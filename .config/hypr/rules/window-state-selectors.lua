@@ -1,5 +1,5 @@
 -- Window state persistence selectors.
--- Source selector list read by runtime/windows/daemons/window-state/window-state.sh.
+-- Declarative policy for native persistent-position geometry restoration.
 
 local pip = require("lib.picture_in_picture")
 
@@ -20,8 +20,8 @@ local pip = require("lib.picture_in_picture")
 ---@field geometry_authority? "pip" Excludes geometry from generic capture and accepts it through the PiP port.
 ---@field per_monitor? boolean Retains independent monitor-relative state; defaults to true.
 ---@field restore_monitor? boolean Restores the monitor captured by a global selector.
----@field restore_size? boolean Emits a generated size rule; defaults to true.
----@field force_windowed? boolean Emits fullscreen_state = "0 0"; defaults to true.
+---@field restore_size? boolean Restores saved initial size; defaults to true.
+---@field force_windowed? boolean Restores an initial windowed state; defaults to true.
 
 ---@return WindowStateSelector[]
 return {
@@ -38,7 +38,7 @@ return {
 	{ matcher = "match:class", pattern = [=[^org\.gnome\.TextEditor$]=] },
 	{ matcher = "match:class", pattern = [=[^flake_update_terminal$]=] },
 	{ matcher = "match:class", pattern = [=[^Mullvad VPN$]=] },
-	{ matcher = "match:class", pattern = [=[nz\.co\.mega\.]=] },
+	{ matcher = "match:class", pattern = [=[^nz\.co\.mega\..*$]=] },
 	{ matcher = "match:initial_title", pattern = [=[^Infinitefusion$]=] },
 	{ matcher = "match:class", pattern = [=[^GParted$]=] },
 	{ matcher = "match:class", pattern = [=[^net\.davidotek\.pupgui2$]=] },

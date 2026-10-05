@@ -4,7 +4,6 @@ local log = require("lib.log")
 
 local window_rule_phases = {
 	generated = "rules/generated.lua",
-	window_state = "rules/window-state.lua",
 }
 
 function M.log(message)

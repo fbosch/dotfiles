@@ -10,6 +10,8 @@ local module_names = {
 	"lib.pip_placement",
 	"lib.picture_in_picture",
 	"lib.rate_limit",
+	"plugins.persistent_position_readiness",
+	"lib.persistent_pip",
 }
 
 local function run_daemon(options)
@@ -163,6 +165,16 @@ local function run_daemon(options)
 			end,
 		},
 	}
+	package.loaded["plugins.persistent_position_readiness"] = {
+		native_state = function()
+			return options.native_state == true
+		end,
+	}
+	package.loaded["lib.persistent_pip"] = {
+		request = function()
+			return "eval native-accept"
+		end,
+	}
 	package.loaded["lib.rate_limit"] = {
 		new = function()
 			return function(key, message)
@@ -192,6 +204,9 @@ local function run_daemon(options)
 		restart_exit_status = 75,
 		new = function()
 			return {
+				instance_path = function()
+					return "/tmp/test-persistent-position.ready"
+				end,
 				socket_path = function()
 					return "/tmp/window-state.sock"
 				end,
@@ -210,6 +225,9 @@ local function run_daemon(options)
 					requests[#requests + 1] = { message = message, options = request_options }
 					if message == "j/plugin list" then
 						return "plugins"
+					end
+					if message == "eval native-accept" then
+						return options.acceptance_response or "ok"
 					end
 					if message:match("^accept ") then
 						return options.acceptance_response or "ok\n"
@@ -267,6 +285,19 @@ local function run_daemon(options)
 end
 
 describe("picture-in-picture daemon adapter", function()
+	it("sends accepted placement directly to native persistence without the legacy socket", function()
+		local result = run_daemon({ native_state = true, selected = { "control" } })
+		local found = false
+		for _, request in ipairs(result.requests) do
+			assert.is_nil(request.message:match("^accept "))
+			if request.message == "eval native-accept" then
+				found = true
+				assert.same({ timeout = 1 }, request.options)
+			end
+		end
+		assert.is_true(found)
+	end)
+
 	it("adapts startup, controls, monitor reloads, and reducer commands at runtime boundaries", function()
 		local result = run_daemon({
 			selected = { "event", "event", "control", "control" },
@@ -299,7 +330,7 @@ describe("picture-in-picture daemon adapter", function()
 			requests_by_message['dispatch hl.dsp.window.tag({ tag = "+pip-bottom-right", window = "address:0x1" })']
 		)
 		assert.is_not_nil(requests_by_message["eval hl.plugin.cursor_outline.on()"])
-		assert.same({ path = "/tmp/window-state.sock", timeout = 1 }, requests_by_message["accept corner\n"].options)
+		assert.same({ timeout = 1 }, requests_by_message["eval native-accept"].options)
 		assert.same({
 			{ name = "pip-snap-preview", payload = '{"x":12,"y":34,"action":"show"}' },
 			{ name = "pip-snap-preview", payload = '{"action":"hide"}' },
@@ -412,7 +443,7 @@ describe("picture-in-picture daemon adapter", function()
 		assert.equal(2, result.event_connects)
 		assert.equal(2, result.event_closed)
 		assert.same({
-			{ key = "placement-acceptance", message = "accepted placement was not persisted" },
+			{ key = "placement-acceptance", message = "native placement acceptance failed" },
 			{ key = "placement-observation", message = "final placement was not observed" },
 		}, result.rate_limit_calls)
 		assert.same({}, result.reset_calls)

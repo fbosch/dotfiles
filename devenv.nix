@@ -442,7 +442,7 @@ in
       timeout --foreground 15s busted --lua=luajit ${hyprTests}
     '';
 
-    "test:window-state-runtime".exec = ''
+    "test:hypr-runtime".exec = ''
       set -euo pipefail
       shopt -s nullglob
       test_files=(${hyprTests}/runtime/*_runtime.lua)
@@ -484,7 +484,7 @@ in
         "test:runtime-shell"
         "test:ags-gjs"
         "test:lua"
-        "test:window-state-runtime"
+        "test:hypr-runtime"
       ];
     };
   };

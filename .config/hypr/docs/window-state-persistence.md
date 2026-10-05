@@ -1,241 +1,101 @@
-# Window State Persistence
+# Window state persistence
 
-`rules/window-state-selectors.lua` selects floating clients whose size and
-monitor-relative position should be restored when they next open. It is source
-data, not a set of live Hyprland rules. The `window-state` daemon captures the
-state and generates `rules/window-state.lua`; do not edit that generated file.
+`rules/window-state-selectors.lua` is the opt-in policy. Native state API v2 in
+`persistent-position` owns saved position, size, initial windowed state, and PiP
+placement. It restores them before initial layout. Saving does not rewrite rules,
+reload the compositor, or move an already-open window.
 
-This feature has two separate jobs:
+## Native path
 
-1. Capture the geometry of a selected floating client.
-2. Restore that geometry with a generated Hyprland window rule.
+1. `plugins/persistent_position.lua` loads the installed plugin and checks its API.
+2. `plugins/persistent_state.lua` converts existing `rules/window-state.lua` data
+   into migration records. Import fills missing fields; newer native fields win.
+3. Configuration loads the durable cache before selected windows map, then
+   publishes instance-scoped readiness.
+4. Completed native drags and explicit keyboard actions capture windowed floating
+   geometry. An asynchronous worker coalesces snapshots and writes them atomically.
+5. Mapping reads memory only. Static-rule hooks handle initial windowed state and
+   saved PiP monitor routing; the pre-layout hook applies size and position.
 
-An upgrade can break either job independently. A generated rule proves capture
-worked, but not that the current Hyprland version accepts or applies the rule.
+Native state lives at `$XDG_STATE_HOME/hyprland/persistent-position.state`, or
+`~/.local/state/hyprland/persistent-position.state`. Version 1 position records are
+readable. The first version 2 write preserves the original as `.v1.bak`. Invalid
+state is not overwritten. Existing generated rules remain untouched as migration
+and rollback evidence, not as an active persistence store.
 
-## Data Flow
+## Policy
 
-1. `hyprland.start` runs `autostart.lua`, which starts
-   `runtime/windows/daemons/window-state/window-state.sh` under UWSM.
-2. The launcher takes an advisory runtime lock and execs the LuaJIT daemon.
-3. The daemon queries `j/clients` and `j/monitors` through the instance-scoped
-   Hyprland IPC socket and listens for socket2 events.
-4. On relevant events, it captures every selected **floating** client. Position
-   is stored relative to the client's monitor origin, keyed by selector and
-   monitor name.
-5. After geometry has been stable for one second, the daemon passes the capture
-   to the window-state publication module. Publication updates retained state,
-   atomically writes `rules/window-state.lua`, and runs
-   `hyprctl reload config-only` when the generated file changed.
-6. `hyprland.lua` loads those data rules after generated and static rules.
-   Hyprland then applies `size` and `move` to a future client that matches both
-   the selector and the current monitor workspace.
+Selectors match in declaration order using Hyprland's full-match regex engine.
+The first matching, nonexcluded selector wins. Stable selector IDs identify state;
+window addresses and process IDs do not. Nemo excludes File Operations and
+Preparing windows.
 
-Closing a tracked window saves immediately. Move and resize events begin a
-short, adaptive polling period because their final geometry is not reliably
-available at the event boundary.
+- `per_monitor` defaults to true. Each selector and monitor has an independent
+  monitor-relative logical position and size. Global selectors share one record.
+- `restore_size` defaults to true. Saved size takes the same precedence as the
+  former generated size rule. Explicit `move` and `center` still win for ordinary
+  position restoration.
+- `force_windowed` defaults to true and affects initial mapping only. A later
+  fullscreen request remains allowed.
+- Fullscreen, maximized, tiled, and excluded windows do not overwrite ordinary
+  saved geometry. Programmatic moves need an explicit `capture_focused()` call;
+  the plugin does not infer user intent from every geometry notification.
 
-## Selector Contract
+## PiP authority
 
-Each entry in `rules/window-state-selectors.lua` has a `matcher`, a `pattern`,
-and optionally an `exclude` matcher with one or more patterns or a
-`persist_tags` allowlist. Only opted-in tags are captured and restored.
+The PiP placement reducer continues to own snapping, previews, resize anchoring,
+and temporary Waybar avoidance. Only an observed accepted placement is sent to
+`accept_pip_placement()`. The reply acknowledges in-memory acceptance and queued
+persistence, not an fsync completion.
 
-| Selector matcher | Client JSON field | Generated Lua match key |
-| --- | --- | --- |
-| `match:class` | `class` | `class` |
-| `match:title` | `title` | `title` |
-| `match:initial_class` | `initialClass` | `initial_class` |
-| `match:initial_title` | `initialTitle` | `initial_title` |
+The plugin remembers a corner or free position plus its named monitor. Corners
+use final initial window dimensions and a 15-logical-pixel margin, restore the
+corresponding corner tag and entry animation, and clear other corner tags. Free
+placement restores no corner tag. A missing saved monitor uses normal routing
+without discarding the record.
 
-`match:initialClass` and `match:initialTitle` are accepted aliases for the
-underscored selector names.
+PiP sets `restore_size = false` and `force_windowed = false`: its native/browser
+size policy remains authoritative. Generic capture never records PiP or temporary
+Waybar avoidance as a new accepted placement.
 
-Selectors are considered in declaration order. The first matching selector that
-does not match its exclusion wins. An exclusion only rejects that selector, so a
-later selector can still capture the client.
+## Upgrade and retirement
 
-Patterns are intended as Hyprland regular expressions. The generated rule
-preserves a regex-shaped pattern and anchors a plain literal as `^literal$`.
-Capture uses a small conversion to Lua patterns, not Hyprland's regex engine.
-Keep selectors simple and anchored, as in `^Bitwarden$`. Do not assume advanced
-regex syntax has identical capture and restore semantics.
+Native state API v2 is required. The legacy daemon, its reload publisher, and
+the generated window-state loader phase have been removed. PiP sends acceptance
+directly to the plugin. Desktop restart/reset scripts no longer start the old
+writer.
 
-The Nemo selector is the useful reference: it captures the main Nemo window but
-excludes clients whose initial title is `File Operations` or `Preparing`. The
-generated rule expresses that exclusion as Hyprland's `negative:(...)` matcher.
+The persisted-data importer and v1 backup reader remain for existing installations.
+Generated legacy state is kept untouched as recovery data. Missing or invalid
+native configuration reports an error; it never starts a reload-based fallback.
 
-`persist_tags` is an ordered allowlist of dynamic client tags to retain. The
-first matching tag is stored as metadata. This keeps transient and policy tags
-out of persisted state by default, and supports mutually exclusive states such
-as PiP corners.
+Production rollout was verified with plugin 0.2.0 and 20 selectors. A repeated
+secondary-monitor resize produced no rule-file changes or `configreloaded` event,
+and the user reported that WoW no longer flickered.
 
-`persist_tag_animations` optionally maps allowed tags to entry animations. The
-animation is emitted into a separate generated rule, so it is available when
-the window is created without forcing a dynamic tag that would interfere with
-later tag transitions.
+## Validation
 
-State is per monitor by default. Set `per_monitor = false` for one
-monitor-local geometry rule that can restore on any monitor; use this for
-pinned cross-monitor windows such as Picture-in-Picture. Add
-`restore_monitor = true` when that global rule must also reopen on the monitor
-captured with its latest geometry.
+The plugin hooks are pinned to Hyprland `19fb395d`. Build it with
+`just check-hyprland-plugins` in the NixOS repository. The native tests cover state
+validation, field-wise migration, version 1 backups, secure atomic writes, and
+worker lifetime. Dotfiles tests cover selector translation, migration, native
+ownership, PiP delivery, and the absence of generated-rule loading in native mode.
 
-Set `restore_size = false` when another owner controls size. Picture-in-Picture
-instead includes the observed dimensions in each accepted placement. Its
-generated rule restores that size after compositor restarts, while Hyprland's
-`persistent_size` handles later opens in the same session. Zen's saved geometry
-is used only before the first accepted placement, and its erroneous maximize
-request remains suppressed.
-Set `force_windowed = false` when the client also owns its initial fullscreen
-state. Picture-in-Picture uses both options so its generated rule controls only
-the accepted monitor, position, and corner tag.
+Run runtime probes only in a separate nested compositor with private config,
+state, and explicitly selected IPC sockets. Covered cases include Wayland and
+XWayland size restoration, later fullscreen requests, all PiP corners and free
+placement, saved-monitor routing, and missing-monitor fallback. These logical
+checks do not establish first-frame pixels or physical-monitor WoW behavior.
 
-## Generated Rule Contract
+The replayable probe is `tests/runtime/native_state_sandbox.py`. Run it from the
+repository's devenv shell with `TEST_HYPRLAND_DIR` pointing to the matching
+compositor's `bin` directory and `TEST_PLUGIN` to its built `.so`. These explicit
+paths prevent the test from loading a different system generation. The probe
+creates private temporary state and verifies its sandbox signature before every
+control command. It does not simulate pointer input; resize coverage uses the
+explicit capture API.
 
-Each saved selector has independent state per monitor. A generated entry has
-this shape:
-
-```lua
-{
-  matcher = "match:class",
-  pattern = "^Bitwarden$",
-  monitor = "DP-2", -- metadata and cache identity
-  match = {
-    class = "^Bitwarden$",
-    workspace = "m[DP-2]",
-  },
-  effects = {
-    fullscreen_state = "0 0",
-    size = "999 1113",
-    move = "300 120",
-  },
-}
-```
-
-`monitor` is not a rule effect. By default, `fullscreen_state = "0 0"` ensures
-an application's maximize request cannot override restored windowed geometry;
-selectors with `force_windowed = false` omit that effect. The daemon does not
-capture maximized or fullscreen clients, so those temporary states cannot
-replace the last windowed geometry. The
-`workspace = "m[<monitor>]"` matcher keeps
-each monitor's saved geometry local to that monitor. `size` and `move` must stay
-space-separated strings because that is the Lua window-rule API contract.
-
-The rule loader converts `effects` into an anonymous `hl.window_rule(...)` call.
-Rule order is significant:
-
-1. `rules/generated.lua`
-2. Static rules under `rules/`
-3. `rules/window-state.lua`
-
-Window-state publication must request `hyprctl reload config-only` because
-generated data files are not watched Lua configuration dependencies.
-
-## Upgrade Debugging
-
-Record the pre-upgrade compositor version and check the active configuration
-before testing behavior:
-
-```bash
-hyprctl version
-hyprctl configerrors
-```
-
-Use one configured floating application, resize and move it, wait at least one
-second, close it, and then reopen it on the same monitor. Reopening matters:
-this feature restores through window rules, not a direct geometry dispatch.
-
-### 1. Confirm The Daemon Is Running
-
-```bash
-pgrep -af 'window-state'
-journalctl --user -b --no-pager | rg 'window-state'
-```
-
-The daemon logs startup, IPC reconnects, poll failures, and failed rule reloads
-to stderr. A missing daemon or a failure to connect to `.socket.sock` or
-`.socket2.sock` is a capture-path failure.
-
-### 2. Confirm Hyprland Still Reports The Expected Client Schema
-
-Replace `Bitwarden` with the class under test:
-
-```bash
-hyprctl -j clients | jq '.[] | select(.class == "Bitwarden") | {
-  class, title, initialClass, initialTitle, floating, monitor, at, size
-}'
-hyprctl -j monitors | jq '.[] | { id, name, x, y }'
-```
-
-Capture requires `floating: true`. It also depends on the selected identity
-field, monitor id, global `at` coordinates, and `size` array. A renamed JSON
-field, changed value type, changed event name, or changed IPC socket protocol is
-an upgrade-sensitive daemon contract.
-
-### 3. Confirm Capture Produced A Rule
-
-After the one-second debounce or immediately after closing the client, inspect
-the generated output:
-
-```bash
-rg -n -C 6 'Bitwarden' ~/.config/hypr/rules/window-state.lua
-```
-
-Expected evidence is a matching selector, the monitor metadata, a workspace
-matcher such as `m[DP-2]`, and string `size` and `move` effects. No changed rule
-after a valid floating client points to selector matching, IPC client data, or
-daemon lifecycle. A changed rule without restored geometry points to rule
-syntax, reload behavior, or rule application timing.
-
-### 4. Confirm Reload And Rule Application
-
-```bash
-hyprctl reload config-only
-hyprctl configerrors
-hyprctl rollinglog -f
-```
-
-Keep `rollinglog` open while reopening the client. Look for Lua load warnings,
-unknown window-rule keys, invalid matcher syntax, or a change in window-rule
-precedence. The current implementation depends on these Hyprland Lua details:
-
-- `hl.window_rule(...)` accepting `class`, `initial_class`, `initial_title`,
-  `workspace`, `size`, and `move`.
-- `negative:(...)` retaining its matcher meaning.
-- `m[<monitor>]` selecting the monitor workspace while the window rule runs.
-- Rules being applied at a point where `move` and `size` can affect a newly
-  opened floating client.
-
-## Baseline And Test Coverage
-
-The local baseline is Hyprland `0.56.0`; see `docs/agents/version.md`. Lua
-configuration is still a release-sensitive API, so test this workflow after
-every Hyprland upgrade rather than treating the generated Lua format as stable.
-
-Offline coverage exercises selector validation, literal and regex rendering,
-exclusions, monitor-specific state, atomic writes, daemon event handling, and
-reload requests. It does not prove a newer Hyprland release accepts and applies
-the generated rule. Run the focused checks before an upgrade and after any
-generator change:
-
-```bash
-devenv tasks run test:lua
-devenv tasks run test:window-state-runtime
-```
-
-The live close-and-reopen check is the regression test for the compositor-side
-contract.
-
-## Relevant Files
-
-- `rules/window-state-selectors.lua`: writable client-selection policy.
-- `runtime/windows/daemons/window-state/window-state.sh`: launcher and lock.
-- `runtime/windows/daemons/window-state/window-state-daemon.lua`: IPC, events,
-  capture, and debounce scheduling.
-- `runtime/windows/daemons/window-state/publication.lua`: retained rule cache,
-  selector reconciliation, generated-rule publication, and reload.
-- `runtime/windows/daemons/window-state/rules.lua`: selector validation, cache,
-  and generated Lua rule rendering.
-- `rules/window-state.lua`: generated persistent state; never edit manually.
-- `rule_loader.lua` and `hyprland.lua`: generated rule loading and ordering.
+After production rollout, repeat the secondary-monitor resize while observing
+`configreloaded`. Success requires both no persistence-driven reload and no WoW
+flicker. The old physical-monitor session has not been used for experimental
+plugin loading.

@@ -53,11 +53,9 @@ wait_for_shutdowns() {
   hyprpaper_pid=$!
   wait_for_shutdown "window capture" pgrep -f "window-capture-daemon\.(sh|lua)" &
   window_capture_pid=$!
-  wait_for_shutdown "window state" pgrep -f "window-state(-daemon)?\.(sh|lua)" &
-  window_state_pid=$!
 
   status=0
-  for pid in "$ags_pid" "$foot_pid" "$waybar_pid" "$hyprpaper_pid" "$window_capture_pid" "$window_state_pid"; do
+  for pid in "$ags_pid" "$foot_pid" "$waybar_pid" "$hyprpaper_pid" "$window_capture_pid"; do
     if wait "$pid"; then
       continue
     fi
@@ -78,8 +76,6 @@ fi
 "$waybar_process" signal TERM 2>/dev/null || true
 pkill gjs 2>/dev/null || true
 pkill -f "foot --server" 2>/dev/null || true
-pkill -f window-state.sh 2>/dev/null || true
-pkill -f window-state-daemon.lua 2>/dev/null || true
 pkill -CONT -f window-capture-daemon 2>/dev/null || true
 pkill -f window-capture-daemon 2>/dev/null || true
 pkill -f hyprpaper 2>/dev/null || true
@@ -99,7 +95,6 @@ swaync-client -R &
 swaync-client -rs &
 
 uwsm-app -s s -- hyprpaper >/dev/null 2>&1 &
-uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-state/window-state.sh &
 uwsm-app -s b -- ~/.config/hypr/runtime/windows/daemons/window-capture/window-capture-daemon.sh &
 
 sleep 1
