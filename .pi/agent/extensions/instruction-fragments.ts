@@ -82,6 +82,8 @@ function discoverInstructionFragmentPaths(directory: string, basePath = ""): str
         return discoverInstructionFragmentPaths(entryPath, path);
       }
       if (entry.isFile() === false || entry.name.endsWith(".md") === false) return [];
+      // Topic directories keep reference Markdown beside their injected entrypoint.
+      if (basePath !== "" && entry.name !== "index.md") return [];
       return [path];
     });
 }

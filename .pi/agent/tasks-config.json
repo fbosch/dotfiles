@@ -1,6 +1,8 @@
 {
-  "taskScope": "session-global",
+  "taskScope": "session-history",
   "glyphs": {
-    "spinner": ["◼"]
+    "spinner": [
+      "◼"
+    ]
   }
 }

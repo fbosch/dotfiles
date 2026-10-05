@@ -1,7 +1,10 @@
 # Orchestration evals
 
-Caliper evals for `../../instructions/orchestration.md`, loaded as an instruction
-fragment rather than a discoverable skill. Run from the dotfiles root.
+Caliper evals for `../../instructions/orchestration.md`, loaded as a global
+instruction fragment rather than a discoverable skill. Global discovery includes
+Markdown files at the instructions root and `index.md` files in topic directories
+at any depth; other nested Markdown is loaded only through an explicit path. Run
+from the dotfiles root.
 
 Turn-budget presence is scored in the delegation-contract case and recorded
 separately elsewhere, so it cannot mask a lifecycle result.

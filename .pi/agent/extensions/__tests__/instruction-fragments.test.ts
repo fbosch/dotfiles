@@ -99,7 +99,7 @@ describe("instruction fragments", () => {
     }
   });
 
-  test("discovers Markdown fragments recursively in lexical order", () => {
+  test("discovers nested index.md files recursively, but excludes other nested Markdown", () => {
     const root = temporaryDirectory();
     const agentDirectory = join(root, "agent");
     const instructionsDirectory = join(agentDirectory, "instructions");
@@ -107,22 +107,50 @@ describe("instruction fragments", () => {
     writeFragment(instructionsDirectory, "second.md", "Second instruction.");
     writeFragment(
       join(instructionsDirectory, "nested"),
-      "first.md",
+      "index.md",
       "First instruction.",
       "when:\n  tools:\n    all:\n      - subagent\n      - todo",
     );
     writeFileSync(join(instructionsDirectory, "ignored.txt"), "Not an instruction.\n");
+    writeFragment(join(instructionsDirectory, "nested"), "routing.md", "Reference only.");
+    mkdirSync(join(instructionsDirectory, "nested", "deeper"));
+    writeFragment(join(instructionsDirectory, "nested", "deeper"), "index.md", "Deep instruction.");
+    writeFragment(join(instructionsDirectory, "nested", "deeper"), "notes.md", "Reference only.");
 
     const fragments = loadGlobalInstructionFragments(agentDirectory);
 
     expect(fragments.map(({ path, when, content }) => ({ path, when, content }))).toEqual([
+      { path: "nested/deeper/index.md", when: undefined, content: "Deep instruction." },
       {
-        path: "nested/first.md",
+        path: "nested/index.md",
         when: { tools: { all: ["subagent", "todo"] } },
         content: "First instruction.",
       },
       { path: "second.md", when: undefined, content: "Second instruction." },
     ]);
+  });
+
+  test("discovers a topic index and loads its references only by explicit path", () => {
+    const instructionsDirectory = createInstructionsDirectory();
+    const orchestrationDirectory = join(instructionsDirectory, "orchestration");
+    mkdirSync(orchestrationDirectory);
+    writeFragment(instructionsDirectory, "global.md", "Global instruction.");
+    writeFragment(orchestrationDirectory, "index.md", "Orchestration entrypoint.");
+    writeFragment(orchestrationDirectory, "routing.md", "Routing reference.");
+    writeFragment(orchestrationDirectory, "assignments.md", "Assignment reference.");
+
+    const fragments = loadInstructionFragments(instructionsDirectory);
+
+    expect(fragments.map(({ path, content }) => ({ path, content }))).toEqual([
+      { path: "global.md", content: "Global instruction." },
+      { path: "orchestration/index.md", content: "Orchestration entrypoint." },
+    ]);
+    expect(
+      loadInstructionFragments(instructionsDirectory, [
+        "orchestration/routing.md",
+        "orchestration/assignments.md",
+      ]).map(({ content }) => content),
+    ).toEqual(["Routing reference.", "Assignment reference."]);
   });
 
   test("loads explicit paths in the requested order", () => {
