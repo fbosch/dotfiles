@@ -5,30 +5,30 @@ local M = {}
 local ensured_dir = nil
 
 local function log_path()
-  return system.cache_home() .. "/hypr/lua-migration.log"
+	return system.cache_home() .. "/hypr/lua-config.log"
 end
 
 local function timestamp()
-  return os.date("!%Y-%m-%dT%H:%M:%SZ")
+	return os.date("!%Y-%m-%dT%H:%M:%SZ")
 end
 
 function M.write(message)
-  local path = log_path()
-  local dir = path:match("^(.+)/[^/]+$")
+	local path = log_path()
+	local dir = path:match("^(.+)/[^/]+$")
 
-  if dir and dir ~= ensured_dir then
-    os.execute("mkdir -p " .. command.arg(dir))
-    ensured_dir = dir
-  end
+	if dir and dir ~= ensured_dir then
+		os.execute("mkdir -p " .. command.arg(dir))
+		ensured_dir = dir
+	end
 
-  local file = io.open(path, "a")
-  if not file then
-    return false
-  end
+	local file = io.open(path, "a")
+	if not file then
+		return false
+	end
 
-  file:write(timestamp() .. " " .. tostring(message) .. "\n")
-  file:close()
-  return true
+	file:write(timestamp() .. " " .. tostring(message) .. "\n")
+	file:close()
+	return true
 end
 
 return M

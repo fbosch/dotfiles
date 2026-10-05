@@ -84,7 +84,7 @@ end
 
 function M.report_warnings(warnings)
 	for _, message in ipairs(warnings) do
-		local line = "hypr lua migration warning: " .. message
+		local line = "hypr window rule warning: " .. message
 		print(line)
 		M.log(line)
 	end
