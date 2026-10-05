@@ -27,24 +27,3 @@ if ! grep -q 'const precisionCache = new WeakMap();' "$lock_target"; then
   fi
   patch --batch --fuzz=0 -d "$agent_root" -p1 <"$lock_patch"
 fi
-
-pi_package="$agent_root/node_modules/@earendil-works/pi-coding-agent"
-pi_manifest="$pi_package/package.json"
-mcp_target="$pi_package/dist/extensions/mcp/index.js"
-mcp_patch="$repo_root/.pi/agent/runtime-patches/pi-coding-agent-0.99.1-mcp-footer.patch"
-
-if [[ ! -f "$pi_manifest" || ! -f "$mcp_target" ]]; then
-  printf '@earendil-works/pi-coding-agent@0.99.1 is missing from %s\n' "$agent_root" >&2
-  exit 1
-fi
-
-if ! grep -q '"version"[[:space:]]*:[[:space:]]*"0\.99\.1"' "$pi_manifest"; then
-  printf 'Refusing to patch an unsupported Pi version in %s\n' "$pi_manifest" >&2
-  exit 1
-fi
-
-if grep -Fq 'ctx.ui.setStatus("mcp", status);' "$mcp_target"; then
-  exit 0
-fi
-
-patch --batch --fuzz=0 -d "$agent_root" -p1 <"$mcp_patch"

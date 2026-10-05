@@ -9,7 +9,7 @@ Tracked patches preserve local changes to pinned Pi extensions:
 
 The `@gotgenes/pi-subagents` patch was retired for 21.8.1: upstream now declares host-provided `typebox` as a peer dependency.
 
-The runtime patches under `../runtime-patches/` keep `proper-lockfile@4.1.2` compatible with Bun's Proxy-backed filesystem and publish native MCP connection health in the footer instead of a startup warning. The MCP patch is pinned to `@earendil-works/pi-coding-agent@0.99.1`; review and regenerate it before changing that pin. `just install-pi` applies these patches after dependency installation.
+The runtime patch under `../runtime-patches/` keeps `proper-lockfile@4.1.2` compatible with Bun's Proxy-backed filesystem. `just install-pi` applies these patches after dependency installation.
 
 Keep these patches here rather than editing Pi's installed packages without a reproducible source.
 
