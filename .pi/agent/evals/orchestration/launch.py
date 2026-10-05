@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 import os
 from pathlib import Path
@@ -13,7 +14,6 @@ import sys
 import uuid
 
 sys.path.insert(0, str(Path(__file__).parent))
-import importlib.util
 
 def load_sibling(name: str):
     spec = importlib.util.spec_from_file_location(name, Path(__file__).with_name(f"{name}.py"))
@@ -52,8 +52,18 @@ def prepare(repo: Path, run_root: Path, evidence: Path, without: bool,
         if not path.is_file():
             raise ValueError(f"Required extension not installed: {path}")
     evidence.mkdir(parents=True, exist_ok=True)
-    text = (agent / "instructions/orchestration.md").read_text()
-    (evidence / "orchestration.md").write_text(text)
+    instruction_source = agent / "instructions/orchestration"
+    instruction_files = sorted(instruction_source.glob("*.md"))
+    if not (instruction_source / "index.md").is_file():
+        raise ValueError(f"Missing orchestration instruction entrypoint: {instruction_source / 'index.md'}")
+    instruction_snapshot = evidence / "instructions/orchestration"
+    instruction_hashes = {}
+    for source in instruction_files:
+        relative = source.name
+        target = instruction_snapshot / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+        instruction_hashes[f"orchestration/{relative}"] = hashlib.sha256(source.read_bytes()).hexdigest()
     models = json.loads((agent / "models.json").read_text())
     if any(set(provider) != {"models"} for provider in models.get("providers", {}).values()):
         raise ValueError("Review model configuration before copying provider endpoints or credentials into an eval")
@@ -63,7 +73,7 @@ def prepare(repo: Path, run_root: Path, evidence: Path, without: bool,
     package = agent / "npm/node_modules/@gotgenes/pi-subagents/package.json"
     metadata = {
         "instructions_enabled": not without,
-        "instruction_sha256": hashlib.sha256(text.encode()).hexdigest(),
+        "instruction_sha256": instruction_hashes,
         "extensions": {str(p.relative_to(repo)): hashlib.sha256(p.read_bytes()).hexdigest() for p in extensions},
         "subagents_version": json.loads(package.read_text())["version"],
         "catalog": catalog,
@@ -95,9 +105,10 @@ def configure_attempt(home: Path, agent: Path, config: dict, trace: Path, case: 
     (agent / "subagents.json").write_text('{"maxConcurrent":3,"abortAllOnInterrupt":true}\n')
     shutil.copy2(Path(config["evidence"]) / "models.json", agent / "models.json")
     shutil.copy2(Path(config["evidence"]) / "models-store.json", agent / "models-store.json")
-    (agent / "instructions").mkdir(exist_ok=True)
+    instruction_directory = agent / "instructions/orchestration"
+    instruction_directory.mkdir(parents=True, exist_ok=True)
     if config["instructions_enabled"]:
-        shutil.copy2(Path(config["evidence"]) / "orchestration.md", agent / "instructions/orchestration.md")
+        shutil.copytree(Path(config["evidence"]) / "instructions/orchestration", instruction_directory, dirs_exist_ok=True)
     (agent / "agents").mkdir(exist_ok=True)
     # Separate directories avoid Explore.md/explore.md collisions on macOS while
     # retaining the native registry's case-sensitive canonical agent names.

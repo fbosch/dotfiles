@@ -102,7 +102,11 @@ interface HashlineEditFlags {
 interface HashlineToolModule {
   readonly buildToolDef?: (flags?: HashlineEditFlags) => ToolDefinition;
   readonly buildInsertToolDef?: (flags?: HashlineEditFlags) => ToolDefinition;
-  readonly regUndo?: (pi: ExtensionAPI) => void;
+  readonly buildReplaceMatchToolDef?: (flags?: HashlineEditFlags) => ToolDefinition;
+  readonly buildTransferToolDef?: (kind: "copy" | "move", flags?: HashlineEditFlags) => ToolDefinition;
+  readonly regUndo?: (pi: ExtensionAPI, flags?: HashlineEditFlags) => void;
+  readonly regRead?: (pi: ExtensionAPI, flags?: HashlineEditFlags) => void;
+  readonly regGrep?: (pi: ExtensionAPI, flags?: HashlineEditFlags) => void;
 }
 
 interface HashlineEditCommonModule {
@@ -147,6 +151,39 @@ export async function loadHashlineDeltaTools(): Promise<ToolDefinition[]> {
   } catch {
     // Replace remains useful when the optional insert module is unavailable.
   }
+  for (const [modulePath, build] of [
+    ["replace-match.ts", (module: HashlineToolModule) => module.buildReplaceMatchToolDef?.(flags)],
+    ["copy-move.ts", (module: HashlineToolModule) => module.buildTransferToolDef?.("copy", flags)],
+    ["copy-move.ts", (module: HashlineToolModule) => module.buildTransferToolDef?.("move", flags)],
+  ] as const) {
+    try {
+      // SAFETY: Each listed installed hashline module exports its corresponding builder.
+      const module = (await import(
+        new URL(`../../npm/node_modules/pi-hashline-edit-pro/src/${modulePath}`, import.meta.url).href
+      )) as unknown as HashlineToolModule;
+      const tool = build(module);
+      if (tool !== undefined) tools.push(tool);
+    } catch {
+      // Other available hashline tools remain usable if an optional builder is unavailable.
+    }
+  }
+
+  for (const modulePath of ["read.ts", "grep.ts"] as const) {
+    try {
+      // SAFETY: read.ts and grep.ts expose the matching registration functions.
+      const module = (await import(
+        new URL(`../../npm/node_modules/pi-hashline-edit-pro/src/${modulePath}`, import.meta.url).href
+      )) as unknown as HashlineToolModule;
+      const registeredTools: ToolDefinition[] = [];
+      const register = modulePath === "read.ts" ? module.regRead : module.regGrep;
+      // SAFETY: These registrations only call registerTool on the capture adapter.
+      register?.({ registerTool(tool: ToolDefinition) { registeredTools.push(tool); } } as unknown as ExtensionAPI, flags);
+      tools.push(...registeredTools);
+    } catch {
+      // Keep remaining tools when an optional read/search module is unavailable.
+    }
+  }
+
   try {
     // SAFETY: The pinned hashline undo module exposes the optional registration hook checked below.
     const undoModule = (await import(

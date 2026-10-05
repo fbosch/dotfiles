@@ -130,6 +130,33 @@ describe("instruction fragments", () => {
     ]);
   });
 
+  test("discovers Stow-linked instruction roots, files, and topic directories", () => {
+    const root = temporaryDirectory();
+    const externalInstructionsDirectory = join(root, "dotfiles", "instructions");
+    const externalTopicDirectory = join(root, "dotfiles", "topics", "routing");
+    const agentDirectory = join(root, "agent");
+    mkdirSync(externalInstructionsDirectory, { recursive: true });
+    mkdirSync(externalTopicDirectory, { recursive: true });
+    mkdirSync(agentDirectory);
+
+    writeFragment(externalInstructionsDirectory, "root.md", "Root instruction.");
+    const linkedFile = join(root, "dotfiles", "shared.md");
+    writeFragment(join(root, "dotfiles"), "shared.md", "Linked file instruction.");
+    symlinkSync(linkedFile, join(externalInstructionsDirectory, "linked.md"));
+    writeFragment(externalTopicDirectory, "index.md", "Linked topic instruction.");
+    symlinkSync(externalTopicDirectory, join(externalInstructionsDirectory, "routing"), "dir");
+    symlinkSync(externalInstructionsDirectory, join(agentDirectory, "instructions"), "dir");
+
+    const fragments = loadGlobalInstructionFragments(agentDirectory);
+
+    expect(fragments).toContainEqual({ path: "root.md", content: "Root instruction." });
+    expect(fragments).toContainEqual({ path: "linked.md", content: "Linked file instruction." });
+    expect(fragments).toContainEqual({
+      path: "routing/index.md",
+      content: "Linked topic instruction.",
+    });
+  });
+
   test("discovers a topic index and loads its references only by explicit path", () => {
     const instructionsDirectory = createInstructionsDirectory();
     const orchestrationDirectory = join(instructionsDirectory, "orchestration");
@@ -220,19 +247,37 @@ describe("instruction fragments", () => {
     );
   });
 
-  test("rejects direct and symlink path escapes", () => {
+  test("rejects lexical path escapes but trusts explicit Stow symlink targets", () => {
     const root = temporaryDirectory();
     const directory = join(root, "instructions");
     const outside = join(root, "outside.md");
     mkdirSync(directory);
     writeFileSync(outside, "Outside instruction.");
     symlinkSync(outside, join(directory, "linked.md"));
+    symlinkSync(outside, join(directory, "linked-alias.md"));
 
     expect(() => loadInstructionFragments(directory, ["../outside.md"])).toThrow(
       "Instruction fragment escapes its directory: ../outside.md",
     );
-    expect(() => loadInstructionFragments(directory, ["linked.md"])).toThrow(
-      "Instruction fragment symlink escapes its directory: linked.md",
+    expect(loadInstructionFragments(directory, ["linked.md"]).map(({ content }) => content)).toEqual([
+      "Outside instruction.",
+    ]);
+    expect(() => loadInstructionFragments(directory, ["linked.md", "linked-alias.md"])).toThrow(
+      "Duplicate instruction fragment: linked-alias.md",
+    );
+  });
+
+  test("fails loudly on broken symlinks and directory cycles", () => {
+    const brokenDirectory = createInstructionsDirectory();
+    symlinkSync(join(brokenDirectory, "missing.md"), join(brokenDirectory, "broken.md"));
+    expect(() => loadInstructionFragments(brokenDirectory)).toThrow(
+      "Cannot resolve instruction fragment symlink: broken.md",
+    );
+
+    const cyclicDirectory = createInstructionsDirectory();
+    symlinkSync(cyclicDirectory, join(cyclicDirectory, "loop"), "dir");
+    expect(() => loadInstructionFragments(cyclicDirectory)).toThrow(
+      "Instruction fragment directory cycle: loop",
     );
   });
 

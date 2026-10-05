@@ -1,10 +1,11 @@
 #!/usr/bin/env python3
+import hashlib
 import importlib.util
 import json
 import tempfile
 import unittest
-from unittest import mock
 from pathlib import Path
+from unittest import mock
 
 ROOT = Path(__file__).resolve().parents[1]
 EVAL_DIR = ROOT / ".pi/agent/evals/orchestration"
@@ -252,6 +253,15 @@ class CaliperOrchestrationLaunchTests(unittest.TestCase):
         self.assertEqual(metadata["catalog"]["parent"]["model"], "openai-codex/mock-parent-fast")
         self.assertEqual(metadata["catalog"]["parent"]["thinking"], "xhigh")
         self.assertEqual(metadata["catalog"]["agents"]["quick"]["model"], "openai-codex/mock-quick")
+        source_instructions = self.repo / ".pi/agent/instructions/orchestration"
+        expected_hashes = {
+            f"orchestration/{source.name}": hashlib.sha256(source.read_bytes()).hexdigest()
+            for source in sorted(source_instructions.glob("*.md"))
+        }
+        self.assertEqual(metadata["instruction_sha256"], expected_hashes)
+        snapshots = self.evidence / "instructions/orchestration"
+        self.assertEqual({path.name for path in snapshots.iterdir()}, {"index.md", "assignments.md", "coordination.md", "routing.md", "supervision.md"})
+        self.assertFalse((self.evidence / "orchestration.md").exists())
         self.assertEqual(len(self.config["extensions"]), 5)
         self.assertTrue(any(path.endswith("openai-capabilities.ts") for path in self.config["extensions"]))
         self.assertEqual(json.loads((self.runtime / "home/.pi/agent/settings.json").read_text()), {})
@@ -275,6 +285,16 @@ class CaliperOrchestrationLaunchTests(unittest.TestCase):
         self.assertEqual(settings["extensions"], self.config["extensions"])
         self.assertEqual((agent / "auth.json").read_text(), "private-auth")
         self.assertIn("model: openai-codex/mock-review", (agent / "agents/review.md").read_text())
+        copied_instructions = agent / "instructions/orchestration"
+        self.assertEqual(
+            {path.name for path in copied_instructions.iterdir()},
+            {"index.md", "assignments.md", "coordination.md", "routing.md", "supervision.md"},
+        )
+        self.assertEqual(
+            (copied_instructions / "index.md").read_text(),
+            (self.evidence / "instructions/orchestration/index.md").read_text(),
+        )
+        self.assertFalse((agent / "instructions/orchestration.md").exists())
         self.assertEqual(json.loads((agent / "subagents.json").read_text())["maxConcurrent"], 3)
         self.assertTrue((agent / "models.json").exists())
         self.assertTrue((home / ".agents/skills/swarm/SKILL.md").exists())
@@ -288,7 +308,7 @@ class CaliperOrchestrationLaunchTests(unittest.TestCase):
         agent = home / ".pi/agent"
         config = {**self.config, "instructions_enabled": False}
         self.launcher.configure_attempt(home, agent, config, self.root / "trace.jsonl")
-        self.assertFalse((agent / "instructions/orchestration.md").exists())
+        self.assertFalse((agent / "instructions/orchestration/index.md").exists())
         with self.assertRaisesRegex(ValueError, "Unexpected Caliper agent"):
             self.launcher.configure_attempt(home, self.root / "wrong", config, self.root / "other.jsonl")
 

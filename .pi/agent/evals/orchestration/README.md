@@ -1,10 +1,12 @@
 # Orchestration evals
 
-Caliper evals for `../../instructions/orchestration.md`, loaded as a global
-instruction fragment rather than a discoverable skill. Global discovery includes
-Markdown files at the instructions root and `index.md` files in topic directories
-at any depth; other nested Markdown is loaded only through an explicit path. Run
-from the dotfiles root.
+Caliper evals for `../../instructions/orchestration/index.md` and its
+read-before-action references, loaded as a global instruction fragment rather
+than a discoverable skill. Global discovery includes Markdown files at the
+instructions root and `index.md` files in topic directories at any depth; other
+nested Markdown is loaded only through an explicit path. Only the topic index is
+injected; its sibling references are available for explicit reads. Run from the
+dotfiles root.
 
 Turn-budget presence is scored in the delegation-contract case and recorded
 separately elsewhere, so it cannot mask a lifecycle result.
@@ -47,8 +49,10 @@ from `.pi/agent/agents/{quick,explore,analyze,debug,review,validate,test}.md`;
 same-named `.pi/agents/` definitions take precedence. Disabled agents stay
 unavailable. A missing or invalid preset is an error, not a fallback.
 
-Each run snapshots that catalog and the required entries from `models.json`
-and `models-store.json`. The isolated runtime loads `openai-capabilities.ts`,
+Each run snapshots every Markdown file in the split orchestration instructions,
+including the index and its sibling references, and the required entries from
+`models.json` and `models-store.json`. Every instruction snapshot file is hashed.
+The isolated runtime loads `openai-capabilities.ts`,
 which translates configured `*-fast` aliases to the base model with priority
 service. Traces record actual parent and worker model/thinking selections and
 outgoing model IDs/service tiers. Assertions compare these with the snapshot.
@@ -92,12 +96,13 @@ Routine progress is a decision probe, not a live-worker scenario.
 
 ## Isolation and evidence
 
-Each attempt has a disposable HOME and synthetic workspace. The extension
-allowlist contains native subagents, the model translation hook, instruction
-fragments, recommend-agent, and the fixture. Model tools cannot execute shell
-commands, write files, or read credentials, specs, traces, or the real repository.
-The copied swarm skill is the only read exception outside the workspace.
-This is a tool-level boundary, not an OS sandbox for extension code.
+Each attempt has a disposable HOME and synthetic workspace. The extension allowlist contains native subagents, the model translation hook,
+instruction fragments, recommend-agent, and the fixture. The actual instruction
+loader injects only the copied orchestration index; model tools can explicitly
+read the copied sibling references as well as the copied swarm skill. Model tools
+cannot execute shell commands, write files, or read credentials, specs, traces,
+or the real repository. This is a tool-level boundary, not an OS sandbox for
+extension code.
 
 The wrapper's existing auth-copy and refresh-persistence behavior is unchanged.
 Only synthetic task state is sent to the classifier. Provider refusals, classifier unavailability,

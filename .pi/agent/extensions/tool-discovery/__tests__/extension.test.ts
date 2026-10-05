@@ -38,6 +38,7 @@ writeFileSync(
         "ast-grep_",
         "mcp__",
         "browser_",
+        "neovim",
       ],
     },
   }),
@@ -477,7 +478,7 @@ describe("tool discovery", () => {
     expect(isDeferredToolName("tool_load", ["tool_"])).toBe(false);
   });
 
-  test("removes specialist tools from the initial parent tool set", async () => {
+  test("defers Neovim tools until requested", async () => {
     const harness = createHarness({
       tools: [
         dummyTool("read", "Read files"),
@@ -492,7 +493,13 @@ describe("tool discovery", () => {
 
     await harness.discoverResources();
 
-    expect(harness.activeTools).toEqual(["read", "mcp", "neovim", "tool_load"]);
+    expect(harness.activeTools).toEqual(["read", "mcp", "tool_load"]);
+    expect((await harness.search("editor", 1)).details).toEqual({
+      matches: ["neovim"],
+      added: ["neovim"],
+      rankingSource: "lexical",
+    });
+    expect(harness.activeTools).toEqual(["read", "mcp", "tool_load", "neovim"]);
   });
 
   test("loads a matched underscore-namespaced tool family", async () => {

@@ -91,6 +91,7 @@
       "ast-grep_",
       "mcp__",
       "browser_",
+      "neovim",
       "web_search",
       "source_check",
       "fetch_content",
