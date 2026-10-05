@@ -1,8 +1,6 @@
 -- Window state persistence selectors.
 -- Declarative policy for native persistent-position geometry restoration.
 
-local pip = require("lib.picture_in_picture")
-
 ---@alias WindowStateMatcher
 ---| "match:class" # Hyprland client class.
 ---| "match:title" # Hyprland client title.
@@ -12,11 +10,9 @@ local pip = require("lib.picture_in_picture")
 ---| "match:initial_title" # Initial client title.
 
 ---@class WindowStateSelector
----@field matcher WindowStateMatcher Identifies the client field and emitted window-rule selector.
----@field pattern string Regex preserved as-is, or a literal string matched exactly by generated rules.
+---@field matcher WindowStateMatcher Identifies the client field matched by the native plugin.
+---@field pattern string Hyprland full-match regex preserved as-is.
 ---@field exclude? { matcher: WindowStateMatcher, patterns: string[] } Excludes clients matching this field and any pattern.
----@field persist_tags? string[] Dynamic client tags to restore when present.
----@field persist_tag_animations? table<string, string> Entry animation for each persisted tag.
 ---@field geometry_authority? "pip" Excludes geometry from generic capture and accepts it through the PiP port.
 ---@field per_monitor? boolean Retains independent monitor-relative state; defaults to true.
 ---@field restore_monitor? boolean Restores the monitor captured by a global selector.
@@ -52,13 +48,6 @@ return {
 		matcher = "match:initial_title",
 		pattern = [=[^Picture-in-Picture$]=],
 		geometry_authority = "pip",
-		persist_tags = {
-			"pip-top-left",
-			"pip-top-right",
-			"pip-bottom-left",
-			"pip-bottom-right",
-		},
-		persist_tag_animations = pip.corner_tag_animations,
 		per_monitor = false,
 		restore_monitor = true,
 		restore_size = false,

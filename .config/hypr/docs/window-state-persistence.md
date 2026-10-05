@@ -8,8 +8,7 @@ reload the compositor, or move an already-open window.
 ## Native path
 
 1. `plugins/persistent_position.lua` loads the installed plugin and checks its API.
-2. Configuration loads the durable v2 cache before selected windows map, then
-   publishes instance-scoped readiness.
+2. Configuration loads the durable v2 cache before selected windows map.
 3. Completed native drags and explicit keyboard actions capture windowed floating
    geometry. An asynchronous worker coalesces snapshots and writes them atomically.
 4. Mapping reads memory only. Static-rule hooks handle initial windowed state and

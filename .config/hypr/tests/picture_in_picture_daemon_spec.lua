@@ -10,7 +10,6 @@ local module_names = {
 	"lib.pip_placement",
 	"lib.picture_in_picture",
 	"lib.rate_limit",
-	"plugins.persistent_position_readiness",
 	"lib.persistent_pip",
 }
 
@@ -165,11 +164,6 @@ local function run_daemon(options)
 			end,
 		},
 	}
-	package.loaded["plugins.persistent_position_readiness"] = {
-		native_state = function()
-			return options.native_state == true
-		end,
-	}
 	package.loaded["lib.persistent_pip"] = {
 		request = function()
 			return "eval native-accept"
@@ -204,12 +198,6 @@ local function run_daemon(options)
 		restart_exit_status = 75,
 		new = function()
 			return {
-				instance_path = function()
-					return "/tmp/test-persistent-position.ready"
-				end,
-				socket_path = function()
-					return "/tmp/window-state.sock"
-				end,
 				monitors = function(_, query_opts)
 					monitor_queries = monitor_queries + 1
 					if query_opts then
@@ -286,7 +274,7 @@ end
 
 describe("picture-in-picture daemon adapter", function()
 	it("sends accepted placement directly to native persistence without the legacy socket", function()
-		local result = run_daemon({ native_state = true, selected = { "control" } })
+		local result = run_daemon({ selected = { "control" } })
 		local found = false
 		for _, request in ipairs(result.requests) do
 			assert.is_nil(request.message:match("^accept "))

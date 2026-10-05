@@ -124,10 +124,8 @@ try:
     native.parent.mkdir(parents=True)
     native.write_text('persistent-position-v2\n' + 'nemo-main'.encode().hex() + '\t' + 'WAYLAND-1'.encode().hex() + '\t40\t50\t360\t210\t1\t-\t-\n')
     repo = str(Path(__file__).resolve().parents[4])
-    adapter_expression = 'package.path=' + json.dumps(repo + '/.config/hypr/?.lua;' + repo + '/.config/hypr/?/init.lua;') + '..package.path; package.loaded["plugins.persistent_position"]=nil; local p=require("plugins.persistent_position"); assert(p.native_state)'
+    adapter_expression = 'package.path=' + json.dumps(repo + '/.config/hypr/?.lua;' + repo + '/.config/hypr/?/init.lua;') + '..package.path; package.loaded["plugins.persistent_position"]=nil; local api=hl.plugin.persistent_position; local configure=api.configure; local configured=false; api.configure=function(path,selectors) assert(#selectors==19); local ok,err=configure(path,selectors); configured=ok==true; return ok,err end; local ok,result=pcall(require,"plugins.persistent_position"); api.configure=configure; assert(ok,result); assert(result.native_state and configured)'
     lua(adapter_expression)
-    ready = json.loads((root / 'hypr' / sig / 'persistent-position.ready').read_text())
-    assert ready['native_state'] and len(ready['selectors']) == 19, ready
     assert not (Path(repo) / '.config/hypr/runtime/windows/daemons/window-state/window-state.sh').exists()
     before = legacy.read_bytes()
     observer = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)

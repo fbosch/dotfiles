@@ -3,18 +3,14 @@ local config_dir = script_path:match("^(.*)/tests/persistent_position_spec%.lua$
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
 local adapter = "plugins.persistent_position"
-local names = { adapter, "plugins.persistent_position_readiness", "runtime.lib.hypr-ipc" }
 
 describe("native persistence adapter", function()
-	local saved, old_hl, old_env, old_remove
+	local saved, old_hl, old_env
 	local env, calls, loaded, version, configure_ok
 	before_each(function()
-		saved = {}
-		for _, name in ipairs(names) do
-			saved[name] = package.loaded[name]
-		end
+		saved = package.loaded[adapter]
 		package.loaded[adapter] = nil
-		old_hl, old_env, old_remove = _G.hl, os.getenv, os.remove
+		old_hl, old_env = _G.hl, os.getenv
 		env = {
 			HOME = "/test",
 			XDG_STATE_HOME = "/test/state",
@@ -25,22 +21,6 @@ describe("native persistence adapter", function()
 		os.getenv = function(name)
 			return env[name]
 		end
-		os.remove = function()
-			calls[#calls + 1] = "remove-ready"
-			return true
-		end
-		package.loaded["runtime.lib.hypr-ipc"] = {
-			instance_path = function()
-				return "/test/ready"
-			end,
-		}
-		package.loaded["plugins.persistent_position_readiness"] = {
-			publish = function(_, selectors, native)
-				assert.equals(19, #selectors)
-				assert.is_true(native)
-				calls[#calls + 1] = "ready"
-			end,
-		}
 		_G.hl = {
 			get_loaded_plugins = function()
 				return loaded and { { name = "persistent-position" } } or {}
@@ -64,10 +44,8 @@ describe("native persistence adapter", function()
 		}
 	end)
 	after_each(function()
-		_G.hl, os.getenv, os.remove = old_hl, old_env, old_remove
-		for _, name in ipairs(names) do
-			package.loaded[name] = saved[name]
-		end
+		_G.hl, os.getenv = old_hl, old_env
+		package.loaded[adapter] = saved
 	end)
 
 	it("remains inert when explicitly disabled", function()
@@ -75,27 +53,30 @@ describe("native persistence adapter", function()
 		assert.is_false(require(adapter).enabled)
 		assert.same({}, calls)
 	end)
-	it("configures all policies and publishes readiness last", function()
+	it("configures all policies before marking native ownership active", function()
 		local result = require(adapter)
 		assert.is_true(result.enabled)
 		assert.is_true(result.native_state)
-		assert.same({ "remove-ready", "load", "configure", "ready" }, calls)
+		assert.same({ "load", "configure" }, calls)
 	end)
 	it("waits for the plugin API registration parse", function()
 		loaded = false
 		assert.is_false(require(adapter).enabled)
-		assert.same({ "remove-ready", "load" }, calls)
+		assert.same({ "load" }, calls)
 	end)
 	it("reports an unsupported native API without loading old generated rules", function()
 		version = 1
 		local result = require(adapter)
 		assert.is_false(result.enabled)
 		assert.matches("API v2", result.error)
-		assert.same({ "remove-ready", "load", "remove-ready" }, calls)
+		assert.same({ "load" }, calls)
 	end)
-	it("does not publish readiness when configuration fails", function()
+	it("does not mark native ownership active when configuration fails", function()
 		configure_ok = false
-		assert.is_false(require(adapter).enabled)
-		assert.same({ "remove-ready", "load", "configure", "remove-ready" }, calls)
+		local result = require(adapter)
+		assert.is_false(result.enabled)
+		assert.is_nil(result.native_state)
+		assert.matches("bad configuration", result.error)
+		assert.same({ "load", "configure" }, calls)
 	end)
 end)
