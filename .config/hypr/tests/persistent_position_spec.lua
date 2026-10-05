@@ -3,11 +3,11 @@ local config_dir = script_path:match("^(.*)/tests/persistent_position_spec%.lua$
 package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. package.path
 
 local adapter = "plugins.persistent_position"
-local names = { adapter, "plugins.persistent_state", "plugins.persistent_position_readiness", "runtime.lib.hypr-ipc" }
+local names = { adapter, "plugins.persistent_position_readiness", "runtime.lib.hypr-ipc" }
 
 describe("native persistence adapter", function()
 	local saved, old_hl, old_env, old_remove
-	local env, calls, loaded, version, import_ok, configure_ok
+	local env, calls, loaded, version, configure_ok
 	before_each(function()
 		saved = {}
 		for _, name in ipairs(names) do
@@ -21,7 +21,7 @@ describe("native persistence adapter", function()
 			HYPR_PERSISTENT_POSITION_PLUGIN = "/plugin.so",
 			HYPR_PERSISTENT_POSITION_ENABLED = "1",
 		}
-		calls, loaded, version, import_ok, configure_ok = {}, true, 2, true, true
+		calls, loaded, version, configure_ok = {}, true, 2, true
 		os.getenv = function(name)
 			return env[name]
 		end
@@ -34,18 +34,9 @@ describe("native persistence adapter", function()
 				return "/test/ready"
 			end,
 		}
-		package.loaded["plugins.persistent_state"] = {
-			import_file = function(_, path, legacy, selectors)
-				assert.equals("/test/state/hyprland/persistent-position.state", path)
-				assert.equals("/test/.config/hypr/rules/window-state.lua", legacy)
-				assert.equals(20, #selectors)
-				calls[#calls + 1] = "import"
-				assert(import_ok, "broken import")
-			end,
-		}
 		package.loaded["plugins.persistent_position_readiness"] = {
 			publish = function(_, selectors, native)
-				assert.equals(20, #selectors)
+				assert.equals(19, #selectors)
 				assert.is_true(native)
 				calls[#calls + 1] = "ready"
 			end,
@@ -62,7 +53,9 @@ describe("native persistence adapter", function()
 					state_version = function()
 						return version
 					end,
-					configure = function()
+					configure = function(path, selectors)
+						assert.equals("/test/state/hyprland/persistent-position.state", path)
+						assert.equals(19, #selectors)
 						calls[#calls + 1] = "configure"
 						return configure_ok, "bad configuration"
 					end,
@@ -82,11 +75,11 @@ describe("native persistence adapter", function()
 		assert.is_false(require(adapter).enabled)
 		assert.same({}, calls)
 	end)
-	it("configures all policies after import and publishes readiness last", function()
+	it("configures all policies and publishes readiness last", function()
 		local result = require(adapter)
 		assert.is_true(result.enabled)
 		assert.is_true(result.native_state)
-		assert.same({ "remove-ready", "load", "import", "configure", "ready" }, calls)
+		assert.same({ "remove-ready", "load", "configure", "ready" }, calls)
 	end)
 	it("waits for the plugin API registration parse", function()
 		loaded = false
@@ -100,16 +93,9 @@ describe("native persistence adapter", function()
 		assert.matches("API v2", result.error)
 		assert.same({ "remove-ready", "load", "remove-ready" }, calls)
 	end)
-	it("does not publish readiness when import fails", function()
-		import_ok = false
-		local result = require(adapter)
-		assert.is_false(result.enabled)
-		assert.matches("broken import", result.error)
-		assert.same({ "remove-ready", "load", "import", "remove-ready" }, calls)
-	end)
 	it("does not publish readiness when configuration fails", function()
 		configure_ok = false
 		assert.is_false(require(adapter).enabled)
-		assert.same({ "remove-ready", "load", "import", "configure", "remove-ready" }, calls)
+		assert.same({ "remove-ready", "load", "configure", "remove-ready" }, calls)
 	end)
 end)

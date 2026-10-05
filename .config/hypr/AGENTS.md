@@ -12,7 +12,7 @@ Hyprland compositor configuration deployed with GNU Stow; system packages are ma
 - Keep peer Lua modules in one directory on the same filename convention. Use `snake_case` for new module groups; preserve established kebab-case runtime families and generated artifact names.
 - Keep general static Lua rules as direct `hl.workspace_rule(...)` and `hl.window_rule(...)` calls under `rules/workspace.lua` and `rules/window.lua`; keep cohesive policy-owned rules with their policy module.
 - Keep static layer rules under `rules/layer.lua`; load them from the entrypoint where live config order places them, not from `rules/init.lua` if that would change their established ordering.
-- Keep generated rules in `rules/generated.lua`; do not edit generated outputs directly. `rules/window-state.lua` is retained only as legacy migration input.
+- Keep generated rules in `rules/generated.lua`; do not edit generated outputs directly. Retired `rules/window-state.lua` data is not read or migrated.
 - Keep `rules/window-state-selectors.lua` as the writable policy for native persistence; see [window-state persistence](docs/window-state-persistence.md). Do not restore persistence by writing rules or reloading configuration.
 - Keep cross-module policy tables declarative and typed at their writable source; consumers must read them instead of duplicating per-client exceptions.
 - Preserve window-rule declaration order: generated rules, then static rules. Persisted geometry is applied natively before layout.

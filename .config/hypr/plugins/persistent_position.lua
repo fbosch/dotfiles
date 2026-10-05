@@ -24,12 +24,9 @@ local ok, err = pcall(function()
 	for _, plugin in ipairs(hl.get_loaded_plugins()) do
 		if plugin.name == "persistent-position" then
 			-- Plugin load can schedule another parse; configure only once its API is registered.
-			local config_dir = assert(os.getenv("HOME"), "HOME is required") .. "/.config/hypr"
 			local state_path = state_home .. "/hyprland/persistent-position.state"
 			local api = hl.plugin.persistent_position
 			assert(api.state_version and api.state_version() == 2, "native state API v2 is required")
-			local state = require("plugins.persistent_state")
-			state.import_file(api, state_path, config_dir .. "/rules/window-state.lua", selectors)
 			local configured, config_err = hl.plugin.persistent_position.configure(state_path, selectors)
 			assert(configured, "configure: " .. tostring(config_err))
 			readiness.publish(ready_path, selectors, true)

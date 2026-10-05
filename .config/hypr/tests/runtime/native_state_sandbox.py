@@ -71,7 +71,8 @@ try:
     assert not call('configerrors')
     print('LOAD', call('plugin', 'load', plugin), flush=True)
     state = str(root / 'state/persistent-position.state')
-    lua('local p=hl.plugin.persistent_position; assert(p.import_legacy(' + json.dumps(state) + ',{{id="probe",monitor="WAYLAND-1",x=20,y=30,width=320,height=180,windowed=true}})); assert(p.configure(' + json.dumps(state) + ',{{id="probe",matcher="match:class",pattern="^pp-size-probe$"}}))')
+    Path(state).write_text('persistent-position-v2\n' + 'probe'.encode().hex() + '\t' + 'WAYLAND-1'.encode().hex() + '\t20\t30\t320\t180\t1\t-\t-\n')
+    lua('assert(hl.plugin.persistent_position.import_legacy == nil); assert(hl.plugin.persistent_position.configure(' + json.dumps(state) + ',{{id="probe",matcher="match:class",pattern="^pp-size-probe$"}}))')
     for backend, cmd in [('wayland', 'foot --config=/dev/null --app-id=pp-size-probe --title=probe sleep 600'), ('x11', 'kitty --config=/dev/null -o linux_display_server=x11 --class=pp-size-probe --title=probe sleep 600')]:
         call('dispatch', 'hl.dsp.exec_cmd(' + json.dumps(cmd) + ')')
         w = wait_client('pp-size-probe')
@@ -118,12 +119,15 @@ try:
     call('dispatch', 'hl.dsp.window.kill({window=' + json.dumps('address:' + w['address']) + '})')
     legacy = root / 'home/.config/hypr/rules/window-state.lua'
     legacy.parent.mkdir(parents=True)
-    legacy.write_text('return {{source="window-state",matcher="match:class",pattern="^nemo$",monitor="WAYLAND-1",effects={move="40 50",size="360 210"}}}')
+    legacy.write_text('error("retired state must not be read")')
+    native = root / 'state/hyprland/persistent-position.state'
+    native.parent.mkdir(parents=True)
+    native.write_text('persistent-position-v2\n' + 'nemo-main'.encode().hex() + '\t' + 'WAYLAND-1'.encode().hex() + '\t40\t50\t360\t210\t1\t-\t-\n')
     repo = str(Path(__file__).resolve().parents[4])
     adapter_expression = 'package.path=' + json.dumps(repo + '/.config/hypr/?.lua;' + repo + '/.config/hypr/?/init.lua;') + '..package.path; package.loaded["plugins.persistent_position"]=nil; local p=require("plugins.persistent_position"); assert(p.native_state)'
     lua(adapter_expression)
     ready = json.loads((root / 'hypr' / sig / 'persistent-position.ready').read_text())
-    assert ready['native_state'] and len(ready['selectors']) == 20, ready
+    assert ready['native_state'] and len(ready['selectors']) == 19, ready
     assert not (Path(repo) / '.config/hypr/runtime/windows/daemons/window-state/window-state.sh').exists()
     before = legacy.read_bytes()
     observer = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -154,7 +158,7 @@ try:
     assert b'configreloaded>>' not in events, events
     observer.close()
     call('dispatch', 'hl.dsp.window.kill({window=' + json.dumps('address:' + w['address']) + '})')
-    print('PASS production adapter: migration,20 selectors,daemon retirement,size roundtrip,no rule write/no reload', flush=True)
+    print('PASS production adapter: v2-only,19 selectors,daemon retirement,size roundtrip,no rule write/no reload', flush=True)
     print('UNLOAD', call('plugin', 'unload', plugin), flush=True)
     call('plugin', 'load', plugin)
     lua(adapter_expression)
@@ -163,7 +167,7 @@ try:
     assert w['size'] == [380, 230], w
     call('dispatch', 'hl.dsp.window.kill({window=' + json.dumps('address:' + w['address']) + '})')
     call('plugin', 'unload', plugin)
-    print('PASS v2 durable restore after plugin reload; native size wins over legacy import', flush=True)
+    print('PASS v2 durable restore after plugin reload; retired state ignored', flush=True)
     assert proc.poll() is None
     print('PASS size precedence, initial windowed state, later fullscreen request, unload', flush=True)
 finally:

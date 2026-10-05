@@ -38,7 +38,6 @@ return {
 	{ matcher = "match:class", pattern = [=[^org\.gnome\.TextEditor$]=] },
 	{ matcher = "match:class", pattern = [=[^flake_update_terminal$]=] },
 	{ matcher = "match:class", pattern = [=[^Mullvad VPN$]=] },
-	{ matcher = "match:class", pattern = [=[^nz\.co\.mega\..*$]=] },
 	{ matcher = "match:initial_title", pattern = [=[^Infinitefusion$]=] },
 	{ matcher = "match:class", pattern = [=[^GParted$]=] },
 	{ matcher = "match:class", pattern = [=[^net\.davidotek\.pupgui2$]=] },

@@ -8,20 +8,17 @@ reload the compositor, or move an already-open window.
 ## Native path
 
 1. `plugins/persistent_position.lua` loads the installed plugin and checks its API.
-2. `plugins/persistent_state.lua` converts existing `rules/window-state.lua` data
-   into migration records. Import fills missing fields; newer native fields win.
-3. Configuration loads the durable cache before selected windows map, then
+2. Configuration loads the durable v2 cache before selected windows map, then
    publishes instance-scoped readiness.
-4. Completed native drags and explicit keyboard actions capture windowed floating
+3. Completed native drags and explicit keyboard actions capture windowed floating
    geometry. An asynchronous worker coalesces snapshots and writes them atomically.
-5. Mapping reads memory only. Static-rule hooks handle initial windowed state and
+4. Mapping reads memory only. Static-rule hooks handle initial windowed state and
    saved PiP monitor routing; the pre-layout hook applies size and position.
 
 Native state lives at `$XDG_STATE_HOME/hyprland/persistent-position.state`, or
-`~/.local/state/hyprland/persistent-position.state`. Version 1 position records are
-readable. The first version 2 write preserves the original as `.v1.bak`. Invalid
-state is not overwritten. Existing generated rules remain untouched as migration
-and rollback evidence, not as an active persistence store.
+`~/.local/state/hyprland/persistent-position.state`. Only version 2 is supported.
+Invalid or older state is rejected without overwriting it. Legacy generated state
+and existing backups are no longer read or migrated.
 
 ## Policy
 
@@ -65,9 +62,9 @@ the generated window-state loader phase have been removed. PiP sends acceptance
 directly to the plugin. Desktop restart/reset scripts no longer start the old
 writer.
 
-The persisted-data importer and v1 backup reader remain for existing installations.
-Generated legacy state is kept untouched as recovery data. Missing or invalid
-native configuration reports an error; it never starts a reload-based fallback.
+The persisted-data importer and v1 migration support have been removed. Existing
+legacy state and backups remain untouched. Missing or invalid native configuration
+reports an error; it never starts a reload-based fallback.
 
 Production rollout was verified with plugin 0.2.0 and 20 selectors. A repeated
 secondary-monitor resize produced no rule-file changes or `configreloaded` event,
@@ -77,9 +74,9 @@ and the user reported that WoW no longer flickered.
 
 The plugin hooks are pinned to Hyprland `19fb395d`. Build it with
 `just check-hyprland-plugins` in the NixOS repository. The native tests cover state
-validation, field-wise migration, version 1 backups, secure atomic writes, and
-worker lifetime. Dotfiles tests cover selector translation, migration, native
-ownership, PiP delivery, and the absence of generated-rule loading in native mode.
+validation, rejection of older formats, secure atomic writes, and worker lifetime.
+Dotfiles tests cover selector translation, native ownership, PiP delivery, and the
+absence of generated-rule loading in native mode.
 
 Run runtime probes only in a separate nested compositor with private config,
 state, and explicitly selected IPC sockets. Covered cases include Wayland and

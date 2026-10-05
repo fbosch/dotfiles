@@ -7,7 +7,7 @@ Local reference for maintaining this repo's Hyprland Lua configuration.
 - Upstream basis: Hyprland 0.56.0 Lua-first documentation and Lua config PR
   #13817.
 - Local Lua test entrypoint is `.config/hypr/hyprland.lua`; remove or rename it to roll back to `.config/hypr/hyprland.conf`.
-- Generated rules live in `.config/hypr/rules/generated.lua`. `rules/window-state.lua` is legacy migration input, not a live rule phase.
+- Generated rules live in `.config/hypr/rules/generated.lua`. Retired `rules/window-state.lua` data is not read or migrated.
 
 ## Entrypoint Behavior
 

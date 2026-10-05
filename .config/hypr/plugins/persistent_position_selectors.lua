@@ -8,7 +8,6 @@ local ids = {
 	[ [=[^org\.gnome\.TextEditor$]=] ] = "gnome-text-editor",
 	[ [=[^flake_update_terminal$]=] ] = "flake-update-terminal",
 	[ [=[^Mullvad VPN$]=] ] = "mullvad-vpn",
-	[ [=[^nz\.co\.mega\..*$]=] ] = "mega",
 	[ [=[^Infinitefusion$]=] ] = "infinitefusion",
 	[ [=[^GParted$]=] ] = "gparted",
 	[ [=[^net\.davidotek\.pupgui2$]=] ] = "pupgui2",
@@ -42,6 +41,6 @@ for _, source in ipairs(window_state_selectors) do
 		geometry_authority = source.geometry_authority or "generic",
 	}
 end
-assert(#selectors == 20, "persistent-position selector policy changed; review its stable IDs")
+assert(#selectors == 19, "persistent-position selector policy changed; review its stable IDs")
 
 return selectors
