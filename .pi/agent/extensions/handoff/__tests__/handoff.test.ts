@@ -27,6 +27,8 @@ type BeforeAgentStartHandler = (
 ) => Promise<unknown> | unknown;
 type CapturedTool = {
   name: string;
+  exposure?: string;
+  defaultActive?: boolean;
   execute: (
     toolCallId: string,
     params: { sessionID: string; limit?: number },
@@ -323,6 +325,8 @@ test("read_session is restricted to the pinned parent branch", async () => {
     appendEntry: () => {},
   } as unknown as ExtensionAPI;
   createHandoffExtension()(pi);
+  expect(tool?.exposure).toBe("deferred");
+  expect(tool?.defaultActive).toBe(false);
   const context = { cwd: directory, sessionManager: target } as unknown as ExtensionContext;
 
   try {

@@ -13,6 +13,7 @@ import {
   truncateHead,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { INACTIVE_SPECIALIST_TOOL } from "../../lib/tool-exposure";
 
 type Mode = "auto" | "browser" | "window" | "region" | "monitor" | "full";
 type Format = "png" | "jpeg";
@@ -1896,6 +1897,7 @@ function createHyprDesktopDiagnoseTool(
   environment: NodeJS.ProcessEnv,
 ) {
   return defineTool<typeof HyprDesktopDiagnoseParameters, HyprlandDiagnosticDetails>({
+    ...INACTIVE_SPECIALIST_TOOL,
     name: "hypr_desktop_diagnose",
     label: "Hyprland Desktop Diagnostic",
     description:
@@ -1963,6 +1965,7 @@ function createHyprLayerInspectTool(
   environment: NodeJS.ProcessEnv,
 ) {
   return defineTool<typeof HyprLayerInspectParameters, LayerInspectionDetails>({
+    ...INACTIVE_SPECIALIST_TOOL,
     name: "hypr_layer_inspect",
     label: "Hyprland Layer Inspector",
     description:
@@ -2120,6 +2123,7 @@ function createHyprWindowScreenshotTool(
   environment: NodeJS.ProcessEnv,
 ) {
   return defineTool<typeof HyprWindowScreenshotParameters, CaptureResult>({
+    ...INACTIVE_SPECIALIST_TOOL,
     name: "hypr_window_screenshot",
     label: "Hyprland Screenshot",
     description:

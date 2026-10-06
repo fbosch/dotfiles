@@ -5,6 +5,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { match } from "ts-pattern";
 import { type Static, Type } from "typebox";
+import { INACTIVE_SPECIALIST_TOOL } from "../../lib/tool-exposure";
 import type { NeovimStartupPayload } from "../startup-header/owner-payloads";
 import { installStartupOwnerPublisher, type StartupOwnerStatus } from "../startup-header/publisher";
 import { type NvimConnectionFactory, PiNeovimChannel } from "./channel";
@@ -252,6 +253,7 @@ export function initializeNeovim(
 
   pi.registerTool(
     defineTool<typeof NeovimParameters, NeovimToolDetails>({
+      ...INACTIVE_SPECIALIST_TOOL,
       name: "neovim",
       label: "Neovim",
       description:

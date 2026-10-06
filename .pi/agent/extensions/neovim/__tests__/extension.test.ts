@@ -6,10 +6,10 @@ import type {
   ExtensionUIContext,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { createEventBus } from "@earendil-works/pi-coding-agent";
 import type { Component, TUI } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import {
   createStartupOwnerRequest,
   STARTUP_OWNER_SNAPSHOT_EVENT,
@@ -256,6 +256,8 @@ test("registers one fixed-socket tool and cleans it up with the session", async 
   })(pi);
 
   if (tool === undefined) throw new Error("neovim tool was not registered");
+  expect(tool.exposure).toBe("deferred");
+  expect(tool.defaultActive).toBe(false);
   await handlers.get("session_start")?.({} as never, context);
   expect(connection.boundSessionArguments).toEqual({
     launchId: "0123456789abcdef0123456789abcdef",

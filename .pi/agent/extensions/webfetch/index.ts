@@ -5,7 +5,7 @@ import { isIP } from "node:net";
 import { Readable } from "node:stream";
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
-import { PROGRAMMATIC_READ_ONLY } from "../../lib/tool-exposure";
+import { INACTIVE_SPECIALIST_TOOL, PROGRAMMATIC_READ_ONLY } from "../../lib/tool-exposure";
 
 const DEFAULT_TIMEOUT_SECONDS = 30;
 const MAX_TIMEOUT_SECONDS = 120;
@@ -176,12 +176,22 @@ async function defaultResolveHostname(hostname: string): Promise<readonly string
   return records.map((record) => record.address);
 }
 
+function parseUrl(value: string | URL): URL {
+  try {
+    return value instanceof URL ? value : new URL(value);
+  } catch (cause) {
+    throw new Error("Invalid URL", { cause });
+  }
+}
+
+const DEFAULT_BASE_URL = parseUrl("https://invalid.example");
+
 async function assertPublicUrl(
   value: string | URL,
   resolveHostname: (hostname: string) => Promise<readonly string[]>,
   signal: AbortSignal,
 ): Promise<ValidatedUrl> {
-  const url = value instanceof URL ? value : new URL(value);
+  const url = parseUrl(value);
   if (url.protocol !== "http:" && url.protocol !== "https:") {
     throw new Error("URL must start with http:// or https://");
   }
@@ -277,6 +287,7 @@ async function requestPinnedUrl(
         try {
           const status = incoming.statusCode ?? 500;
           const hasNoBody = status === 204 || status === 205 || status === 304;
+          // SAFETY: IncomingMessage is a raw HTTP response stream and yields byte chunks.
           const body = hasNoBody
             ? null
             : (Readable.toWeb(incoming) as unknown as ReadableStream<Uint8Array>);
@@ -633,7 +644,7 @@ export function htmlToText(html: string, deadline = Number.POSITIVE_INFINITY): s
 
 export function htmlToMarkdown(
   html: string,
-  baseUrl = new URL("https://invalid.example"),
+  baseUrl = DEFAULT_BASE_URL,
   deadline = Number.POSITIVE_INFINITY,
 ): string {
   let output = "";
@@ -753,7 +764,7 @@ export async function fetchWebContent(
   const signalWithTimeout = responseSignal(signal, timeout);
   const requestFn = dependencies.requestFn ?? requestPinnedUrl;
   const resolveHostname = dependencies.resolveHostname ?? defaultResolveHostname;
-  const initialUrl = new URL(params.url);
+  const initialUrl = parseUrl(params.url);
   const { response, url } = await fetchWithRedirects(
     initialUrl,
     format,
@@ -835,6 +846,7 @@ export async function fetchWebContent(
 export default function webFetchExtension(pi: ExtensionAPI): void {
   pi.registerTool(
     defineTool<typeof WebFetchParamsSchema, WebFetchDetails>({
+      ...INACTIVE_SPECIALIST_TOOL,
       ...PROGRAMMATIC_READ_ONLY,
       name: "webfetch",
       label: "Web Fetch",

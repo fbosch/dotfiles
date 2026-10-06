@@ -1,11 +1,27 @@
 import { describe, expect, test } from "bun:test";
 import { rejects } from "node:assert/strict";
 import { spawnSync } from "node:child_process";
-import { fetchWebContent, htmlToMarkdown, htmlToText, isBlockedAddress } from "..";
+import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import webFetchExtension, {
+  fetchWebContent,
+  htmlToMarkdown,
+  htmlToText,
+  isBlockedAddress,
+} from "..";
 
 const PUBLIC_ADDRESSES = async () => ["93.184.216.34"];
 
 describe("webfetch", () => {
+  test("registers web fetch with native deferred exposure", () => {
+    let tool: ToolDefinition | undefined;
+    webFetchExtension({
+      registerTool: (value: ToolDefinition) => (tool = value),
+    } as unknown as ExtensionAPI);
+    expect(tool?.name).toBe("webfetch");
+    expect(tool?.exposure).toBe("deferred");
+    expect(tool?.defaultActive).toBe(false);
+  });
+
   test("blocks local and private destinations", async () => {
     expect(isBlockedAddress("127.0.0.1")).toBe(true);
     expect(isBlockedAddress("10.0.0.1")).toBe(true);

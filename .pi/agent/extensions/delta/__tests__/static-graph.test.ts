@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { mkdtemp, readdir, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,6 +8,7 @@ import type {
   ExtensionContext,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import {
   type DeltaDetails,
   type DeltaExtensionDependencies,
@@ -197,6 +197,8 @@ describe("first-use module loaders", () => {
     expect(loads).toBe(0);
     const tool = registeredTools.find(({ name }) => name === "git_diff");
     if (tool?.execute === undefined) throw new Error("git_diff tool was not registered");
+    expect(tool.exposure).toBe("deferred");
+    expect(tool.defaultActive).toBe(false);
     await tool.execute(
       "diff-1",
       {},

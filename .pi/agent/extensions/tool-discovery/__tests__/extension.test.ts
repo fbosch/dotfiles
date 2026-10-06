@@ -33,12 +33,10 @@ writeFileSync(
       deferredToolPrefixes: [
         "chart_",
         "figma_",
-        "serena_",
-        "context7_",
-        "ast-grep_",
-        "mcp__",
-        "browser_",
-        "neovim",
+        "find_definition",
+        "worktrunk",
+        "webfetch",
+        "websearch",
       ],
     },
   }),
@@ -386,36 +384,12 @@ describe("tool discovery", () => {
     expect(harness.activeToolSets).toEqual([]);
   });
 
-  test("classifies only known specialist tool names", () => {
-    expect(isDeferredToolName("chart_pie")).toBe(true);
-    expect(isDeferredToolName("chart_bar")).toBe(true);
-    expect(isDeferredToolName("chart_line")).toBe(true);
-    expect(isDeferredToolName("chart_scatter")).toBe(true);
-    expect(isDeferredToolName("chart_histogram")).toBe(true);
-    expect(isDeferredToolName("chart_bezier")).toBe(true);
-    expect(isDeferredToolName("chart_heatmap")).toBe(true);
-    expect(isDeferredToolName("chart_boxplot")).toBe(true);
-    expect(isDeferredToolName("chart_waterfall")).toBe(true);
-    expect(isDeferredToolName("chart_dumbbell")).toBe(true);
-    expect(isDeferredToolName("chart_stacked_bar")).toBe(true);
-    expect(isDeferredToolName("chart_gantt")).toBe(true);
-    expect(isDeferredToolName("chart_network")).toBe(true);
-    expect(isDeferredToolName("chart_tree")).toBe(true);
-    expect(isDeferredToolName("chart_treemap")).toBe(true);
-    expect(isDeferredToolName("figma_parse_url")).toBe(true);
-    expect(isDeferredToolName("serena_find_symbol")).toBe(true);
-    expect(isDeferredToolName("mcp__github")).toBe(true);
-    expect(isDeferredToolName("exec")).toBe(true);
-    expect(isDeferredToolName("find_definition")).toBe(true);
-    expect(isDeferredToolName("worktrunk")).toBe(true);
-    expect(isDeferredToolName("hypr_desktop_diagnose")).toBe(true);
-    expect(isDeferredToolName("hypr_layer_inspect")).toBe(true);
-
+  test("prefix deferral applies only to configured third-party names", () => {
+    expect(isDeferredToolName("tool_load", ["tool_"])).toBe(false);
+    expect(isDeferredToolName("browser_open")).toBe(false);
+    expect(isDeferredToolName("chart_pie")).toBe(false);
+    expect(isDeferredToolName("worktrunk", ["worktrunk"])).toBe(true);
     expect(isDeferredToolName("read")).toBe(false);
-    expect(isDeferredToolName("fffind")).toBe(false);
-    expect(isDeferredToolName("just_tools")).toBe(false);
-    expect(isDeferredToolName("mcp")).toBe(false);
-    expect(isDeferredToolName("neovim")).toBe(false);
   });
   test("resolves Classifier settings with safe defaults, bounds, and trusted project overrides", () => {
     expect(resolveClassifierToolDiscoveryConfig({}, undefined)).toEqual({
@@ -472,9 +446,9 @@ describe("tool discovery", () => {
         { toolDiscovery: { deferredToolPrefixes: [] } },
       ),
     ).toEqual([]);
-    expect(
-      resolveDeferredToolPrefixes({ toolDiscovery: { deferredToolPrefixes: [""] } }),
-    ).toContain("chart_");
+    expect(resolveDeferredToolPrefixes({ toolDiscovery: { deferredToolPrefixes: [""] } })).toEqual(
+      [],
+    );
     expect(isDeferredToolName("tool_load", ["tool_"])).toBe(false);
   });
 
@@ -483,12 +457,12 @@ describe("tool discovery", () => {
       tools: [
         dummyTool("read", "Read files"),
         dummyTool("mcp", "Discover MCP operations"),
-        dummyTool("neovim", "Inspect the launching editor"),
+        { ...dummyTool("neovim", "Inspect the launching editor"), exposure: "deferred" },
         dummyTool("figma_parse_url", "Parse a Figma URL"),
         dummyTool("find_definition", "Find a symbol definition"),
         dummyTool("worktrunk", "Manage worktrees"),
       ],
-      activeTools: ["read", "mcp", "neovim", "figma_parse_url", "find_definition", "worktrunk"],
+      activeTools: ["read", "mcp", "figma_parse_url", "find_definition", "worktrunk"],
     });
 
     await harness.discoverResources();
@@ -506,25 +480,24 @@ describe("tool discovery", () => {
     const harness = createHarness({
       tools: [
         dummyTool("read", "Read files"),
-        dummyTool("figma_parse_url", "Parse a Figma URL"),
         { ...dummyTool("chart_pie", "Render a pie chart"), exposure: "deferred" },
         { ...dummyTool("chart_donut", "Render a donut chart"), exposure: "deferred" },
       ],
-      activeTools: ["read", "figma_parse_url", "chart_pie"],
+      activeTools: ["read", "chart_pie"],
     });
 
     await harness.discoverResources();
 
     expect(harness.activeTools).toEqual(["read", "chart_pie", "tool_load"]);
-    expect((await harness.search("chart donut", 1)).details).toEqual({
-      matches: ["chart_donut", "chart_pie"],
+    expect((await harness.search("chart_donut", 1)).details).toEqual({
+      matches: ["chart_donut"],
       added: ["chart_donut"],
       rankingSource: "lexical",
     });
     expect(harness.activeTools).toEqual(["read", "chart_pie", "tool_load", "chart_donut"]);
   });
 
-  test("loads a matched underscore-namespaced tool family", async () => {
+  test("loads only the ranked specialist tool, not underscore-named siblings", async () => {
     const harness = createHarness({
       tools: [
         dummyTool("read", "Read files"),
@@ -538,47 +511,40 @@ describe("tool discovery", () => {
 
     await harness.discoverResources();
     expect(harness.activeTools).toEqual(["read", "tool_load"]);
-    expect((await harness.search("chart timeline", 1)).details).toEqual({
-      matches: ["chart_gantt", "chart_pie", "chart_line", "chart_network"],
-      added: ["chart_gantt", "chart_pie", "chart_line", "chart_network"],
+    expect((await harness.search("chart_gantt", 1)).details).toEqual({
+      matches: ["chart_gantt"],
+      added: ["chart_gantt"],
       rankingSource: "lexical",
     });
-    expect(harness.activeTools).toEqual([
-      "read",
-      "tool_load",
-      "chart_gantt",
-      "chart_pie",
-      "chart_line",
-      "chart_network",
-    ]);
+    expect(harness.activeTools).toEqual(["read", "tool_load", "chart_gantt"]);
   });
 
-  test("loads the full browser family from one matching search", async () => {
+  test("loads only the specific browser tool selected by the search", async () => {
     const harness = createHarness({
       tools: [
-        dummyTool("browser_open", "Open a URL in Lightpanda"),
-        dummyTool("browser_snapshot", "Read the current page accessibility snapshot"),
-        dummyTool("browser_act", "Interact with a browser element"),
-        dummyTool("browser_decide", "Choose among explicit browser actions"),
+        { ...dummyTool("browser_open", "Open a URL in Lightpanda"), exposure: "deferred" },
+        {
+          ...dummyTool("browser_snapshot", "Read the current page accessibility snapshot"),
+          exposure: "deferred",
+        },
+        { ...dummyTool("browser_act", "Interact with a browser element"), exposure: "deferred" },
+        {
+          ...dummyTool("browser_decide", "Choose among explicit browser actions"),
+          exposure: "deferred",
+        },
       ],
       activeTools: [],
     });
 
     await harness.discoverResources();
-    const result = await harness.search("open a URL in the browser", 1);
+    const result = await harness.search("browser_open", 1);
 
     expect(result.details).toEqual({
-      matches: ["browser_open", "browser_snapshot", "browser_act", "browser_decide"],
-      added: ["browser_open", "browser_snapshot", "browser_act", "browser_decide"],
+      matches: ["browser_open"],
+      added: ["browser_open"],
       rankingSource: "lexical",
     });
-    expect(harness.activeTools).toEqual([
-      "tool_load",
-      "browser_open",
-      "browser_snapshot",
-      "browser_act",
-      "browser_decide",
-    ]);
+    expect(harness.activeTools).toEqual(["tool_load", "browser_open"]);
   });
 
   test("loads the highest-scoring matches additively", async () => {
@@ -599,16 +565,11 @@ describe("tool discovery", () => {
     const result = await harness.search("figma implementation context", 1);
 
     expect(result.details).toEqual({
-      matches: ["figma_get_implementation_context", "figma_parse_url"],
-      added: ["figma_get_implementation_context", "figma_parse_url"],
+      matches: ["figma_get_implementation_context"],
+      added: ["figma_get_implementation_context"],
       rankingSource: "lexical",
     });
-    expect(harness.activeTools).toEqual([
-      "read",
-      "tool_load",
-      "figma_get_implementation_context",
-      "figma_parse_url",
-    ]);
+    expect(harness.activeTools).toEqual(["read", "tool_load", "figma_get_implementation_context"]);
   });
 
   test("does not activate unclassified inactive tools", async () => {
@@ -701,6 +662,19 @@ describe("tool discovery", () => {
     expect(harness.activeTools).toEqual(["read", "tool_load"]);
   });
 
+  test("discovers native deferred metadata without a configured name prefix", async () => {
+    const harness = createHarness({
+      tools: [
+        dummyTool("read", "Read files"),
+        { ...dummyTool("browser_snapshot", "Read the browser snapshot"), exposure: "deferred" },
+        dummyTool("browser_open", "Open the browser"),
+      ],
+    });
+    const result = await harness.search("browser snapshot", 1);
+    expect(result.details.matches).toEqual(["browser_snapshot"]);
+    expect(harness.activeTools).toEqual(["tool_load", "browser_snapshot"]);
+  });
+
   test("ranks deferred tools deterministically", () => {
     const tools = [
       dummyTool("figma_render_nodes", "Render Figma nodes"),
@@ -711,7 +685,7 @@ describe("tool discovery", () => {
       description: tool.description,
       parameters: tool.parameters,
       ...(tool.promptGuidelines === undefined ? {} : { promptGuidelines: tool.promptGuidelines }),
-      exposure: "direct" as const,
+      exposure: tool.name.startsWith("figma_") ? ("deferred" as const) : ("direct" as const),
       sourceInfo: {
         path: `/extensions/${tool.name}.ts`,
         source: "local" as const,

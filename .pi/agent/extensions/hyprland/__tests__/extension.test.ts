@@ -55,6 +55,16 @@ function captureRegistration() {
 }
 
 describe("Hyprland extension", () => {
+  test("registers specialist tools with native deferred exposure", () => {
+    const { pi, getTool } = captureRegistration();
+    registerHyprlandExtension(pi, { environment });
+    for (const name of ["hypr_desktop_diagnose", "hypr_layer_inspect", "hypr_window_screenshot"]) {
+      const tool = getTool(name);
+      expect(tool?.exposure).toBe("deferred");
+      expect(tool?.defaultActive).toBe(false);
+    }
+  });
+
   test("requires a complete Hyprland Wayland environment", () => {
     expect(supportsHyprlandSession({})).toBeFalse();
     expect(

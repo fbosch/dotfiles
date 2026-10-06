@@ -35,32 +35,7 @@ const DEFAULT_CLASSIFIER_TOOL_DISCOVERY_CONFIG = {
   timeoutMs: DEFAULT_CLASSIFIER_TIMEOUT_MS,
 } as const;
 
-const DEFERRED_TOOL_NAMES = new Set([
-  "exec",
-  "find_definition",
-  "find_callers",
-  "find_callees",
-  "get_symbol_body",
-  "list_symbols",
-  "lsp",
-  "git_diff",
-  "websearch",
-  "webfetch",
-  "read_session",
-  "hypr_window_screenshot",
-  "hypr_desktop_diagnose",
-  "hypr_layer_inspect",
-  "worktrunk",
-]);
-
-const DEFAULT_DEFERRED_TOOL_PREFIXES = [
-  "chart_",
-  "figma_",
-  "serena_",
-  "context7_",
-  "ast-grep_",
-  "mcp__",
-] as const;
+const DEFAULT_DEFERRED_TOOL_PREFIXES = [] as const;
 
 const ToolSearchParameters = Type.Object(
   {
@@ -168,7 +143,18 @@ export function isDeferredToolName(
   prefixes: readonly string[] = DEFAULT_DEFERRED_TOOL_PREFIXES,
 ): boolean {
   if (name === "tool_load") return false;
-  return DEFERRED_TOOL_NAMES.has(name) || prefixes.some((prefix) => name.startsWith(prefix));
+  return prefixes.some((prefix) => name.startsWith(prefix));
+}
+
+function isDiscoverableTool(
+  tool: ToolInfo,
+  prefixes: readonly string[] = DEFAULT_DEFERRED_TOOL_PREFIXES,
+): boolean {
+  return (
+    tool.exposure === "deferred" ||
+    tool.exposure === "codemode" ||
+    isDeferredToolName(tool.name, prefixes)
+  );
 }
 
 function isSubagentSession(ctx: ExtensionContext): boolean {
@@ -216,7 +202,7 @@ export function searchDeferredTools(
   if (terms.length === 0) return [];
 
   return tools
-    .filter((tool) => isDeferredToolName(tool.name, prefixes))
+    .filter((tool) => isDiscoverableTool(tool, prefixes))
     .map((tool) => ({ tool, score: scoreTool(tool, terms) }))
     .filter(({ score }) => score > 0)
     .sort(
@@ -224,31 +210,6 @@ export function searchDeferredTools(
     )
     .slice(0, limit)
     .map(({ tool }) => tool);
-}
-
-function inferredToolFamily(name: string): string | undefined {
-  return /^([^_]+_)/u.exec(name)?.[1];
-}
-
-export function expandDeferredToolFamilyMatches(
-  tools: readonly ToolInfo[],
-  matches: readonly ToolInfo[],
-): ToolInfo[] {
-  const matchedFamilies = new Set(
-    matches.map((tool) => inferredToolFamily(tool.name)).filter((family) => family !== undefined),
-  );
-  if (matchedFamilies.size === 0) return [...matches];
-
-  const expanded = [...matches];
-  const selectedNames = new Set(matches.map((tool) => tool.name));
-  for (const tool of tools) {
-    const family = inferredToolFamily(tool.name);
-    if (!selectedNames.has(tool.name) && family !== undefined && matchedFamilies.has(family)) {
-      selectedNames.add(tool.name);
-      expanded.push(tool);
-    }
-  }
-  return expanded;
 }
 
 export type ClassifierRankingOptions = Omit<DiscoveryRankingOptions, "enabled">;
@@ -294,7 +255,7 @@ export async function rankDeferredToolsWithClassifier(
   options: ClassifierRankingOptions,
   signal?: AbortSignal,
 ): Promise<RankedToolResult | undefined> {
-  const candidates = tools.filter((tool) => isDeferredToolName(tool.name, prefixes));
+  const candidates = tools.filter((tool) => isDiscoverableTool(tool, prefixes));
   const attempt = await rankDiscoveryWithClassifier(
     candidates,
     lexicalDiscoveryMatches(candidates, query, prefixes),
@@ -313,7 +274,7 @@ export async function searchDeferredToolsWithClassifierFallback(
   options: ClassifierRankingOptions,
   signal?: AbortSignal,
 ): Promise<RankedToolResult> {
-  const candidates = tools.filter((tool) => isDeferredToolName(tool.name, prefixes));
+  const candidates = tools.filter((tool) => isDiscoverableTool(tool, prefixes));
   const ranking = await rankDiscovery(
     candidates,
     lexicalDiscoveryMatches(candidates, query, prefixes),
@@ -434,7 +395,7 @@ export default function toolDiscoveryExtension(
             const current = byName.get(tool.name);
             return current === undefined ? [] : [current];
           });
-          const matches = expandDeferredToolFamilyMatches(currentTools, currentMatches);
+          const matches = currentMatches;
           if (matches.length === 0) {
             return {
               ...usage,

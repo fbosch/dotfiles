@@ -201,6 +201,8 @@ function resultTask(details: unknown): string {
 test("registers one script tool; the manual Just extension registers no agent tools", async () => {
   const h = await harness();
   expect(h.tool.name).toBe("dekit");
+  expect(h.tool.exposure).toBe("deferred");
+  expect(h.tool.defaultActive).toBe(false);
   const tools: string[] = [];
   const commands: string[] = [];
   justExtension({

@@ -18,7 +18,10 @@ test("native search loads deferred tools while codemode retains the inactive-dir
   const directory = mkdtempSync(join(tmpdir(), "native-deferral-"));
   writeFileSync(
     join(directory, "settings.json"),
-    JSON.stringify({ classifier: { toolDiscovery: { enabled: false } } }),
+    JSON.stringify({
+      classifier: { toolDiscovery: { enabled: false } },
+      toolDiscovery: { deferredToolPrefixes: ["third_party_fetch"] },
+    }),
   );
   process.env.PI_CODING_AGENT_DIR = directory;
   try {
@@ -42,7 +45,7 @@ test("native search loads deferred tools while codemode retains the inactive-dir
     const parameters = Type.Object({});
     for (const [name, exposure] of [
       ["chart_pie", "deferred"],
-      ["webfetch", "direct"],
+      ["third_party_fetch", "direct"],
     ] as const) {
       pi.registerTool({
         name,
@@ -91,7 +94,13 @@ test("native search loads deferred tools while codemode retains the inactive-dir
     const codemode = tools.get("codemode");
     if (!search || !codemode) throw new Error("Native frontends were not registered");
     expect(active).not.toContain("chart_pie");
-    const miss = await search.execute("search", { query: "webfetch" }, undefined, undefined, ctx);
+    const miss = await search.execute(
+      "search",
+      { query: "third_party_fetch" },
+      undefined,
+      undefined,
+      ctx,
+    );
     expect(miss.details).toEqual({ loaded: [] });
     const found = await search.execute("search", { query: "chart_pie" }, undefined, undefined, ctx);
     expect(found.details).toEqual({ loaded: ["chart_pie"] });
@@ -100,15 +109,15 @@ test("native search loads deferred tools while codemode retains the inactive-dir
     const loaded = await codemode.execute(
       "sandbox",
       {
-        code: 'text(await tools.tool_load({ query: "webfetch", limit: 1 }));',
+        code: 'text(await tools.tool_load({ query: "third_party_fetch", limit: 1 }));',
       },
       undefined,
       undefined,
       ctx,
     );
     expect(loaded.isError).not.toBe(true);
-    expect(JSON.stringify(loaded.content)).toContain("webfetch (loaded)");
-    expect(active).toContain("webfetch");
+    expect(JSON.stringify(loaded.content)).toContain("third_party_fetch (loaded)");
+    expect(active).toContain("third_party_fetch");
   } finally {
     if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
     else process.env.PI_CODING_AGENT_DIR = previous;

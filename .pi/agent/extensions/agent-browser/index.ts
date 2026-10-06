@@ -7,6 +7,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { type Static, Type } from "typebox";
 import { requestClassifier } from "../../lib/classifier";
+import { INACTIVE_SPECIALIST_TOOL } from "../../lib/tool-exposure";
 
 const ENGINE = "lightpanda";
 const COMMAND_TIMEOUT_MS = 30_000;
@@ -451,6 +452,7 @@ export function applyStepSafety(
 
 export default function agentBrowserExtension(pi: ExtensionAPI): void {
   pi.registerTool({
+    ...INACTIVE_SPECIALIST_TOOL,
     name: "browser_open",
     label: "Open browser page",
     description: "Open a URL in the session-owned agent-browser Lightpanda instance.",
@@ -470,6 +472,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
   });
 
   pi.registerTool({
+    ...INACTIVE_SPECIALIST_TOOL,
     name: "browser_snapshot",
     label: "Snapshot browser page",
     description:
@@ -489,6 +492,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
   });
 
   pi.registerTool({
+    ...INACTIVE_SPECIALIST_TOOL,
     name: "browser_act",
     label: "Act in browser",
     description:
@@ -514,6 +518,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
   });
 
   pi.registerTool({
+    ...INACTIVE_SPECIALIST_TOOL,
     name: "browser_step",
     label: "Take browser step",
     description:
@@ -603,6 +608,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
   });
 
   pi.registerTool({
+    ...INACTIVE_SPECIALIST_TOOL,
     name: "browser_run",
     label: "Run browser workflow",
     description:
@@ -785,6 +791,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
   });
 
   pi.registerTool({
+    ...INACTIVE_SPECIALIST_TOOL,
     name: "browser_decide",
     label: "Choose browser action",
     description:

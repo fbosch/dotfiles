@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import {
+import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import webSearchExtension, {
   parseMcpResponse,
   searchWeb,
   selectProviderForSearch,
@@ -7,6 +8,16 @@ import {
 } from "../websearch";
 
 describe("websearch", () => {
+  test("registers web search with native deferred exposure", () => {
+    let tool: ToolDefinition | undefined;
+    webSearchExtension({
+      registerTool: (value: ToolDefinition) => (tool = value),
+    } as unknown as ExtensionAPI);
+    expect(tool?.name).toBe("websearch");
+    expect(tool?.exposure).toBe("deferred");
+    expect(tool?.defaultActive).toBe(false);
+  });
+
   test("honors an explicit provider override", () => {
     expect(selectWebSearchProvider("session", "exa")).toBe("exa");
     expect(selectWebSearchProvider("session", "parallel")).toBe("parallel");

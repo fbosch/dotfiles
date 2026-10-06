@@ -3,9 +3,10 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ClassifierAnswer, ClassifierContext, ClassifierResult } from "@earendil-works/pi-ai";
-import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ModelRegistry, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-classifier-registry";
 import { type ClassifierRegistry, createClassifierRequester } from "../../../lib/classifier";
+import agentBrowserExtension from "..";
 import {
   browserArgs,
   createDecisionRequest,
@@ -41,6 +42,24 @@ function registryWithClassifier(classify: ClassifierRegistry["classify"]): Class
 }
 
 describe("agent-browser extension", () => {
+  test("registers browser operations as native deferred specialists", () => {
+    const tools: ToolDefinition[] = [];
+    agentBrowserExtension({
+      registerTool: (tool: ToolDefinition) => tools.push(tool),
+    } as unknown as ExtensionAPI);
+    expect(tools.map((tool) => tool.name)).toEqual([
+      "browser_open",
+      "browser_snapshot",
+      "browser_act",
+      "browser_step",
+      "browser_run",
+      "browser_decide",
+    ]);
+    expect(
+      tools.every((tool) => tool.exposure === "deferred" && tool.defaultActive === false),
+    ).toBe(true);
+  });
+
   test("always scopes commands to a sanitized Lightpanda session", () => {
     expect(browserArgs("session/id with spaces", ["open", "https://example.com"])).toEqual([
       "--engine",

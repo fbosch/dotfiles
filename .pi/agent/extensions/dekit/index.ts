@@ -15,6 +15,7 @@ import {
   MAX_DISCOVERY_CLASSIFIER_CANDIDATES,
   rankDiscovery,
 } from "../../lib/discovery-ranking";
+import { INACTIVE_SPECIALIST_TOOL } from "../../lib/tool-exposure";
 import { truncateCommandOutput } from "../just";
 import { resolveClassifierToolDiscoveryConfig } from "../tool-discovery";
 import {
@@ -190,6 +191,7 @@ function scriptSummary(script: Script) {
 export default function dekitExtension(pi: ExtensionAPI): void {
   pi.registerTool(
     defineTool<typeof Parameters, Result>({
+      ...INACTIVE_SPECIALIST_TOOL,
       name: "dekit",
       label: "Project scripts",
       parameters: Parameters,

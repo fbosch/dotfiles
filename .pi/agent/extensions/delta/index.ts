@@ -12,7 +12,7 @@ import {
 import { Container, Spacer, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { readJsonConfig } from "../../lib/extension-config";
-import { PROGRAMMATIC_READ_ONLY } from "../../lib/tool-exposure";
+import { INACTIVE_SPECIALIST_TOOL, PROGRAMMATIC_READ_ONLY } from "../../lib/tool-exposure";
 import { diffComponent } from "./rendering";
 import {
   DEFAULT_SYNTAX_THEME,
@@ -103,7 +103,10 @@ interface HashlineToolModule {
   readonly buildToolDef?: (flags?: HashlineEditFlags) => ToolDefinition;
   readonly buildInsertToolDef?: (flags?: HashlineEditFlags) => ToolDefinition;
   readonly buildReplaceMatchToolDef?: (flags?: HashlineEditFlags) => ToolDefinition;
-  readonly buildTransferToolDef?: (kind: "copy" | "move", flags?: HashlineEditFlags) => ToolDefinition;
+  readonly buildTransferToolDef?: (
+    kind: "copy" | "move",
+    flags?: HashlineEditFlags,
+  ) => ToolDefinition;
   readonly regUndo?: (pi: ExtensionAPI, flags?: HashlineEditFlags) => void;
   readonly regRead?: (pi: ExtensionAPI, flags?: HashlineEditFlags) => void;
   readonly regGrep?: (pi: ExtensionAPI, flags?: HashlineEditFlags) => void;
@@ -159,7 +162,8 @@ export async function loadHashlineDeltaTools(): Promise<ToolDefinition[]> {
     try {
       // SAFETY: Each listed installed hashline module exports its corresponding builder.
       const module = (await import(
-        new URL(`../../npm/node_modules/pi-hashline-edit-pro/src/${modulePath}`, import.meta.url).href
+        new URL(`../../npm/node_modules/pi-hashline-edit-pro/src/${modulePath}`, import.meta.url)
+          .href
       )) as unknown as HashlineToolModule;
       const tool = build(module);
       if (tool !== undefined) tools.push(tool);
@@ -172,12 +176,20 @@ export async function loadHashlineDeltaTools(): Promise<ToolDefinition[]> {
     try {
       // SAFETY: read.ts and grep.ts expose the matching registration functions.
       const module = (await import(
-        new URL(`../../npm/node_modules/pi-hashline-edit-pro/src/${modulePath}`, import.meta.url).href
+        new URL(`../../npm/node_modules/pi-hashline-edit-pro/src/${modulePath}`, import.meta.url)
+          .href
       )) as unknown as HashlineToolModule;
       const registeredTools: ToolDefinition[] = [];
       const register = modulePath === "read.ts" ? module.regRead : module.regGrep;
       // SAFETY: These registrations only call registerTool on the capture adapter.
-      register?.({ registerTool(tool: ToolDefinition) { registeredTools.push(tool); } } as unknown as ExtensionAPI, flags);
+      register?.(
+        {
+          registerTool(tool: ToolDefinition) {
+            registeredTools.push(tool);
+          },
+        } as unknown as ExtensionAPI,
+        flags,
+      );
       tools.push(...registeredTools);
     } catch {
       // Keep remaining tools when an optional read/search module is unavailable.
@@ -521,6 +533,7 @@ export function registerDeltaExtension(
 
   pi.registerTool(
     defineTool<typeof GitDiffParameters, DeltaDetails, GitDiffRenderState>({
+      ...INACTIVE_SPECIALIST_TOOL,
       ...PROGRAMMATIC_READ_ONLY,
       name: "git_diff",
       label: "Delta Git diff",
