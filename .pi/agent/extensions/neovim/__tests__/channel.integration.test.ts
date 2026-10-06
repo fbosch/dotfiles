@@ -419,7 +419,7 @@ test("reads ordered diagnostics for unsaved source through preserved Pi context"
     `vim.api.nvim_buf_set_name(special, ${JSON.stringify(join(workspace, "special"))})`,
     "local excluded = vim.api.nvim_create_buf(true, false)",
     `vim.api.nvim_buf_set_name(excluded, ${JSON.stringify(join(workspace, "excluded.lua"))})`,
-    'vim.bo[excluded].filetype = "opencode"',
+    "vim.b[excluded].is_pi_terminal = true",
     "local terminal = vim.api.nvim_create_buf(false, true)",
     'vim.api.nvim_buf_set_name(terminal, "pi-terminal-must-not-leak")',
     "vim.b[terminal].is_pi_terminal = true",

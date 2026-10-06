@@ -22,7 +22,7 @@ if (CHILD_MODE) {
 	test("Waybar control sends show to the configured controller", async () => {
 		await withFixture("exit 0", async ({ home, request }) => {
 			const result = await runControlInChild(home, "success");
-			assert(countFailures(result.stderr) === 0, "successful control request reported an error");
+			assert(countFailures(result) === 0, "successful control request reported an error");
 			assert(readFile(request) === "show\n", "controller did not receive exactly one show argument");
 		});
 	});
@@ -30,39 +30,37 @@ if (CHILD_MODE) {
 	test("Waybar control reports a synchronous spawn failure once", async () => {
 		await withTemporaryHome(async (home) => {
 			const result = await runControlInChild(home, "spawn-failure");
-			assert(countFailures(result.stderr) === 1, "spawn failure was not reported exactly once");
+			assert(countFailures(result) === 1, "spawn failure was not reported exactly once");
 		});
 	});
 
 	test("Waybar control reports an asynchronous nonzero failure once", async () => {
 		await withFixture("exit 1", async ({ home }) => {
 			const result = await runControlInChild(home, "nonzero-failure");
-			assert(countFailures(result.stderr) === 1, "nonzero child failure was not reported exactly once");
+			assert(countFailures(result) === 1, "nonzero child failure was not reported exactly once");
 		});
 	});
 }
 
 async function runChild(mode: string): Promise<void> {
-	showWaybar();
-
-	if (mode === "success") {
-		await waitFor(() =>
-			Gio.File.new_for_path(`${GLib.get_home_dir()}/request`).query_exists(null),
-		);
-	} else {
-		await delay(100);
+	let failures = 0;
+	const originalError = console.error;
+	console.error = (...args: Parameters<typeof console.error>) => {
+		if (args[0] === "Waybar control request failed:") failures++;
+		originalError(...args);
+	};
+	try {
+		showWaybar();
+		if (mode === "success") {
+			await waitFor(() => Gio.File.new_for_path(`${GLib.get_home_dir()}/request`).query_exists(null));
+		} else {
+			await waitFor(() => failures > 0);
+		}
+		// Count calls, not GJS's formatted stack traces, which can repeat the message.
+		print(`WAYBAR_CONTROL_RESULT ${failures}`);
+	} finally {
+		console.error = originalError;
 	}
-
-	console.log("WAYBAR_CONTROL_RESULT");
-}
-
-function delay(milliseconds: number): Promise<void> {
-	return new Promise((resolve) => {
-		GLib.timeout_add(GLib.PRIORITY_DEFAULT, milliseconds, () => {
-			resolve();
-			return GLib.SOURCE_REMOVE;
-		});
-	});
 }
 
 async function runControlInChild(home: string, mode: string): Promise<ChildOutput> {
@@ -123,8 +121,10 @@ function communicate(process: Gio.Subprocess): Promise<ChildOutput> {
 	});
 }
 
-function countFailures(stderr: string): number {
-	return stderr.split("Waybar control request failed:").length - 1;
+function countFailures(output: ChildOutput): number {
+	const markers = [...`${output.stdout}\n${output.stderr}`.matchAll(/^WAYBAR_CONTROL_RESULT (\d+)$/gm)];
+	assert(markers.length === 1, "child did not report exactly one failure count");
+	return Number(markers[0][1]);
 }
 
 async function waitFor(condition: () => boolean): Promise<void> {

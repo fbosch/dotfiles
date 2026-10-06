@@ -71,39 +71,27 @@ test("AI Pointer operation registry replaces slots and settles shutdown", async 
 	});
 });
 
-test("AI Pointer answer and preflight cancellation settle owned processes", async () => {
-	await withFixture(async ({ executable }) => {
-		const helper = executable("answer-helper", "trap '' INT TERM\nexec sleep 30");
-		const answerCancellable = new Gio.Cancellable();
-		const answerObservations: ProcessObservation[] = [];
-		const answer = await requestAnswer(
-			{
-				requestId: "cancel-answer",
-				prompt: "Question",
-				attachment: { path: "/unread", sha256: "a".repeat(64) },
-				timeoutSeconds: 5,
-			},
-			answerCancellable,
-			cancellingObserver(answerCancellable, answerObservations),
-			undefined,
-			{ executable: helper, hardTimeoutMs: 1_000, cancellationGraceMs: 20 },
-		);
-		assert(answer.kind === "cancelled", "answer cancellation did not reach the caller");
-		assertObserverSettled(answerObservations, "answer");
-
-		const preflightCancellable = new Gio.Cancellable();
-		const preflightObservations: ProcessObservation[] = [];
-		const preflight = await preflightAnswer(
-			preflightCancellable,
-			cancellingObserver(preflightCancellable, preflightObservations),
-			{ executable: helper, hardTimeoutMs: 1_000, cancellationGraceMs: 20 },
-		);
-		assert(
-			preflight.kind === "failed" && preflight.code === "cancelled",
-			"preflight cancellation did not reach the caller",
-		);
-		assertObserverSettled(preflightObservations, "preflight");
-	});
+test("AI Pointer cancelled answer and preflight never acquire processes", async () => {
+	const cancellable = new Gio.Cancellable();
+	cancellable.cancel();
+	const observations: ProcessObservation[] = [];
+	const deltas: string[] = [];
+	const answer = await requestAnswer(
+		{
+			requestId: "cancel-answer",
+			prompt: "Question",
+			attachment: { path: "/unread", sha256: "a".repeat(64) },
+			timeoutSeconds: 5,
+		},
+		cancellable,
+		(process) => observations.push(process),
+		(text) => deltas.push(text),
+	);
+	assert(answer.kind === "cancelled", "answer cancellation did not reach the caller");
+	const preflight = await preflightAnswer(cancellable, (process) => observations.push(process));
+	assert(preflight.kind === "failed" && preflight.code === "cancelled", "preflight cancellation did not reach the caller");
+	assert(observations.length === 0, "cancelled answer acquired process ownership");
+	assert(deltas.length === 0, "cancelled answer emitted output");
 });
 
 test("AI Pointer capture cancellation force-exits and removes partial output", async () => {

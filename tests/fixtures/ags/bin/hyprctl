@@ -1,0 +1,22 @@
+#!/usr/bin/env python3
+"""Fixed compositor responses for the isolated AGS test environment."""
+import json
+import sys
+
+clients = [
+    {"address": "0x1", "mapped": True, "hidden": False, "class": "fixture-one",
+     "initialClass": "fixture-one", "title": "Fixture One", "initialTitle": "Fixture One",
+     "workspace": {"id": 1, "name": "1"}, "focusHistoryID": 0, "pid": 101,
+     "xwayland": False, "at": [0, 0], "size": [640, 480], "floating": False},
+    {"address": "0x2", "mapped": True, "hidden": False, "class": "fixture-two",
+     "initialClass": "fixture-two", "title": "Fixture Two", "initialTitle": "Fixture Two",
+     "workspace": {"id": 1, "name": "1"}, "focusHistoryID": 1, "pid": 102,
+     "xwayland": False, "at": [640, 0], "size": [640, 480], "floating": False},
+]
+if sys.argv[1:] == ["clients", "-j"]:
+    print(json.dumps(clients))
+elif sys.argv[1:] == ["activewindow", "-j"]:
+    print(json.dumps(clients[0]))
+else:
+    print("Unsupported AGS test compositor request: " + repr(sys.argv[1:]), file=sys.stderr)
+    sys.exit(2)

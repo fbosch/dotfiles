@@ -20,40 +20,11 @@ function settleMainLoop(): Promise<void> {
 
 const readyPreflight = async () => ({ kind: "ready" } as const);
 
-test("AI Pointer rejects missing and malformed preflight helpers", async () => {
-	const missing = await preflightAnswer(
-		new Gio.Cancellable(),
-		() => {},
-		{ executable: `/missing-ai-pointer-helper-${GLib.uuid_string_random()}` },
-	);
-	assert(
-		missing.kind === "failed" && missing.code === "backend_unavailable",
-		"missing preflight helper did not fail safely",
-	);
-
-	const runtimeDirectory = GLib.getenv("XDG_RUNTIME_DIR") ?? "/tmp";
-	const malformedHelper = GLib.build_filenamev([
-		runtimeDirectory,
-		`ai-pointer-preflight-test-${GLib.uuid_string_random()}`,
-	]);
-	Gio.File.new_for_path(malformedHelper).replace_contents(
-		new TextEncoder().encode("#!/bin/sh\nprintf 'not-json\\n'\n"),
-		null, false, Gio.FileCreateFlags.PRIVATE, null,
-	);
-	GLib.chmod(malformedHelper, 0o700);
-	try {
-		const malformed = await preflightAnswer(
-			new Gio.Cancellable(),
-			() => {},
-			{ executable: malformedHelper },
-		);
-		assert(
-			malformed.kind === "failed" && malformed.code === "invalid_response",
-			"malformed preflight output was accepted",
-		);
-	} finally {
-		Gio.File.new_for_path(malformedHelper).delete(null);
-	}
+test("AI Pointer preflight reports the unavailable backend without starting a helper", async () => {
+	const observations: Array<Gio.Subprocess | null> = [];
+	const result = await preflightAnswer(new Gio.Cancellable(), (process) => observations.push(process));
+	assert(result.kind === "failed" && result.code === "backend_unavailable", "preflight did not report the unavailable backend");
+	assert(observations.length === 0, "unavailable preflight acquired a process");
 });
 
 test("AI Pointer preflight failure does not block selection rendering", async () => {
@@ -489,34 +460,23 @@ test("AI Pointer removes a partial grim capture", async () => {
 	}
 });
 
-test("AI Pointer bounds a helper that ignores cooperative cancellation", async () => {
-	const runtimeDirectory = GLib.getenv("XDG_RUNTIME_DIR") ?? "/tmp";
-	const helper = GLib.build_filenamev([
-		runtimeDirectory,
-		`ai-pointer-helper-test-${GLib.uuid_string_random()}`,
-	]);
-	Gio.File.new_for_path(helper).replace_contents(
-		new TextEncoder().encode("#!/bin/sh\ntrap '' INT\nexec sleep 30\n"),
-		null, false, Gio.FileCreateFlags.PRIVATE, null,
+test("AI Pointer reports the unavailable answer backend without reading or spawning", async () => {
+	const observations: Array<Gio.Subprocess | null> = [];
+	const deltas: string[] = [];
+	const result = await requestAnswer(
+		{
+			requestId: "unavailable-answer",
+			prompt: "Question",
+			attachment: { path: "/unread", sha256: "a".repeat(64) },
+			timeoutSeconds: 5,
+		},
+		new Gio.Cancellable(),
+		(process) => observations.push(process),
+		(text) => deltas.push(text),
 	);
-	GLib.chmod(helper, 0o700);
-	try {
-		const result = await requestAnswer(
-			{
-				requestId: "timeout-test",
-				prompt: "Question",
-				attachment: { path: "/unread", sha256: "a".repeat(64) },
-				timeoutSeconds: 5,
-			},
-			new Gio.Cancellable(),
-			() => {},
-			undefined,
-			{ executable: helper, hardTimeoutMs: 10, cancellationGraceMs: 20 },
-		);
-		assert(result.kind === "failed" && result.code === "timeout", "helper timeout was not bounded");
-	} finally {
-		Gio.File.new_for_path(helper).delete(null);
-	}
+	assert(result.kind === "failed" && result.code === "backend_unavailable", "answer did not report the unavailable backend");
+	assert(observations.length === 0, "unavailable answer acquired a process");
+	assert(deltas.length === 1 && deltas[0] === "", "unavailable answer did not clear stale output");
 });
 
 test("AI Pointer fails closed when lock state is unavailable", () => {

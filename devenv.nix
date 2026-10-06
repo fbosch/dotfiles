@@ -320,11 +320,23 @@ in
 
     "test:ags-gjs".exec = ''
       set -euo pipefail
+      test_home="$(mktemp -d "$DEVENV_STATE/ags-home.XXXXXX")"
+      trap 'rm -rf "$test_home"' EXIT
+      export HOME="$test_home"
+      export XDG_CONFIG_HOME="$HOME/.config"
+      export XDG_CACHE_HOME="$HOME/.cache"
+      export XDG_STATE_HOME="$HOME/.local/state"
+      mkdir -p "$XDG_CONFIG_HOME/waybar"
+      cp .config/waybar/config "$XDG_CONFIG_HOME/waybar/config"
+      # Keep compositor queries deterministic and away from an inherited desktop session.
+      export PATH="$PWD/tests/fixtures/ags/bin:$PATH"
+      unset HYPRLAND_INSTANCE_SIGNATURE WAYLAND_DISPLAY
       cd .config/ags
-      # GTK widget tests need a display and session bus even on a headless runner.
+      # The view tests exercise a 480px surface inside the lower half of this display.
       GDK_BACKEND=x11 GSK_RENDERER=cairo GTK_A11Y=none \
         timeout --foreground 180s dbus-run-session \
-        --config-file=${pkgs.dbus}/share/dbus-1/session.conf -- xvfb-run -a bun run test:gjs
+        --config-file=${pkgs.dbus}/share/dbus-1/session.conf -- \
+        xvfb-run -a -s "-screen 0 1920x1440x24" bun run test:gjs
     '';
 
     "test:runtime-shell".exec = ''

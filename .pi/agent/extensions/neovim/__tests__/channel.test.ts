@@ -910,7 +910,7 @@ describe("PiNeovimChannel", () => {
     ).toEqual({
       error: {
         code: "NVIM_CONTEXT_STALE",
-        message: "The Neovim context is stale; refresh context and retry read_buffer",
+        message: "The selected source no longer matches this request. Submit a new Ask before reading it.",
       },
       ok: false,
     });
