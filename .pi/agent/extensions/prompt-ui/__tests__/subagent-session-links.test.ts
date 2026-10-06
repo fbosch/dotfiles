@@ -634,7 +634,6 @@ describe("subagent session links", () => {
     expect(first).toMatch(/transcript row 1\b/);
     expect(first).not.toContain("transcript row 120");
     expect(last).toContain("transcript row 120");
-    expect(last).toContain("Esc close");
     expect(previousPage).not.toContain("transcript row 120");
     expect(frames).toHaveLength(3);
     for (const { width, rows, lines } of frames) {
@@ -644,6 +643,8 @@ describe("subagent session links", () => {
       expect(stripTerminalSequences(lines.at(-1) ?? "")).toBe(`╰${"─".repeat(width - 2)}╯`);
       expect(lines.every((line) => line.includes("\u001b[48;2;25;25;25m"))).toBe(true);
     }
+    const wideFrame = frames.find(({ width }) => width === 96);
+    expect(stripTerminalSequences(wideFrame?.lines.join("\n") ?? "")).toContain("Esc close");
     expect(overlay.getOptions()?.maxHeight).toBeUndefined();
     expect(overlay.isHidden()).toBe(true);
   });
