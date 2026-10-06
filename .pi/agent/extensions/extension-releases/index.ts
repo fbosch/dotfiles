@@ -28,7 +28,7 @@ import {
 
 const QUERY_TIMEOUT_MS = 10_000;
 const MAX_QUERY_OUTPUT_BYTES = 64 * 1024;
-const CACHE_SCHEMA_VERSION = 2;
+const CACHE_SCHEMA_VERSION = 3;
 const MAX_CACHE_ENTRIES = 32;
 
 export interface PreparedCheck {

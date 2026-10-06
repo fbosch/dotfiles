@@ -1,5 +1,5 @@
-import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { afterAll, describe, expect, spyOn, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ClassifierContext, Usage } from "@earendil-works/pi-ai";
@@ -8,6 +8,7 @@ import type {
   ExtensionContext,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
+import { SettingsManager } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-classifier-registry";
 import { withToolExecution } from "../../__tests__/fixtures/tool-context";
@@ -186,6 +187,46 @@ function createHarness(options?: {
 }
 
 describe("tool discovery", () => {
+  test("loads settings once per loader search and observes changes on the next call", async () => {
+    const settingsPath = join(testAgentDirectory, "settings.json");
+    const originalSettings = readFileSync(settingsPath, "utf8");
+    const createSettings = spyOn(SettingsManager, "create");
+    const harness = createHarness({
+      tools: [dummyTool("chart_pie", "Render a pie"), dummyTool("custom_pie", "Render a pie")],
+    });
+    try {
+      writeFileSync(
+        settingsPath,
+        JSON.stringify({
+          classifier: { toolDiscovery: { enabled: false } },
+          toolDiscovery: { deferredToolPrefixes: ["chart_"] },
+        }),
+      );
+      expect((await harness.search("pie", 1)).details).toEqual({
+        matches: ["chart_pie"],
+        added: ["chart_pie"],
+        rankingSource: "lexical",
+      });
+      expect(createSettings).toHaveBeenCalledTimes(1);
+      writeFileSync(
+        settingsPath,
+        JSON.stringify({
+          classifier: { toolDiscovery: { enabled: false } },
+          toolDiscovery: { deferredToolPrefixes: ["custom_"] },
+        }),
+      );
+      expect((await harness.search("pie", 1)).details).toEqual({
+        matches: ["custom_pie"],
+        added: ["custom_pie"],
+        rankingSource: "lexical",
+      });
+      expect(createSettings).toHaveBeenCalledTimes(2);
+    } finally {
+      createSettings.mockRestore();
+      writeFileSync(settingsPath, originalSettings);
+    }
+  });
+
   test("registers native ranking per session and disposes replaced or shut-down registrations", async () => {
     const firstRegistry = await createNativeClassifierRegistry();
     const secondRegistry = await createNativeClassifierRegistry();

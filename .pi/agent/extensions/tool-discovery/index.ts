@@ -286,22 +286,15 @@ export async function searchDeferredToolsWithClassifierFallback(
 }
 
 function getConfiguredSettings(ctx: ExtensionContext) {
-  return SettingsManager.create(ctx.cwd, getAgentDir(), { projectTrusted: ctx.isProjectTrusted() });
-}
-
-function getConfiguredDeferredToolPrefixes(ctx: ExtensionContext): readonly string[] {
-  const settings = getConfiguredSettings(ctx);
-  return resolveDeferredToolPrefixes(settings.getGlobalSettings(), settings.getProjectSettings());
-}
-
-function getConfiguredClassifierToolDiscovery(
-  ctx: ExtensionContext,
-): ClassifierToolDiscoveryConfig {
-  const settings = getConfiguredSettings(ctx);
-  return resolveClassifierToolDiscoveryConfig(
-    settings.getGlobalSettings(),
-    settings.getProjectSettings(),
-  );
+  const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
+    projectTrusted: ctx.isProjectTrusted(),
+  });
+  const globalSettings = settings.getGlobalSettings();
+  const projectSettings = settings.getProjectSettings();
+  return {
+    deferredToolPrefixes: resolveDeferredToolPrefixes(globalSettings, projectSettings),
+    classifierToolDiscovery: resolveClassifierToolDiscoveryConfig(globalSettings, projectSettings),
+  };
 }
 export default function toolDiscoveryExtension(
   pi: ExtensionAPI,
@@ -328,7 +321,7 @@ export default function toolDiscoveryExtension(
     disposeNativeRanking = nativeHooks.installToolSearchRanker(
       ctx.modelRegistry,
       createNativeDiscoveryRanker(searchableTools, (context) => {
-        const config = getConfiguredClassifierToolDiscovery(context);
+        const config = getConfiguredSettings(context).classifierToolDiscovery;
         return {
           modelRegistry: context.modelRegistry,
           enabled: config.enabled,
@@ -359,8 +352,8 @@ export default function toolDiscoveryExtension(
         let inferenceUsage: Usage | undefined;
         try {
           const tools = searchableTools(ctx);
-          const prefixes = getConfiguredDeferredToolPrefixes(ctx);
-          const classifierConfig = getConfiguredClassifierToolDiscovery(ctx);
+          const { deferredToolPrefixes: prefixes, classifierToolDiscovery: classifierConfig } =
+            getConfiguredSettings(ctx);
           const ranked: RankedToolResult = classifierConfig.enabled
             ? await searchDeferredToolsWithClassifierFallback(
                 tools,
@@ -459,7 +452,7 @@ export default function toolDiscoveryExtension(
       return;
     }
 
-    const deferredPrefixes = getConfiguredDeferredToolPrefixes(ctx);
+    const deferredPrefixes = getConfiguredSettings(ctx).deferredToolPrefixes;
     const deferredNames = new Set(
       pi
         .getAllTools()

@@ -25,7 +25,9 @@ def seed_repo(repo: Path) -> Path:
         path.write_text("// offline extension fixture\n")
     (agent / "npm/node_modules/@gotgenes/pi-subagents/package.json").write_text('{"version":"21.7.1"}')
     (agent / "settings.json").write_text(json.dumps({
-        "modes": {"build": {"model": "openai-codex/mock-parent-fast", "thinkingLevel": "xhigh"}},
+        "defaultProvider": "openai-codex",
+        "defaultModel": "mock-parent-fast",
+        "defaultThinkingLevel": "xhigh",
         "packages": ["unrelated-package"],
     }))
     (agent / "models.json").write_text('{"providers":{"openai-codex":{"models":[]}}}')

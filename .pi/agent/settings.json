@@ -20,7 +20,8 @@
     "+extensions/catastrophic-command-guard.ts"
   ],
   "defaultProvider": "openai-codex",
-  "defaultModel": "gpt-6-sol",
+  "defaultModel": "gpt-6-luna-fast",
+  "defaultThinkingLevel": "xhigh",
   "defaultTools": [
     "+codemode"
   ],
@@ -129,12 +130,12 @@
     }
   },
   "packages": [
-    "npm:pi-hashline-edit-pro@6.0.1",
+    "npm:pi-hashline-edit-pro@6.1.2",
     "npm:pi-codex-goal@latest",
     "npm:pi-context-view@0.6.0",
     "npm:@ff-labs/pi-fff@0.11.0",
-    "npm:@gotgenes/pi-subagents@23.0.0",
-    "npm:pi-web-access@0.36.0",
+    "npm:@gotgenes/pi-subagents@23.2.0",
+    "npm:pi-web-access@0.37.0",
     "npm:pi-lens@4.3.0",
     "npm:@tintinweb/pi-tasks@0.9.0",
     "npm:pi-compaction-model@0.1.0",
@@ -143,6 +144,22 @@
   "autocompleteMaxVisible": 10,
   "editorPaddingX": 0,
   "skillTweaks": {
+    "warmSkills": [
+      "agents-md-author",
+      "code-simplifier",
+      "deprecation-and-migration",
+      "diagnosing-bugs",
+      "grill-skill",
+      "jsdoc-typescript-docs",
+      "mermaid-diagrams",
+      "microinteractions",
+      "pr-description",
+      "security-and-hardening",
+      "swarm",
+      "ui-writing",
+      "vercel-react-best-practices",
+      "writing-clearly"
+    ],
     "disableModelInvocation": [
       "grilling",
       "herdr",
@@ -161,29 +178,5 @@
     }
   },
   "editPreviews": true,
-  "syntaxTheme": "Zenwritten Dark",
-  "modes": {
-    "build": {
-      "model": "openai-codex/gpt-6-luna-fast",
-      "prompt": "./prompts/build.txt",
-      "thinkingLevel": "xhigh",
-      "color": "#66A5AD"
-    },
-    "plan": {
-      "model": "openai-codex/gpt-6-sol",
-      "prompt": "./prompts/plan.txt",
-      "thinkingLevel": "high",
-      "color": "#B279A7",
-      "allowedTools": [
-        "read",
-        "find",
-        "grep",
-        "ls",
-        "skill",
-        "fffind",
-        "ffgrep",
-        "ask_user_question"
-      ]
-    }
-  }
+  "syntaxTheme": "Zenwritten Dark"
 }

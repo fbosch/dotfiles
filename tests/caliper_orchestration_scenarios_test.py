@@ -1,9 +1,9 @@
 import copy
 import importlib.util
 import json
-from pathlib import Path
 import tempfile
 import unittest
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -209,6 +209,14 @@ class ProductionModelConfigTests(unittest.TestCase):
     def test_parent_thinking_must_match_a_production_preset(self):
         with self.assertRaisesRegex(ValueError, "Model/thinking pair"):
             MODELS.resolve_parent(self.repo, "configured", "low")
+
+    def test_parent_defaults_require_native_settings_not_legacy_modes(self):
+        settings_path = self.repo / ".pi/agent/settings.json"
+        settings_path.write_text(json.dumps({
+            "modes": {"build": {"model": "openai-codex/mock-parent-fast", "thinkingLevel": "xhigh"}},
+        }))
+        with self.assertRaisesRegex(ValueError, "defaultProvider, defaultModel, and defaultThinkingLevel"):
+            MODELS.load_catalog(self.repo)
 
     def test_model_store_snapshot_is_bounded_and_rejects_credentials(self):
         catalog = MODELS.load_catalog(self.repo)

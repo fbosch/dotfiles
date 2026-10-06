@@ -1,4 +1,17 @@
 {
+  "skillTweaks": {
+    "coldSkills": [
+      "xstate",
+      "devenv",
+      "github-actions-docs",
+      "worktrunk",
+      "typescript-advanced-types",
+      "ts-pattern",
+      "linear-issue-workflow",
+      "docs-cache",
+      "nix-run"
+    ]
+  },
   "quickReplies": {
     "model": "openai-codex/gpt-6-luna"
   },

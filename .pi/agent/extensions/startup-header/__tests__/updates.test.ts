@@ -6,7 +6,11 @@ import {
   STARTUP_OWNER_SNAPSHOT_EVENT,
   type StartupOwnerSnapshot,
 } from "../contracts";
-import { installUpdateStartupPublisher, readUpdateCoverage } from "../updates";
+import {
+  installUpdateStartupPublisher,
+  readAvailableUpdates,
+  readUpdateCoverage,
+} from "../updates";
 
 describe("update coverage publisher", () => {
   test("publishes complete, partial, offline, and failed coverage without fetching", () => {
@@ -88,7 +92,9 @@ describe("update coverage publisher", () => {
   });
 
   test("accepts validated immutable update details and rejects invalid or equal versions", () => {
-    const updates = [{ name: "@acme/pkg", current: "1.0.0-rc.1", latest: "1.0.0" }];
+    const updates = [
+      { name: "@acme/pkg", current: "1.0.0-rc.1", latest: "1.0.0", scope: "project" as const },
+    ];
     const parsed = readUpdateCoverage({ coverage: "complete", available: 1, updates });
     expect(parsed?.updates).toEqual(updates);
     expect(Object.isFrozen(parsed?.updates)).toBe(true);
@@ -96,14 +102,21 @@ describe("update coverage publisher", () => {
       readUpdateCoverage({
         coverage: "complete",
         available: 1,
-        updates: [{ name: "pkg", current: "1.0.0", latest: "1.0.0" }],
+        updates: [{ name: "pkg", current: "1.0.0", latest: "2.0.0" }],
       }),
     ).toBeUndefined();
     expect(
       readUpdateCoverage({
         coverage: "complete",
         available: 1,
-        updates: [{ name: "pkg\\nBAD", current: "1.0.0", latest: "2.0.0" }],
+        updates: [{ name: "pkg", current: "1.0.0", latest: "1.0.0", scope: "user" }],
+      }),
+    ).toBeUndefined();
+    expect(
+      readUpdateCoverage({
+        coverage: "complete",
+        available: 1,
+        updates: [{ name: "pkg\\nBAD", current: "1.0.0", latest: "2.0.0", scope: "user" }],
       }),
     ).toBeUndefined();
     expect(
@@ -114,8 +127,47 @@ describe("update coverage publisher", () => {
           name: "p",
           current: "1.0.0",
           latest: "2.0.0",
+          scope: "user",
         })),
       }),
+    ).toBeUndefined();
+  });
+
+  test("offers only complete, current, fully listed updates", () => {
+    const snapshot: StartupOwnerSnapshot = {
+      type: "reply",
+      schemaVersion: 1,
+      sessionId: "session",
+      generationId: "generation",
+      ownerId: "updates",
+      ownerRevision: 1,
+      state: "ready",
+      staleAt: 20,
+      expiresAt: 30,
+      payload: {
+        coverage: "complete",
+        available: 1,
+        updates: [{ name: "pkg", current: "1.0.0", latest: "2.0.0", scope: "project" }],
+      },
+    };
+
+    expect(readAvailableUpdates(snapshot, 10)).toEqual([
+      { name: "pkg", current: "1.0.0", latest: "2.0.0", scope: "project" },
+    ]);
+    expect(readAvailableUpdates(snapshot, 20)).toBeUndefined();
+    expect(readAvailableUpdates(snapshot, 30)).toBeUndefined();
+    expect(
+      readAvailableUpdates(
+        {
+          ...snapshot,
+          payload: {
+            coverage: "partial",
+            available: 2,
+            updates: [{ name: "pkg", current: "1.0.0", latest: "2.0.0", scope: "project" }],
+          },
+        },
+        10,
+      ),
     ).toBeUndefined();
   });
 
