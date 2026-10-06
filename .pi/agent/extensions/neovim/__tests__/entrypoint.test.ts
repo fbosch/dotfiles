@@ -3,7 +3,11 @@ import { copyFile, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 
-async function runEntrypoint(socketPath: string, script: string, implementation?: string) {
+async function runEntrypoint(
+  socketPath: string | undefined,
+  script: string,
+  implementation?: string,
+) {
   const directory = await mkdtemp(join(tmpdir(), "pi-neovim-entrypoint-"));
   try {
     // Only copy the entrypoint: a disconnected session must not need its implementation graph.
@@ -12,12 +16,14 @@ async function runEntrypoint(socketPath: string, script: string, implementation?
       await writeFile(join(directory, "extension.ts"), implementation);
     }
     await writeFile(join(directory, "run.ts"), script);
+    const environment: NodeJS.ProcessEnv = {
+      ...process.env,
+      PI_NVIM_LAUNCH_ID: "original-launch",
+    };
+    if (socketPath === undefined) delete environment.PI_NVIM_SOCKET;
+    else environment.PI_NVIM_SOCKET = socketPath;
     const child = Bun.spawn([process.execPath, "run", join(directory, "run.ts")], {
-      env: {
-        ...process.env,
-        PI_NVIM_LAUNCH_ID: "original-launch",
-        PI_NVIM_SOCKET: socketPath,
-      },
+      env: environment,
       stderr: "pipe",
       stdout: "pipe",
     });
@@ -38,9 +44,9 @@ export function initializeNeovim(pi, dependencies) {
 }
 `;
 
-test("disconnected startup loads no Neovim implementation or dependencies", async () => {
+test("does not register the Neovim tool without its launch environment variable", async () => {
   const result = await runEntrypoint(
-    "",
+    undefined,
     `
 import initialize from "./index";
 await initialize(new Proxy({}, { get() { throw new Error("unexpected registration"); } }));

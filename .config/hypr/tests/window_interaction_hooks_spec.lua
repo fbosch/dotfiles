@@ -110,35 +110,16 @@ describe("window interaction hooks adapter", function()
 		os.getenv = original_getenv
 	end)
 
-	it("loads the plugin and announces both event paths", function()
+	it("loads the plugin and announces only the PiP update path", function()
 		require("plugins.window_interaction_hooks")
 
 		assert.are.equal("/nix/store/window-interaction-hooks.so", loaded_plugin)
 		assert.are.equal(1, rebind_calls)
-		assert.matches("interaction%-hooks%-ready", dispatches[1])
-		assert.matches("/runtime/window%-state%.sock", dispatches[1])
-		assert.matches("interaction%-updates%-ready", dispatches[2])
-		assert.matches("/runtime/pip%-monitor%.sock", dispatches[2])
-		assert.is_function(handlers["window_interaction_hooks.finished"])
+		assert.are.equal(1, #dispatches)
+		assert.matches("interaction%-updates%-ready", dispatches[1])
+		assert.matches("/runtime/pip%-monitor%.sock", dispatches[1])
+		assert.is_nil(handlers["window_interaction_hooks.finished"])
 		assert.is_function(handlers["hyprland.start"])
-	end)
-
-	it("forwards valid completed interactions", function()
-		require("plugins.window_interaction_hooks")
-
-		for _, kind in ipairs({ "move", "resize" }) do
-			handlers["window_interaction_hooks.finished"]({}, kind, 10, 20, 300, 200)
-			assert.matches("interaction%-finished " .. kind, dispatches[#dispatches])
-		end
-	end)
-
-	it("ignores invalid interaction kinds", function()
-		require("plugins.window_interaction_hooks")
-		local before = #dispatches
-
-		handlers["window_interaction_hooks.finished"]({}, "unknown", 10, 20, 300, 200)
-
-		assert.are.equal(before, #dispatches)
 	end)
 
 	it("reannounces readiness after startup", function()
@@ -150,7 +131,6 @@ describe("window interaction hooks adapter", function()
 		assert.are.equal(1000, deferred[1].delay_ms)
 
 		deferred[1].callback()
-		assert.matches("interaction%-hooks%-ready", dispatches[#dispatches - 1])
 		assert.matches("interaction%-updates%-ready", dispatches[#dispatches])
 	end)
 
@@ -159,9 +139,7 @@ describe("window interaction hooks adapter", function()
 
 		require("plugins.window_interaction_hooks")
 
-		assert.are.equal(1, #dispatches)
-		assert.matches("interaction%-hooks%-ready", dispatches[1])
-		assert.is_nil(dispatches[2])
+		assert.are.equal(0, #dispatches)
 	end)
 
 	it("keeps polling fallback when the plugin path is unavailable", function()

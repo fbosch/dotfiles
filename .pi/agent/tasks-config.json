@@ -1,5 +1,8 @@
 {
+  "taskScope": "session-history",
   "glyphs": {
-    "spinner": ["◼"]
+    "spinner": [
+      "◼"
+    ]
   }
 }

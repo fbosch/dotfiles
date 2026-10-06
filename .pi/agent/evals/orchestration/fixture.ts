@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { appendFileSync, readFileSync, realpathSync } from "node:fs";
+import { appendFileSync, readFileSync, readdirSync, realpathSync } from "node:fs";
 import { resolve, sep } from "node:path";
 import { StringEnum } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -60,7 +60,10 @@ export default function orchestrationFixture(pi: ExtensionAPI): void {
   } catch {
     throw new Error("Invalid eval model catalog");
   }
-  const instructionBody = readFileSync(resolve(catalogPath, "../orchestration.md"), "utf8")
+  const instructionBody = readFileSync(
+    resolve(catalogPath, "../instructions/orchestration/index.md"),
+    "utf8",
+  )
     .replace(/^---\r?\n[\s\S]*?\r?\n---\r?\n/u, "")
     .trim();
   if (!instructionBody) throw new Error("Missing instruction treatment snapshot");
@@ -87,12 +90,23 @@ export default function orchestrationFixture(pi: ExtensionAPI): void {
     "ask_parent",
   ]);
   const root = realpathSync(work);
-  const skillRoot = realpathSync(resolve(process.env.HOME ?? "", ".agents/skills/swarm"));
+  const home = process.env.HOME ?? "";
+  const skillFile = realpathSync(resolve(home, ".agents/skills/swarm/SKILL.md"));
+  const instructionRoot = realpathSync(resolve(home, ".pi/agent/instructions/orchestration"));
+  const instructionFiles = new Set(
+    readdirSync(instructionRoot)
+      .filter((name) => name.endsWith(".md"))
+      .map((name) => realpathSync(resolve(instructionRoot, name))),
+  );
   function allowedPath(path: string): boolean {
     try {
-      const absolute = realpathSync(resolve(root, path.replace(/^~\//u, `${process.env.HOME}/`)));
+      const expanded = path.startsWith("~/") ? resolve(home, path.slice(2)) : resolve(root, path);
+      const absolute = realpathSync(expanded);
       return (
-        absolute === root || absolute.startsWith(root + sep) || absolute.startsWith(skillRoot + sep)
+        absolute === root ||
+        absolute.startsWith(root + sep) ||
+        absolute === skillFile ||
+        instructionFiles.has(absolute)
       );
     } catch {
       return false;
@@ -138,7 +152,7 @@ export default function orchestrationFixture(pi: ExtensionAPI): void {
       const path =
         "path" in event.input && typeof event.input.path === "string" ? event.input.path : ".";
       if (!allowedPath(path))
-        denial = "Reads and searches are limited to fixture files and the copied swarm skill";
+        denial = "Reads and searches are limited to fixture files, copied swarm skill, and copied orchestration references";
       if (
         event.toolName === "find" &&
         typeof event.input.pattern === "string" &&

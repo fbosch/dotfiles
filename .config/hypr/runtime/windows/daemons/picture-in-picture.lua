@@ -21,7 +21,6 @@ local acceptance_delivery_timeout_s = 1
 local monitors_by_name = {}
 local current_bars = {}
 local native_updates_ready = false
-local acceptance_socket_path = kit:socket_path("window-state.sock")
 
 local function log(message)
 	io.stderr:write("picture-in-picture: ", message, "\n")
@@ -143,15 +142,12 @@ local function refresh_bars(waybar_visible)
 end
 
 local function accept_placement(value)
-	local response, err = kit:request(pip.acceptance.encode(value) .. "\n", {
-		path = acceptance_socket_path,
-		timeout = acceptance_delivery_timeout_s,
-	})
-	if err ~= nil or response ~= "ok\n" then
-		log_rate_limited("placement-acceptance", "accepted placement was not persisted")
+	local message = require("lib.persistent_pip").request(value)
+	local response, err = kit:request(message, { timeout = acceptance_delivery_timeout_s })
+	if err ~= nil or not response or response:match("^%s*(.-)%s*$") ~= "ok" then
+		log_rate_limited("placement-acceptance", "native placement acceptance failed")
 		return
 	end
-
 	reset_rate_limit("placement-acceptance")
 end
 

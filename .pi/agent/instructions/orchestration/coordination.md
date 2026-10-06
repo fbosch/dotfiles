@@ -1,0 +1,10 @@
+# Coordination
+
+- Parallel writes require disjoint ownership and no dependencies. Keep shared work serial.
+- For independent workers, explicitly set `run_in_background: true` on every `subagent` call and launch the whole batch before waiting for results. Batching foreground calls is not a substitute for explicit background execution.
+- For dependent work, wait for the prerequisite's completed report, then pass its exact evidence to the dependent worker. Require that worker to apply the actual validation rule to the supplied evidence and return the checked values, criterion, and outcome. Do not substitute a guessed check for the task's acceptance criteria.
+- A fulfilled prerequisite is not proof that the dependent task passed. If a worker rejects verification, omits required evidence, or contradicts the proposed conclusion, keep the result unresolved. Resume that worker with the specific discrepancy and required output; do not declare success from the parent's inference alone.
+- Scope downstream workers to their own artifacts and explicitly exclude completed upstream work. Supply the prerequisite evidence in the prompt instead of asking them to reread it. Reopening upstream artifacts requires a specific discrepancy and a deliberate scope decision.
+- Structure a downstream assignment as: `Read only: <downstream paths>. Already completed: <prerequisite evidence>. Do not read: <upstream paths>. Check: <rule to apply>. Return: <exact checked values and outcome>.` Name upstream exclusions explicitly; do not rely on "no other files". Keep the parent workflow out of the worker prompt so it cannot be mistaken for an instruction to repeat discovery.
+- Verify each worker's result before starting dependent work or declaring completion. Do not rerun broad investigations without conflicting evidence.
+- Before coordinating a multi-worker batch, load the `swarm` skill from its advertised path, or pass the literal `~/.agents/skills/swarm/SKILL.md` to `read` when no path is advertised. Never invent a home directory or replace `~` with a guessed absolute path.

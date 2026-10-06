@@ -21,8 +21,6 @@ local generated = loader.apply_window_rule_phase(config_dir, "generated")
 
 require("rules")
 
-local window_state = loader.apply_window_rule_phase(config_dir, "window_state")
-
 require("environment")
 require("appearance")
 -- Config loading covers startup and reload; restore the in-session overlay without another reload.
@@ -31,4 +29,4 @@ require("rules.layer")
 require("input")
 require("autostart")
 
-loader.report_results({ generated, window_state })
+loader.report_results({ generated })

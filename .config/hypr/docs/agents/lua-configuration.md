@@ -7,7 +7,7 @@ Local reference for maintaining this repo's Hyprland Lua configuration.
 - Upstream basis: Hyprland 0.56.0 Lua-first documentation and Lua config PR
   #13817.
 - Local Lua test entrypoint is `.config/hypr/hyprland.lua`; remove or rename it to roll back to `.config/hypr/hyprland.conf`.
-- Generated outputs are data files under `.config/hypr/rules/generated.lua` and `.config/hypr/rules/window-state.lua`.
+- Generated rules live in `.config/hypr/rules/generated.lua`. Retired `rules/window-state.lua` data is not read or migrated.
 
 ## Entrypoint Behavior
 
@@ -209,7 +209,7 @@ Relevant fields:
 
 - Match by `namespace`.
 - Common effects: `no_anim`, `blur`, `blur_popups`, `ignore_alpha`, `dim_around`, `xray`, `animation`, `order`, `above_lock`, `no_screen_share`.
-- Local static layer rules live in `rules/layer.lua`. Load them in the same config phase as `appearance.conf` to avoid moving them ahead of window-state rules.
+- Local static layer rules live in `rules/layer.lua`. Keep their established entrypoint order after appearance and window rules.
 
 Sources:
 

@@ -47,6 +47,78 @@ describe("update coverage publisher", () => {
     publisher.dispose();
   });
 
+  test("preserves freshness metadata and reports failed checks without an available count", () => {
+    const events = createEventBus();
+    const snapshots: StartupOwnerSnapshot[] = [];
+    const publisher = installUpdateStartupPublisher(events, () => undefined);
+    events.on(STARTUP_OWNER_SNAPSHOT_EVENT, (value) =>
+      snapshots.push(value as StartupOwnerSnapshot),
+    );
+    events.emit(
+      STARTUP_OWNER_REQUEST_EVENT,
+      createStartupOwnerRequest("session", "generation", "updates"),
+    );
+    publisher.publish({
+      state: "degraded",
+      observedAt: 10,
+      staleAt: 20,
+      expiresAt: 30,
+      payload: { coverage: "partial", available: 1, gitNotChecked: 2 },
+    });
+    publisher.publish({
+      state: "degraded",
+      observedAt: 40,
+      staleAt: 50,
+      expiresAt: 60,
+      payload: { coverage: "failed", failed: 1 },
+    });
+
+    expect(snapshots.at(-2)).toMatchObject({
+      observedAt: 10,
+      staleAt: 20,
+      expiresAt: 30,
+      payload: { coverage: "partial", gitNotChecked: 2 },
+    });
+    expect(snapshots.at(-1)).toMatchObject({
+      state: "degraded",
+      payload: { coverage: "failed", failed: 1 },
+    });
+    expect(snapshots.at(-1)?.payload).not.toHaveProperty("available");
+    publisher.dispose();
+  });
+
+  test("accepts validated immutable update details and rejects invalid or equal versions", () => {
+    const updates = [{ name: "@acme/pkg", current: "1.0.0-rc.1", latest: "1.0.0" }];
+    const parsed = readUpdateCoverage({ coverage: "complete", available: 1, updates });
+    expect(parsed?.updates).toEqual(updates);
+    expect(Object.isFrozen(parsed?.updates)).toBe(true);
+    expect(
+      readUpdateCoverage({
+        coverage: "complete",
+        available: 1,
+        updates: [{ name: "pkg", current: "1.0.0", latest: "1.0.0" }],
+      }),
+    ).toBeUndefined();
+    expect(
+      readUpdateCoverage({
+        coverage: "complete",
+        available: 1,
+        updates: [{ name: "pkg\\nBAD", current: "1.0.0", latest: "2.0.0" }],
+      }),
+    ).toBeUndefined();
+    expect(
+      readUpdateCoverage({
+        coverage: "complete",
+        available: 1,
+        updates: Array.from({ length: 101 }, () => ({
+          name: "p",
+          current: "1.0.0",
+          latest: "2.0.0",
+        })),
+      }),
+    ).toBeUndefined();
+  });
+
   test("rejects malformed or unqualified zero coverage", () => {
     expect(readUpdateCoverage({ coverage: "partial", available: -1 })).toBeUndefined();
     expect(readUpdateCoverage({ coverage: "unknown", available: 0 })).toBeUndefined();

@@ -150,14 +150,29 @@ local function clamp(value, minimum, maximum)
 	return math.min(math.max(value, minimum), maximum)
 end
 
+local function capture_explicit_move(active, result)
+	local plugin = package.loaded["plugins.persistent_position"]
+	if
+		result == false
+		or (type(result) == "table" and result.ok == false)
+		or not active
+		or not active.floating
+		or pip.matches(active)
+		or state.active() ~= active
+		or not (plugin and plugin.enabled and hl.plugin and hl.plugin.persistent_position)
+	then
+		return
+	end
+	hl.plugin.persistent_position.capture_focused()
+end
+
 local function move_floating_to_monitor(active, role, dispatcher)
 	local source = monitor_by_role(monitor_role.for_window(active))
 	local destination = monitor_by_role(role)
 	local at = active and active.at
 	local size = active and active.size
 	if source == nil or destination == nil or at == nil or size == nil or size.x == nil or size.y == nil then
-		dispatch(dispatcher)
-		return
+		return dispatch(dispatcher)
 	end
 
 	local x_fraction = (at.x - source.x) / source.width
@@ -165,7 +180,7 @@ local function move_floating_to_monitor(active, role, dispatcher)
 	local x = destination.x + clamp(x_fraction * destination.width, 0, math.max(0, destination.width - size.x))
 	local y = destination.y + clamp(y_fraction * destination.height, 0, math.max(0, destination.height - size.y))
 	dispatch(dispatcher)
-	dispatch(hl.dsp.window.move({ x = x, y = y }))
+	return dispatch(hl.dsp.window.move({ x = x, y = y }))
 end
 
 local function directional_candidate(active, direction, candidates, expected_role)
@@ -286,13 +301,15 @@ function M.move(value)
 	local function move_window()
 		local active = state.active()
 		if active and active.floating then
+			local result
 			if normalized == "right" and state.uses_custom_layout(active, monitor_role.portrait) then
-				move_floating_to_monitor(active, monitor_role.ultrawide, move_to_ultrawide)
+				result = move_floating_to_monitor(active, monitor_role.ultrawide, move_to_ultrawide)
 			elseif normalized == "left" and state.uses_custom_layout(active, monitor_role.ultrawide) then
-				move_floating_to_monitor(active, monitor_role.portrait, move_to_portrait)
+				result = move_floating_to_monitor(active, monitor_role.portrait, move_to_portrait)
 			else
-				dispatch(move_dispatcher)
+				result = dispatch(move_dispatcher)
 			end
+			capture_explicit_move(active, result)
 		elseif normalized == "right" and state.uses_custom_layout(active, monitor_role.portrait) then
 			intents.record_transfer_intent(active, ultrawide_transfer_start)
 			dispatch(move_to_ultrawide)
@@ -324,7 +341,13 @@ end
 function M.adjust(kind, value)
 	local delta = delta(value)
 	if kind == "nudge" then
-		return hl.dsp.window.move({ x = delta.x, y = delta.y, relative = true })
+		local move_dispatcher = hl.dsp.window.move({ x = delta.x, y = delta.y, relative = true })
+		return function()
+			local active = state.active()
+			local result = dispatch(move_dispatcher)
+			capture_explicit_move(active, result)
+			return result
+		end
 	end
 
 	if kind ~= "resize" then
@@ -338,7 +361,9 @@ function M.adjust(kind, value)
 				return
 			end
 
-			dispatch(hl.dsp.window.resize({ x = delta.x, y = delta.y, relative = true }))
+			local active = state.active()
+			local result = dispatch(hl.dsp.window.resize({ x = delta.x, y = delta.y, relative = true }))
+			capture_explicit_move(active, result)
 		end
 	end
 
@@ -348,7 +373,9 @@ function M.adjust(kind, value)
 			return
 		end
 
-		dispatch(hl.dsp.window.resize({ x = delta.x, y = delta.y, relative = true }))
+		local active = state.active()
+		local result = dispatch(hl.dsp.window.resize({ x = delta.x, y = delta.y, relative = true }))
+		capture_explicit_move(active, result)
 	end
 end
 

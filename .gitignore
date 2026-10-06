@@ -20,6 +20,7 @@ storybook-static
 # Pi installs project-local packages here; .pi/settings.json pins them for other machines.
 .pi/npm/
 .pi-lens/*
+.pi/agent/tasks/*
 .pi/tasks/*
 !.pi-lens/config.json
 !.codex/skills/**/*

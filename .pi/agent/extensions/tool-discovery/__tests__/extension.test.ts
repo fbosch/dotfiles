@@ -38,6 +38,7 @@ writeFileSync(
         "ast-grep_",
         "mcp__",
         "browser_",
+        "neovim",
       ],
     },
   }),
@@ -477,7 +478,7 @@ describe("tool discovery", () => {
     expect(isDeferredToolName("tool_load", ["tool_"])).toBe(false);
   });
 
-  test("removes specialist tools from the initial parent tool set", async () => {
+  test("defers Neovim tools until requested", async () => {
     const harness = createHarness({
       tools: [
         dummyTool("read", "Read files"),
@@ -492,7 +493,35 @@ describe("tool discovery", () => {
 
     await harness.discoverResources();
 
-    expect(harness.activeTools).toEqual(["read", "mcp", "neovim", "tool_load"]);
+    expect(harness.activeTools).toEqual(["read", "mcp", "tool_load"]);
+    expect((await harness.search("editor", 1)).details).toEqual({
+      matches: ["neovim"],
+      added: ["neovim"],
+      rankingSource: "lexical",
+    });
+    expect(harness.activeTools).toEqual(["read", "mcp", "tool_load", "neovim"]);
+  });
+
+  test("leaves native deferred tools to Pi and retains tool_load discovery", async () => {
+    const harness = createHarness({
+      tools: [
+        dummyTool("read", "Read files"),
+        dummyTool("figma_parse_url", "Parse a Figma URL"),
+        { ...dummyTool("chart_pie", "Render a pie chart"), exposure: "deferred" },
+        { ...dummyTool("chart_donut", "Render a donut chart"), exposure: "deferred" },
+      ],
+      activeTools: ["read", "figma_parse_url", "chart_pie"],
+    });
+
+    await harness.discoverResources();
+
+    expect(harness.activeTools).toEqual(["read", "chart_pie", "tool_load"]);
+    expect((await harness.search("chart donut", 1)).details).toEqual({
+      matches: ["chart_donut", "chart_pie"],
+      added: ["chart_donut"],
+      rankingSource: "lexical",
+    });
+    expect(harness.activeTools).toEqual(["read", "chart_pie", "tool_load", "chart_donut"]);
   });
 
   test("loads a matched underscore-namespaced tool family", async () => {
@@ -632,8 +661,9 @@ describe("tool discovery", () => {
     const harness = createHarness({
       tools: [
         dummyTool("read", "Read files"),
-        dummyTool("figma_parse_url", "Parse a Figma URL"),
-        dummyTool("webfetch", "Fetch a web page"),
+        { ...dummyTool("figma_parse_url", "Parse a Figma URL"), exposure: "deferred" },
+        { ...dummyTool("figma_private", "Private design capability"), exposure: "deferred" },
+        { ...dummyTool("webfetch", "Fetch a web page"), exposure: "deferred" },
       ],
       activeTools: ["read", "figma_parse_url"],
       parentSession: "parent-session-id",

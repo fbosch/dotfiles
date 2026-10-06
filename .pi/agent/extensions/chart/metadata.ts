@@ -924,23 +924,30 @@ export function createTreeChartTool(): ToolDefinition<
   };
 }
 
+function registerDeferredChartTool<TParams extends TSchema, TDetails>(
+  pi: ExtensionAPI,
+  tool: ToolDefinition<TParams, TDetails>,
+): void {
+  pi.registerTool({ ...tool, exposure: "deferred" });
+}
+
 const chartToolRegistrars: Record<ChartTypeId, (pi: ExtensionAPI) => void> = {
-  pie: (pi) => pi.registerTool(createPieChartTool()),
-  donut: (pi) => pi.registerTool(createDonutChartTool()),
-  bar: (pi) => pi.registerTool(createBarChartTool()),
-  scatter: (pi) => pi.registerTool(createScatterChartTool()),
-  line: (pi) => pi.registerTool(createLineChartTool()),
-  histogram: (pi) => pi.registerTool(createHistogramChartTool()),
-  bezier: (pi) => pi.registerTool(createBezierChartTool()),
-  heatmap: (pi) => pi.registerTool(createHeatmapChartTool()),
-  boxplot: (pi) => pi.registerTool(createBoxplotChartTool()),
-  waterfall: (pi) => pi.registerTool(createWaterfallChartTool()),
-  dumbbell: (pi) => pi.registerTool(createDumbbellChartTool()),
-  stacked_bar: (pi) => pi.registerTool(createStackedBarChartTool()),
-  gantt: (pi) => pi.registerTool(createGanttChartTool()),
-  network: (pi) => pi.registerTool(createNetworkChartTool()),
-  tree: (pi) => pi.registerTool(createTreeChartTool()),
-  treemap: (pi) => pi.registerTool(createTreemapChartTool()),
+  pie: (pi) => registerDeferredChartTool(pi, createPieChartTool()),
+  donut: (pi) => registerDeferredChartTool(pi, createDonutChartTool()),
+  bar: (pi) => registerDeferredChartTool(pi, createBarChartTool()),
+  scatter: (pi) => registerDeferredChartTool(pi, createScatterChartTool()),
+  line: (pi) => registerDeferredChartTool(pi, createLineChartTool()),
+  histogram: (pi) => registerDeferredChartTool(pi, createHistogramChartTool()),
+  bezier: (pi) => registerDeferredChartTool(pi, createBezierChartTool()),
+  heatmap: (pi) => registerDeferredChartTool(pi, createHeatmapChartTool()),
+  boxplot: (pi) => registerDeferredChartTool(pi, createBoxplotChartTool()),
+  waterfall: (pi) => registerDeferredChartTool(pi, createWaterfallChartTool()),
+  dumbbell: (pi) => registerDeferredChartTool(pi, createDumbbellChartTool()),
+  stacked_bar: (pi) => registerDeferredChartTool(pi, createStackedBarChartTool()),
+  gantt: (pi) => registerDeferredChartTool(pi, createGanttChartTool()),
+  network: (pi) => registerDeferredChartTool(pi, createNetworkChartTool()),
+  tree: (pi) => registerDeferredChartTool(pi, createTreeChartTool()),
+  treemap: (pi) => registerDeferredChartTool(pi, createTreemapChartTool()),
 };
 
 export function registerChartTools(pi: ExtensionAPI): void {

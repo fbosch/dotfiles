@@ -1,10 +1,17 @@
 #!/usr/bin/env python3
+import hashlib
 import importlib.util
 import json
+import os
+import shutil
+import subprocess
+import sys
 import tempfile
 import unittest
-from unittest import mock
 from pathlib import Path
+from unittest import mock
+
+import yaml
 
 ROOT = Path(__file__).resolve().parents[1]
 EVAL_DIR = ROOT / ".pi/agent/evals/orchestration"
@@ -12,7 +19,11 @@ CHECK_PATH = EVAL_DIR / "check.py"
 LAUNCH_PATH = EVAL_DIR / "launch.py"
 ASSIGNED = "assigned-regression-nonce-42"
 MARKER = "steered-private-marker-73"
-EXPECTED = {"assigned": ASSIGNED, "instructions_enabled": True}
+EXPECTED = {
+    "assigned": ASSIGNED,
+    "instructions_enabled": True,
+    "instruction_reference_files": ["routing.md"],
+}
 
 
 def load_module(name, path):
@@ -121,6 +132,49 @@ class CaliperOrchestrationCheckTests(unittest.TestCase):
     def test_accepts_a_valid_steering_trace_with_steering_only_marker(self):
         CHECK.check_events(make_steering_trace(), EXPECTED, "steering")
 
+    def test_classifies_tilde_and_absolute_home_reference_reads(self):
+        with tempfile.TemporaryDirectory() as home, mock.patch.dict(os.environ, {"HOME": home}):
+            self.assertTrue(CHECK.is_instruction_reference(
+                "~/.pi/agent/instructions/orchestration/routing.md", EXPECTED
+            ))
+            self.assertTrue(CHECK.is_instruction_reference(
+                str(Path(home) / ".pi/agent/instructions/orchestration/routing.md"), EXPECTED
+            ))
+            self.assertFalse(CHECK.is_instruction_reference(
+                "~/.pi/agent/instructions/orchestration/other.md", EXPECTED
+            ))
+            self.assertFalse(CHECK.is_instruction_reference(
+                "/Users/unknown/.pi/agent/instructions/orchestration/routing.md", EXPECTED
+            ))
+
+    def test_permitted_parent_reference_reads_are_classified_separately(self):
+        with tempfile.TemporaryDirectory() as home, mock.patch.dict(os.environ, {"HOME": home}):
+            events = make_steering_trace()
+            events.insert(1, {
+                "kind": "call", "id": "reference-read", "parent": True, "session": "parent-session",
+                "tool": "read", "input": {"path": "~/.pi/agent/instructions/orchestration/routing.md"},
+            })
+            self.assertEqual(CHECK.instruction_reference_reads(events, EXPECTED), 1)
+            CHECK.check_events(events, EXPECTED, "steering")
+
+    def test_parent_task_source_rereads_and_forbidden_denials_still_fail(self):
+        task_reread = make_steering_trace()
+        task_reread.insert(1, {
+            "kind": "call", "id": "parent-source-read", "parent": True, "session": "parent-session",
+            "tool": "read", "input": {"path": "assigned.txt"},
+        })
+        with self.assertRaisesRegex(AssertionError, "Parent repeated delegated work"):
+            CHECK.check_events(task_reread, EXPECTED, "steering")
+
+        forbidden = make_steering_trace()
+        forbidden.insert(1, {
+            "kind": "denied", "parent": True, "session": "parent-session", "tool": "read",
+            "input": {"path": "/Users/unknown/.pi/agent/instructions/orchestration/routing.md"},
+            "reason": "outside copied fixture",
+        })
+        with self.assertRaisesRegex(AssertionError, "Runtime failure or forbidden operation"):
+            CHECK.check_events(forbidden, EXPECTED, "steering")
+
     def test_rejects_fabricated_content_after_an_unrelated_read_result(self):
         events = make_steering_trace()
         result = next(e for e in events if e.get("id") == "child-read" and e["kind"] == "result")
@@ -197,7 +251,7 @@ class CaliperOrchestrationCheckTests(unittest.TestCase):
         events = make_steering_trace()
         result = next(event for event in events if event.get("id") == "assessment" and event["kind"] == "result")
         result["text"] = '{"status":"unavailable"}'
-        with self.assertRaisesRegex(AssertionError, "Jev assessment unavailable"):
+        with self.assertRaisesRegex(AssertionError, "Live classifier assessment unavailable or abstained; not a steering pass"):
             CHECK.check_events(events, EXPECTED, "steering")
 
     def test_rejects_missing_parent_instructions(self):
@@ -233,6 +287,38 @@ class CaliperOrchestrationCheckTests(unittest.TestCase):
                     CHECK.check_events(events, EXPECTED, case)
 
 
+class CaliperAssertionRunnerTests(unittest.TestCase):
+    def test_eval_assertions_import_checker_from_run_evidence_not_cwd(self):
+        for spec_path in (
+            EVAL_DIR / "orchestration.eval.yaml",
+            EVAL_DIR / "steering.eval.yaml",
+        ):
+            with self.subTest(spec=spec_path.name), tempfile.TemporaryDirectory() as temp:
+                run_root = Path(temp) / "evidence"
+                working_directory = Path(temp) / "assertion-cwd"
+                run_root.mkdir()
+                working_directory.mkdir()
+                shutil.copy2(CHECK_PATH, run_root / "check.py")
+                trace = run_root / "attempt.jsonl"
+                trace.write_text("\n".join(json.dumps(event) for event in make_simple_trace("direct")) + "\n")
+                trace.with_suffix(".expected.json").write_text(json.dumps({
+                    "case": "direct", "assigned": ASSIGNED, "instructions_enabled": True,
+                    "instruction_reference_files": [],
+                }))
+                (run_root / "latest.json").write_text(json.dumps({"trace": str(trace), "exit_code": 0}))
+                spec = yaml.safe_load(spec_path.read_text())
+                assertion = spec["tasks"][0]["assert"]
+                result = subprocess.run(
+                    [sys.executable, "-c", assertion],
+                    cwd=working_directory,
+                    env={**os.environ, "ORCHESTRATION_EVAL_RUN": str(run_root)},
+                    capture_output=True,
+                    text=True,
+                    check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+
 class CaliperOrchestrationLaunchTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -252,6 +338,16 @@ class CaliperOrchestrationLaunchTests(unittest.TestCase):
         self.assertEqual(metadata["catalog"]["parent"]["model"], "openai-codex/mock-parent-fast")
         self.assertEqual(metadata["catalog"]["parent"]["thinking"], "xhigh")
         self.assertEqual(metadata["catalog"]["agents"]["quick"]["model"], "openai-codex/mock-quick")
+        self.assertEqual((self.evidence / "check.py").read_bytes(), CHECK_PATH.read_bytes())
+        source_instructions = self.repo / ".pi/agent/instructions/orchestration"
+        expected_hashes = {
+            f"orchestration/{source.name}": hashlib.sha256(source.read_bytes()).hexdigest()
+            for source in sorted(source_instructions.glob("*.md"))
+        }
+        self.assertEqual(metadata["instruction_sha256"], expected_hashes)
+        snapshots = self.evidence / "instructions/orchestration"
+        self.assertEqual({path.name for path in snapshots.iterdir()}, {"index.md", "assignments.md", "coordination.md", "routing.md", "supervision.md"})
+        self.assertFalse((self.evidence / "orchestration.md").exists())
         self.assertEqual(len(self.config["extensions"]), 5)
         self.assertTrue(any(path.endswith("openai-capabilities.ts") for path in self.config["extensions"]))
         self.assertEqual(json.loads((self.runtime / "home/.pi/agent/settings.json").read_text()), {})
@@ -275,6 +371,16 @@ class CaliperOrchestrationLaunchTests(unittest.TestCase):
         self.assertEqual(settings["extensions"], self.config["extensions"])
         self.assertEqual((agent / "auth.json").read_text(), "private-auth")
         self.assertIn("model: openai-codex/mock-review", (agent / "agents/review.md").read_text())
+        copied_instructions = agent / "instructions/orchestration"
+        self.assertEqual(
+            {path.name for path in copied_instructions.iterdir()},
+            {"index.md", "assignments.md", "coordination.md", "routing.md", "supervision.md"},
+        )
+        self.assertEqual(
+            (copied_instructions / "index.md").read_text(),
+            (self.evidence / "instructions/orchestration/index.md").read_text(),
+        )
+        self.assertFalse((agent / "instructions/orchestration.md").exists())
         self.assertEqual(json.loads((agent / "subagents.json").read_text())["maxConcurrent"], 3)
         self.assertTrue((agent / "models.json").exists())
         self.assertTrue((home / ".agents/skills/swarm/SKILL.md").exists())
@@ -282,13 +388,19 @@ class CaliperOrchestrationLaunchTests(unittest.TestCase):
         self.assertIn("explore.md", [p.name for p in (agent / "agents").iterdir()])
         self.assertNotIn("Explore.md", [p.name for p in (agent / "agents").iterdir()])
         self.assertIn("enabled: false", (work / ".pi/agents/Explore.md").read_text())
+        expected = json.loads((self.root / "trace.jsonl").with_suffix(".expected.json").read_text())
+        self.assertEqual(expected["instruction_reference_files"], [
+            "assignments.md", "coordination.md", "index.md", "routing.md", "supervision.md",
+        ])
 
     def test_disabled_instructions_and_wrong_agent_directory(self):
         home = self.root / "attempt"
         agent = home / ".pi/agent"
         config = {**self.config, "instructions_enabled": False}
         self.launcher.configure_attempt(home, agent, config, self.root / "trace.jsonl")
-        self.assertFalse((agent / "instructions/orchestration.md").exists())
+        self.assertFalse((agent / "instructions/orchestration/index.md").exists())
+        expected = json.loads((self.root / "trace.jsonl").with_suffix(".expected.json").read_text())
+        self.assertEqual(expected["instruction_reference_files"], [])
         with self.assertRaisesRegex(ValueError, "Unexpected Caliper agent"):
             self.launcher.configure_attempt(home, self.root / "wrong", config, self.root / "other.jsonl")
 

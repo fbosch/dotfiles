@@ -63,11 +63,18 @@ async function setup() {
   expect(loadedHashlineTools.map((tool) => tool.name)).toEqual([
     "replace",
     "insert",
+    "replace_match",
+    "copy",
+    "move",
+    "read",
+    "anchor_grep",
     "undo_last_change",
   ]);
-  for (const tool of loadedHashlineTools.filter(({ name }) => name !== "undo_last_change")) {
+  for (const tool of loadedHashlineTools.filter(({ name }) => ["replace", "insert", "replace_match", "copy", "move"].includes(name))) {
     expect((tool.parameters as { required?: string[] }).required).toContain("path");
   }
+  expect(loadedHashlineTools.find(({ name }) => name === "read")?.renderResult).toBeDefined();
+  expect(loadedHashlineTools.find(({ name }) => name === "anchor_grep")?.renderResult).toBeDefined();
   const hashlineTools = loadedHashlineTools.map(({ name }) => {
     const tool = tools.get(name);
     if (tool === undefined) throw new Error(`${name} was not registered`);
@@ -143,7 +150,7 @@ function editResult(warnings: boolean) {
   };
 }
 
-for (const toolName of ["replace", "insert", "undo_last_change"]) {
+for (const toolName of ["replace", "insert", "replace_match", "copy", "move", "undo_last_change"]) {
   describe(`${toolName} Delta result`, () => {
     test("preserves errors, partial updates and the non-Delta fallback", async () => {
       const { tools, hashlineTools } = await setup();
@@ -215,6 +222,7 @@ for (const toolName of ["replace", "insert", "undo_last_change"]) {
             expect(rendered.match(/local fast_interval_ms = 83/g)).toHaveLength(1);
             expect(rendered).not.toContain("local launch_timeout_ms");
             expect(rendered).not.toContain("IPal│");
+            expect(rendered).not.toContain("vygo│");
             expect(rendered).not.toContain("...");
             expect(rendered).toContain("19 local fast_interval_ms");
             const plainRendered = stripVTControlCharacters(rendered).replace(/\s+/gu, " ");

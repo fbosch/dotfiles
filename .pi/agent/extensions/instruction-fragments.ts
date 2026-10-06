@@ -71,19 +71,50 @@ function instructionFragmentCondition(value: unknown, path: string): Instruction
   return { tools: { [selector]: toolNames(tools[selector], `${path}.tools.${selector}`) } };
 }
 
-function discoverInstructionFragmentPaths(directory: string, basePath = ""): string[] {
-  return readdirSync(directory, { withFileTypes: true })
-    .sort((left, right) => left.name.localeCompare(right.name))
-    .flatMap((entry) => {
-      const path = basePath === "" ? entry.name : join(basePath, entry.name);
-      const entryPath = join(directory, entry.name);
+function discoverInstructionFragmentPaths(
+  directory: string,
+  basePath = "",
+  activeDirectories = new Set<string>(),
+): string[] {
+  const resolvedDirectory = realpathSync(directory);
+  if (activeDirectories.has(resolvedDirectory)) {
+    throw new Error(`Instruction fragment directory cycle: ${basePath || directory}`);
+  }
+  activeDirectories.add(resolvedDirectory);
 
-      if (entry.isDirectory()) {
-        return discoverInstructionFragmentPaths(entryPath, path);
-      }
-      if (entry.isFile() === false || entry.name.endsWith(".md") === false) return [];
-      return [path];
-    });
+  try {
+    return readdirSync(directory, { withFileTypes: true })
+      .sort((left, right) => left.name.localeCompare(right.name))
+      .flatMap((entry) => {
+        const path = basePath === "" ? entry.name : join(basePath, entry.name);
+        const entryPath = join(directory, entry.name);
+        let isDirectory = entry.isDirectory();
+        let isFile = entry.isFile();
+        if (entry.isSymbolicLink()) {
+          try {
+            const targetStats = statSync(entryPath);
+            isDirectory = targetStats.isDirectory();
+            isFile = targetStats.isFile();
+          } catch (error) {
+            throw new Error(
+              `Cannot resolve instruction fragment symlink: ${path}: ${
+                error instanceof Error ? error.message : String(error)
+              }`,
+            );
+          }
+        }
+
+        if (isDirectory) {
+          return discoverInstructionFragmentPaths(entryPath, path, activeDirectories);
+        }
+        if (isFile === false || entry.name.endsWith(".md") === false) return [];
+        // Topic directories keep reference Markdown beside their injected entrypoint.
+        if (basePath !== "" && entry.name !== "index.md") return [];
+        return [path];
+      });
+  } finally {
+    activeDirectories.delete(resolvedDirectory);
+  }
 }
 
 function pathEscapesDirectory(directory: string, path: string): boolean {
@@ -152,11 +183,8 @@ function loadInstructionFragmentsFromPaths(
       throw new Error(`Instruction fragment escapes its directory: ${fragment.path}`);
     }
 
+    // This user-owned tree may use Stow links outside its root; confine paths lexically, then trust targets.
     const resolvedPath = realpathSync(requestedPath);
-    if (pathEscapesDirectory(resolvedDirectory, resolvedPath)) {
-      throw new Error(`Instruction fragment symlink escapes its directory: ${fragment.path}`);
-    }
-
     if (loadedPaths.has(resolvedPath)) {
       throw new Error(`Duplicate instruction fragment: ${fragment.path}`);
     }

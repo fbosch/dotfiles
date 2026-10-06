@@ -45,12 +45,12 @@ describe("picture-in-picture control protocol", function()
 end)
 
 describe("picture-in-picture placement acceptance protocol", function()
-	it("round-trips corner and free placements", function()
+	it("normalizes corner and free placements", function()
 		local corner = { kind = "corner", corner = "top-left", target_monitor = "DP-1", width = 640, height = 360 }
 		local free = { kind = "free", target_monitor = "HDMI-A-1", x = 120, y = 340, width = 800, height = 450 }
 
-		assert.same(corner, assert(pip.acceptance.decode(pip.acceptance.encode(corner))))
-		assert.same(free, assert(pip.acceptance.decode(pip.acceptance.encode(free))))
+		assert.same(corner, assert(pip.acceptance.normalize(corner)))
+		assert.same(free, assert(pip.acceptance.normalize(free)))
 		assert.same(
 			{ kind = "corner", corner = "top-left", target_monitor = "DP-1" },
 			assert(pip.acceptance.normalize({ kind = "corner", corner = "top-left", target_monitor = "DP-1" }))
@@ -72,8 +72,6 @@ describe("picture-in-picture placement acceptance protocol", function()
 		for _, value in ipairs(malformed) do
 			assert.is_nil(pip.acceptance.normalize(value))
 		end
-		assert.is_nil(pip.acceptance.decode("wrong-command {}"))
-		assert.is_nil(pip.acceptance.decode(pip.acceptance.action .. " not-json"))
 	end)
 end)
 
@@ -120,7 +118,7 @@ describe("picture-in-picture window rules", function()
 		for _, rule in ipairs(rules) do
 			if rule.float == true then
 				setup_rules[#setup_rules + 1] = rule
-			elseif rule.animation == pip.default_animation then
+			elseif rule.animation == pip.default_animation and not rule.match.tag then
 				default_animation_rules[#default_animation_rules + 1] = rule
 			elseif rule.move == pip.normal_move then
 				placement_rules[#placement_rules + 1] = rule

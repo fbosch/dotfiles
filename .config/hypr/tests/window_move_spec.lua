@@ -130,6 +130,8 @@ end
 local function load_modules()
 	package.loaded["lib.window.custom_layout"] = nil
 	package.loaded["lib.window.directional"] = nil
+	package.loaded["plugins.persistent_position"] = nil
+	_G.hl.plugin = nil
 	package.loaded["lib.window.state"] = nil
 	package.loaded["lib.window.workspace"] = nil
 	package.loaded["layouts.shared.order_state"] = nil
@@ -154,6 +156,53 @@ before_each(load_modules)
 local function run(name, test)
 	it(name, test)
 end
+
+run("floating nudge dispatches before native capture and preserves disabled/PiP behavior", function()
+	reset("DP-2")
+	active_window.floating = true
+	local function enable_capture()
+		package.loaded["plugins.persistent_position"] = { enabled = true }
+		_G.hl.plugin = {
+			persistent_position = {
+				capture_focused = function()
+					dispatched[#dispatched + 1] = { op = "capture" }
+					return true
+				end,
+			},
+		}
+	end
+
+	directional.adjust("nudge", "right")()
+	assert_equal(dispatched[1].op, "window.move", "disabled nudge")
+	assert_equal(#dispatched, 1, "disabled capture count")
+	dispatched = {}
+	enable_capture()
+	directional.adjust("nudge", "right")()
+	assert_equal(dispatched[1].args.x, 32, "nudge delta")
+	assert_equal(dispatched[2].op, "capture", "capture after move")
+	dispatched = {}
+	active_window.class = "app.zen_browser.zen"
+	active_window.title = "Picture-in-Picture"
+	directional.adjust("nudge", "left")()
+	assert_equal(#dispatched, 1, "PiP capture excluded")
+end)
+
+run("generic floating directional move captures only after dispatch", function()
+	reset("DP-2")
+	active_window.floating = true
+	package.loaded["plugins.persistent_position"] = { enabled = true }
+	_G.hl.plugin = {
+		persistent_position = {
+			capture_focused = function()
+				dispatched[#dispatched + 1] = { op = "capture" }
+				return true
+			end,
+		},
+	}
+	directional.move("down")()
+	assert_equal(dispatched[1].op, "window.move", "first move")
+	assert_equal(dispatched[2].op, "capture", "capture after move")
+end)
 
 run("gaming move fullscreens policies with fullscreen state", function()
 	reset("DP-2")

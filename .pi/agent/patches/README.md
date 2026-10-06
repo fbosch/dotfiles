@@ -2,16 +2,21 @@
 
 Tracked patches preserve local changes to pinned Pi extensions:
 - `@ff-labs+pi-fff+0.11.0.patch` disables FFF's native watcher on macOS, forwards Git-status metadata for `@` suggestions, and marks the bounded find and grep tools for read-only programmatic dispatch.
-- `pi-hashline-edit-pro+4.5.3.patch` keeps one registry identity when Pi exposes a session file after early tool calls, preserving served anchors and reclamation state; it also keeps source type-safe under the local ES2022 and exact-optional checks.
+- `pi-hashline-edit-pro+6.0.1.patch` keeps one registry identity when Pi exposes a session file after early tool calls, preserving served anchors and reclamation state; it also keeps source type-safe under the local ES2022 and exact-optional checks.
 - `pi-lens+4.3.0.patch` refreshes and returns hashline anchors after immediate autoformatting, so formatter mutations do not leave the model with stale edit references; it also avoids duplicate deferred formatting and resolves bundled grammars.
 - `pi-worktrunk+0.8.0.patch` adds a persistent Worktrunk command-reference cache. Worktrunk remains an unconfigured installed leftover; it is not listed in `settings.json` and is intentionally not installed or loaded by this guide.
-- `@tintinweb+pi-tasks+0.9.0.patch` moves host-provided `typebox` from `dependencies` to `peerDependencies` with a `"*"` range, preventing a bundled duplicate runtime module.
+- `@tintinweb+pi-tasks+0.9.0.patch` stores task snapshots as `pi-tasks-state` entries in Pi's session history and restores the active branch on resume, reload, fork, tree navigation, and compaction. Settings are global-only, and the built-in storage choices are `session-history` and `memory`. Explicit `PI_TASKS` shared-list overrides remain file-backed. It also declares host-provided `typebox` as a peer dependency.
 
 The `@gotgenes/pi-subagents` patch was retired for 21.8.1: upstream now declares host-provided `typebox` as a peer dependency.
 
-The runtime compatibility patch under `../runtime-patches/` keeps `proper-lockfile@4.1.2` compatible with Bun's Proxy-backed filesystem. `just install-pi` applies it after dependency installation.
+The runtime patch under `../runtime-patches/` keeps `proper-lockfile@4.1.2` compatible with Bun's Proxy-backed filesystem. `just install-pi` applies these patches after dependency installation.
 
 Keep these patches here rather than editing Pi's installed packages without a reproducible source.
+
+The tasks patch does not import or delete old `.pi/tasks/` files or global task
+sidecars. Those lists remain untouched; new task changes belong to the session
+history. Remove the task-storage customization when upstream supports branch-aware
+session persistence and global-only settings.
 
 ## Installation
 
@@ -23,7 +28,7 @@ Keep these patches here rather than editing Pi's installed packages without a re
    pi install npm:@ff-labs/pi-fff@0.11.0
    pi install npm:@tintinweb/pi-tasks@0.9.0
    pi install npm:pi-lens@4.3.0
-   pi install npm:pi-hashline-edit-pro@4.5.3
+   pi install npm:pi-hashline-edit-pro@6.0.1
    ```
 
    If they are already installed, run

@@ -20,7 +20,7 @@ const promptState: PromptEditorState = {
 
 describe("footer repository customization", () => {
   test("renders a configured icon before the repository location", () => {
-    const line = renderPromptHints(theme, keybindings, promptState, "~/nixos", 60, "", {
+    const line = renderPromptHints(theme, keybindings, promptState, "~/nixos", 60, "", "", {
       icon: "",
       color: "blue",
     });

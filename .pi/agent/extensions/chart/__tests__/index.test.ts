@@ -331,6 +331,7 @@ describe("pie chart", () => {
       "chart_tree",
       "chart_treemap",
     ]);
+    expect(registerTools().every((tool) => tool.exposure === "deferred")).toBe(true);
     expect([
       pie.name,
       donut.name,

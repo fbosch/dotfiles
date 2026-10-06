@@ -6,3 +6,6 @@ require("plugins.focus_animation")
 require("plugins.inset_border")
 require("plugins.pointer_edge_hooks")
 require("plugins.window_interaction_hooks")
+if os.getenv("HYPR_PERSISTENT_POSITION_ENABLED") == "1" then
+	require("plugins.persistent_position")
+end

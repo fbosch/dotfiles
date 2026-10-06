@@ -115,6 +115,7 @@ describe("auth profile prompt status", () => {
     process.env.PI_CODING_AGENT_DIR = agentDir;
 
     let sessionStart: SessionStartHandler | undefined;
+    let sessionShutdown: SessionStartHandler | undefined;
     let profileCommand: ProfileCommandHandler | undefined;
     let resetCreditCommand: ResetCreditCommandHandler | undefined;
     let activeSessionId = "session-1";
@@ -126,6 +127,7 @@ describe("auth profile prompt status", () => {
       exec: async () => ({ code: 1, killed: false, stderr: "", stdout: "" }),
       on(event: string, handler: SessionStartHandler) {
         if (event === "session_start") sessionStart = handler;
+        if (event === "session_shutdown") sessionShutdown = handler;
       },
       registerCommand(name: string, command: { handler: ProfileCommandHandler }) {
         if (name === "profile") profileCommand = command.handler;
@@ -146,6 +148,9 @@ describe("auth profile prompt status", () => {
     let reportNextModelRefreshError = false;
     let modelRefreshes = 0;
     const runtime = {
+      login: async () => {
+        throw new Error("Login not used in this fixture");
+      },
       credentials: { store: new FakeAuthStore() },
     };
     const ctx = {
@@ -178,10 +183,13 @@ describe("auth profile prompt status", () => {
       },
     } as unknown as ExtensionCommandContext;
 
+    const originalLogin = runtime.login;
     expect(sessionStart).toBeDefined();
     expect(profileCommand).toBeDefined();
     expect(resetCreditCommand).toBeDefined();
     await sessionStart?.({}, ctx);
+    expect(runtime.login).not.toBe(originalLogin);
+    const wrappedLogin = runtime.login;
     expect(statuses).toEqual([["auth-profile", "default"]]);
     expect(runtime.credentials.store.path).toBe(join(agentDir, "auth.json"));
     expect(modelRefreshes).toBe(1);
@@ -231,6 +239,9 @@ describe("auth profile prompt status", () => {
       data: { profile: null, sessionId: "session-2" },
     });
     expect(modelRefreshes).toBe(9);
+    expect(runtime.login).toBe(wrappedLogin);
+    await sessionShutdown?.({}, ctx);
+    expect(runtime.login).toBe(originalLogin);
   });
 
   test("binds the selected profile before model availability refresh", async () => {
@@ -278,7 +289,12 @@ describe("auth profile prompt status", () => {
       usageCollector: () => new Promise(() => {}),
     });
 
-    const runtime = { credentials: { store: new FakeAuthStore() } };
+    const runtime = {
+      login: async () => {
+        throw new Error("Login not used in this fixture");
+      },
+      credentials: { store: new FakeAuthStore() },
+    };
     const sessionEntries: Array<{ type: "custom"; customType: string; data: unknown }> = [];
     let modelRefreshes = 0;
     const ctx = {
@@ -481,6 +497,9 @@ describe("auth profile prompt status", () => {
     const statuses: Array<[string, string | undefined]> = [];
     const notifications: string[] = [];
     const runtime = {
+      login: async () => {
+        throw new Error("Login not used in this fixture");
+      },
       credentials: { store: new FakeAuthStore() },
     };
     const ctx = {
@@ -584,6 +603,9 @@ describe("auth profile prompt status", () => {
 
     const originalStore = new FakeAuthStore();
     const runtime = {
+      login: async () => {
+        throw new Error("Login not used in this fixture");
+      },
       credentials: { store: originalStore },
     };
     const fetchRequests: Array<{

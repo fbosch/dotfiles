@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "1.0.0",
+  "lastChangelogVersion": "1.0.2",
   "theme": "zenwritten-dark",
   "quietStartup": true,
   "references": {
@@ -91,6 +91,7 @@
       "ast-grep_",
       "mcp__",
       "browser_",
+      "neovim",
       "web_search",
       "source_check",
       "fetch_content",
@@ -128,12 +129,12 @@
     }
   },
   "packages": [
-    "npm:pi-hashline-edit-pro@4.5.3",
-    "npm:pi-codex-goal@0.4.1",
+    "npm:pi-hashline-edit-pro@6.0.1",
+    "npm:pi-codex-goal@latest",
     "npm:pi-context-view@0.6.0",
     "npm:@ff-labs/pi-fff@0.11.0",
-    "npm:@gotgenes/pi-subagents@21.8.1",
-    "npm:pi-web-access@0.34.0",
+    "npm:@gotgenes/pi-subagents@23.0.0",
+    "npm:pi-web-access@0.36.0",
     "npm:pi-lens@4.3.0",
     "npm:@tintinweb/pi-tasks@0.9.0",
     "npm:pi-compaction-model@0.1.0",

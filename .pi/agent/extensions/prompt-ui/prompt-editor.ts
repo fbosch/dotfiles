@@ -12,6 +12,7 @@ import {
   type EditorTheme,
   stripTerminalSequences,
   type TUI,
+  visibleWidth,
 } from "@earendil-works/pi-tui";
 import {
   type AgentMention,
@@ -52,6 +53,8 @@ import { colorizeHex } from "./terminal-color";
 const EDITOR_PADDING_X = 1;
 const AUTOCOMPLETE_MAX_VISIBLE = 10;
 export const FILE_CHANGES_STATUS_KEY = "file-changes";
+export const MCP_STATUS_KEY = "mcp";
+const MCP_ICON = "";
 export function formatFffGitStatus(theme: Pick<Theme, "fg">, status: string): string {
   switch (status) {
     case "untracked":
@@ -127,6 +130,17 @@ function sanitizeStatus(status: string): string {
     .trim();
 }
 
+export function renderMcpFooterStatus(
+  theme: Pick<Theme, "fg">,
+  connectedCount: number,
+  hasFailure = false,
+): string {
+  if (connectedCount <= 0 && hasFailure === false) return "";
+
+  const iconColor = hasFailure ? "error" : "success";
+  return `${theme.fg(iconColor, MCP_ICON)} ${theme.fg("text", `${connectedCount} MCP`)}`;
+}
+
 export function renderFooterStatus(theme: Pick<Theme, "fg">, key: string, status: string): string {
   if (key === FILE_CHANGES_STATUS_KEY) {
     const match = /^(\d+ files?)(?: (\+\d+))?(?: (-\d+))?$/.exec(stripTerminalSequences(status));
@@ -142,6 +156,12 @@ export function renderFooterStatus(theme: Pick<Theme, "fg">, key: string, status
       .filter((part) => part !== undefined)
       .join(" ");
   }
+  if (key === MCP_STATUS_KEY) {
+    const match = /^MCP (\d+)\/\d+(!)?$/.exec(stripTerminalSequences(status));
+    return match === null
+      ? ""
+      : renderMcpFooterStatus(theme, Number(match[1]), match[2] !== undefined);
+  }
   return status;
 }
 
@@ -151,7 +171,8 @@ export function renderPromptHints(
   promptState: PromptEditorState,
   cwd: string,
   width: number,
-  rightStatus = "",
+  primaryRightStatus = "",
+  secondaryRightStatus = "",
   footerCustomization?: FooterCustomization,
 ): string {
   const statuses = promptState
@@ -175,8 +196,16 @@ export function renderPromptHints(
       : `${repoIcon} ${theme.fg("muted", locationText)}`;
   const hintLeft = [workingText, location, statusText].filter(Boolean).join(" · ");
   const renderedLeft = theme.fg("muted", ` ${hintLeft}`);
-  const rightStatusText = sanitizeStatus(rightStatus);
-  const hintRight = rightStatusText.length > 0 ? `${rightStatusText} ` : "";
+  const primaryRight = sanitizeStatus(primaryRightStatus);
+  const secondaryRight = sanitizeStatus(secondaryRightStatus);
+  const combinedRight = [secondaryRight, primaryRight].filter(Boolean).join(" · ");
+  const rightWidth = Math.max(0, width - visibleWidth(renderedLeft) - 1);
+  const hintRight =
+    primaryRight && secondaryRight && visibleWidth(combinedRight) > rightWidth
+      ? `${primaryRight} `
+      : combinedRight.length > 0
+        ? `${combinedRight} `
+        : "";
   return fitColumns(renderedLeft, hintRight, width);
 }
 

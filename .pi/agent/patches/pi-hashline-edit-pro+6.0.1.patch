@@ -144,10 +144,10 @@ index a8c8f3c..5febcea 100644
    pendingInits.delete(key);
    sidecarByKey.delete(key);
 diff --git a/node_modules/pi-hashline-edit-pro/src/hashline/apply.ts b/node_modules/pi-hashline-edit-pro/src/hashline/apply.ts
-index 4d063a8..579858b 100644
+index f7ff129..4adb494 100644
 --- a/node_modules/pi-hashline-edit-pro/src/hashline/apply.ts
 +++ b/node_modules/pi-hashline-edit-pro/src/hashline/apply.ts
-@@ -231,7 +231,12 @@ export function applyEdit(
+@@ -223,7 +223,12 @@ export function applyEdit(
    if (precomputedHashes === undefined) {
      throw new Error("[E_BAD_SHAPE] applyEdit requires the file's allocated anchors; derive them via lineHashes(content, path) first.");
    }
@@ -200,11 +200,11 @@ index e17801f..0bddfeb 100644
  }
  
 diff --git a/node_modules/pi-hashline-edit-pro/src/hashline/resolve.ts b/node_modules/pi-hashline-edit-pro/src/hashline/resolve.ts
-index 17f551a..67a0d09 100644
+index f1339dd..85c7392 100644
 --- a/node_modules/pi-hashline-edit-pro/src/hashline/resolve.ts
 +++ b/node_modules/pi-hashline-edit-pro/src/hashline/resolve.ts
-@@ -245,6 +245,14 @@ export function swapReversedRanges(
- 	return { ...edit, hash_bounds: [endRef, startRef] as [Anchor, Anchor] };
+@@ -292,6 +292,14 @@ export function preserveDeletionSeparators(edit: HEdit, fileLines: string[], fil
+ 	return { ...edit, hash_bounds: [{ hash: fileHashes[start]! }, { hash: fileHashes[end]! }] };
  }
  
 +function findLastMismatch(mismatches: HMismatch[], ref: Anchor): HMismatch | undefined {
@@ -218,7 +218,7 @@ index 17f551a..67a0d09 100644
  export function valEdit(
  	edit: HEdit,
  	fileLines: string[],
-@@ -277,10 +285,10 @@ export function valEdit(
+@@ -324,10 +332,10 @@ export function valEdit(
  	const endResolved = tryResolve(edit.hash_bounds[1]);
  	if (!startResolved || !endResolved) {
  		if (!startResolved && endResolved) {

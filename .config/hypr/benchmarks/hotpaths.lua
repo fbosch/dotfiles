@@ -406,106 +406,6 @@ local function bench_window_motion(iterations)
 	end)
 end
 
-local function make_capture_fixture(client_count, selector_count)
-	local selectors = {
-		{
-			matcher = "match:class",
-			pattern = "^nemo$",
-			per_monitor = true,
-			exclude = { matcher = "match:initialTitle", patterns = { "^File Operations$", "^Preparing$" } },
-		},
-		{
-			matcher = "match:initialTitle",
-			pattern = "^Picture-in-Picture$",
-			per_monitor = false,
-			persist_tags = { "pip-top-left", "pip-top-right" },
-		},
-		{ matcher = "match:initialClass", pattern = "^kitty$", per_monitor = true },
-		{ matcher = "match:title", pattern = "^Spotify Premium$", per_monitor = true },
-	}
-	for index = #selectors + 1, selector_count do
-		selectors[index] = { matcher = "match:class", pattern = "^unused-" .. index .. "$", per_monitor = true }
-	end
-	local monitors = {
-		{ id = "1", name = "DP-1", x = 0, y = 0 },
-		{ id = "2", name = "HDMI-A-1", x = 1920, y = 0 },
-		{ id = "3", name = "DP-2", x = -1440, y = 0 },
-	}
-	local clients = {}
-	for index = 1, client_count do
-		local monitor = (index - 1) % #monitors + 1
-		local monitor_data = monitors[monitor]
-		local kind = (index - 1) % 10
-		local client = {
-			class = "unmatched-app",
-			initialClass = "unmatched-app",
-			title = "Unmatched",
-			floating = true,
-			fullscreen = 0,
-			fullscreenClient = 0,
-			monitor = tostring(monitor),
-			at = { monitor_data.x + (index * 37) % 900, monitor_data.y + (index * 23) % 700 },
-			size = { 480 + index % 5 * 40, 320 + index % 4 * 30 },
-		}
-		if kind == 0 then
-			client.class = "nemo"
-			client.initialClass = "nemo"
-			client.initialTitle = "Files"
-		elseif kind == 1 then
-			client.class = "zen"
-			client.initialClass = "zen"
-			client.initialTitle = "Picture-in-Picture"
-			client.tags = { "pip-top-right*", "pip-top-left*", "unrelated" }
-		elseif kind == 2 then
-			client.class = "kitty"
-			client.initialClass = "kitty"
-		elseif kind == 3 then
-			client.class = "spotify"
-			client.initialClass = "spotify"
-			client.title = "Spotify Premium"
-		elseif kind == 4 then
-			client.class = "nemo"
-			client.initialClass = "nemo"
-			client.initialTitle = "File Operations"
-		elseif kind == 5 then
-			client.class = "nemo"
-			client.floating = false
-		elseif kind == 6 then
-			client.class = "kitty"
-			client.initialClass = "kitty"
-			client.fullscreen = 1
-		elseif kind == 7 then
-			client.class = "kitty"
-			client.initialClass = "kitty"
-			client.fullscreenClient = 1
-		end
-		clients[index] = client
-	end
-
-	return selectors, clients, monitors
-end
-
-local function bench_window_state_capture(iterations)
-	clear_modules()
-	local capture = require("runtime.windows.daemons.window-state.capture")
-	for _, scenario in ipairs({
-		{ name = "realistic-12x4", clients = 12, selectors = 4, iterations = iterations },
-		{ name = "selector-heavy-12x32", clients = 12, selectors = 32, iterations = math.max(100, math.floor(iterations / 4)) },
-		{ name = "busy-60x4", clients = 60, selectors = 4, iterations = math.max(100, math.floor(iterations / 4)) },
-		{ name = "stress-240x4", clients = 240, selectors = 4, iterations = math.max(100, math.floor(iterations / 20)) },
-	}) do
-		local selectors, clients, monitors = make_capture_fixture(scenario.clients, scenario.selectors)
-		run_case(
-			"window-state/capture-" .. scenario.name,
-			scenario.iterations,
-			function()
-				capture.snapshot(selectors, clients, monitors)
-			end,
-			math.min(2000, scenario.iterations)
-		)
-	end
-end
-
 local function bench_transfer_intent(iterations)
 	clear_modules()
 	local monitor_role = require("lib.monitor_role")
@@ -534,7 +434,6 @@ local cases = {
 	profiles = bench_profiles,
 	window_motion = bench_window_motion,
 	transfer_intent = bench_transfer_intent,
-	window_state_capture = bench_window_state_capture,
 }
 
 local selected = arg[1] or "all"
@@ -550,7 +449,6 @@ if selected == "all" then
 		"profiles",
 		"window_motion",
 		"transfer_intent",
-		"window_state_capture",
 	}) do
 		cases[name](iterations)
 	end
@@ -560,7 +458,7 @@ else
 	print(
 		"usage: lua "
 			.. script_path
-			.. " [all|ultrawide_master|portrait|window_switcher|clipboard|rule_loader|profiles|window_motion|transfer_intent|window_state_capture] [iterations]"
+			.. " [all|ultrawide_master|portrait|window_switcher|clipboard|rule_loader|profiles|window_motion|transfer_intent] [iterations]"
 	)
 	os.exit(2)
 end

@@ -139,11 +139,6 @@ hl.window_rule({
 -- xfreerdp (FreeRDP)
 hl.window_rule({ match = { initial_class = "^(xfreerdp)$" }, fullscreen = true })
 
--- MEGAsync
-hl.window_rule({ match = { class = "nz.mega.MEGAsync" }, float = true })
-hl.window_rule({ match = { initial_title = "^(MEGAsync)$" }, float = true, pin = true, rounding = 15 })
-hl.window_rule({ match = { initial_class = "nz.co.mega" }, float = true })
-
 -- Wine
 hl.window_rule({ match = { class = "^(winecfg\\.exe)$" }, float = true })
 

@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
-import { type PromptEditorState, renderFooterStatus, renderPromptHints } from "../prompt-editor";
+import {
+  type PromptEditorState,
+  renderFooterStatus,
+  renderMcpFooterStatus,
+  renderPromptHints,
+} from "../prompt-editor";
 
 const theme = {
   fg: (color: string, text: string) => `${color}:${text}`,
@@ -30,6 +35,17 @@ describe("prompt footer statuses", () => {
     expect(line).toContain("esc interrupt");
   });
 
+  test("renders MCP status and marks failures", () => {
+    expect(renderMcpFooterStatus(theme, 2)).toBe("success: text:2 MCP");
+    expect(renderMcpFooterStatus(theme, 2, true)).toBe("error: text:2 MCP");
+    expect(renderMcpFooterStatus(theme, 0)).toBe("");
+    expect(renderMcpFooterStatus(theme, 0, true)).toBe("error: text:0 MCP");
+    expect(renderFooterStatus(theme, "mcp", "MCP 2/6")).toBe("success: text:2 MCP");
+    expect(renderFooterStatus(theme, "mcp", "MCP 2/6!")).toBe("error: text:2 MCP");
+    expect(renderFooterStatus(theme, "mcp", "MCP 0/6")).toBe("");
+    expect(renderFooterStatus(theme, "mcp", "MCP 0/6!")).toBe("error: text:0 MCP");
+  });
+
   test("colors file change counts in the footer", () => {
     expect(renderFooterStatus(theme, "file-changes", "2 files +40 -25")).toBe(
       "text:2 files success:+40 error:-25",
@@ -37,34 +53,62 @@ describe("prompt footer statuses", () => {
     expect(renderFooterStatus(theme, "file-changes", "1 file")).toBe("text:1 file");
   });
 
-  test("keeps file changes on the right while displaying extension statuses on the left", () => {
+  test("keeps file changes and MCP on the right while showing extension statuses on the left", () => {
     const state = {
       ...promptState,
       getStatuses: () => ["background task"],
     };
+    const mcpStatus = renderMcpFooterStatus(ansiTheme, 2);
     const fileStatus = renderFooterStatus(ansiTheme, "file-changes", "2 files +40 -25");
-    const line = renderPromptHints(ansiTheme, keybindings, state, "~/dotfiles", 60, fileStatus);
+    const line = renderPromptHints(
+      ansiTheme,
+      keybindings,
+      state,
+      "~/dotfiles",
+      60,
+      mcpStatus,
+      fileStatus,
+    );
     const plainLine = stripTerminalSequences(line);
 
     expect(plainLine).toContain("background task");
-    expect(plainLine.endsWith("2 files +40 -25 ")).toBe(true);
+    expect(plainLine.endsWith("2 files +40 -25 ·  2 MCP ")).toBe(true);
     expect(visibleWidth(line)).toBe(60);
   });
 
-  test("leaves one column after the right-side file status", () => {
-    const fileStatus = renderFooterStatus(ansiTheme, "file-changes", "1 file");
+  test("leaves one column after right-side MCP status", () => {
+    const mcpStatus = renderMcpFooterStatus(ansiTheme, 2);
     const line = renderPromptHints(
       ansiTheme,
       keybindings,
       promptState,
       "~/dotfiles",
       60,
+      mcpStatus,
+    );
+    const plainLine = stripTerminalSequences(line);
+
+    expect(plainLine.endsWith(" 2 MCP ")).toBe(true);
+    expect(visibleWidth(line)).toBe(60);
+  });
+
+  test("prioritizes MCP over file changes when the footer narrows", () => {
+    const mcpStatus = renderMcpFooterStatus(ansiTheme, 2);
+    const fileStatus = renderFooterStatus(ansiTheme, "file-changes", "2 files +40 -25");
+    const line = renderPromptHints(
+      ansiTheme,
+      keybindings,
+      promptState,
+      "~/dotfiles",
+      25,
+      mcpStatus,
       fileStatus,
     );
     const plainLine = stripTerminalSequences(line);
 
-    expect(plainLine.endsWith("1 file ")).toBe(true);
-    expect(visibleWidth(line)).toBe(60);
+    expect(plainLine).not.toContain("2 files");
+    expect(plainLine.endsWith(" 2 MCP ")).toBe(true);
+    expect(visibleWidth(line)).toBe(25);
   });
 
   test("preserves unrelated status text", () => {

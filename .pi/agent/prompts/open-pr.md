@@ -16,6 +16,8 @@ Use the available GitHub or Azure DevOps CLI workflow (`gh`/`az`) for provider d
 PR BODY POLICY (authoritative for body content only):
 
 Read and apply `.agents/skills/pr-description/SKILL.md`.
+- Omit `## Testing` when pre-commit/pre-push hooks or CI run the relevant routine checks; their results are visible from the commit or PR. Do not list them just to report that they passed.
+- Include `## Testing` only for additional validation not reported by hooks or CI when it materially helps reviewers, such as a manual or environment-specific check.
 
 TONE POLICY (authoritative for voice and phrasing only):
 

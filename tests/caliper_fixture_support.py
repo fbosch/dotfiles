@@ -1,7 +1,7 @@
 """Offline production-config fixtures shared by the Caliper runner tests."""
 import json
-from pathlib import Path
 import shutil
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 EVAL = ROOT / ".pi/agent/evals/orchestration"
@@ -12,7 +12,7 @@ def seed_repo(repo: Path) -> Path:
     agent = repo / ".pi/agent"
     fixture = agent / "evals/orchestration"
     fixture.mkdir(parents=True)
-    for name in ("launch.py", "model_config.py", "scenario.py"):
+    for name in ("check.py", "launch.py", "model_config.py", "scenario.py"):
         shutil.copy2(EVAL / name, fixture / name)
     for path in (
         agent / "npm/node_modules/@gotgenes/pi-subagents/src/index.ts",
@@ -42,8 +42,17 @@ def seed_repo(repo: Path) -> Path:
             f"---\ndescription: The {role} specialist\nmodel: openai-codex/mock-{role}\n"
             "thinking: low\n---\nOriginal production prompt.\n"
         )
-    (agent / "instructions").mkdir()
-    (agent / "instructions/orchestration.md").write_text("---\nwhen:\n  tools:\n    any: [subagent]\n---\n# Subagent orchestration\n")
+    instructions = agent / "instructions/orchestration"
+    instructions.mkdir(parents=True)
+    instruction_files = {
+        "index.md": "---\nwhen:\n  tools:\n    any: [subagent]\n---\n# Subagent orchestration\n",
+        "assignments.md": "# Assignment reference\n",
+        "coordination.md": "# Coordination reference\n",
+        "routing.md": "# Routing reference\n",
+        "supervision.md": "# Supervision reference\n",
+    }
+    for name, content in instruction_files.items():
+        (instructions / name).write_text(content)
     (fixture / "orchestration.eval.yaml").write_text("skills: []\ntasks: []\n")
     swarm = repo / ".agents/skills/swarm"
     swarm.mkdir(parents=True)

@@ -84,7 +84,11 @@ export default function (pi: ExtensionAPI): void {
       await check(pie, pie.createDetails(data, settings), ctx.ui.theme);
       await check(bar, bar.createDetails(data, settings), ctx.ui.theme);
       const { histogramChartRenderer: histogram } = await loadChartType("histogram");
-      assert.ok(pi.getActiveTools().includes("chart_histogram"));
+      assert.ok(!pi.getActiveTools().includes("chart_histogram"));
+      assert.equal(
+        pi.getAllTools().find((tool) => tool.name === "chart_histogram")?.exposure,
+        "deferred",
+      );
       assert.ok(pi.getAllTools().some((tool) => tool.name === "chart_histogram"));
       await check(
         histogram,
@@ -101,7 +105,7 @@ export default function (pi: ExtensionAPI): void {
         ctx.ui.theme,
       );
       const { bezierChartRenderer: bezier } = await loadChartType("bezier");
-      assert.ok(pi.getActiveTools().includes("chart_bezier"));
+      assert.ok(!pi.getActiveTools().includes("chart_bezier"));
       assert.ok(pi.getAllTools().some((tool) => tool.name === "chart_bezier"));
       await check(
         bezier,
@@ -123,7 +127,7 @@ export default function (pi: ExtensionAPI): void {
         27,
       );
       const { heatmapChartRenderer: heatmap } = await loadChartType("heatmap");
-      assert.ok(pi.getActiveTools().includes("chart_heatmap"));
+      assert.ok(!pi.getActiveTools().includes("chart_heatmap"));
       assert.ok(pi.getAllTools().some((tool) => tool.name === "chart_heatmap"));
       await check(
         heatmap,
@@ -145,7 +149,7 @@ export default function (pi: ExtensionAPI): void {
         ctx.ui.theme,
       );
       const { boxplotChartRenderer: boxplot } = await loadChartType("boxplot");
-      assert.ok(pi.getActiveTools().includes("chart_boxplot"));
+      assert.ok(!pi.getActiveTools().includes("chart_boxplot"));
       assert.ok(pi.getAllTools().some((tool) => tool.name === "chart_boxplot"));
       await check(
         boxplot,
@@ -165,7 +169,7 @@ export default function (pi: ExtensionAPI): void {
         ctx.ui.theme,
       );
       const { waterfallChartRenderer: waterfall } = await loadChartType("waterfall");
-      assert.ok(pi.getActiveTools().includes("chart_waterfall"));
+      assert.ok(!pi.getActiveTools().includes("chart_waterfall"));
       assert.ok(pi.getAllTools().some((tool) => tool.name === "chart_waterfall"));
       await check(
         waterfall,
@@ -187,7 +191,7 @@ export default function (pi: ExtensionAPI): void {
         ctx.ui.theme,
       );
       const { dumbbellChartRenderer: dumbbell } = await loadChartType("dumbbell");
-      assert.ok(pi.getActiveTools().includes("chart_dumbbell"));
+      assert.ok(!pi.getActiveTools().includes("chart_dumbbell"));
       assert.ok(pi.getAllTools().some((tool) => tool.name === "chart_dumbbell"));
       await check(
         dumbbell,
@@ -210,7 +214,7 @@ export default function (pi: ExtensionAPI): void {
         ctx.ui.theme,
       );
       const { stackedBarChartRenderer: stackedBar } = await loadChartType("stacked_bar");
-      assert.ok(pi.getActiveTools().includes("chart_stacked_bar"));
+      assert.ok(!pi.getActiveTools().includes("chart_stacked_bar"));
       assert.ok(pi.getAllTools().some((tool) => tool.name === "chart_stacked_bar"));
       for (const normalize of [false, true]) {
         await check(
@@ -235,7 +239,7 @@ export default function (pi: ExtensionAPI): void {
         );
       }
       const { treemapChartRenderer: treemap } = await loadChartType("treemap");
-      assert.ok(pi.getActiveTools().includes("chart_treemap"));
+      assert.ok(!pi.getActiveTools().includes("chart_treemap"));
       assert.ok(pi.getAllTools().some((tool) => tool.name === "chart_treemap"));
       await check(
         treemap,
