@@ -19,7 +19,7 @@ done
 package_specs="$(bun --no-install -e '
   import { discoverPackagePatches } from "./.pi/agent/lib/patch-catalog.ts";
   for (const { name, version } of discoverPackagePatches(".pi/agent/patches")) {
-    console.log(`${name}@${version}`);
+    console.log(name + "@" + version);
   }
 ')"
 if [[ -z "$package_specs" ]]; then

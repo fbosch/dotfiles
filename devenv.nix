@@ -323,7 +323,8 @@ in
       cd .config/ags
       # GTK widget tests need a display and session bus even on a headless runner.
       GDK_BACKEND=x11 GSK_RENDERER=cairo GTK_A11Y=none \
-        timeout --foreground 180s dbus-run-session -- xvfb-run -a bun run test:gjs
+        timeout --foreground 180s dbus-run-session \
+        --config-file=${pkgs.dbus}/share/dbus-1/session.conf -- xvfb-run -a bun run test:gjs
     '';
 
     "test:runtime-shell".exec = ''
@@ -345,6 +346,18 @@ in
 
     "test:pi-extensions".exec = ''
       set -euo pipefail
+      test_home="$(mktemp -d "$DEVENV_STATE/pi-home.XXXXXX")"
+      trap 'rm -rf "$test_home"' EXIT
+      # Exercise the tracked configuration without reading or mutating a live Pi profile.
+      export HOME="$test_home"
+      export XDG_CONFIG_HOME="$HOME/.config"
+      export XDG_CACHE_HOME="$HOME/.cache"
+      export XDG_STATE_HOME="$HOME/.local/state"
+      export PI_CODING_AGENT_DIR="$HOME/.pi/agent"
+      mkdir -p "$PI_CODING_AGENT_DIR" "$XDG_CONFIG_HOME/pi-hashline-edit-pro"
+      cp .pi/agent/settings.json "$PI_CODING_AGENT_DIR/"
+      cp -R .pi/agent/agents .pi/agent/themes "$PI_CODING_AGENT_DIR/"
+      cp .config/pi-hashline-edit-pro/config.json "$XDG_CONFIG_HOME/pi-hashline-edit-pro/"
       cd .pi/agent
       bun test extensions benchmarks lib
       bun run typecheck
