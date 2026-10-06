@@ -17,4 +17,27 @@ jobs:
       - name: Install devenv
         run: nix profile add nixpkgs#devenv
       - name: Test
-        run: devenv test
+        run: |
+          set +e
+          devenv test > "$RUNNER_TEMP/devenv-test.log" 2>&1
+          result=$?
+          python3 - <<'PY'
+          import os
+          import re
+          from pathlib import Path
+          lines = (Path(os.environ['RUNNER_TEMP']) / 'devenv-test.log').read_text(errors='replace').splitlines()
+          selected = set(range(max(0, len(lines) - 40), len(lines)))
+          for i, line in enumerate(lines):
+              if re.search(r'\(fail\)|\bFAIL\b|error:|error TS\d+|npm error|✖ Running', line):
+                  selected.update(range(max(0, i - 4), min(len(lines), i + 10)))
+          for i in sorted(selected):
+              print(lines[i])
+          PY
+          exit "$result"
+      - name: Upload full test log
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: devenv-test-log
+          path: ${{ runner.temp }}/devenv-test.log
+          retention-days: 7

@@ -27,11 +27,21 @@ if [[ -z "$package_specs" ]]; then
   exit 1
 fi
 mapfile -t packages <<<"$package_specs"
-# The session viewer is tested too, but this unpatched package is absent from the patch catalog.
-subagent_spec="$(jq -er '.packages[] | select(test("^npm:@gotgenes/pi-subagents@[0-9]+\\.[0-9]+\\.[0-9]+$")) | ltrimstr("npm:")' .pi/agent/settings.json)"
-packages+=("$subagent_spec")
 npm install --prefix .pi/agent/npm --ignore-scripts --no-audit --no-fund --save-exact "${packages[@]}"
 bun --no-install .pi/agent/lib/pi-npm.ts --apply-patches .pi/agent/npm
+
+# Lens and Subagents declare incompatible peer ranges. Resolve the viewer's own
+# dependency graph separately instead of suppressing npm's peer validation.
+subagent_spec="$(jq -er '.packages[] | select(test("^npm:@gotgenes/pi-subagents@[0-9]+\\.[0-9]+\\.[0-9]+$")) | ltrimstr("npm:")' .pi/agent/settings.json)"
+subagent_root="$repo_root/.pi/agent/npm/.test-fixtures/subagents"
+npm install --prefix "$subagent_root" --ignore-scripts --no-audit --no-fund --save-exact "$subagent_spec"
+subagent_link="$repo_root/.pi/agent/npm/node_modules/@gotgenes/pi-subagents"
+mkdir -p "$(dirname "$subagent_link")"
+if [[ -e "$subagent_link" && ! -L "$subagent_link" ]]; then
+  printf 'Refusing to replace an existing Subagents installation: %s\n' "$subagent_link" >&2
+  exit 1
+fi
+ln -sfn "$subagent_root/node_modules/@gotgenes/pi-subagents" "$subagent_link"
 
 # Read the existing lock without running Neovim's interactive package updater.
 # Never depend on, or update, plugins installed in the developer's actual home.
