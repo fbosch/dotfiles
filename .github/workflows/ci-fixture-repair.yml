@@ -1,0 +1,52 @@
+name: PR 17 fixture repair
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+permissions:
+  contents: write
+jobs:
+  repair:
+    if: github.repository == 'fbosch/dotfiles' && github.event.pull_request.number == 17 && github.event.pull_request.head.repo.full_name == 'fbosch/dotfiles' && github.event.pull_request.head.ref == 'fix/ci-test-environment-2026-10-06'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+      - name: Apply exact fixture corrections
+        env:
+          EXPECTED_HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          set -euo pipefail
+          python3 scripts/ci-fixture-repair.py
+          git diff --check
+          git diff --stat
+          git add -- devenv.nix .pi/agent/extensions/neovim/__tests__/channel.test.ts .pi/agent/extensions/neovim/__tests__/channel.integration.test.ts .config/ags/scripts/tests/gjs/ai-pointer-process-lifecycle.case.ts .config/ags/scripts/tests/gjs/ai-pointer-workflow.case.tsx .config/ags/services/__tests__/waybar-control.case.ts tests/fixtures/ags/bin/hyprctl
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'fix(ci): isolate compositor fixtures and align current test contracts'
+          remote_head="$(git ls-remote origin refs/heads/fix/ci-test-environment-2026-10-06 | cut -f1)"
+          test "$remote_head" = "$EXPECTED_HEAD"
+          git push origin HEAD:refs/heads/fix/ci-test-environment-2026-10-06
+          git rev-parse HEAD
+      - uses: cachix/install-nix-action@v31
+      - name: Install devenv
+        run: nix profile add nixpkgs#devenv > /tmp/devenv-install.log 2>&1 || { tail -50 /tmp/devenv-install.log; exit 1; }
+      - name: Validate corrected tree
+        run: |
+          set +e
+          devenv test > /tmp/fixture-validation.log 2>&1
+          result=$?
+          python3 - <<'PY'
+          import re
+          from pathlib import Path
+          lines = Path('/tmp/fixture-validation.log').read_text(errors='replace').splitlines()
+          matches = [i for i, line in enumerate(lines) if re.search(r'\(fail\)|\bFAIL\b|error:|error TS\d+|✖ Running', line)]
+          selected = set(range(max(0, len(lines)-30), len(lines)))
+          for i in matches:
+              selected.update(range(max(0, i-4), min(len(lines), i+9)))
+          for i in sorted(selected)[:450]:
+              print(lines[i][:1800])
+          print('Full log lines:', len(lines), 'matched failures:', len(matches))
+          PY
+          exit "$result"
