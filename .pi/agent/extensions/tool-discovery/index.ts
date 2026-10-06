@@ -502,7 +502,11 @@ export default function toolDiscoveryExtension(
     const deferredNames = new Set(
       pi
         .getAllTools()
-        .filter((tool) => isDeferredToolName(tool.name, deferredPrefixes))
+        .filter(
+          (tool) =>
+            (tool.exposure === "direct" || tool.exposure === "model-only") &&
+            isDeferredToolName(tool.name, deferredPrefixes),
+        )
         .map((tool) => tool.name),
     );
     const active = pi.getActiveTools();

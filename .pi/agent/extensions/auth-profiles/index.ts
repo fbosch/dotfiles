@@ -8,6 +8,7 @@
  */
 
 import type { CredentialStore } from "@earendil-works/pi-ai";
+import { installCredentialLoginBoundary } from "./credential-login";
 import type { GitRunner } from "./profile-resolver";
 import { type ProfileSelection, selectProfile } from "./profile-selector";
 import {
@@ -78,6 +79,7 @@ type InternalCredentials = { store?: CredentialStore };
 
 type InternalRuntime = {
   credentials?: InternalCredentials;
+  login: import("@earendil-works/pi-coding-agent").ModelRuntime["login"];
 };
 
 type BindProfileOptions = {
@@ -100,18 +102,25 @@ type AuthProfileDependencies = {
 function credentialStoreBinding(ctx: Pick<ExtensionContext, "modelRegistry">): {
   credentials: InternalCredentials;
   store: CredentialStore;
+  runtime: InternalRuntime;
 } {
   // Pi no longer exposes its credential runtime to extensions, so this is the
   // narrow compatibility boundary used to replace only its active store.
+  // SAFETY: installed Pi owns this private runtime; validate required ports below.
   const runtime = (ctx.modelRegistry as unknown as { runtime?: InternalRuntime }).runtime;
   const credentials = runtime?.credentials;
   const store = credentials?.store;
-  if (credentials === undefined || store === undefined) {
+  if (
+    credentials === undefined ||
+    store === undefined ||
+    runtime === undefined ||
+    typeof runtime.login !== "function"
+  ) {
     throw new Error(
       "Auth profiles is incompatible with this version of pi: credential storage cannot be switched.",
     );
   }
-  return { credentials, store };
+  return { credentials, store, runtime };
 }
 export function createProfileCredentialStore(
   selected: CredentialStore,
@@ -373,6 +382,7 @@ export default function authProfiles(
   pi: ExtensionAPI,
   dependencies: AuthProfileDependencies = {},
 ): void {
+  const loginBoundaries = new Map<InternalRuntime, () => void>();
   const chooseProfile = dependencies.selectProfile ?? selectProfile;
   const now = dependencies.now ?? Date.now;
   const providerAdapter = dependencies.providerAdapter ?? createOpenAiCodexProfileAdapter();
@@ -441,6 +451,10 @@ export default function authProfiles(
     selection: ProfileSelection,
     options: BindProfileOptions = {},
   ) => {
+    const { runtime } = credentialStoreBinding(ctx);
+    if (!loginBoundaries.has(runtime)) {
+      loginBoundaries.set(runtime, installCredentialLoginBoundary(runtime));
+    }
     const path = await bindProfile(ctx, selection.profile, providerAdapter, options);
     activeProfile = selection.profile;
     activeSelection = selection;
@@ -510,6 +524,8 @@ export default function authProfiles(
 
   pi.on("session_shutdown", () => {
     authStartupOwner?.dispose();
+    for (const dispose of loginBoundaries.values()) dispose();
+    loginBoundaries.clear();
   });
 
   pi.on("session_start", async (_event, ctx) => {

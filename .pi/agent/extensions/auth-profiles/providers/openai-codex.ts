@@ -8,6 +8,7 @@ import type {
 import { getAgentDir, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { isRecord } from "../../shared/is-record";
 import { readBoundedJson } from "../../shared/read-bounded-json";
+import { consumeCredentialLogin } from "../credential-login";
 import { authPathFor, normalizeName } from "../profile-store";
 import type {
   ProfileCredentialReadResult,
@@ -143,12 +144,13 @@ export function guardOpenAiCodexCredential(
     },
     modify(providerId, modify, options) {
       if (providerId !== PROVIDER_ID) return store.modify(providerId, modify, options);
+      const isLogin = allowIdentityResetAfterDelete && consumeCredentialLogin(options);
       return serializeMutation(async () => {
         let observedIdentity: string | undefined;
         const result = await store.modify(
           providerId,
           async (current) => {
-            const expectedIdentity = identityFor(current);
+            const expectedIdentity = isLogin ? undefined : identityFor(current);
             const next = await modify(current);
             if (next === undefined) return undefined;
             const nextIdentity =
