@@ -84,6 +84,8 @@ test.skipIf(pi === null)(
       expect(report.recommendations).toContain("/skills/xstate/SKILL.md");
       expect(report.recommendations).not.toContain("specialized workflow");
       expect(report.structuredRecommendation).toBe(true);
+      expect(report.recommendationEntries).toEqual([{ skills: ["xstate"] }]);
+      expect(report.userOnlyEntryInModelContext).toBe(false);
       expect(report.searchResult).toContain("- xstate:");
       expect(report.searchResult).toContain("Ranking source: lexical");
     } finally {

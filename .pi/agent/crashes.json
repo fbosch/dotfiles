@@ -1,0 +1,12 @@
+[
+  {
+    "timestamp": "2026-10-06T13:36:17.825Z",
+    "version": "1.0.2",
+    "kind": "uncaught_exception",
+    "message": "undefined is not an object (evaluating 'this.keys.getKeys')",
+    "stack": "Error: undefined is not an object (evaluating 'this.keys.getKeys')\n    at <anonymous> (/Users/fbb/dotfiles/.pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigator.ts:346:38)\n    at keyPair (/Users/fbb/dotfiles/.pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigator.ts:346:12)\n    at footerHint (/Users/fbb/dotfiles/.pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigator.ts:338:30)\n    at render (/Users/fbb/dotfiles/.pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigator.ts:311:47)\n    at render (/Users/fbb/dotfiles/.pi/agent/extensions/prompt-ui/subagent-transcript-frame.ts:32:11)\n    at compositeOverlays (/$bunfs/root/pi:117637:44)\n    at doRender (/$bunfs/root/pi:126126:38)\n    at <anonymous> (/$bunfs/root/pi:117393:22)",
+    "sessionFile": "/Users/fbb/dotfiles/.pi/agent/sessions/--Users-fbb-dotfiles--/2026-10-06T10-20-47-152Z_01a110ba-e8b0-763b-944f-a26ec8993926.jsonl",
+    "cwd": "/Users/fbb/dotfiles",
+    "notified": true
+  }
+]

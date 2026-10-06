@@ -44,6 +44,8 @@ function extensionHarness(dependencies: Parameters<typeof createSkillSelectionEx
   const extension = createSkillSelectionExtension(dependencies);
   const api = {
     events: createEventBus(),
+    registerEntryRenderer: () => {},
+    appendEntry: () => {},
     registerCommand: () => {},
     on: (_event: string, callback: typeof handler) => {
       handler = callback;
@@ -62,6 +64,8 @@ function lifecycleHarness(dependencies: Parameters<typeof createSkillSelectionEx
   const extension = createSkillSelectionExtension(dependencies);
   extension({
     events: createEventBus(),
+    registerEntryRenderer: () => {},
+    appendEntry: () => {},
     registerCommand: (name: string, definition: { handler: typeof statusCommand }) => {
       if (name === "classifier-status") statusCommand = definition.handler;
     },

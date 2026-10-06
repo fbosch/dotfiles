@@ -27,7 +27,7 @@ class CodemodeEvalTests(unittest.TestCase):
         self.repo = seed_repo(self.root / "repo")
         target = self.repo / ".pi/agent/evals/codemode"
         shutil.copytree(SOURCE, target, ignore=shutil.ignore_patterns("__pycache__"))
-        (self.repo / ".pi/agent/AGENTS.md").write_text("- Use codemode for independent calls.\n- Unrelated instruction.\n")
+        (self.repo / ".pi/agent/AGENTS.md").write_text("- Unrelated instruction.\n")
 
     def prepare(self, baseline):
         run = self.root / ("baseline" if baseline else "candidate")
@@ -44,7 +44,7 @@ class CodemodeEvalTests(unittest.TestCase):
         self.assertEqual(a["extensions"], b["extensions"])
         self.assertEqual(a["source_sha256"], b["source_sha256"])
         self.assertEqual((candidate / "candidate.md").read_bytes(), (SOURCE / "candidate.md").read_bytes())
-        self.assertEqual((baseline / "baseline.md").read_text(), "- Use codemode for independent calls.\n")
+        self.assertEqual((baseline / "baseline.md").read_bytes(), (SOURCE / "baseline.md").read_bytes())
         self.assertEqual(a["arm"], "baseline")
         self.assertEqual(b["arm"], "candidate")
 

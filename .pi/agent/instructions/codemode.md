@@ -1,3 +1,10 @@
+---
+when:
+  tools:
+    all:
+      - codemode
+---
+
 # Codemode
 
 - Keep prerequisites and conflicting mutations ordered, including required

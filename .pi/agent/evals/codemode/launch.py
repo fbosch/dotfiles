@@ -31,9 +31,10 @@ def prepare(repo: Path, run_root: Path, evidence: Path, baseline: bool, model: s
         raise ValueError("Review credential-bearing custom provider configuration before copying")
     (evidence / "models.json").write_text(json.dumps(models))
     (evidence / "models-store.json").write_text(json.dumps(module.snapshot_store(repo, catalog)))
-    guidance = "\n".join(line for line in (agent / "AGENTS.md").read_text().splitlines() if "codemode" in line.lower())
-    if not guidance:
-        raise ValueError("Current codemode guidance is missing")
+    # Freeze the original rule so relocating production guidance does not change the control arm.
+    guidance = (source / "baseline.md").read_text().rstrip("\n")
+    if not guidance.strip():
+        raise ValueError("Baseline codemode guidance is empty")
     candidate = (source / "candidate.md").read_text()
     (evidence / "baseline.md").write_text(guidance + "\n")
     (evidence / "candidate.md").write_text(candidate)

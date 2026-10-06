@@ -23,7 +23,6 @@
 - Target the current contract. Add compatibility paths only for explicitly scoped
   persisted data or external consumers.
 - Prefer event-driven systems over polling when both are viable.
-- Use `codemode` for workflows that batch or chain tool calls; use direct calls for simple tasks.
 - Do not use `any` casts to bypass type errors.
 - Put new JavaScript and TypeScript tests in a neighboring `__tests__` directory.
 - Add comments only for non-obvious constraints, lifecycle requirements,

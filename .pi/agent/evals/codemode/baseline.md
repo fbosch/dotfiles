@@ -1,0 +1,1 @@
+- Use `codemode` for workflows that batch or chain tool calls; use direct calls for simple tasks.

@@ -75,6 +75,11 @@ export default function runtimeCheck(pi: ExtensionAPI): void {
       classifierCandidates,
       recommendations: options?.sections?.skill_recommendations,
       structuredRecommendation: systems.includes('name=\\"xstate\\"'),
+      recommendationEntries: ctx.sessionManager
+        .getBranch()
+        .filter((entry) => entry.type === "custom" && entry.customType === "skill-recommendations")
+        .map((entry) => (entry.type === "custom" ? entry.data : undefined)),
+      userOnlyEntryInModelContext: JSON.stringify(event.messages).includes("skill-recommendations"),
       searchResult,
     };
     console.log(`SKILL_RUNTIME_CHECK ${JSON.stringify(report)}`);

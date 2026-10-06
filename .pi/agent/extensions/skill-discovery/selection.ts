@@ -8,6 +8,7 @@ import {
   SettingsManager,
   type Skill,
 } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 import {
   type ClassifierFailure,
   type ClassifierFetch,
@@ -30,6 +31,7 @@ const MAX_REQUEST_CHARS = 12_000;
 const MAX_DESCRIPTION_CHARS = 400;
 const SKILL_RECOMMENDATIONS_START = "<skill_recommendations>";
 const SKILL_RECOMMENDATIONS_SECTION = "skill_recommendations";
+const RECOMMENDATIONS_ENTRY = "skill-recommendations";
 const NO_MATCH_QUESTION = "none_relevant";
 
 export interface SkillCandidate {
@@ -50,6 +52,7 @@ export interface SkillSelectionUsage {
 export interface SkillSelectionResult {
   readonly recommendations: readonly SkillRecommendation[];
   readonly scores: ReadonlyMap<string, number>;
+  readonly noMatchScore: number;
   readonly usage?: SkillSelectionUsage;
 }
 
@@ -169,6 +172,22 @@ function usageFromClassifier(usage: Usage | undefined): SkillSelectionUsage | un
   return { inputTokens: usage.input, outputTokens: usage.output };
 }
 
+export function recommendSkillsFromScores(
+  candidates: readonly SkillCandidate[],
+  scores: ReadonlyMap<string, number>,
+  noMatchScore: number,
+  config: Pick<SkillSelectionConfig, "threshold" | "maxRecommendations"> =
+    DEFAULT_SKILL_SELECTION_CONFIG,
+): SkillRecommendation[] {
+  if (noMatchScore >= config.threshold) return [];
+
+  return candidates
+    .map((candidate) => ({ name: candidate.name, score: scores.get(candidate.name) ?? 0 }))
+    .filter(({ score }) => score >= config.threshold)
+    .sort((left, right) => right.score - left.score || compareNames(left.name, right.name))
+    .slice(0, config.maxRecommendations);
+}
+
 export function parseSkillSelectionResponse(
   answers: Record<string, ClassifierAnswer>,
   candidates: readonly SkillCandidate[],
@@ -212,16 +231,9 @@ export function parseSkillSelectionResponse(
     return undefined;
   }
 
-  const recommendations =
-    noMatchScore >= config.threshold
-      ? []
-      : candidates
-          .map((candidate) => ({ name: candidate.name, score: scores.get(candidate.name) ?? 0 }))
-          .filter(({ score }) => score >= config.threshold)
-          .sort((left, right) => right.score - left.score || compareNames(left.name, right.name))
-          .slice(0, config.maxRecommendations);
+  const recommendations = recommendSkillsFromScores(candidates, scores, noMatchScore, config);
 
-  return { recommendations, scores };
+  return { recommendations, scores, noMatchScore };
 }
 
 export function parseSkillSelectionResponseDetailed(
@@ -398,6 +410,22 @@ export function createSkillSelectionExtension(
   };
 
   return (pi) => {
+    pi.registerEntryRenderer<{ skills: string[] }>(
+      RECOMMENDATIONS_ENTRY,
+      (entry, _options, theme) => {
+        if (
+          !entry.data ||
+          !Array.isArray(entry.data.skills) ||
+          entry.data.skills.some((name) => typeof name !== "string")
+        )
+          return;
+        return new Text(
+          theme.fg("dim", `Recommended skills: ${entry.data.skills.join(", ")}`),
+          0,
+          0,
+        );
+      },
+    );
     pi.registerCommand("classifier-status", {
       description: "Show the latest advisory skill-selection lifecycle status",
       handler: async (_args, context) => {
@@ -505,6 +533,10 @@ export function createSkillSelectionExtension(
         if (result.recommendations.length === 0) return;
         event.systemPromptOptions.sections[SKILL_RECOMMENDATIONS_SECTION] =
           formatSkillRecommendations(result.recommendations, skills);
+        // Custom entries render in chat but are excluded from model context by Pi.
+        pi.appendEntry(RECOMMENDATIONS_ENTRY, {
+          skills: result.recommendations.map(({ name }) => name),
+        });
       } catch {
         status = {
           enabled: true,
