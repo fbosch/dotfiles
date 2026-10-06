@@ -1,3 +1,6 @@
 inputs:
   nixpkgs:
     url: github:cachix/devenv-nixpkgs/rolling
+  # The GTK4 tests use AGS 3's ags/gtk4 API, not nixpkgs' older AGS 2 API.
+  ags:
+    url: github:aylur/ags/bbee2f18939f1ec7ff720e717cf305e73635628f

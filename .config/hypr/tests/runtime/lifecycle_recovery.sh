@@ -154,7 +154,8 @@ SYSTEMD_HYPRLAND_INSTANCE_SIGNATURE=current-instance HYPRLAND_INSTANCE_SIGNATURE
   FIXTURE_LOG="$restart_log" "$repo_root/runtime/desktop/restart-daemons.sh"
 # The recovery script intentionally launches replacements in the background.
 # Wait for every launcher stub before assertions or fixture cleanup can race it.
-wait_for_log_count "$restart_log" uwsm-app 13
+# Waybar is launched by its supervisor, not directly by recovery.
+wait_for_log_count "$restart_log" uwsm-app 12
 assert_contains "$restart_log" 'pkill -f gaming-session-watchdog'
 assert_contains "$restart_log" 'pgrep -f gaming-session-watchdog\.(sh|lua)'
 assert_contains "$restart_log" "uwsm-app -s b -- $home_dir/.config/hypr/runtime/gaming/daemons/gaming-session-watchdog/gaming-session-watchdog.sh"
@@ -182,7 +183,7 @@ if (( SECONDS > 2 )); then
   printf 'reset-desktop shutdown waits ran serially (%ss)\n' "$SECONDS" >&2
   exit 1
 fi
-wait_for_log_count "$reset_log" uwsm-app 6
+wait_for_log_count "$reset_log" uwsm-app 5
 wait_for_log_count "$reset_log" swaync-client 2
 assert_contains "$reset_log" 'waybar-process.sh running'
 assert_contains "$reset_log" 'hyprctl reload'

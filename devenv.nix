@@ -1,4 +1,4 @@
-{ pkgs, lib, ... }:
+{ pkgs, lib, inputs, ... }:
 
 let
   bunVersion = "1.4.0";
@@ -80,6 +80,12 @@ in
     stylua
     util-linux
     yq-go
+  ] ++ lib.optionals pkgs.stdenv.hostPlatform.isLinux [
+    (inputs.ags.packages.${pkgs.stdenv.hostPlatform.system}.default.override {
+      extraPackages = [ pkgs.astal.wireplumber pkgs.evolution-data-server ];
+    })
+    pkgs.dbus
+    pkgs.xvfb-run
   ];
 
   tasks = {
@@ -146,6 +152,8 @@ in
         ".pi/agent/auth-profiles"
         ".pi/agent/auth.json"
         ".pi/agent/mcp-cache.json"
+        ".pi/agent/mcp-npx-cache.json"
+        ".pi/agent/mcp-onboarding.json"
         ".pi/agent/models-store.json"
         ".pi/agent/sessions"
       )
@@ -173,6 +181,8 @@ in
       while IFS= read -r -d "" deployment_path; do
         case "$deployment_path" in
           ".pi/skills/"*) continue ;;
+          # Tracked runtime caches remain excluded by .stow-local-ignore.
+          ".pi/agent/mcp-npx-cache.json"|".pi/agent/mcp-onboarding.json") continue ;;
         esac
         if ! test -e "$target/$deployment_path"; then
           printf 'Expected Stow deployment is missing: %s\n' "$deployment_path" >&2
@@ -311,7 +321,9 @@ in
     "test:ags-gjs".exec = ''
       set -euo pipefail
       cd .config/ags
-      timeout --foreground 180s bun run test:gjs
+      # GTK widget tests need a display and session bus even on a headless runner.
+      GDK_BACKEND=x11 GSK_RENDERER=cairo GTK_A11Y=none \
+        timeout --foreground 180s dbus-run-session -- xvfb-run -a bun run test:gjs
     '';
 
     "test:runtime-shell".exec = ''
@@ -490,6 +502,10 @@ in
   };
 
   enterTest = ''
+    set -euo pipefail
+    export XDG_DATA_HOME="$DEVENV_STATE/test-data"
+    export PATH="$PWD/.pi/agent/node_modules/.bin:$PATH"
+    bash scripts/prepare-test-dependencies.sh
     devenv tasks run test:all
   '';
 }
