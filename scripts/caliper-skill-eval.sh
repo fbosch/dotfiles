@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: caliper-skill-eval.sh [--ablate] [--auth-profile NAME] [--spec PATH] [--orchestration [--without-instructions]] SKILL [MODEL] [THINKING] [K] [JUDGE_MODEL] [JUDGE_THINKING]
+Usage: caliper-skill-eval.sh [--ablate] [--auth-profile NAME] [--spec PATH] [--orchestration [--without-instructions]] [--codemode [--baseline]] SKILL [MODEL] [THINKING] [K] [JUDGE_MODEL] [JUDGE_THINKING]
 EOF
 }
 
@@ -12,8 +12,18 @@ auth_profile=default
 spec_override=""
 orchestration=false
 without_instructions=false
+codemode=false
+baseline=false
 while (($# > 0)); do
   case "$1" in
+  --codemode)
+    codemode=true
+    shift
+    ;;
+  --baseline)
+    baseline=true
+    shift
+    ;;
   --orchestration)
     orchestration=true
     shift
@@ -65,7 +75,7 @@ if [[ -z "$skill" || $# -gt 6 ]]; then
   exit 2
 fi
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-if [[ "$orchestration" == true ]]; then
+if [[ "$orchestration" == true || "$codemode" == true ]]; then
   resolved_model="$(python3 "$repo_root/.pi/agent/evals/orchestration/model_config.py" \
     "$repo_root" "${2:-configured}" "${3:-configured}")"
   read -r model thinking <<<"$resolved_model"
@@ -98,6 +108,17 @@ if [[ ! "$skill" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
   exit 2
 fi
 
+if [[ "$baseline" == true && "$codemode" != true ]]; then
+  printf '%s\n' '--baseline requires --codemode' >&2
+  exit 2
+fi
+if [[ "$codemode" == true ]]; then
+  if [[ "$orchestration" == true || "$ablate" == true || "$skill" != codemode ]]; then
+    printf '%s\n' 'Use --codemode with subject codemode; use --baseline, not --ablate or --orchestration.' >&2
+    exit 2
+  fi
+  spec_override="${spec_override:-$repo_root/.pi/agent/evals/codemode/codemode.eval.yaml}"
+fi
 if [[ "$without_instructions" == true && "$orchestration" != true ]]; then
   printf '%s\n' '--without-instructions requires --orchestration' >&2
   exit 2
@@ -152,6 +173,14 @@ if [[ "$orchestration" == true ]]; then
     "$repo_root" "$run_root" "$ORCHESTRATION_EVAL_RUN" "$without_instructions" "$model" "$thinking"
   printf 'Orchestration evidence: %s\n' "$ORCHESTRATION_EVAL_RUN"
 fi
+if [[ "$codemode" == true ]]; then
+  mkdir -p "$repo_root/.caliper/codemode"
+  CODEMODE_EVAL_RUN="$(mktemp -d "$repo_root/.caliper/codemode/run.XXXXXX")"
+  export CODEMODE_EVAL_RUN
+  python3 "$repo_root/.pi/agent/evals/codemode/launch.py" prepare \
+    "$repo_root" "$run_root" "$CODEMODE_EVAL_RUN" "$baseline" "$model" "$thinking"
+  printf 'Codemode evidence: %s\n' "$CODEMODE_EVAL_RUN"
+fi
 
 wrapper="$run_root/pi-wrapper"
 cat >"$wrapper" <<'EOF'
@@ -189,6 +218,8 @@ pi_bin=__CALIPER_PI_BIN__
 set +e
 if [ -f "$run_root/orchestration-launch.py" ]; then
   python3 "$run_root/orchestration-launch.py" "$pi_bin" "$@"
+elif [ -f "$run_root/codemode-launch.py" ]; then
+  python3 "$run_root/codemode-launch.py" "$pi_bin" "$@"
 else
   PI_OFFLINE=1 "$pi_bin" --no-extensions "$@"
 fi
@@ -213,7 +244,7 @@ chmod 700 "$wrapper"
 
 candidate="pi:openai-codex/$model:$thinking"
 judge="pi:openai-codex/$judge_model:$judge_thinking"
-if [[ "$orchestration" == true ]]; then
+if [[ "$orchestration" == true || "$codemode" == true ]]; then
   candidate="pi:$model:$thinking"
   judge="pi:$judge_model:$judge_thinking"
 fi

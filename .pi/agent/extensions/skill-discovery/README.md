@@ -1,8 +1,10 @@
-# Advisory skill selection
+# Skill discovery
 
-This extension asks the classifier for independent relevance scores over the skills Pi has already discovered. It appends recommendations only; it never removes the native catalog, loads a skill, or changes explicit `/skill:name` behavior.
+One extension owns on-demand `skill_search` and automatic classifier recommendations. Both use the full discovered catalog, including cold skills; explicit-only skills and agent-specific invocation restrictions are excluded.
 
-Skills with `disable-model-invocation` metadata or names denied by `skillTweaks` are excluded before the request. This extension uses the shared classifier gateway, whose ordered provider preferences apply to all classifier-backed callers. Both adapters use Pi's provider auth registry; missing credentials, timeouts, aborts, malformed responses, image prompts, and other classifier failures leave the original system prompt unchanged.
+Warm skills remain in Pi's structured prompt. Cold skills stay out of the catalog sent to the agent. For a matching user prompt, automatic selection adds only recommended skill names and `SKILL.md` paths in a structured `skill_recommendations` section. The agent still reads the skill before using it; recommendations never load skill bodies or override instructions.
+
+`skill_search` ranks names and descriptions through the shared classifier, with BM25 fallback when classification is unavailable. Automatic recommendations use independent relevance scores and add nothing on missing credentials, timeouts, aborts, malformed responses, image prompts, or other classifier failures. Explicit `/skill:name` invocations bypass automatic selection. Neither path sends skill bodies; automatic selection sends the user prompt and bounded candidate metadata to the configured classifier.
 
 ## Shared classifier gateway routing
 
@@ -21,7 +23,7 @@ Configure provider preferences in global `~/.pi/agent/settings.json`. The first 
 
 If `classifier.providers` is absent, the same OpenRouter-first order is used. OpenRouter model IDs use the `typesafe/` namespace with a Jev alias (`jev-latest`, `jev-preview`) or version (`jev-X.Y` / `jev-X.Y.Z`); the adapter sends the suffix as the wire model ID. The current Vercel route accepts `typesafe-ai/jev` and sends that ID unchanged. Unknown providers, unsupported provider/model pairs, duplicate providers, malformed lists, or malformed settings fail closed before auth or network access. Project settings do not override this global shared routing configuration.
 
-The feature is disabled by default. Opt in through `settings.json` or a trusted project settings file:
+Automatic recommendations are enabled in this repository's global settings, but disabled by default in the extension. Configure them through `settings.json` or a trusted project settings file:
 
 ```json
 {

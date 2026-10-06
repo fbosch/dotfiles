@@ -7,7 +7,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { activeAgentName } from "../shared/active-agent";
 import { isRecord } from "../shared/is-record";
-import { replaceSkillCatalog } from "../shared/skill-prompt";
+import { fullSkillCatalog, replaceSkillCatalog } from "../shared/skill-prompt";
 
 function configuredSkillNames(
   value: unknown,
@@ -178,19 +178,16 @@ export function applySkillTweaks(
 
 export default function skillTweaks(pi: ExtensionAPI): void {
   pi.on("before_agent_start", (event, context) => {
+    const skills = fullSkillCatalog(pi.events, event.systemPromptOptions);
     const disabledNames = configuredDisabledSkillNames(
       context,
       event.systemPrompt,
-      (event.systemPromptOptions.selectedTools ?? []).includes("search_skills"),
-      event.systemPromptOptions.skills ?? [],
+      (event.systemPromptOptions.selectedTools ?? []).includes("skill_search"),
+      skills,
     );
-    const systemPrompt = applySkillTweaks(
-      event.systemPrompt,
-      event.systemPromptOptions.skills,
-      disabledNames,
-      fileReadTool(event),
+    if (fileReadTool(event) === undefined) return;
+    event.systemPromptOptions.skills = skills.filter(
+      (skill) => !disabledNames.has(skill.name) && !skill.disableModelInvocation,
     );
-    if (systemPrompt === event.systemPrompt) return;
-    return { systemPrompt };
   });
 }

@@ -12,38 +12,25 @@ import {
   type ClassifierFailure,
   type ClassifierFetch,
   type ClassifierRegistry,
-  DEFAULT_CLASSIFIER_TIMEOUT_MS,
   requestClassifier,
 } from "../../lib/classifier";
-import { isRecord } from "../shared/is-record";
-import { coldSkillNames, disabledSkillNames } from "../skill-tweaks";
+import { fullSkillCatalog } from "../shared/skill-prompt";
+import { disabledSkillNames } from "../skill-tweaks";
+import {
+  configuredSkillSelection,
+  DEFAULT_SKILL_SELECTION_CONFIG,
+  type SkillSelectionConfig,
+} from "./selection-config";
 
-const DEFAULT_THRESHOLD = 0.72;
-const DEFAULT_TIMEOUT_MS = DEFAULT_CLASSIFIER_TIMEOUT_MS;
-const DEFAULT_MAX_RECOMMENDATIONS = 3;
-const MAX_TIMEOUT_MS = DEFAULT_CLASSIFIER_TIMEOUT_MS;
-const MAX_RECOMMENDATIONS = 5;
+export type { SkillSelectionConfig } from "./selection-config";
+export { DEFAULT_SKILL_SELECTION_CONFIG, resolveSkillSelectionConfig } from "./selection-config";
+
 const MAX_CATALOG_SKILLS = 96;
 const MAX_REQUEST_CHARS = 12_000;
 const MAX_DESCRIPTION_CHARS = 400;
 const SKILL_RECOMMENDATIONS_START = "<skill_recommendations>";
-const SKILL_RECOMMENDATIONS_END = "</skill_recommendations>";
+const SKILL_RECOMMENDATIONS_SECTION = "skill_recommendations";
 const NO_MATCH_QUESTION = "none_relevant";
-
-export interface SkillSelectionConfig {
-  readonly enabled: boolean;
-  readonly threshold: number;
-  readonly timeoutMs: number;
-  readonly maxRecommendations: number;
-}
-
-export const DEFAULT_SKILL_SELECTION_CONFIG: SkillSelectionConfig = {
-  enabled: false,
-  // Experimental starting point, not a calibrated production threshold.
-  threshold: DEFAULT_THRESHOLD,
-  timeoutMs: DEFAULT_TIMEOUT_MS,
-  maxRecommendations: DEFAULT_MAX_RECOMMENDATIONS,
-};
 
 export interface SkillCandidate {
   readonly name: string;
@@ -91,77 +78,6 @@ export interface SkillSelectionRequestOptions {
   readonly fetch?: ClassifierFetch;
   readonly signal?: AbortSignal;
   readonly onFetchAttempt?: () => void;
-}
-
-type SkillSelectionSection = Record<string, unknown> | null | undefined;
-
-function settingSection(settings: unknown): SkillSelectionSection {
-  if (isRecord(settings) === false) return undefined;
-  const classifier = settings.classifier;
-  if (classifier === undefined) return undefined;
-  if (isRecord(classifier) === false) return null;
-
-  const section = classifier.skillSelection;
-  if (section === undefined || isRecord(section)) return section;
-  return null;
-}
-
-function invalidConfig(): SkillSelectionConfig {
-  return { ...DEFAULT_SKILL_SELECTION_CONFIG, enabled: false };
-}
-
-function readConfigSection(
-  section: SkillSelectionSection,
-  current: SkillSelectionConfig,
-): SkillSelectionConfig {
-  if (section === undefined) return current;
-  if (section === null) return invalidConfig();
-  const unknownFields = Object.keys(section).filter(
-    (field) => !["enabled", "threshold", "timeoutMs", "maxRecommendations"].includes(field),
-  );
-  if (unknownFields.length > 0) return invalidConfig();
-
-  const enabled = section.enabled ?? current.enabled;
-  const threshold = section.threshold ?? current.threshold;
-  const timeoutMs = section.timeoutMs ?? current.timeoutMs;
-  const maxRecommendations = section.maxRecommendations ?? current.maxRecommendations;
-
-  if (
-    typeof enabled !== "boolean" ||
-    typeof threshold !== "number" ||
-    Number.isFinite(threshold) === false ||
-    threshold < 0 ||
-    threshold > 1 ||
-    typeof timeoutMs !== "number" ||
-    Number.isInteger(timeoutMs) === false ||
-    timeoutMs < 1 ||
-    timeoutMs > MAX_TIMEOUT_MS ||
-    typeof maxRecommendations !== "number" ||
-    Number.isInteger(maxRecommendations) === false ||
-    maxRecommendations < 1 ||
-    maxRecommendations > MAX_RECOMMENDATIONS
-  ) {
-    return invalidConfig();
-  }
-
-  return { enabled, threshold, timeoutMs, maxRecommendations };
-}
-
-export function resolveSkillSelectionConfig(
-  globalSettings: unknown,
-  projectSettings: unknown,
-): SkillSelectionConfig {
-  const global = readConfigSection(settingSection(globalSettings), DEFAULT_SKILL_SELECTION_CONFIG);
-  return readConfigSection(settingSection(projectSettings), global);
-}
-
-function configuredSkillSelection(
-  context: Pick<ExtensionContext, "cwd" | "isProjectTrusted">,
-): SkillSelectionConfig {
-  const settings = SettingsManager.create(context.cwd, getAgentDir(), {
-    projectTrusted: context.isProjectTrusted(),
-  });
-  return resolveSkillSelectionConfig(settings.getGlobalSettings(), settings.getProjectSettings());
 }
 
 function compactDescription(description: string): string {
@@ -409,44 +325,36 @@ function escapeXml(value: string): string {
 
 export function formatSkillRecommendations(
   recommendations: readonly SkillRecommendation[],
+  skills: readonly Skill[],
 ): string {
   if (recommendations.length === 0) return "";
 
-  const lines = recommendations.map(
-    ({ name, score }) => `  <skill name="${escapeXml(name)}" relevance="${score.toFixed(2)}" />`,
-  );
+  const paths = new Map(skills.map((skill) => [skill.name, skill.filePath]));
+  const lines = recommendations.map(({ name }) => {
+    const path = paths.get(name);
+    if (path === undefined) throw new Error(`Recommendation has no discovered skill path: ${name}`);
+    return `  <skill name="${escapeXml(name)}" location="${escapeXml(path)}" />`;
+  });
   return [
-    SKILL_RECOMMENDATIONS_START,
-    "These are advisory hints for this request, not skill loads or new mandatory rules.",
+    "These are advisory recommendations, not skill loads or new mandatory rules.",
     ...lines,
-    "Keep the complete skill catalog and all existing instructions authoritative. Use your own judgment before loading any skill.",
-    SKILL_RECOMMENDATIONS_END,
+    "Read the listed SKILL.md before following a skill. Keep the complete skill catalog and all existing instructions authoritative.",
   ].join("\n");
-}
-
-function appendSkillRecommendations(
-  systemPrompt: string,
-  recommendations: readonly SkillRecommendation[],
-): string {
-  const block = formatSkillRecommendations(recommendations);
-  return block.length === 0 ? systemPrompt : `${systemPrompt}\n\n${block}`;
 }
 
 function disabledNamesForContext(
   context: ExtensionContext,
   systemPrompt: string,
-  skills: readonly Skill[] = [],
+  _skills: readonly Skill[],
 ): ReadonlySet<string> {
   const settings = SettingsManager.create(context.cwd, getAgentDir(), {
     projectTrusted: context.isProjectTrusted(),
   });
-  const global = settings.getGlobalSettings();
-  const project = settings.getProjectSettings();
-  // Cold metadata is surfaced on demand through search_skills, not automatic hints.
-  return new Set([
-    ...disabledSkillNames(global, project, systemPrompt),
-    ...coldSkillNames(global, project, skills),
-  ]);
+  return disabledSkillNames(
+    settings.getGlobalSettings(),
+    settings.getProjectSettings(),
+    systemPrompt,
+  );
 }
 
 export interface SkillSelectionStatus {
@@ -509,21 +417,18 @@ export function createSkillSelectionExtension(
         return skip("recommendation-marker");
       }
 
+      const skills = fullSkillCatalog(pi.events, event.systemPromptOptions);
       let config: SkillSelectionConfig;
       let disabledNames: ReadonlySet<string>;
       try {
         config = getConfig(context);
         if (!config.enabled) return skip("disabled", false);
-        disabledNames = getDisabledNames(
-          context,
-          event.systemPrompt,
-          event.systemPromptOptions.skills ?? [],
-        );
+        disabledNames = getDisabledNames(context, event.systemPrompt, skills);
       } catch {
         return skip("config-error", false);
       }
 
-      const candidates = eligibleSkillCandidates(event.systemPromptOptions.skills, disabledNames);
+      const candidates = eligibleSkillCandidates(skills, disabledNames);
       if (candidates.length === 0) return skip("no-candidates", true);
       if (candidates.length > MAX_CATALOG_SKILLS) return skip("too-many-candidates", true);
 
@@ -598,9 +503,8 @@ export function createSkillSelectionExtension(
           fetchAttempted,
         };
         if (result.recommendations.length === 0) return;
-        return {
-          systemPrompt: appendSkillRecommendations(event.systemPrompt, result.recommendations),
-        };
+        event.systemPromptOptions.sections[SKILL_RECOMMENDATIONS_SECTION] =
+          formatSkillRecommendations(result.recommendations, skills);
       } catch {
         status = {
           enabled: true,
@@ -617,5 +521,3 @@ export function createSkillSelectionExtension(
     });
   };
 }
-
-export default createSkillSelectionExtension();

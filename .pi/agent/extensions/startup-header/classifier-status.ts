@@ -1,6 +1,6 @@
 import { CLASSIFIER_PROVIDER_IDS, resolveClassifierEnabled } from "../../lib/classifier";
 import { resolveRecommendAgentConfig } from "../recommend-agent/settings";
-import { resolveSkillSelectionConfig } from "../skill-selection";
+import { resolveSkillSelectionConfig } from "../skill-discovery/selection-config";
 import { resolveClassifierToolDiscoveryConfig } from "../tool-discovery";
 import type { StartupOwnerState } from "./contracts";
 

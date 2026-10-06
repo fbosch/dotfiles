@@ -2,7 +2,11 @@ import { expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+  ExtensionToolContext,
+} from "@earendil-works/pi-coding-agent";
 import { createEventBus } from "@earendil-works/pi-coding-agent";
 import {
   createStartupOwnerRequest,
@@ -15,7 +19,13 @@ type SessionStartHandler = (event: never, context: ExtensionContext) => Promise<
 
 interface RegisteredTool {
   name: string;
-  execute(id: string, params: { command: string; timeout?: number }): Promise<unknown>;
+  execute(
+    id: string,
+    params: { command: string; timeout?: number },
+    signal: AbortSignal | undefined,
+    onUpdate: unknown,
+    context: ExtensionToolContext,
+  ): Promise<unknown>;
 }
 
 interface PiHarness {
@@ -23,13 +33,16 @@ interface PiHarness {
   events: ReturnType<typeof createEventBus>;
   getHandler(): SessionStartHandler;
   registeredTools: RegisteredTool[];
+  getSettingsCalls(): number;
 }
 
 function createPiHarness(
   exported: { stdout: string; stderr: string; code: number },
   piCommaPrefix?: string,
+  settings: Pick<ReturnType<ExtensionAPI["getSettings"]>, "shellPath" | "shellCommandPrefix"> = {},
 ): PiHarness {
   let handler: SessionStartHandler | undefined;
+  let getSettingsCalls = 0;
   const registeredTools: RegisteredTool[] = [];
   const events = createEventBus();
   const pi = {
@@ -37,6 +50,10 @@ function createPiHarness(
       if (event === "session_start") handler = candidate;
     },
     exec: async () => ({ ...exported, killed: false }),
+    getSettings() {
+      getSettingsCalls += 1;
+      return settings;
+    },
     events: {
       on: events.on.bind(events),
       emit(event: string, value: unknown) {
@@ -55,6 +72,9 @@ function createPiHarness(
     pi,
     events,
     registeredTools,
+    getSettingsCalls() {
+      return getSettingsCalls;
+    },
     getHandler() {
       if (handler === undefined) throw new Error("session_start handler was not registered");
       return handler;
@@ -80,6 +100,7 @@ test("overrides bash after loading an allowed repository environment", async () 
     await mkdir(join(project, ".git"));
     await writeFile(join(project, ".envrc"), "");
     const prefixMarker = join(project, "prefix-marker");
+    const settingsMarker = join(project, "settings-marker");
     const environmentMarker = join(project, "environment-marker");
     const harness = createPiHarness(
       {
@@ -88,6 +109,10 @@ test("overrides bash after loading an allowed repository environment", async () 
         code: 0,
       },
       `printf pi-comma > ${JSON.stringify(prefixMarker)}`,
+      {
+        shellCommandPrefix: `printf settings > ${JSON.stringify(settingsMarker)}`,
+        shellPath: "/bin/bash",
+      },
     );
     const notifications: string[] = [];
 
@@ -97,12 +122,29 @@ test("overrides bash after loading an allowed repository environment", async () 
     expect(harness.registeredTools.map((tool) => tool.name)).toEqual(["bash"]);
     const bashTool = harness.registeredTools[0];
     if (bashTool === undefined) throw new Error("Bash tool was not registered");
-    await bashTool.execute("direnv-composition", {
-      command: `printf '%s' "$PROJECT_TOOL" > ${JSON.stringify(environmentMarker)}`,
-      timeout: 1,
-    });
+    const toolContext = {
+      cwd: project,
+      model: { provider: "fixture", id: "fixture-model" },
+      sessionManager: {
+        getSessionId: () => "fixture-session",
+        getSessionFile: () => undefined,
+      },
+      thinkingLevel: "low",
+    } as unknown as ExtensionToolContext;
+    await bashTool.execute(
+      "direnv-composition",
+      {
+        command: `printf '%s|%s' "$PROJECT_TOOL" "$PI_SESSION_ID" > ${JSON.stringify(environmentMarker)}`,
+        timeout: 1,
+      },
+      undefined,
+      undefined,
+      toolContext,
+    );
+    expect(await readFile(settingsMarker, "utf8")).toBe("settings");
     expect(await readFile(prefixMarker, "utf8")).toBe("pi-comma");
-    expect(await readFile(environmentMarker, "utf8")).toBe("/repo/bin/tool");
+    expect(await readFile(environmentMarker, "utf8")).toBe("/repo/bin/tool|fixture-session");
+    expect(harness.getSettingsCalls()).toBe(1);
     expect(notifications).toEqual([]);
   } finally {
     await rm(project, { recursive: true, force: true });

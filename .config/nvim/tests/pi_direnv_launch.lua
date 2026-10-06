@@ -17,13 +17,11 @@ session.set_current(nvim_session)
 session.set_metadata({}, nvim_session)
 package.loaded["utils.session"] = session
 
-local direnv_calls = 0
-package.loaded["config.direnv"] = {
-	synchronize = function()
-		direnv_calls = direnv_calls + 1
-		error("direnv is unavailable")
-	end,
-}
+local original_direnv_loader = package.preload["config.direnv"]
+package.loaded["config.direnv"] = nil
+package.preload["config.direnv"] = function()
+	error("Pi launch must not load the Neovim direnv module")
+end
 package.loaded["plugins.ai.pi.bridge"] = {
 	record_source_context = function()
 		return true
@@ -68,11 +66,11 @@ package.loaded["snacks.terminal"] = {
 
 local pi = dofile(repo_root .. "/.config/nvim/lua/plugins/ai/pi/init.lua")
 assert(pi.start() == terminal, "Pi launch was blocked by unavailable direnv")
-assert(direnv_calls == 0, "Pi launch consulted direnv")
+assert(package.loaded["config.direnv"] == nil, "Pi launch consulted direnv")
 assert(#opened == 1, "fresh Pi launch opened the wrong number of terminals")
 
 assert(pi.start() == terminal, "existing Pi terminal was not reused")
-assert(direnv_calls == 0, "reusing Pi consulted direnv")
+assert(package.loaded["config.direnv"] == nil, "reusing Pi consulted direnv")
 assert(#opened == 1, "existing Pi terminal was opened again")
 terminal_callbacks.TermClose()
 
@@ -80,9 +78,10 @@ session.set_metadata({ pi_terminal_open = false }, nvim_session)
 local opened_before_restore = #opened
 session.set_metadata({ pi_session_id = "restore-session", pi_terminal_open = true }, nvim_session)
 assert(pi.restore() == true, "saved Pi restore was blocked by unavailable direnv")
-assert(direnv_calls == 0, "restoring Pi consulted direnv")
+assert(package.loaded["config.direnv"] == nil, "restoring Pi consulted direnv")
 assert(#opened == opened_before_restore + 1, "saved restore did not open Pi")
 terminal_callbacks.TermClose()
 
+package.preload["config.direnv"] = original_direnv_loader
 vim.cmd("cd " .. vim.fn.fnameescape(original_cwd))
 vim.fn.delete(test_root, "rf")

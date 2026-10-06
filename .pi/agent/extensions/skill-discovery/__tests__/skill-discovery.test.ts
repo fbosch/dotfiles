@@ -42,7 +42,7 @@ describe("skill discovery", () => {
     expect(compact).toContain("Run JavaScript tests and scripts");
     expect(compact).not.toContain("XState machines");
     expect(compact).not.toContain("Interrogate a decision");
-    expect(compact).toContain("Use search_skills");
+    expect(compact).toContain("Use skill_search");
     expect(compact).toStartWith("before");
     expect(compact).toContain("\n\nafter");
   });
@@ -68,7 +68,7 @@ describe("skill discovery", () => {
       "read",
     );
     expect(compact).not.toContain("<available_skills>");
-    expect(compact).toContain("search_skills");
+    expect(compact).toContain("skill_search");
   });
 
   test("skill-tweaks cannot restore cold metadata after discovery", () => {
@@ -76,7 +76,7 @@ describe("skill discovery", () => {
     const tweaked = applySkillTweaks(compact, skills, new Set([...cold, ...disabled]), "read");
     expect(tweaked).not.toContain("XState machines");
     expect(tweaked).toContain("Run JavaScript tests");
-    expect(tweaked).toContain("search_skills");
+    expect(tweaked).toContain("skill_search");
   });
 
   test("global allowlist defaults new user skills cold without disabling search", () => {

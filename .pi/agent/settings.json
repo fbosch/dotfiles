@@ -145,12 +145,10 @@
   "editorPaddingX": 0,
   "skillTweaks": {
     "warmSkills": [
-      "agents-md-author",
       "code-simplifier",
       "deprecation-and-migration",
       "diagnosing-bugs",
       "grill-skill",
-      "jsdoc-typescript-docs",
       "mermaid-diagrams",
       "microinteractions",
       "pr-description",

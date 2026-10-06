@@ -73,6 +73,17 @@ test.skipIf(pi === null)(
       expect(report.globalWarmVisible).toBe(true);
       expect(report.localWarmVisible).toBe(true);
       expect(report.explicitOnlyVisible).toBe(false);
+      expect(report.structuredColdVisible).toBe(false);
+      expect(report.structuredGlobalColdVisible).toBe(false);
+      expect(report.structuredWarmVisible).toBe(true);
+      expect(report.optionsColdVisible).toBe(false);
+      expect(report.classifierCandidates).toContain("xstate");
+      expect(report.classifierCandidates).toContain("global-cold");
+      expect(report.classifierCandidates).not.toContain("explicit-only");
+      expect(report.recommendations).toContain('name="xstate"');
+      expect(report.recommendations).toContain("/skills/xstate/SKILL.md");
+      expect(report.recommendations).not.toContain("specialized workflow");
+      expect(report.structuredRecommendation).toBe(true);
       expect(report.searchResult).toContain("- xstate:");
       expect(report.searchResult).toContain("Ranking source: lexical");
     } finally {

@@ -1,0 +1,52 @@
+skills: []
+sandbox:
+  forbidden_files:
+    - '.*\.eval\.yaml$'
+    - '.*(?:check\.py|expected\.json|latest\.json|\.jsonl|verdict\.json)$'
+tasks:
+  - name: Independent reads
+    prompt: |
+      [[codemode-case:independent]]
+      Read `a.ts` and `b.ts` and report the exported constant from each.
+      Do not modify files.
+    assert: &check |
+      import os
+      import sys
+      sys.path.insert(0, os.environ["CODEMODE_EVAL_RUN"])
+      from check import check
+      check()
+  - name: Dependent read followed by independent reads
+    prompt: |
+      [[codemode-case:dependent]]
+      Read `manifest.json`, then read the files it lists and report their
+      exported constants. Do not modify files.
+    assert: *check
+  - name: Rejected call with useful partial results
+    prompt: |
+      [[codemode-case:rejected]]
+      Read `a.ts`, `b.ts`, and `c.ts`. Report the constants you can retrieve
+      and identify any read failures. Do not modify files.
+    assert: *check
+  - name: Fulfilled tool-level error
+    prompt: |
+      [[codemode-case:tool-error]]
+      Run the two supplied checks and summarize which passed and which failed.
+    assert: *check
+  - name: Conflicting mutations
+    prompt: |
+      [[codemode-case:mutations]]
+      In `config.json`, set `enabled` to true. Read back the result, then
+      set `mode` to "fast" while preserving the other fields. Report the
+      final configuration.
+    assert: *check
+  - name: Large structured output
+    prompt: |
+      [[codemode-case:large]]
+      Read `large.ts` and `small.ts`. Report their exported constant
+      declarations with paths and anchors.
+    assert: *check
+  - name: Single trivial operation
+    prompt: |
+      [[codemode-case:single]]
+      Read `a.ts` and tell me the value of `alpha`. Do not modify files.
+    assert: *check

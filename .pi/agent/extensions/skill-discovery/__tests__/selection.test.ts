@@ -5,6 +5,7 @@ import type {
   ExtensionContext,
   Skill,
 } from "@earendil-works/pi-coding-agent";
+import { createEventBus } from "@earendil-works/pi-coding-agent";
 import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-classifier-registry";
 import {
   createSkillSelectionExtension,
@@ -18,7 +19,7 @@ import {
   type SkillSelectionResult,
   selectSkillsWithClassifier,
   selectSkillsWithClassifierDetailed,
-} from "../index";
+} from "../selection";
 
 const classifierRegistry = await createNativeClassifierRegistry();
 
@@ -42,6 +43,7 @@ function extensionHarness(dependencies: Parameters<typeof createSkillSelectionEx
     | undefined;
   const extension = createSkillSelectionExtension(dependencies);
   const api = {
+    events: createEventBus(),
     registerCommand: () => {},
     on: (_event: string, callback: typeof handler) => {
       handler = callback;
@@ -59,6 +61,7 @@ function lifecycleHarness(dependencies: Parameters<typeof createSkillSelectionEx
   let statusCommand: ((args: string, context: ExtensionContext) => Promise<void>) | undefined;
   const extension = createSkillSelectionExtension(dependencies);
   extension({
+    events: createEventBus(),
     registerCommand: (name: string, definition: { handler: typeof statusCommand }) => {
       if (name === "classifier-status") statusCommand = definition.handler;
     },
@@ -84,6 +87,7 @@ function event(prompt = "Help me choose an approach") {
     prompt,
     systemPrompt: "default instructions\n\n<available_skills>catalog</available_skills>",
     systemPromptOptions: {
+      sections: {},
       skills: [
         skill("writing-clearly", { description: "Improve documentation prose." }),
         skill("hidden-workflow", {
@@ -313,17 +317,17 @@ describe("skill selection", () => {
     const original = event();
     const result = await handler(original, context());
 
-    expect(result).toEqual({
-      systemPrompt: expect.stringContaining('<skill name="writing-clearly" relevance="0.91" />'),
-    });
-    expect((result as { systemPrompt: string }).systemPrompt).toContain(
+    expect(result).toBeUndefined();
+    const recommendation = original.systemPromptOptions.sections.skill_recommendations;
+    expect(recommendation).toContain(
+      '<skill name="writing-clearly" location="/skills/writing-clearly/SKILL.md" />',
+    );
+    expect(original.systemPrompt).toBe(
       "default instructions\n\n<available_skills>catalog</available_skills>",
     );
     expect(original.systemPromptOptions.skills).toHaveLength(3);
-    expect((result as { systemPrompt: string }).systemPrompt).not.toContain("hidden-workflow");
-    expect((result as { systemPrompt: string }).systemPrompt).not.toContain(
-      "security-and-hardening",
-    );
+    expect(recommendation).not.toContain("hidden-workflow");
+    expect(recommendation).not.toContain("security-and-hardening");
   });
 
   test("falls back unchanged for unavailable Classifier, explicit skills, and image prompts", async () => {
@@ -496,7 +500,9 @@ describe("skill selection", () => {
   });
 
   test("formats no block for zero recommendations and escapes names", () => {
-    expect(formatSkillRecommendations([])).toBe("");
-    expect(formatSkillRecommendations([{ name: "a&b", score: 0.8 }])).toContain("a&amp;b");
+    expect(formatSkillRecommendations([], [])).toBe("");
+    expect(formatSkillRecommendations([{ name: "a&b", score: 0.8 }], [skill("a&b")])).toContain(
+      "a&amp;b",
+    );
   });
 });

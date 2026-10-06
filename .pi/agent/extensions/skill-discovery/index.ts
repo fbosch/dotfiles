@@ -12,14 +12,15 @@ import {
   type DiscoveryMatch,
   rankDiscovery,
 } from "../../lib/discovery-ranking";
-import { replaceSkillCatalog } from "../shared/skill-prompt";
+import { fullSkillCatalog, replaceSkillCatalog } from "../shared/skill-prompt";
 import { coldSkillNames, disabledSkillNames } from "../skill-tweaks";
 import { resolveClassifierToolDiscoveryConfig } from "../tool-discovery";
+import { createSkillSelectionExtension } from "./selection";
 
 const MAX_MATCHES = 10;
 const DEFAULT_MATCHES = 3;
 const SEARCH_GUIDANCE =
-  "\n\nSkills provide specialized instructions. Use search_skills to search available skills by task or name, then read the selected SKILL.md before following it. Explicit /skill:name commands remain available.";
+  "\n\nSkills provide specialized instructions. Use skill_search to search available skills by task or name, then read the selected SKILL.md before following it. Explicit /skill:name commands remain available.";
 
 export interface SearchableSkill {
   name: string;
@@ -93,9 +94,13 @@ export function searchableSkills(
     }));
 }
 
-export default function skillDiscovery(pi: ExtensionAPI): void {
+export default function skillDiscovery(
+  pi: ExtensionAPI,
+  selectionDependencies: Parameters<typeof createSkillSelectionExtension>[0] = {},
+): void {
   let catalog: SearchableSkill[] = [];
   pi.on("before_agent_start", (event, ctx) => {
+    const skills = fullSkillCatalog(pi.events, event.systemPromptOptions);
     const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
       projectTrusted: ctx.isProjectTrusted(),
     });
@@ -104,10 +109,10 @@ export default function skillDiscovery(pi: ExtensionAPI): void {
       settings.getProjectSettings(),
       event.systemPrompt,
     );
-    catalog = searchableSkills(event.systemPromptOptions.skills, excluded);
+    catalog = searchableSkills(skills, excluded);
     const selected = event.systemPromptOptions.selectedTools ?? [];
     // Do not hide the catalog in restricted agents that cannot search or read skills.
-    if (!selected.includes("search_skills")) return;
+    if (!selected.includes("skill_search")) return;
     const readTool = selected.includes("read")
       ? "read"
       : selected.includes("bash")
@@ -117,25 +122,25 @@ export default function skillDiscovery(pi: ExtensionAPI): void {
     const cold = coldSkillNames(
       settings.getGlobalSettings(),
       settings.getProjectSettings(),
-      event.systemPromptOptions.skills ?? [],
+      skills,
     );
-    const systemPrompt = compactSkillPrompt(
-      event.systemPrompt,
-      event.systemPromptOptions.skills ?? [],
-      cold,
-      excluded,
-      readTool,
+    event.systemPromptOptions.skills = skills.filter(
+      (skill) =>
+        !cold.has(skill.name) && !excluded.has(skill.name) && !skill.disableModelInvocation,
     );
-    if (systemPrompt !== event.systemPrompt) return { systemPrompt };
   });
+  createSkillSelectionExtension(selectionDependencies)(pi);
 
   pi.registerTool(
     defineTool({
-      name: "search_skills",
+      name: "skill_search",
       label: "Search skills",
       description:
         "Search available skills by name or task. Returns paths to read the selected SKILL.md; does not load skill instructions automatically.",
       promptSnippet: "Find relevant skills before reading their instructions",
+      promptGuidelines: [
+        "Use skill_search to discover relevant specialist skills not listed in the visible catalog, then read their SKILL.md before following them.",
+      ],
       parameters: Type.Object(
         {
           query: Type.String({

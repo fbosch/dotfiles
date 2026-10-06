@@ -44,42 +44,25 @@ test("skips repositories without an envrc without invoking direnv", async () => 
   expect(invoked).toBe(false);
 });
 
-test("reuses an inherited environment for the same envrc directory", async () => {
+test("exports the envrc when DIRENV_ACTIVE contains its directory", async () => {
   const project = await temporaryProject();
   await writeFile(join(project, ".envrc"), "");
-  let invoked = false;
+  const originalActive = process.env.DIRENV_ACTIVE;
+  process.env.DIRENV_ACTIVE = `${project}:${join(project, "other")}`;
+  let invokedFrom: string | undefined;
 
-  const result = await loadDirenvEnvironment(
-    project,
-    project,
-    async () => {
-      invoked = true;
-      throw new Error("direnv should not run");
-    },
-    { DIRENV_ACTIVE: project },
-  );
+  try {
+    const result = await loadDirenvEnvironment(project, project, async (directory) => {
+      invokedFrom = directory;
+      return JSON.stringify({ PATH: "/repo/bin" });
+    });
 
-  expect(result).toEqual({ status: "loaded", environment: {} });
-  expect(invoked).toBe(false);
-});
-
-test("does not reuse an inherited environment from another project", async () => {
-  const project = await temporaryProject();
-  await writeFile(join(project, ".envrc"), "");
-  let invoked = false;
-
-  const result = await loadDirenvEnvironment(
-    project,
-    project,
-    async () => {
-      invoked = true;
-      return "{}";
-    },
-    { DIRENV_ACTIVE: join(project, "other") },
-  );
-
-  expect(result).toEqual({ status: "loaded", environment: {} });
-  expect(invoked).toBe(true);
+    expect(result).toEqual({ status: "loaded", environment: { PATH: "/repo/bin" } });
+    expect(invokedFrom).toBe(project);
+  } finally {
+    if (originalActive === undefined) delete process.env.DIRENV_ACTIVE;
+    else process.env.DIRENV_ACTIVE = originalActive;
+  }
 });
 
 test("loads the nearest envrc inside the repository", async () => {

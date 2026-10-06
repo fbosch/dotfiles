@@ -8,7 +8,7 @@ import {
   DEFAULT_SKILL_SELECTION_CONFIG,
   type SkillSelectionFailure,
   selectSkillsWithClassifierDetailed,
-} from "../extensions/skill-selection";
+} from "../extensions/skill-discovery/selection";
 import type { ClassifierFailure } from "../lib/classifier";
 import {
   SKILL_SELECTION_BENCHMARK_CASES,

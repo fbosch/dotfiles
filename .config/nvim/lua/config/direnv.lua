@@ -22,7 +22,6 @@ end
 local startup_environment = copy_environment(vim.fn.environ())
 local startup_path = startup_environment.PATH
 
-local startup_environment_consumed = false
 local function inherited_direnv()
 	for _, name in ipairs(inherited_metadata) do
 		if type(startup_environment[name]) == "string" and startup_environment[name] ~= "" then
@@ -37,8 +36,6 @@ local clean_baseline_ready = not inherited_direnv()
 local setup_complete = false
 local generation = 0
 local pending
-local synchronizing = false
-local queued_cwd
 local clean_baseline_process
 local direnv_command = vim.fn.exepath("direnv")
 if direnv_command == "" then
@@ -100,21 +97,6 @@ local function envrc_directory(cwd)
 	end
 end
 
-local function use_startup_environment(cwd)
-	if startup_environment_consumed then
-		return false
-	end
-
-	local active_directory = canonical_path(startup_environment.DIRENV_ACTIVE)
-	local directory = envrc_directory(cwd)
-	if active_directory == nil or directory == nil or active_directory ~= canonical_path(directory) then
-		return false
-	end
-
-	startup_environment_consumed = true
-	set_path(startup_path)
-	return true
-end
 local function stop_process(process)
 	if process == nil then
 		return
@@ -148,9 +130,8 @@ local function parse_export(result)
 	if type(result.stdout) ~= "string" then
 		return "malformed", nil
 	end
-	-- An empty export is a valid no-op when Neovim inherited this environment.
 	if result.stdout == "" then
-		return "loaded", startup_path
+		return "loaded", nil
 	end
 
 	local ok, exported = pcall(vim.json.decode, result.stdout)
@@ -163,9 +144,7 @@ local function parse_export(result)
 		end
 	end
 	local path = exported.PATH
-	if path == vim.NIL then
-		path = nil
-	elseif path ~= nil and type(path) ~= "string" then
+	if path ~= nil and path ~= vim.NIL and type(path) ~= "string" then
 		return "malformed", nil
 	end
 	return "loaded", path
@@ -203,11 +182,17 @@ local function status_message(status)
 end
 
 local function apply_result(status, path)
-	if status == "loaded" and type(path) == "string" and path ~= "" then
-		set_path(path)
+	if status ~= "loaded" then
+		set_path(clean_path)
 		return
 	end
-	set_path(clean_path)
+	if path == vim.NIL then
+		set_path(nil)
+	elseif type(path) == "string" then
+		set_path(path)
+	else
+		set_path(startup_path)
+	end
 end
 
 local function current_cwd()
@@ -254,43 +239,6 @@ local function start_clean_baseline()
 	end
 end
 
-local function synchronize_clean_baseline()
-	if clean_baseline_ready then
-		return
-	end
-	if clean_baseline_process ~= nil then
-		stop_process(clean_baseline_process)
-		clean_baseline_process = nil
-	end
-
-	local directory = vim.fn.tempname()
-	if vim.fn.mkdir(directory, "p") ~= 1 then
-		clean_baseline_ready = true
-		return
-	end
-	local process = run_export(directory)
-	if process == nil then
-		clean_baseline_ready = true
-		vim.fn.delete(directory, "rf")
-		return
-	end
-	local ok, result = pcall(function()
-		return process:wait(refresh_timeout_ms)
-	end)
-	if ok then
-		local status, path = parse_export(result)
-		if status == "timeout" then
-			stop_process(process)
-		elseif status == "loaded" and type(path) == "string" and path ~= "" then
-			clean_path = path
-		end
-	else
-		stop_process(process)
-	end
-	clean_baseline_ready = true
-	vim.fn.delete(directory, "rf")
-end
-
 local function cancel_pending()
 	generation = generation + 1
 	if pending ~= nil then
@@ -322,16 +270,8 @@ function M.refresh(cwd)
 	if cwd == nil then
 		return { ok = false, status = "unavailable" }
 	end
-	if synchronizing then
-		queued_cwd = cwd
-		return { ok = false, status = "pending" }
-	end
 	if pending ~= nil and pending.cwd == cwd then
 		return { ok = false, status = "pending" }
-	end
-	if current_cwd() == cwd and use_startup_environment(cwd) then
-		cancel_pending()
-		return { ok = true, status = "loaded", cwd = cwd }
 	end
 
 	cancel_pending()
@@ -362,78 +302,6 @@ function M.refresh(cwd)
 		end
 	end, refresh_timeout_ms)
 	return { ok = false, status = "pending", cwd = cwd }
-end
-
-function M.synchronize(cwd)
-	cwd = canonical_path(cwd or vim.fn.getcwd())
-	if cwd == nil then
-		set_path(clean_path)
-		return { ok = false, status = "unavailable" }
-	end
-	if current_cwd() ~= cwd then
-		return { ok = false, status = "cwd_changed", cwd = cwd }
-	end
-	if synchronizing then
-		set_path(clean_path)
-		return { ok = false, status = "pending", cwd = cwd }
-	end
-	if use_startup_environment(cwd) then
-		cancel_pending()
-		return { ok = true, status = "loaded", cwd = cwd }
-	end
-
-	synchronizing = true
-	queued_cwd = nil
-	cancel_pending()
-	synchronize_clean_baseline()
-	set_path(clean_path)
-
-	local result
-	if envrc_directory(cwd) == nil then
-		result = { ok = true, status = "missing", cwd = cwd }
-	else
-		local process = run_export(cwd)
-		if process == nil then
-			result = { ok = false, status = "unavailable", cwd = cwd }
-		else
-			local ok, export_result = pcall(function()
-				return process:wait(refresh_timeout_ms)
-			end)
-			if not ok then
-				stop_process(process)
-				result = { ok = false, status = "unavailable", cwd = cwd }
-			else
-				local status, path = parse_export(export_result)
-				if status == "timeout" then
-					stop_process(process)
-				end
-				result = {
-					ok = status == "loaded",
-					status = status,
-					cwd = cwd,
-				}
-				apply_result(status, path)
-			end
-		end
-	end
-
-	if current_cwd() ~= cwd then
-		set_path(clean_path)
-		result = { ok = false, status = "cwd_changed", cwd = cwd }
-	end
-	synchronizing = false
-	local next_cwd = queued_cwd
-	queued_cwd = nil
-	if next_cwd ~= nil and next_cwd == current_cwd() then
-		vim.schedule(function()
-			M.refresh(next_cwd)
-		end)
-	end
-	return result
-end
-
-function M.failure_message(status)
-	return status_message(status)
 end
 
 function M.setup()

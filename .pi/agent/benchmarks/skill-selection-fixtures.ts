@@ -1,4 +1,4 @@
-import type { SkillCandidate } from "../extensions/skill-selection";
+import type { SkillCandidate } from "../extensions/skill-discovery/selection";
 
 export interface SkillSelectionBenchmarkCase {
   readonly name: string;
