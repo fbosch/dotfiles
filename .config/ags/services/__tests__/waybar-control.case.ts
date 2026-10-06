@@ -44,23 +44,27 @@ if (CHILD_MODE) {
 
 async function runChild(mode: string): Promise<void> {
 	let failures = 0;
-	const originalError = console.error;
-	console.error = (...args: Parameters<typeof console.error>) => {
-		if (args[0] === "Waybar control request failed:") failures++;
-		originalError(...args);
-	};
-	try {
-		showWaybar();
-		if (mode === "success") {
-			await waitFor(() => Gio.File.new_for_path(`${GLib.get_home_dir()}/request`).query_exists(null));
-		} else {
-			await waitFor(() => failures > 0);
+	// GJS freezes console; its structured log writer observes each emitted record once.
+	// The GJS override accepts a callback despite GI exposing this argument as a pointer.
+	const setLogWriter = GLib.log_set_writer_func as unknown as (writer: (
+		level: GLib.LogLevelFlags,
+		fields: Record<string, Uint8Array>,
+	) => GLib.LogWriterOutput) => void;
+	setLogWriter((_level, fields) => {
+		const message = fields.MESSAGE ? new TextDecoder().decode(fields.MESSAGE) : "";
+		if (message.startsWith("Waybar control request failed:")) {
+			failures++;
+			return GLib.LogWriterOutput.HANDLED;
 		}
-		// Count calls, not GJS's formatted stack traces, which can repeat the message.
-		print(`WAYBAR_CONTROL_RESULT ${failures}`);
-	} finally {
-		console.error = originalError;
+		return GLib.LogWriterOutput.UNHANDLED;
+	});
+	showWaybar();
+	if (mode === "success") {
+		await waitFor(() => Gio.File.new_for_path(`${GLib.get_home_dir()}/request`).query_exists(null));
+	} else {
+		await waitFor(() => failures > 0);
 	}
+	print(`WAYBAR_CONTROL_RESULT ${failures}`);
 }
 
 async function runControlInChild(home: string, mode: string): Promise<ChildOutput> {

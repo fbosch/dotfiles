@@ -370,6 +370,8 @@ in
       cp .pi/agent/settings.json "$PI_CODING_AGENT_DIR/"
       cp -R .pi/agent/agents .pi/agent/themes "$PI_CODING_AGENT_DIR/"
       cp .config/pi-hashline-edit-pro/config.json "$XDG_CONFIG_HOME/pi-hashline-edit-pro/"
+      mkdir -p "$XDG_CONFIG_HOME/fbb/data"
+      cp .config/fbb/data/typos.abolish "$XDG_CONFIG_HOME/fbb/data/"
       cd .pi/agent
       bun test extensions benchmarks lib
       bun run typecheck

@@ -1,6 +1,7 @@
 import {
   type BeforeAgentStartEvent,
   type ExtensionAPI,
+  formatSkillsForPrompt,
   getAgentDir,
   SettingsManager,
   type Skill,
@@ -169,11 +170,15 @@ export function applySkillTweaks(
     return systemPrompt;
   }
 
-  return replaceSkillCatalog(
-    systemPrompt,
-    skills.filter((skill) => !disabledNames.has(skill.name)),
-    readTool,
-  );
+  const visibleSkills = skills.filter((skill) => !disabledNames.has(skill.name));
+  if (!visibleSkills.some((skill) => !skill.disableModelInvocation)) {
+    // Remove only an exact SDK-generated section; keep unfamiliar host routing prose intact.
+    const originalSection = formatSkillsForPrompt([...skills], readTool);
+    if (originalSection && systemPrompt.includes(originalSection)) {
+      return systemPrompt.replace(originalSection, "");
+    }
+  }
+  return replaceSkillCatalog(systemPrompt, visibleSkills, readTool);
 }
 
 export default function skillTweaks(pi: ExtensionAPI): void {

@@ -91,7 +91,8 @@ test("AI Pointer view presents a question prompt and disposes", async () => {
 		"AI Pointer repeated prompt update was rejected",
 	);
 	assert(prompt.get_text() === submittedQuestion, "a repeated component update cleared the question");
-	await settleMainLoop();
+	// Let GTK allocate the widened entry before sampling its composition position.
+	await settleMainLoop(50);
 	assert(view.isSelectionPreviewVisible, "AI Pointer selection preview was not visible");
 	action.emit("clicked");
 	assert(submitted === submittedQuestion.trim(), "AI Pointer submitted the wrong question");

@@ -10,6 +10,7 @@ import {
   truncateLine,
 } from "@earendil-works/pi-coding-agent";
 import {
+  getKeybindings,
   type Component,
   hyperlink,
   isKeyRelease,
@@ -520,6 +521,7 @@ interface SessionNavigationModule {
 interface SessionNavigatorModule {
   TranscriptPane: new (options: {
     tui: TUI;
+    keys: ReturnType<typeof getKeybindings>;
     theme: TranscriptTheme;
     source: SubagentTranscriptSource;
     heading: TranscriptHeading;
@@ -623,7 +625,7 @@ async function loadSessionNavigator(): Promise<{
     import(SESSION_NAVIGATION_MODULE),
     import(SESSION_NAVIGATOR_MODULE),
   ]);
-  // SAFETY: The installed 21.8.1 modules were inspected against these internal contracts.
+  // SAFETY: The installed 23.0.0 modules were inspected against these internal contracts.
   return {
     navigation: navigation as unknown as SessionNavigationModule,
     navigator: navigator as unknown as SessionNavigatorModule,
@@ -739,6 +741,7 @@ export async function openSubagentSession(
         overlayComponent = new SubagentTranscriptFrame(
           new navigator.TranscriptPane({
             tui,
+            keys: getKeybindings(),
             theme: ctx.ui.theme,
             source,
             heading,

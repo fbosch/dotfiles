@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -36,7 +36,7 @@ test.skipIf(pi === null)(
         join(project, ".pi", "settings.json"),
         JSON.stringify({ skillTweaks: { coldSkills: ["xstate"] } }),
       );
-      const output = execFileSync(
+      const output = spawnSync(
         pi ?? "pi",
         [
           "--approve",
@@ -65,7 +65,11 @@ test.skipIf(pi === null)(
           timeout: 30000,
         },
       );
-      const line = output.split("\n").find((item) => item.startsWith("SKILL_RUNTIME_CHECK "));
+      expect(output.error).toBeUndefined();
+      expect(output.status).toBe(0);
+      // Print mode reserves stdout for model output and routes extension logs to stderr.
+      expect(output.stdout).toBe("");
+      const line = output.stderr.split("\n").find((item) => item.startsWith("SKILL_RUNTIME_CHECK "));
       expect(line).toBeDefined();
       const report = JSON.parse(line?.slice("SKILL_RUNTIME_CHECK ".length) ?? "{}");
       expect(report.coldVisible).toBe(false);
