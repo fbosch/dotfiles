@@ -74,7 +74,7 @@
 
   /* stylelint-disable nesting-selector-no-missing-scoping-root -- The surface mixin supplies the parent selector. */
   &.mode-icons {
-    box.switcher-container { background-color: var(--ags-color-background-primary); backdrop-filter: none; }
+    box.switcher-container { background-color: var(--ags-color-background-primary); }
 
     box.window-preview,
     box.preview-body { background: var(--ags-color-background-primary); }
@@ -82,7 +82,7 @@
   }
 
   &.mode-previews {
-    box.switcher-container { background-color: color-mix(in srgb, var(--ags-color-background-primary) 50%, transparent); backdrop-filter: blur(20px); }
+    box.switcher-container { background-color: color-mix(in srgb, var(--ags-color-background-primary) 50%, transparent); }
     box.window-preview { background-color: color-mix(in srgb, var(--ags-color-background-primary) 95%, transparent); }
     box.preview-header { background-color: color-mix(in srgb, var(--ags-color-background-tertiary) 95%, transparent); }
     box.preview-body { background: linear-gradient(135deg, color-mix(in srgb, var(--ags-color-background-tertiary) 90%, transparent) 0%, color-mix(in srgb, var(--ags-color-background-primary) 90%, transparent) 100%); }

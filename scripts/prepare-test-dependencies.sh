@@ -27,6 +27,9 @@ if [[ -z "$package_specs" ]]; then
   exit 1
 fi
 mapfile -t packages <<<"$package_specs"
+# The session viewer is tested too, but this unpatched package is absent from the patch catalog.
+subagent_spec="$(jq -er '.packages[] | select(test("^npm:@gotgenes/pi-subagents@[0-9]+\\.[0-9]+\\.[0-9]+$")) | ltrimstr("npm:")' .pi/agent/settings.json)"
+packages+=("$subagent_spec")
 npm install --prefix .pi/agent/npm --ignore-scripts --no-audit --no-fund --save-exact "${packages[@]}"
 bun --no-install .pi/agent/lib/pi-npm.ts --apply-patches .pi/agent/npm
 
