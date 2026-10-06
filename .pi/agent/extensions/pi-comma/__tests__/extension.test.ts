@@ -271,7 +271,7 @@ describe("pi-comma", () => {
     const comma = join(root, "comma");
     const resolved = join(store, "json-tool");
     await mkdir(store);
-    await executable(resolved, "#!/bin/sh\nprintf '{\\\"ok\\\":true}'\n");
+    await executable(resolved, "#!/bin/sh\nprintf '%s' '{\"ok\":true}'\n");
     await executable(comma, `#!/bin/sh\nprintf '%s\\n' ${JSON.stringify(resolved)}\n`);
     const setup = createSetupFragment({ commaPath: comma, pickerPath: comma, nixStore: store });
     const result = await runBash(

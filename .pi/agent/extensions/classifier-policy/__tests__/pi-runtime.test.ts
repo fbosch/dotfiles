@@ -43,8 +43,9 @@ test.skipIf(!executable)(
         );
         child.stdin?.end();
       });
-      expect(result.stderr).toBe("");
-      expect(result.stdout.match(/CLASSIFIER_POLICY_RUNTIME_OK/g)).toHaveLength(2);
+      // Print mode routes extension console output to stderr, leaving stdout for model output.
+      expect(result.stdout).toBe("");
+      expect(result.stderr).toBe("CLASSIFIER_POLICY_RUNTIME_OK\nCLASSIFIER_POLICY_RUNTIME_OK\n");
     } finally {
       await rm(agentDirectory, { recursive: true, force: true });
     }

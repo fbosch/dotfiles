@@ -47,23 +47,27 @@ test.skipIf(!executable)(
           timeout: 25_000,
         },
       );
-      expect(stderr).toBe("");
-      expect(stdout).toContain("CHART_RUNTIME_OK startup ");
-      expect(stdout).toContain("CHART_RUNTIME_OK reload ");
-      expect(stdout).toContain("CHART_REDRAW startup Rendering bezier chart");
-      expect(stdout).toContain("CHART_REDRAW reload Rendering bezier chart");
-      expect(stdout).toContain("CHART_REDRAW startup Rendering heatmap");
-      expect(stdout).toContain("CHART_REDRAW reload Rendering heatmap");
-      expect(stdout).toContain("CHART_REDRAW startup Rendering box plot");
-      expect(stdout).toContain("CHART_REDRAW reload Rendering box plot");
-      expect(stdout).toContain("CHART_REDRAW startup Rendering waterfall");
-      expect(stdout).toContain("CHART_REDRAW reload Rendering waterfall");
-      expect(stdout).toContain("CHART_REDRAW startup Rendering dumbbell chart");
-      expect(stdout).toContain("CHART_REDRAW reload Rendering dumbbell chart");
-      expect(stdout).toContain("CHART_REDRAW startup Rendering stacked bar chart");
-      expect(stdout).toContain("CHART_REDRAW reload Rendering stacked bar chart");
-      expect(stdout).toContain("CHART_REDRAW startup Rendering treemap");
-      expect(stdout).toContain("CHART_REDRAW reload Rendering treemap");
+      // Print mode routes extension console output to stderr, leaving stdout for model output.
+      expect(stdout).toBe("");
+      for (const line of stderr.trimEnd().split("\n")) {
+        expect(line).toMatch(/^CHART_(RUNTIME_OK|REDRAW) (startup|reload) /);
+      }
+      expect(stderr).toContain("CHART_RUNTIME_OK startup ");
+      expect(stderr).toContain("CHART_RUNTIME_OK reload ");
+      expect(stderr).toContain("CHART_REDRAW startup Rendering bezier chart");
+      expect(stderr).toContain("CHART_REDRAW reload Rendering bezier chart");
+      expect(stderr).toContain("CHART_REDRAW startup Rendering heatmap");
+      expect(stderr).toContain("CHART_REDRAW reload Rendering heatmap");
+      expect(stderr).toContain("CHART_REDRAW startup Rendering box plot");
+      expect(stderr).toContain("CHART_REDRAW reload Rendering box plot");
+      expect(stderr).toContain("CHART_REDRAW startup Rendering waterfall");
+      expect(stderr).toContain("CHART_REDRAW reload Rendering waterfall");
+      expect(stderr).toContain("CHART_REDRAW startup Rendering dumbbell chart");
+      expect(stderr).toContain("CHART_REDRAW reload Rendering dumbbell chart");
+      expect(stderr).toContain("CHART_REDRAW startup Rendering stacked bar chart");
+      expect(stderr).toContain("CHART_REDRAW reload Rendering stacked bar chart");
+      expect(stderr).toContain("CHART_REDRAW startup Rendering treemap");
+      expect(stderr).toContain("CHART_REDRAW reload Rendering treemap");
     } finally {
       await rm(agentDir, { recursive: true, force: true });
     }
