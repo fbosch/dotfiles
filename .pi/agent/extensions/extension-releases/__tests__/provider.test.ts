@@ -275,7 +275,7 @@ describe("extension release-check provider", () => {
       const coverage: ReleaseCoverage = {
         coverage: "complete",
         available: 1,
-        updates: [{ name: "checked", current: "1.0.0", latest: "2.0.0" }],
+        updates: [{ name: "checked", current: "1.0.0", latest: "2.0.0", scope: "user" }],
         observedAt,
         staleAt: observedAt + RELEASE_CACHE_TTL_MS,
         expiresAt: observedAt + 2 * RELEASE_CACHE_TTL_MS,
@@ -294,7 +294,7 @@ describe("extension release-check provider", () => {
       expect(readReleaseCache(changedSource, observedAt + 1)).toMatchObject({ available: 1 });
       expect(readReleaseCache(prepared, observedAt + RELEASE_CACHE_TTL_MS)).toBeUndefined();
       expect(JSON.parse(readFileSync(cacheFile, "utf8"))).toMatchObject({
-        schemaVersion: 2,
+        schemaVersion: 3,
         entries: { "source-a": { coverage: { coverage: "complete" } } },
       });
     } finally {

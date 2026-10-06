@@ -45,7 +45,7 @@ test("renders update details as separately wrapped lines and keeps stale marker"
     payload: {
       coverage: "partial",
       available: 1,
-      updates: [{ name: "@acme/tool", current: "1.0.0", latest: "2.0.0" }],
+      updates: [{ name: "@acme/tool", current: "1.0.0", latest: "2.0.0", scope: "user" }],
     },
   };
   const lines = renderStartupHeader(theme, 30, undefined, undefined, snapshot);
@@ -54,6 +54,43 @@ test("renders update details as separately wrapped lines and keeps stale marker"
   expect(lines).toContain("  @acme/tool 1.0.0 → 2.0.0");
   expect(lines.every((line) => !line.includes("\\\\n"))).toBe(true);
   expect(lines.every((line) => line.length <= 30)).toBe(true);
+});
+
+test("renders Update all beneath complete, fresh update details", () => {
+  const now = Date.now();
+  const snapshot = {
+    type: "reply" as const,
+    schemaVersion: 1 as const,
+    sessionId: "session",
+    generationId: "generation",
+    ownerId: "updates" as const,
+    ownerRevision: 1,
+    state: "ready" as const,
+    staleAt: now + 60_000,
+    expiresAt: now + 120_000,
+    payload: {
+      coverage: "complete",
+      available: 1,
+      updates: [{ name: "@acme/tool", current: "1.0.0", latest: "2.0.0", scope: "user" }],
+    },
+  };
+
+  const lines = renderStartupHeader(
+    theme,
+    80,
+    undefined,
+    undefined,
+    snapshot,
+    undefined,
+    undefined,
+    undefined,
+    undefined,
+    "ready",
+  );
+  const detailRow = lines.findIndex((line) => line.includes("@acme/tool 1.0.0 → 2.0.0"));
+  const buttonRow = lines.findIndex((line) => line.includes("[ Update all ]"));
+  expect(buttonRow).toBeGreaterThan(detailRow);
+  expect(lines[buttonRow]).toContain("Ctrl+Alt+U");
 });
 
 test("colors only changed version segments by upgrade size and preserves wrapped ANSI text", () => {
@@ -70,10 +107,10 @@ test("colors only changed version segments by upgrade size and preserves wrapped
       coverage: "complete",
       available: 4,
       updates: [
-        { name: "major", current: "v1.2.3", latest: "v2.0.0" },
-        { name: "minor", current: "1.2.3", latest: "1.3.0" },
-        { name: "patch", current: "1.2.3", latest: "1.2.4" },
-        { name: "pre", current: "1.2.3-beta.1", latest: "1.2.3-beta.2+build" },
+        { name: "major", current: "v1.2.3", latest: "v2.0.0", scope: "user" },
+        { name: "minor", current: "1.2.3", latest: "1.3.0", scope: "user" },
+        { name: "patch", current: "1.2.3", latest: "1.2.4", scope: "user" },
+        { name: "pre", current: "1.2.3-beta.1", latest: "1.2.3-beta.2+build", scope: "user" },
       ],
     },
   };

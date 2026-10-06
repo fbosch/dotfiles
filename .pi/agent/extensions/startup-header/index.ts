@@ -1,5 +1,12 @@
 import { randomUUID } from "node:crypto";
-import { type ExtensionAPI, getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
+import {
+  type ExtensionAPI,
+  type ExtensionCommandContext,
+  type ExtensionContext,
+  getAgentDir,
+  SettingsManager,
+} from "@earendil-works/pi-coding-agent";
+import { Key, visibleWidth } from "@earendil-works/pi-tui";
 import { loadStartupHeaderArt, type StartupHeaderArt } from "./ascii-art";
 import {
   discoverRepositoryFiles,
@@ -17,7 +24,9 @@ import {
 } from "./contracts";
 import { readHeaderOwnerSnapshot } from "./header-snapshot";
 import { captureStartupBaseline, deferStartupMeasurement } from "./startup-time";
-import { renderStartupHeader } from "./view-model";
+import { type UpdateAllResult, updateAllAvailablePackages } from "./update-all";
+import { readAvailableUpdates, type UpdateDetail } from "./updates";
+import { renderStartupHeader, UPDATE_ALL_BUTTON_TEXT } from "./view-model";
 import { inspectWorkspace, type WorkspaceIdentity } from "./workspace";
 
 export interface StartupHeaderDependencies {
@@ -25,6 +34,10 @@ export interface StartupHeaderDependencies {
   readonly inspectCandidates: typeof inspectConfiguredCandidates;
   readonly inspectRepositoryFiles?: (cwd: string) => Promise<RepositoryFiles>;
   readonly loadArt?: typeof loadStartupHeaderArt;
+  readonly updateAllPackages?: (
+    context: ExtensionContext,
+    updates: readonly UpdateDetail[],
+  ) => Promise<UpdateAllResult>;
 }
 
 const DEFAULT_DEPENDENCIES: StartupHeaderDependencies = {
@@ -41,9 +54,26 @@ export default function startupHeader(
   let disposeSession = () => {};
   const startupBaselines = new Map<string, string | undefined>();
 
+  let runCurrentUpdateAll: (context: ExtensionCommandContext) => Promise<boolean> = async () =>
+    false;
+
+  pi.registerCommand("startup-header-update-all", {
+    description: "Update all listed Pi packages and reload Pi",
+    handler: async (_args, context) => {
+      if (await runCurrentUpdateAll(context)) await context.reload();
+    },
+  });
+  const requestUpdateAll = () =>
+    pi.sendUserMessage("/startup-header-update-all", { expandPromptTemplates: true });
+
+  pi.registerShortcut(Key.ctrlAlt("u"), {
+    description: "Update all available Pi packages",
+    handler: requestUpdateAll,
+  });
   pi.on("session_start", (event, ctx) => {
     disposeSession();
     disposeSession = () => {};
+    runCurrentUpdateAll = async () => false;
     if (ctx.mode !== "tui") return;
 
     const sessionId = ctx.sessionManager.getSessionId();
@@ -73,6 +103,73 @@ export default function startupHeader(
       }
     }
     let requestRender = () => {};
+    let updateActionState: "ready" | "updating" | "reloading" = "ready";
+    let updateInProgress = false;
+    const updatePackages = dependencies.updateAllPackages ?? updateAllAvailablePackages;
+    const runUpdateAll = async (actionContext: ExtensionCommandContext): Promise<boolean> => {
+      if (!active || updateInProgress || updateActionState === "reloading") return false;
+      const updates = readAvailableUpdates(owners.get("updates"), Date.now());
+      if (updates === undefined) {
+        actionContext.ui.notify("Update information is no longer current.", "warning");
+        return false;
+      }
+
+      updateInProgress = true;
+      updateActionState = "updating";
+      requestRender();
+      try {
+        const result = await updatePackages(actionContext, updates);
+        if (!active) return false;
+        if (result.cancelled) {
+          updateActionState = "ready";
+          return false;
+        }
+        if (result.failed.length > 0) {
+          if (result.updated > 0) {
+            updateActionState = "reloading";
+            actionContext.ui.notify(
+              `Updated ${result.updated} of ${updates.length} packages; failed: ${result.failed.join(", ")}. Reloading Pi to activate the updates.`,
+              "warning",
+            );
+            return true;
+          }
+          updateActionState = "ready";
+          actionContext.ui.notify(`Could not update: ${result.failed.join(", ")}.`, "error");
+          return false;
+        }
+        if (result.updated !== updates.length) {
+          const shouldReload = result.updated > 0;
+          updateActionState = shouldReload ? "reloading" : "ready";
+          actionContext.ui.notify(
+            shouldReload
+              ? `Updated ${result.updated} of ${updates.length} packages. Reloading Pi to activate the updates.`
+              : `Updated ${result.updated} of ${updates.length} packages.`,
+            "warning",
+          );
+          return shouldReload;
+        }
+
+        updateActionState = "reloading";
+        const countLabel = `${result.updated} package${result.updated === 1 ? "" : "s"}`;
+        actionContext.ui.notify(
+          `Updated ${countLabel}. Reloading Pi to activate the updates.`,
+          "info",
+        );
+        return true;
+      } catch (error) {
+        if (!active) return false;
+        updateActionState = "ready";
+        actionContext.ui.notify(
+          `Unable to update packages: ${error instanceof Error ? error.message : String(error)}`,
+          "error",
+        );
+        return false;
+      } finally {
+        updateInProgress = false;
+        if (active) requestRender();
+      }
+    };
+    runCurrentUpdateAll = runUpdateAll;
     let startupElapsedMs: number | undefined;
     const startupBaseline = startupBaselines.has(sessionId)
       ? startupBaselines.get(sessionId)
@@ -115,9 +212,10 @@ export default function startupHeader(
 
     ctx.ui.setHeader((tui, theme) => {
       requestRender = () => tui.requestRender();
+      let renderedLines: string[] = [];
       return {
-        render: (width) =>
-          renderStartupHeader(
+        render: (width) => {
+          renderedLines = renderStartupHeader(
             theme,
             width,
             startupElapsedMs,
@@ -132,7 +230,25 @@ export default function startupHeader(
             candidates,
             owners.get("auth"),
             art,
-          ),
+            updateActionState,
+          );
+          return renderedLines;
+        },
+        handleMouse: (event) => {
+          if (event.type !== "click" || event.button !== "left") return;
+          const line = renderedLines[event.y];
+          const buttonIndex = line?.indexOf(UPDATE_ALL_BUTTON_TEXT);
+          if (line === undefined || buttonIndex === undefined || buttonIndex < 0) return;
+          const buttonStart = visibleWidth(line.slice(0, buttonIndex));
+          if (
+            event.x < buttonStart ||
+            event.x >= buttonStart + visibleWidth(UPDATE_ALL_BUTTON_TEXT)
+          ) {
+            return;
+          }
+          requestUpdateAll();
+          return { handled: true };
+        },
         invalidate() {},
       };
     });
@@ -145,6 +261,7 @@ export default function startupHeader(
     }
     disposeSession = () => {
       active = false;
+      runCurrentUpdateAll = async () => false;
       cancelStartupMeasurement();
       unsubscribeOwners();
       owners.dispose();

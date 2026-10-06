@@ -33,7 +33,7 @@ describe("available extension releases", () => {
     expect(coverage).toMatchObject({
       coverage: "complete",
       available: 1,
-      updates: [{ name: "@acme/extension", current: "1.2.3", latest: "1.3.0" }],
+      updates: [{ name: "@acme/extension", current: "1.2.3", latest: "1.3.0", scope: "user" }],
     });
     expect(coverage.staleAt).toBe(1_000 + RELEASE_CACHE_TTL_MS);
     expect(coverage.expiresAt).toBe(1_000 + 2 * RELEASE_CACHE_TTL_MS);

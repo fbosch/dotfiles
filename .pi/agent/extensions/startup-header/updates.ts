@@ -1,11 +1,13 @@
 import type { EventBus } from "@earendil-works/pi-coding-agent";
 import { compareSemver, isSemver } from "../extension-releases/release-check";
+import type { StartupOwnerSnapshot } from "./contracts";
 import { installStartupOwnerPublisher, type StartupOwnerPublisher } from "./publisher";
 
 export interface UpdateDetail {
   readonly name: string;
   readonly current: string;
   readonly latest: string;
+  readonly scope: "user" | "project";
 }
 
 export interface UpdateCoverageMetadata {
@@ -44,6 +46,31 @@ export function readUpdateCoverage(value: unknown): UpdateCoverage | undefined {
   return Object.freeze({ coverage: record.coverage, available: record.available, ...metadata });
 }
 
+export function readAvailableUpdates(
+  snapshot: StartupOwnerSnapshot | undefined,
+  now: number,
+): readonly UpdateDetail[] | undefined {
+  if (snapshot === undefined || (snapshot.state !== "ready" && snapshot.state !== "degraded")) {
+    return undefined;
+  }
+  const coverage = readUpdateCoverage(snapshot.payload);
+  if (
+    coverage === undefined ||
+    (coverage.coverage !== "complete" && coverage.coverage !== "partial") ||
+    coverage.available === 0 ||
+    coverage.updates === undefined ||
+    coverage.updates.length !== coverage.available
+  ) {
+    return undefined;
+  }
+  const staleAt = snapshot.staleAt ?? coverage.staleAt;
+  const expiresAt = snapshot.expiresAt ?? coverage.expiresAt;
+  if (staleAt === undefined || staleAt <= now || expiresAt === undefined || expiresAt <= now) {
+    return undefined;
+  }
+  return coverage.updates;
+}
+
 function readCoverageMetadata(record: Record<string, unknown>): UpdateCoverageMetadata | undefined {
   const metadata: {
     observedAt?: number;
@@ -79,10 +106,18 @@ function readCoverageMetadata(record: Record<string, unknown>): UpdateCoverageMe
         !isSemver(item.current) ||
         typeof item.latest !== "string" ||
         !isSemver(item.latest) ||
+        (item.scope !== "user" && item.scope !== "project") ||
         compareSemver(item.latest, item.current) <= 0
       )
         return undefined;
-      updates.push(Object.freeze({ name: item.name, current: item.current, latest: item.latest }));
+      updates.push(
+        Object.freeze({
+          name: item.name,
+          current: item.current,
+          latest: item.latest,
+          scope: item.scope,
+        }),
+      );
     }
     metadata.updates = Object.freeze(updates);
   }

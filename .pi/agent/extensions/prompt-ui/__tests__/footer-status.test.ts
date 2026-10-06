@@ -53,6 +53,16 @@ describe("prompt footer statuses", () => {
     expect(renderFooterStatus(theme, "file-changes", "1 file")).toBe("text:1 file");
   });
 
+  test("treats plan-like status text as ordinary extension status", () => {
+    const state = {
+      ...promptState,
+      getStatuses: () => ["Plan"],
+    };
+    const line = renderPromptHints(theme, keybindings, state, "~/dotfiles", 60);
+
+    expect(line).toContain("Plan");
+  });
+
   test("keeps file changes and MCP on the right while showing extension statuses on the left", () => {
     const state = {
       ...promptState,

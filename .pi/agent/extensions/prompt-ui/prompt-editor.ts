@@ -27,7 +27,6 @@ import {
   loadProjectReferences,
   type ProjectReference,
 } from "../mentions/project-references";
-import { getModeColor, PLAN_MODE_STATUS } from "../plan-mode";
 import { correctedPromptForInput, type TypoCorrectionRules } from "../typo-abolish";
 import {
   AutocompleteOverlay,
@@ -180,7 +179,7 @@ export function renderPromptHints(
     .map((status) => sanitizeStatus(status))
     .filter((status) => status.length > 0);
   const interruptHint = keyHint(keybindings, "app.interrupt", "interrupt");
-  const statusText = statuses.filter((status) => status !== PLAN_MODE_STATUS).join(" · ");
+  const statusText = statuses.join(" · ");
   const workingText = promptState.isWorking()
     ? [theme.fg("accent", `${promptState.getWorkingMarker()} working`), interruptHint]
         .filter(Boolean)
@@ -360,15 +359,8 @@ export class PromptEditor extends CustomEditor {
     }
 
     const theme = this.ctx.ui.theme;
-    const statuses = this.promptState
-      .getStatuses()
-      .map((status) => sanitizeStatus(status))
-      .filter((status) => status.length > 0);
-    const isPlanMode = statuses.includes(PLAN_MODE_STATUS);
-    const modeColor = colorizeHex(theme, getModeColor(isPlanMode ? "plan" : "build"));
     const editorBorder = (text: string) => this.borderColor(text);
     const editorWidth = width - DOCK_CHROME_WIDTH;
-    // Pi renders its internal editor border with the thinking color, even in Plan mode.
     const { content, suggestions } = splitEditorLines(super.render(editorWidth), editorBorder);
     const coloredContent = content.map((line) => {
       const coloredAgents = formatAnsiAgentMentions(
@@ -386,7 +378,6 @@ export class PromptEditor extends CustomEditor {
         theme.getFgAnsi("accent"),
       );
     });
-    const modeLabel = isPlanMode ? PLAN_MODE_STATUS : "Build";
     const model = this.ctx.model;
     const thinkingLevel = this.pi.getThinkingLevel();
     const separator = theme.fg("dim", " · ");
@@ -394,9 +385,7 @@ export class PromptEditor extends CustomEditor {
       model === undefined
         ? theme.fg("muted", " No model")
         : [
-            modeColor(` ${modeLabel}`),
-            separator,
-            theme.fg("text", model.name),
+            theme.fg("text", ` ${model.name}`),
             " ",
             theme.fg("muted", formatProvider(model.provider)),
             separator,
@@ -409,7 +398,8 @@ export class PromptEditor extends CustomEditor {
       " ",
     ].join("");
     const modelRow = fitColumns(modelLeft, modelRight, editorWidth);
-    const inputRail = modeColor(DOCK_RAIL);
+    const inputBorderColor = this.promptState.isWorking() ? "accent" : "borderMuted";
+    const inputRail = theme.fg(inputBorderColor, DOCK_RAIL);
     const suggestionsRail = theme.fg("borderMuted", DOCK_RAIL);
     const rightBorder = theme.fg("borderMuted", DOCK_RIGHT_BORDER);
     const backgroundAnsi = theme.getBgAnsi("userMessageBg");
@@ -418,7 +408,7 @@ export class PromptEditor extends CustomEditor {
     );
     const bottomEdge = paintDockBottomEdge(
       width,
-      modeColor("▘"),
+      theme.fg(inputBorderColor, "▘"),
       theme.fg("borderMuted", "▝"),
       backgroundAnsi,
     );

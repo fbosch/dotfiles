@@ -43,8 +43,9 @@ Native subagents within an attempt can run concurrently. Use
 
 ## Models
 
-The parent defaults to `modes.build.model` and `modes.build.thinkingLevel` from
-`.pi/agent/settings.json`. Worker model, thinking, and role descriptions come
+The parent defaults to `defaultProvider`, `defaultModel`, and
+`defaultThinkingLevel` from `.pi/agent/settings.json`. Worker model, thinking,
+and role descriptions come
 from `.pi/agent/agents/{quick,explore,analyze,debug,review,validate,test}.md`;
 same-named `.pi/agents/` definitions take precedence. Disabled agents stay
 unavailable. A missing or invalid preset is an error, not a fallback.

@@ -9,8 +9,13 @@ import {
   readAuthStartupPayload,
   readLspStartupPayload,
 } from "./owner-payloads";
-import { readUpdateCoverage, type UpdateDetail } from "./updates";
+import { readAvailableUpdates, readUpdateCoverage, type UpdateDetail } from "./updates";
 import type { WorkspaceIdentity } from "./workspace";
+
+export const UPDATE_ALL_BUTTON_TEXT = "[ Update all ]";
+const UPDATE_ALL_SHORTCUT_TEXT = "Ctrl+Alt+U";
+
+type UpdateActionState = "ready" | "updating" | "reloading";
 
 export interface StartupIntegrationSnapshots {
   readonly neovim: StartupOwnerSnapshot | undefined;
@@ -29,6 +34,7 @@ export function renderStartupHeader(
   candidates?: CandidateInspection,
   auth?: StartupOwnerSnapshot,
   art?: StartupHeaderArt,
+  updateActionState?: UpdateActionState,
 ): string[] {
   if (width <= 0) return [];
 
@@ -48,6 +54,10 @@ export function renderStartupHeader(
   if (updateStatus.length > 0) {
     lines.push(theme.fg("muted", `Updates: ${updateStatus[0]}`));
     lines.push(...updateStatus.slice(1));
+  }
+  if (updateActionState !== undefined && readAvailableUpdates(updates, Date.now()) !== undefined) {
+    const actionLine = renderUpdateAction(theme, updateActionState, width);
+    if (actionLine !== undefined) lines.push(actionLine);
   }
 
   if (startupElapsedMs !== undefined) {
@@ -410,6 +420,22 @@ function parseVersion(
     parts: [match[2] ?? "", match[3] ?? "", match[4] ?? ""],
     suffix: match[5] ?? "",
   };
+}
+
+function renderUpdateAction(
+  theme: Theme,
+  state: UpdateActionState,
+  width: number,
+): string | undefined {
+  if (state === "updating") return theme.fg("muted", "Updating packages…");
+  if (state === "reloading") return theme.fg("success", "Reloading Pi to activate updates…");
+  const buttonWidth = visibleWidth(UPDATE_ALL_BUTTON_TEXT);
+  if (width < buttonWidth) return undefined;
+  const shortcut = ` ${UPDATE_ALL_SHORTCUT_TEXT}`;
+  return (
+    theme.fg("accent", UPDATE_ALL_BUTTON_TEXT) +
+    (width >= buttonWidth + visibleWidth(shortcut) ? theme.fg("muted", shortcut) : "")
+  );
 }
 
 function formatStartupDuration(milliseconds: number): string {

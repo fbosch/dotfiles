@@ -30,9 +30,12 @@ def frontmatter(path: Path) -> dict:
 def load_catalog(repo: Path) -> dict:
     agent = repo / ".pi/agent"
     settings = json.loads((agent / "settings.json").read_text())
-    build = settings.get("modes", {}).get("build", {})
-    if not MODEL.fullmatch(str(build.get("model", ""))) or build.get("thinkingLevel") not in THINKING:
-        raise ValueError("Configure modes.build.model and modes.build.thinkingLevel before evaluating orchestration")
+    provider = settings.get("defaultProvider")
+    model = settings.get("defaultModel")
+    parent_thinking = settings.get("defaultThinkingLevel")
+    build_model = f"{provider}/{model}" if isinstance(provider, str) and isinstance(model, str) else ""
+    if not MODEL.fullmatch(build_model) or not isinstance(parent_thinking, str) or parent_thinking not in THINKING:
+        raise ValueError("Configure defaultProvider, defaultModel, and defaultThinkingLevel before evaluating orchestration")
     catalog = {}
     for name in AGENTS:
         source = agent / "agents" / f"{name}.md"
@@ -56,7 +59,11 @@ def load_catalog(repo: Path) -> dict:
     if "quick" not in catalog:
         raise ValueError("The controlled steering case requires an enabled quick agent")
     return {
-        "parent": {"model": build["model"], "thinking": build["thinkingLevel"], "source": ".pi/agent/settings.json#modes.build"},
+        "parent": {
+            "model": build_model,
+            "thinking": parent_thinking,
+            "source": ".pi/agent/settings.json#defaultProvider+defaultModel+defaultThinkingLevel",
+        },
         "agents": catalog,
     }
 

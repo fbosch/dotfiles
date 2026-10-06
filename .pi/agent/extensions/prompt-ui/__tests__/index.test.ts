@@ -173,6 +173,7 @@ test("uses MCP extension status in the footer and refreshes the editor after com
   await handlers.get("session_start")?.({}, ctx);
   expect(editor).toBeDefined();
   expect(footer).toBeDefined();
+  expect(editor?.render(100).join("\n")).not.toMatch(/\b(?:Plan|Build)\b/);
   extensionStatuses.set("mcp", "MCP 2/6!");
   const footerText = stripTerminalSequences(footer?.render(120).join("\n") ?? "");
   expect(footerText.endsWith(" 2 MCP ")).toBe(true);

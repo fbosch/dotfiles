@@ -16,7 +16,7 @@ import {
   requestClassifier,
 } from "../../lib/classifier";
 import { isRecord } from "../shared/is-record";
-import { disabledSkillNames } from "../skill-tweaks";
+import { coldSkillNames, disabledSkillNames } from "../skill-tweaks";
 
 const DEFAULT_THRESHOLD = 0.72;
 const DEFAULT_TIMEOUT_MS = DEFAULT_CLASSIFIER_TIMEOUT_MS;
@@ -435,15 +435,18 @@ function appendSkillRecommendations(
 function disabledNamesForContext(
   context: ExtensionContext,
   systemPrompt: string,
+  skills: readonly Skill[] = [],
 ): ReadonlySet<string> {
   const settings = SettingsManager.create(context.cwd, getAgentDir(), {
     projectTrusted: context.isProjectTrusted(),
   });
-  return disabledSkillNames(
-    settings.getGlobalSettings(),
-    settings.getProjectSettings(),
-    systemPrompt,
-  );
+  const global = settings.getGlobalSettings();
+  const project = settings.getProjectSettings();
+  // Cold metadata is surfaced on demand through search_skills, not automatic hints.
+  return new Set([
+    ...disabledSkillNames(global, project, systemPrompt),
+    ...coldSkillNames(global, project, skills),
+  ]);
 }
 
 export interface SkillSelectionStatus {
@@ -462,7 +465,11 @@ export interface SkillSelectionStatus {
 interface SkillSelectionExtensionDependencies {
   selectSkillsDetailed?: typeof selectSkillsWithClassifierDetailed;
   getConfig?: (context: ExtensionContext) => SkillSelectionConfig;
-  getDisabledNames?: (context: ExtensionContext, systemPrompt: string) => ReadonlySet<string>;
+  getDisabledNames?: (
+    context: ExtensionContext,
+    systemPrompt: string,
+    skills: readonly Skill[],
+  ) => ReadonlySet<string>;
   fetch?: ClassifierFetch;
   now?: () => number;
 }
@@ -507,7 +514,11 @@ export function createSkillSelectionExtension(
       try {
         config = getConfig(context);
         if (!config.enabled) return skip("disabled", false);
-        disabledNames = getDisabledNames(context, event.systemPrompt);
+        disabledNames = getDisabledNames(
+          context,
+          event.systemPrompt,
+          event.systemPromptOptions.skills ?? [],
+        );
       } catch {
         return skip("config-error", false);
       }

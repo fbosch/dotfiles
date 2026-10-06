@@ -24,6 +24,7 @@ export interface ReleaseUpdate {
   readonly name: string;
   readonly current: string;
   readonly latest: string;
+  readonly scope: "user" | "project";
 }
 
 export interface ReleaseCoverage {
@@ -127,7 +128,12 @@ export async function checkReleases(
         available += 1;
         if (updates.length < 100)
           updates.push(
-            Object.freeze({ name: candidate.name, current: candidate.baseline, latest }),
+            Object.freeze({
+              name: candidate.name,
+              current: candidate.baseline,
+              latest,
+              scope: candidate.scope,
+            }),
           );
       }
     } catch {
@@ -195,6 +201,7 @@ function isReleaseUpdates(value: unknown): value is readonly ReleaseUpdate[] {
         isSemver(entry.current) &&
         typeof entry.latest === "string" &&
         isSemver(entry.latest) &&
+        (entry.scope === "user" || entry.scope === "project") &&
         compareSemver(entry.latest, entry.current) > 0,
     )
   );
