@@ -521,6 +521,7 @@ interface SessionNavigationModule {
 interface SessionNavigatorModule {
   TranscriptPane: new (options: {
     tui: TUI;
+    keys: ReturnType<typeof getKeybindings>;
     theme: TranscriptTheme;
     keys: ReturnType<typeof getKeybindings>;
     source: SubagentTranscriptSource;

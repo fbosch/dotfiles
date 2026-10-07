@@ -645,6 +645,8 @@ describe("subagent session links", () => {
       expect(stripTerminalSequences(lines.at(-1) ?? "")).toBe(`╰${"─".repeat(width - 2)}╯`);
       expect(lines.every((line) => line.includes("\u001b[48;2;25;25;25m"))).toBe(true);
     }
+    const wideFrame = frames.find(({ width }) => width === 96);
+    expect(stripTerminalSequences(wideFrame?.lines.join("\n") ?? "")).toContain("Esc close");
     expect(overlay.getOptions()?.maxHeight).toBeUndefined();
     expect(overlay.isHidden()).toBe(true);
   });

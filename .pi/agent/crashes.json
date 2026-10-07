@@ -10,6 +10,16 @@
     "notified": true
   },
   {
+    "timestamp": "2026-10-06T20:07:58.471Z",
+    "version": "1.0.2",
+    "kind": "uncaught_exception",
+    "message": "undefined is not an object (evaluating 'this.keys.getKeys')",
+    "stack": "Error: undefined is not an object (evaluating 'this.keys.getKeys')\n    at <anonymous> (/home/fbb/dotfiles/.pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigator.ts:346:38)\n    at keyPair (/home/fbb/dotfiles/.pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigator.ts:346:12)\n    at footerHint (/home/fbb/dotfiles/.pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigator.ts:338:30)\n    at render (/home/fbb/dotfiles/.pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigator.ts:311:47)\n    at render (/home/fbb/dotfiles/.pi/agent/extensions/prompt-ui/subagent-transcript-frame.ts:32:11)\n    at compositeOverlays (/$bunfs/root/pi:117637:44)\n    at doRender (/$bunfs/root/pi:126126:38)\n    at <anonymous> (/$bunfs/root/pi:117393:22)",
+    "sessionFile": "/home/fbb/dotfiles/.pi/agent/sessions/--home-fbb-Faugus-battlenet-drive_c-Program Files (x86)-World of Warcraft--/2026-10-04T11-31-08-011Z_01a106ae-986b-70d9-8e1a-a27e692ce948.jsonl",
+    "cwd": "/home/fbb/Faugus/battlenet/drive_c/Program Files (x86)/World of Warcraft",
+    "notified": true
+  },
+  {
     "timestamp": "2026-10-07T09:00:34.563Z",
     "version": "1.0.4",
     "kind": "uncaught_exception",
