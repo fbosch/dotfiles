@@ -3,6 +3,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:f
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
+  AgentBeforeSettleEventResult,
+  EntryRenderer,
   ExtensionAPI,
   ExtensionCommandContext,
   ExtensionContext,
@@ -17,6 +19,7 @@ import { installSubagentWidgetFrame } from "../../prompt-ui/subagent-widget-fram
 import tasksExtension, {
   confidentlyExplainsUnfinishedWork,
   formatProgress,
+  type ReconciliationResult,
   renderTaskWidget,
   resolveTaskIcons,
   TASKS_RECONCILIATION_ENTRY,
@@ -58,12 +61,13 @@ function harness(
     items: readonly TaskItem[],
     response: string,
     signal: AbortSignal,
-  ) => Promise<boolean>,
+  ) => Promise<boolean | ReconciliationResult>,
 ) {
   let manager = initialManager;
   const runController = new AbortController();
   const events = new Map<string, EventHandler>();
   const commands = new Map<string, CommandHandler>();
+  const renderers = new Map<string, EntryRenderer>();
   const widgets: Parameters<ExtensionContext["ui"]["setWidget"]>[1][] = [];
   const notifications: string[] = [];
   let customViews = 0;
@@ -87,6 +91,7 @@ function harness(
   };
   const pi = {
     getSettings: () => ({}),
+    registerEntryRenderer: (name: string, renderer: EntryRenderer) => renderers.set(name, renderer),
     appendEntry: (type: string, data: unknown) => manager.appendCustomEntry(type, data),
     on: (event: string, handler: EventHandler) => events.set(event, handler),
     registerTool: (definition: RegisteredTaskTool) => {
@@ -95,13 +100,21 @@ function harness(
     registerCommand: (_name: string, definition: { handler: CommandHandler }) =>
       commands.set("tasks", definition.handler),
   } as unknown as ExtensionAPI;
-  tasksExtension(pi, classifyResponse);
+  tasksExtension(
+    pi,
+    classifyResponse &&
+      (async (...args) => {
+        const result = await classifyResponse(...args);
+        return typeof result === "boolean" ? { remind: !result, source: "classifier" } : result;
+      }),
+  );
 
   return {
     context,
     abortRun: () => runController.abort(),
     widgets,
     notifications,
+    renderers,
     get customViews() {
       return customViews;
     },
@@ -487,6 +500,102 @@ describe("standalone tasks checklist", () => {
       });
     }
     expect(captured).toEqual(["", ""]);
+  });
+
+  const sentDecisions: ReconciliationResult[] = [
+    { remind: true, source: "classifier" },
+    { remind: true, source: "fallback", reason: "disabled" },
+    { remind: true, source: "fallback", reason: "uncertain" },
+  ];
+  test.each(sentDecisions)("renders a persisted user-only indicator for %j", async (decision) => {
+    const manager = createSession();
+    const tasks = harness(manager, async () => decision);
+    await tasks.event("session_start");
+    await tasks.call({ action: "set", items: plan });
+    const result = (await tasks.event("agent_before_settle", {
+      outcome: "completed",
+      context: { llmMessages: [{ role: "assistant", content: [{ type: "text", text: "Done." }] }] },
+    })) as AgentBeforeSettleEventResult;
+    expect(result.continue).toBe(true);
+    expect(result.entries).toHaveLength(2);
+    for (const entry of result.entries ?? []) {
+      if (entry.type === "custom") manager.appendCustomEntry(entry.customType, entry.data);
+      else if (entry.type === "custom_message") {
+        expect(entry.display).toBe(false);
+        manager.appendCustomMessageEntry(
+          entry.customType,
+          entry.content,
+          entry.display,
+          entry.details,
+        );
+      } else throw new Error("Unexpected boundary entry");
+    }
+    const marker = manager
+      .getBranch()
+      .find((entry) => entry.type === "custom" && entry.customType === TASKS_RECONCILIATION_ENTRY);
+    if (marker?.type !== "custom") throw new Error("Missing reconciliation marker");
+    expect(marker.data).toEqual(decision);
+    const renderer = tasks.renderers.get(TASKS_RECONCILIATION_ENTRY);
+    if (!renderer) throw new Error("Missing indicator renderer");
+    const theme = {
+      fg: (color: string, text: string) => {
+        expect(color).toBe("dim");
+        return text;
+      },
+    } as unknown as Theme;
+    const component = renderer(marker, { expanded: false }, theme);
+    expect(component?.render(120)).toHaveLength(1);
+    expect(component?.render(120).join("\n").trimEnd()).toBe(
+      decision.source === "classifier"
+        ? "Task review requested · classifier decision"
+        : "Task review requested · rule-based check",
+    );
+    for (const width of [1, 24, 80]) {
+      expect(component?.render(width).every((line) => visibleWidth(line) <= width)).toBe(true);
+    }
+    const modelContext = JSON.stringify(manager.buildSessionContext().messages);
+    expect(modelContext).toContain("Reconcile the checklist with the outcome before finishing.");
+    expect(modelContext).not.toContain("Task review requested");
+    expect(modelContext).not.toContain(TASKS_RECONCILIATION_ENTRY);
+    const file = manager.getSessionFile();
+    if (!file) throw new Error("Missing session file");
+    const reopened = SessionManager.open(file);
+    const reloaded = harness(reopened);
+    await reloaded.event("session_start");
+    const restoredMarker = reopened.getBranch().find((entry) => entry.id === marker.id);
+    if (restoredMarker?.type !== "custom") throw new Error("Missing restored marker");
+    expect(
+      reloaded.renderers
+        .get(TASKS_RECONCILIATION_ENTRY)?.(restoredMarker, { expanded: false }, theme)
+        ?.render(120),
+    ).toEqual(component?.render(120));
+  });
+
+  test("does not render indicators for suppression or unannotated markers", async () => {
+    const manager = createSession();
+    const tasks = harness(manager, async () => true);
+    await tasks.event("session_start");
+    await tasks.call({ action: "set", items: plan });
+    const result = (await tasks.event("agent_before_settle", {
+      outcome: "completed",
+      context: { llmMessages: [] },
+    })) as AgentBeforeSettleEventResult;
+    expect(result.continue).toBeUndefined();
+    expect(result.entries).toEqual([{ type: "custom", customType: TASKS_RECONCILIATION_ENTRY }]);
+    const id = manager.appendCustomEntry(TASKS_RECONCILIATION_ENTRY);
+    const marker = manager.getBranch().find((entry) => entry.id === id);
+    if (marker?.type !== "custom") throw new Error("Missing marker");
+    const renderer = tasks.renderers.get(TASKS_RECONCILIATION_ENTRY);
+    if (!renderer) throw new Error("Missing indicator renderer");
+    const theme = { fg: (_color: string, text: string) => text } as unknown as Theme;
+    expect(renderer(marker, { expanded: false }, theme)).toBeUndefined();
+    expect(
+      renderer(
+        { ...marker, data: { remind: false, source: "classifier" } },
+        { expanded: false },
+        theme,
+      ),
+    ).toBeUndefined();
   });
 
   test("lists, replaces the full plan, updates one item, and rejects invalid input", async () => {

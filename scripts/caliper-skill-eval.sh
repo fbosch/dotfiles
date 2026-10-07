@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: caliper-skill-eval.sh [--ablate] [--auth-profile NAME] [--spec PATH] [--orchestration [--without-instructions]] [--codemode [--baseline]] SKILL [MODEL] [THINKING] [K] [JUDGE_MODEL] [JUDGE_THINKING]
+Usage: caliper-skill-eval.sh [--ablate] [--auth-profile NAME] [--spec PATH] [--orchestration [--without-instructions]] [--codemode [--baseline]] [--skill-suggestions [--baseline]] SKILL [MODEL] [THINKING] [K] [JUDGE_MODEL] [JUDGE_THINKING]
 EOF
 }
 
@@ -14,8 +14,13 @@ orchestration=false
 without_instructions=false
 codemode=false
 baseline=false
+skill_suggestions=false
 while (($# > 0)); do
   case "$1" in
+  --skill-suggestions)
+    skill_suggestions=true
+    shift
+    ;;
   --codemode)
     codemode=true
     shift
@@ -75,7 +80,7 @@ if [[ -z "$skill" || $# -gt 6 ]]; then
   exit 2
 fi
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
-if [[ "$orchestration" == true || "$codemode" == true ]]; then
+if [[ "$orchestration" == true || "$codemode" == true || "$skill_suggestions" == true ]]; then
   resolved_model="$(python3 "$repo_root/.pi/agent/evals/orchestration/model_config.py" \
     "$repo_root" "${2:-configured}" "${3:-configured}")"
   read -r model thinking <<<"$resolved_model"
@@ -108,8 +113,8 @@ if [[ ! "$skill" =~ ^[a-z0-9][a-z0-9-]*$ ]]; then
   exit 2
 fi
 
-if [[ "$baseline" == true && "$codemode" != true ]]; then
-  printf '%s\n' '--baseline requires --codemode' >&2
+if [[ "$baseline" == true && "$codemode" != true && "$skill_suggestions" != true ]]; then
+  printf '%s\n' '--baseline requires --codemode or --skill-suggestions' >&2
   exit 2
 fi
 if [[ "$codemode" == true ]]; then
@@ -129,6 +134,14 @@ if [[ "$orchestration" == true ]]; then
     exit 2
   fi
   spec_override="${spec_override:-$repo_root/.pi/agent/evals/orchestration/orchestration.eval.yaml}"
+fi
+
+if [[ "$skill_suggestions" == true ]]; then
+  if [[ "$orchestration" == true || "$codemode" == true || "$ablate" == true || "$skill" != skill-suggestions ]]; then
+    printf '%s\n' 'Use --skill-suggestions with subject skill-suggestions and optional --baseline only.' >&2
+    exit 2
+  fi
+  spec_override="${spec_override:-$repo_root/.pi/agent/evals/skill-suggestions/skill-suggestions.eval.yaml}"
 fi
 
 spec="${spec_override:-.agents/skills/$skill/$skill.eval.yaml}"
@@ -182,6 +195,15 @@ if [[ "$codemode" == true ]]; then
   printf 'Codemode evidence: %s\n' "$CODEMODE_EVAL_RUN"
 fi
 
+if [[ "$skill_suggestions" == true ]]; then
+  mkdir -p "$repo_root/.caliper/skill-suggestions"
+  SKILL_SUGGESTIONS_EVAL_RUN="$(mktemp -d "$repo_root/.caliper/skill-suggestions/run.XXXXXX")"
+  export SKILL_SUGGESTIONS_EVAL_RUN
+  python3 "$repo_root/.pi/agent/evals/skill-suggestions/launch.py" prepare \
+    "$repo_root" "$run_root" "$SKILL_SUGGESTIONS_EVAL_RUN" "$baseline" "$model" "$thinking"
+  printf 'Skill suggestions evidence: %s\n' "$SKILL_SUGGESTIONS_EVAL_RUN"
+fi
+
 wrapper="$run_root/pi-wrapper"
 cat >"$wrapper" <<'EOF'
 #!/bin/sh
@@ -220,6 +242,8 @@ if [ -f "$run_root/orchestration-launch.py" ]; then
   python3 "$run_root/orchestration-launch.py" "$pi_bin" "$@"
 elif [ -f "$run_root/codemode-launch.py" ]; then
   python3 "$run_root/codemode-launch.py" "$pi_bin" "$@"
+elif [ -f "$run_root/skill-suggestions-launch.py" ]; then
+  python3 "$run_root/skill-suggestions-launch.py" "$pi_bin" "$@"
 else
   PI_OFFLINE=1 "$pi_bin" --no-extensions "$@"
 fi
@@ -244,12 +268,15 @@ chmod 700 "$wrapper"
 
 candidate="pi:openai-codex/$model:$thinking"
 judge="pi:openai-codex/$judge_model:$judge_thinking"
-if [[ "$orchestration" == true || "$codemode" == true ]]; then
+if [[ "$orchestration" == true || "$codemode" == true || "$skill_suggestions" == true ]]; then
   candidate="pi:$model:$thinking"
   judge="pi:$judge_model:$judge_thinking"
 fi
 args=(run "$spec" --k "$k" --workers 1 --model "$candidate" --judge-model "$judge")
 if [[ "$ablate" == true ]]; then args+=(--ablate "$skill"); fi
+if [[ "$skill_suggestions" == true ]]; then
+  args+=(--no-user-customizations --timeout 120 --fail-fast 1)
+fi
 
 set +e
 env -u PI_CODING_AGENT_DIR HOME="$run_home" PI_CLI_PATH="$wrapper" caliper validate "$spec"

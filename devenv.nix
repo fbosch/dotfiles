@@ -345,6 +345,16 @@ in
       bun run typecheck
     '';
 
+    "test:pi-notices".exec = ''
+      set -euo pipefail
+      cd .pi/agent
+      bun test \
+        extensions/__tests__/subagent-steering-notice.test.ts \
+        extensions/skill-discovery/__tests__/recommendation-chat.test.ts \
+        extensions/tasks
+      bun run typecheck
+    '';
+
     "test:nvim-dekit-terminal".exec = ''
       REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE -i NONE \
         -l .config/nvim/tests/dekit_terminal.lua

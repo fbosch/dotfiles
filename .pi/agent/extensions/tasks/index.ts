@@ -5,10 +5,14 @@ import {
   type ExtensionContext,
   type Theme,
 } from "@earendil-works/pi-coding-agent";
-import { matchesKey, truncateToWidth } from "@earendil-works/pi-tui";
+import { matchesKey, Text, truncateToWidth } from "@earendil-works/pi-tui";
 import type { Static } from "typebox";
 import { Type } from "typebox";
-import { DEFAULT_CLASSIFIER_TIMEOUT_MS, requestClassifier } from "../../lib/classifier";
+import {
+  type ClassifierFailure,
+  DEFAULT_CLASSIFIER_TIMEOUT_MS,
+  requestClassifier,
+} from "../../lib/classifier";
 import { paintDockBottomEdge, paintDockRow } from "../prompt-ui/dock-rendering";
 
 export const TASKS_STATE_ENTRY = "fbb.tasks-checklist.snapshot";
@@ -383,26 +387,49 @@ export function confidentlyExplainsUnfinishedWork(answer: unknown): boolean {
   );
 }
 
-export async function responseExplainsUnfinishedWork(
+export type ReconciliationResult =
+  | { remind: boolean; source: "classifier" }
+  | {
+      remind: true;
+      source: "fallback";
+      reason: ClassifierFailure["reason"] | "insufficient-context" | "uncertain";
+    };
+
+export async function evaluateReconciliation(
   ctx: ExtensionContext,
   items: readonly TaskItem[],
   response: string,
   signal: AbortSignal,
   request: typeof requestClassifier = requestClassifier,
-): Promise<boolean> {
-  if (signal.aborted || !ctx.modelRegistry) return false;
+): Promise<ReconciliationResult> {
+  const fallback = (
+    reason: Extract<ReconciliationResult, { source: "fallback" }>["reason"],
+  ): ReconciliationResult => ({ remind: true, source: "fallback", reason });
+  if (signal.aborted) return fallback("caller-cancellation");
+  if (!ctx.modelRegistry) return fallback("model-unavailable");
   const input = reconciliationRequest(items, response);
-  if (!input) return false;
+  if (!input) return fallback("insufficient-context");
   try {
     const result = await request(ctx.modelRegistry, input, {
       signal,
       timeoutMs: DEFAULT_CLASSIFIER_TIMEOUT_MS,
       settingsContext: ctx,
     });
-    if (!result.ok) return false;
-    return confidentlyExplainsUnfinishedWork(result.value.answers.unnecessary);
+    if (!result.ok) return fallback(result.reason);
+    const answer = result.value.answers.unnecessary;
+    if (
+      answer?.type !== "bool" ||
+      !Number.isFinite(answer.probability) ||
+      answer.probability < 0 ||
+      answer.probability > 1
+    )
+      return fallback("invalid-response");
+    if (confidentlyExplainsUnfinishedWork(answer)) return { remind: false, source: "classifier" };
+    if (1 - answer.probability >= RECONCILIATION_CONFIDENCE)
+      return { remind: true, source: "classifier" };
+    return fallback("uncertain");
   } catch {
-    return false;
+    return fallback("request-failure");
   }
 }
 
@@ -411,11 +438,11 @@ type ReconciliationDecision = (
   items: readonly TaskItem[],
   response: string,
   signal: AbortSignal,
-) => Promise<boolean>;
+) => Promise<ReconciliationResult>;
 
 export default function tasksExtension(
   pi: ExtensionAPI,
-  classifyResponse: ReconciliationDecision = responseExplainsUnfinishedWork,
+  classifyResponse: ReconciliationDecision = evaluateReconciliation,
 ): void {
   let items: TaskItem[] = [];
   let icons = DEFAULT_TASK_ICONS;
@@ -423,6 +450,19 @@ export default function tasksExtension(
   let reminderSent = false;
   let checkingReminder = false;
   let classifierController: AbortController | undefined;
+
+  // Custom entries persist for the user but never participate in model context.
+  pi.registerEntryRenderer(TASKS_RECONCILIATION_ENTRY, (entry, _options, theme) => {
+    const data = entry.data;
+    if (
+      !isRecord(data) ||
+      data.remind !== true ||
+      (data.source !== "classifier" && data.source !== "fallback")
+    )
+      return;
+    const source = data.source === "classifier" ? "classifier decision" : "rule-based check";
+    return new Text(theme.fg("dim", `Task review requested · ${source}`), 0, 0);
+  });
 
   const invalidateCheck = (): void => {
     revision += 1;
@@ -490,7 +530,7 @@ export default function tasksExtension(
     classifierController = controller;
     checkingReminder = true;
     try {
-      const explained = await classifyResponse(ctx, taskSnapshot, response, signal);
+      const decision = await classifyResponse(ctx, taskSnapshot, response, signal);
       if (
         signal.aborted ||
         attemptRevision !== revision ||
@@ -502,10 +542,10 @@ export default function tasksExtension(
 
       reminderSent = true;
       const marker = { type: "custom" as const, customType: TASKS_RECONCILIATION_ENTRY };
-      if (explained) return { entries: [marker] };
+      if (!decision.remind) return { entries: [marker] };
       return {
         entries: [
-          marker,
+          { ...marker, data: decision },
           {
             type: "custom_message" as const,
             customType: RECONCILIATION_MESSAGE_TYPE,
@@ -540,6 +580,7 @@ export default function tasksExtension(
       promptGuidelines: [
         "For work involving multiple meaningful steps, create a checklist with tasks before starting. Skip quick questions and trivial edits.",
         "Track only the current work. Reuse and update the checklist for follow-ups on the same work.",
+        "Write concise, specific, action-led task titles that name a meaningful outcome. Keep paths, commands, and other technical identifiers exact; avoid vague labels and filler.",
         "Use list to inspect the checklist, set to replace the full plan, and update to change one item by id.",
         "Keep unstarted tasks pending. Mark tasks in_progress when starting and completed only after verification.",
         "Before the final response, reconcile the checklist with the actual outcome. Leave unfinished work incomplete, including blocked, paused, or cancelled work.",

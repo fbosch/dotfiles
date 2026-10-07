@@ -1,0 +1,26 @@
+{
+  "case": "restore-positive-cold",
+  "arm": "baseline",
+  "infrastructureErrors": [
+    "warm/cold catalog mismatch"
+  ],
+  "outcomePass": true,
+  "applicationPass": true,
+  "selectionPass": true,
+  "skillsRead": [
+    "restore-verification"
+  ],
+  "requiredGroups": 1,
+  "groupsFound": 1,
+  "unnecessaryReads": [],
+  "recommendations": [],
+  "mainTokens": 7212,
+  "classifierTokens": 1176,
+  "classifierCalls": 1,
+  "automaticCalls": 0,
+  "classifierElapsedMs": 549,
+  "automaticValidCalls": 0,
+  "searchCalls": 1,
+  "durationSeconds": 18.265591999996104,
+  "artifactsUnchanged": true
+}

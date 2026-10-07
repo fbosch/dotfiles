@@ -11,7 +11,7 @@ import {
   DEFAULT_CLASSIFIER_TIMEOUT_MS,
   type requestClassifier,
 } from "../../../lib/classifier";
-import { responseExplainsUnfinishedWork, type TaskItem } from "../index";
+import { evaluateReconciliation, type TaskItem } from "../index";
 
 const tasks: [TaskItem, TaskItem, TaskItem] = [
   { id: "review", title: "Review reminder integration", status: "pending" },
@@ -37,6 +37,22 @@ function answer(probability: number): ReturnType<typeof requestClassifier> {
 }
 
 describe("optional reconciliation classifier", () => {
+  test.each([
+    [0.03, { remind: true, source: "classifier" }],
+    [0.91, { remind: false, source: "classifier" }],
+    [0.5, { remind: true, source: "fallback", reason: "uncertain" }],
+    [1.1, { remind: true, source: "fallback", reason: "invalid-response" }],
+  ] as const)(
+    "retains the actual decision source at probability %s",
+    async (probability, expected) => {
+      expect(
+        await evaluateReconciliation(ctx, tasks, response, new AbortController().signal, () =>
+          answer(probability),
+        ),
+      ).toEqual(expected);
+    },
+  );
+
   test("sends only unfinished titles/statuses and the final response with shared policy options", async () => {
     let captured: ClassifierContext | undefined;
     const signal = new AbortController().signal;
@@ -50,7 +66,10 @@ describe("optional reconciliation classifier", () => {
       captured = input;
       return answer(0.97);
     };
-    expect(await responseExplainsUnfinishedWork(ctx, tasks, response, signal, request)).toBe(true);
+    expect(await evaluateReconciliation(ctx, tasks, response, signal, request)).toEqual({
+      remind: false,
+      source: "classifier",
+    });
     expect(captured?.state).toEqual({
       unfinishedTasks: tasks.slice(0, 2).map(({ title, status }) => ({ title, status })),
       finalResponse: response,
@@ -63,14 +82,10 @@ describe("optional reconciliation classifier", () => {
     "does not suppress for uncertain or invalid probability %s",
     async (probability) => {
       expect(
-        await responseExplainsUnfinishedWork(
-          ctx,
-          tasks,
-          response,
-          new AbortController().signal,
-          () => answer(probability),
+        await evaluateReconciliation(ctx, tasks, response, new AbortController().signal, () =>
+          answer(probability),
         ),
-      ).toBe(false);
+      ).toMatchObject({ remind: true });
     },
   );
 
@@ -85,14 +100,8 @@ describe("optional reconciliation classifier", () => {
   test.each(failures)("falls back to a reminder on %s", async (reason) => {
     const request: typeof requestClassifier = async () => ({ ok: false, reason, stage: "request" });
     expect(
-      await responseExplainsUnfinishedWork(
-        ctx,
-        tasks,
-        response,
-        new AbortController().signal,
-        request,
-      ),
-    ).toBe(false);
+      await evaluateReconciliation(ctx, tasks, response, new AbortController().signal, request),
+    ).toEqual({ remind: true, source: "fallback", reason });
   });
 
   test("falls back on thrown requests and missing answers", async () => {
@@ -102,14 +111,8 @@ describe("optional reconciliation classifier", () => {
     const missing: typeof requestClassifier = async () => ({ ok: true, value: { answers: {} } });
     for (const request of [throwing, missing]) {
       expect(
-        await responseExplainsUnfinishedWork(
-          ctx,
-          tasks,
-          response,
-          new AbortController().signal,
-          request,
-        ),
-      ).toBe(false);
+        await evaluateReconciliation(ctx, tasks, response, new AbortController().signal, request),
+      ).toMatchObject({ remind: true });
     }
   });
 
@@ -131,17 +134,17 @@ describe("optional reconciliation classifier", () => {
       return answer(1);
     };
     expect(
-      await responseExplainsUnfinishedWork(ctx, tasks, text, new AbortController().signal, request),
-    ).toBe(false);
+      await evaluateReconciliation(ctx, tasks, text, new AbortController().signal, request),
+    ).toMatchObject({ remind: true });
     expect(
-      await responseExplainsUnfinishedWork(
+      await evaluateReconciliation(
         ctx,
         [{ ...tasks[0], title: text }],
         response,
         new AbortController().signal,
         request,
       ),
-    ).toBe(false);
+    ).toMatchObject({ remind: true });
     expect(calls).toBe(0);
   });
 
@@ -159,22 +162,16 @@ describe("optional reconciliation classifier", () => {
       [[{ ...tasks[0], title: "long title ".repeat(30) }], response],
       [Array.from({ length: 21 }, (_, index) => ({ ...tasks[0], id: String(index) })), response],
     ] as const) {
-      expect(await responseExplainsUnfinishedWork(ctx, items, finalResponse, signal, request)).toBe(
-        false,
-      );
+      expect(
+        await evaluateReconciliation(ctx, items, finalResponse, signal, request),
+      ).toMatchObject({ remind: true });
     }
     expect(
-      await responseExplainsUnfinishedWork(
-        {} as ExtensionContext,
-        tasks,
-        response,
-        signal,
-        request,
-      ),
-    ).toBe(false);
+      await evaluateReconciliation({} as ExtensionContext, tasks, response, signal, request),
+    ).toMatchObject({ remind: true });
     expect(
-      await responseExplainsUnfinishedWork(ctx, tasks, response, AbortSignal.abort(), request),
-    ).toBe(false);
+      await evaluateReconciliation(ctx, tasks, response, AbortSignal.abort(), request),
+    ).toMatchObject({ remind: true });
     expect(calls).toBe(0);
   });
 
@@ -190,14 +187,14 @@ describe("optional reconciliation classifier", () => {
     };
     const context = { ...ctx, cwd: root, modelRegistry: registry } as ExtensionContext;
     expect(
-      await responseExplainsUnfinishedWork(
+      await evaluateReconciliation(
         context,
         tasks,
         response,
         new AbortController().signal,
         createClassifierRequester(Date.now, root),
       ),
-    ).toBe(false);
+    ).toMatchObject({ remind: true });
     expect(calls).toBe(0);
   });
 });

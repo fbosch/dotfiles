@@ -1,0 +1,59 @@
+{
+  "arm": "treatment",
+  "model": "openai-codex/gpt-6-luna-fast",
+  "thinking": "xhigh",
+  "evidence": "/Users/fbb/dotfiles/.caliper/skill-suggestions/run.QZy0YF",
+  "repo": "/Users/fbb/dotfiles",
+  "classifierProviders": [
+    {
+      "provider": "openrouter",
+      "model": "typesafe/jev-latest"
+    },
+    {
+      "provider": "vercel-ai-gateway",
+      "model": "typesafe-ai/jev"
+    }
+  ],
+  "extensions": [
+    "/Users/fbb/dotfiles/.pi/agent/evals/skill-suggestions/fixture.ts",
+    "/Users/fbb/dotfiles/.pi/agent/extensions/skill-discovery/index.ts",
+    "/Users/fbb/dotfiles/.pi/agent/extensions/openai-capabilities.ts"
+  ],
+  "sha256": {
+    ".pi/agent/evals/skill-suggestions/fixture.ts": "ff47341dee8a286745aa35cd338f9c89fcb7ea02e8a0a4b3f4156554f523a04e",
+    ".pi/agent/evals/skill-suggestions/skill-suggestions.eval.yaml": "a88e720030cbc12417c94b592d568bce966b50bf6b830287820c96e1212bc2e7",
+    ".pi/agent/evals/skill-suggestions/skills/backup-inventory/SKILL.md": "6f45a105ebee6f802a4309f640ba3152ab4620cf0027b5dc9d80ff55d6e3f4c2",
+    ".pi/agent/evals/skill-suggestions/skills/handoff-brief/SKILL.md": "c3ff8558d5e045b7964467d369cd29e16adc9c54eb39deb2422c6e3db5e05fe6",
+    ".pi/agent/evals/skill-suggestions/skills/ledger-reconciliation/SKILL.md": "53884964af69fcf9bebdb024f79a82d412a9b034e0a2bf476496f90f45ab1780",
+    ".pi/agent/evals/skill-suggestions/skills/record-audit/SKILL.md": "939ebafa719fdeb22276c9025278451c5f626fd9aac7aaa93ac7392586c30ee0",
+    ".pi/agent/evals/skill-suggestions/skills/release-note-draft/SKILL.md": "529e907e0e55001dee7796bb58d9ea411cfde313d9bdc3d28818159b6e9e6ffe",
+    ".pi/agent/evals/skill-suggestions/skills/release-window-check/SKILL.md": "67b24527034befc391dfa6c8bfa74bf141366e74f1717337a089fadac9705327",
+    ".pi/agent/evals/skill-suggestions/skills/restore-verification/SKILL.md": "ce01603b5ae5f9fd353ed30c700cedb10a26d13ff5298d1b2f71d4e3814612be",
+    ".pi/agent/evals/skill-suggestions/skills/ticket-summary/SKILL.md": "930b4b6674e10038affa49cb4724402a7c4aa7746dacfe6f41730fe901feab84",
+    ".pi/agent/extensions/skill-discovery/advisory-state.ts": "9ad2448694cf89efe6846968f878a83d5d67e3eba31d811706464524d9e796b2",
+    ".pi/agent/extensions/skill-discovery/index.ts": "87848be72d73e64f01f7c13afea8a34aa5f318e5ebd434f4a508c1862208c48c",
+    ".pi/agent/extensions/skill-discovery/mid-task.ts": "f9774981a35ca2c56b2493eba3d392eefa9f80a4c64eb2106f8b6f8d7264cd14",
+    ".pi/agent/extensions/skill-discovery/selection-config.ts": "99587b2e5f29d23c202ffd8980452d8a581a59051e993be4f1e78f5b6f9be5dc",
+    ".pi/agent/extensions/skill-discovery/selection.ts": "c8a51dca0ab1c26b5a7b0205904670507bff742f508a0792c987fb208d936447",
+    ".pi/agent/lib/classifier.ts": "5331f511f5cd70dbf272986f69d793cda0df88f2166f03d7b885080535a50cf3",
+    ".pi/agent/evals/skill-suggestions/launch.py": "bd686ff9a53df16c7ab42398aa4c2e0d55838123822833637fb6bc818188b179",
+    ".pi/agent/evals/skill-suggestions/scenarios.py": "a554bc5b4f1159ac71a6f092dfbfaa4c013cc69f4187723269c62876b8ae1299",
+    ".pi/agent/evals/skill-suggestions/check.py": "460d1f6e1f0a3e95c3d778d50f7dd3c84fa019375361cd719608930b2116a235",
+    ".pi/agent/evals/skill-suggestions/compare.py": "474214600049fcbaaef4278091626ea5c6864f755d38c93bfdbd493bd992b854",
+    ".pi/agent/evals/skill-suggestions/pilot.eval.yaml": "ff0a4dc0a91ebeaae2ec6d5a19f63c596c6b39bd9dff21b1bd7f8aee60f2a25b"
+  },
+  "warm": [
+    "ledger-reconciliation",
+    "record-audit",
+    "release-window-check",
+    "release-note-draft"
+  ],
+  "cold": [
+    "handoff-brief",
+    "restore-verification",
+    "backup-inventory",
+    "ticket-summary"
+  ],
+  "scope": "synthetic skill workflows; not the personal skill corpus",
+  "threshold": 0.72
+}

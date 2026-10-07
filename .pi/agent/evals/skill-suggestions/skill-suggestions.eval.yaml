@@ -1,0 +1,104 @@
+skills: []
+sandbox:
+  forbidden_files:
+    - '.*skill-suggestions\.eval\.yaml$'
+    - '.*(?:check\.py|expected\.json|run\.json|\.jsonl|verdict\.json)$'
+tasks:
+  - id: ledger-positive-warm
+    name: Reconcile two incoming ledger records
+    prompt: |
+      [[skill-suggestions-case:ledger-positive-warm]]
+      Compare the two incoming records with the official ledger. Tell me which
+      record matches and which needs review, with the amounts and source files.
+      Do not change anything.
+    assert: &check |
+      import os, sys
+      sys.path.insert(0, os.environ["SKILL_SUGGESTIONS_EVAL_RUN"])
+      from check import check
+      check()
+  - id: release-positive-warm
+    name: Check a planned release against its freeze window
+    prompt: |
+      [[skill-suggestions-case:release-positive-warm]]
+      Review the planned rollout against the calendar and tell me whether it
+      should proceed. Include the affected service and the relevant window.
+      Do not change anything.
+    assert: *check
+  - id: handoff-positive-cold
+    name: Prepare an outgoing shift handoff
+    prompt: |
+      [[skill-suggestions-case:handoff-positive-cold]]
+      Prepare a handoff for the person taking over this work. Separate what is
+      confirmed from what remains open, and identify the next owner. Do not
+      change the records.
+    assert: *check
+  - id: restore-positive-cold
+    name: Verify a completed restore attempt
+    prompt: |
+      [[skill-suggestions-case:restore-positive-cold]]
+      Check whether this restore can be called verified. Report the checksum
+      and payload evidence, and distinguish a present snapshot from a verified
+      restore. Do not make changes.
+    assert: *check
+  - id: ledger-status-negative
+    name: Report intake queue status only
+    prompt: |
+      [[skill-suggestions-case:ledger-status-negative]]
+      What is the current intake queue status? Report the count and state only;
+      do not reconcile or audit any records.
+    assert: *check
+  - id: release-status-negative
+    name: Report release board status only
+    prompt: |
+      [[skill-suggestions-case:release-status-negative]]
+      Is the release board currently marked ready? Report its status only. Do
+      not compare dates or make a go/no-go recommendation.
+    assert: *check
+  - id: backup-status-negative
+    name: Report backup service status only
+    prompt: |
+      [[skill-suggestions-case:backup-status-negative]]
+      Give me the current backup service status in one sentence. Do not
+      catalogue snapshots or verify a restore.
+    assert: *check
+  - id: coverage-status-negative
+    name: Report on-call coverage status only
+    prompt: |
+      [[skill-suggestions-case:coverage-status-negative]]
+      Who is currently on rotation, and what is the coverage status? Report
+      that status only; no handoff is needed.
+    assert: *check
+  - id: ledger-positive-variant-warm
+    name: Reconcile a second pair of ledger records
+    prompt: |
+      [[skill-suggestions-case:ledger-positive-variant-warm]]
+      Check the incoming entries against the official ledger. Identify any
+      exact matches and anything that needs review, with the evidence sources.
+      Do not edit the files.
+    assert: *check
+  - id: restore-positive-variant-cold
+    name: Verify a restore with passing evidence
+    prompt: |
+      [[skill-suggestions-case:restore-positive-variant-cold]]
+      Determine whether this restore is verified from its manifest, checksum,
+      and payload records. Report the evidence and conclusion; do not run or
+      change the restore.
+    assert: *check
+  - id: restore-midtask-cold
+    name: Reassess readiness after a status note reveals a restore check
+    prompt: |
+      [[skill-suggestions-case:restore-midtask-cold]]
+      Check the service's current readiness. Start by reading its status card.
+      Once you know what is happening, send a short progress update before
+      following any references on the card, then report the final status. Do
+      not make changes.
+    assert: *check
+  - id: handoff-midtask-cold
+    name: Reassess a queue item after its status reveals a handoff
+    prompt: |
+      [[skill-suggestions-case:handoff-midtask-cold]]
+      Check the work queue's current status. Start by reading its status card.
+      Once you know what is happening, send a short progress update before
+      opening any linked record, then report the final status. Do not change
+      the records.
+    assert: *check

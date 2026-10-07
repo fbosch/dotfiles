@@ -1,0 +1,35 @@
+skills: []
+sandbox:
+  forbidden_files:
+    - '.*\.eval\.yaml$'
+    - '.*(?:check\.py|expected\.json|run\.json|\.jsonl|verdict\.json)$'
+tasks:
+  - id: ledger-positive-warm
+    name: Pilot warm ledger workflow
+    prompt: |
+      [[skill-suggestions-case:ledger-positive-warm]]
+      Compare the two incoming records with the official ledger. Tell me which
+      record matches and which needs review, with the amounts and source files.
+      Do not change anything.
+    assert: &check |
+      import os, sys
+      sys.path.insert(0, os.environ["SKILL_SUGGESTIONS_EVAL_RUN"])
+      from check import check
+      check()
+  - id: restore-positive-cold
+    name: Pilot cold restore workflow
+    prompt: |
+      [[skill-suggestions-case:restore-positive-cold]]
+      Check whether this restore can be called verified. Report the checksum
+      and payload evidence, and distinguish a present snapshot from a verified
+      restore. Do not make changes.
+    assert: *check
+  - id: restore-midtask-cold
+    name: Pilot mid-task restore workflow
+    prompt: |
+      [[skill-suggestions-case:restore-midtask-cold]]
+      Check the service's current readiness. Start by reading its status card.
+      Once you know what is happening, send a short progress update before
+      following any references on the card, then report the final status. Do
+      not make changes.
+    assert: *check
