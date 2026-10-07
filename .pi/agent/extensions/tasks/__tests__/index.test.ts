@@ -9,6 +9,7 @@ import type {
   ExtensionCommandContext,
   ExtensionContext,
   ExtensionToolContext,
+  ExtensionUIContext,
   Theme,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
@@ -20,6 +21,7 @@ import {
   visibleWidth,
 } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
+import { installFloatingDialogs } from "../../prompt-ui/floating-dialogs";
 import { installSubagentWidgetFrame } from "../../prompt-ui/subagent-widget-frame";
 import tasksExtension, {
   confidentlyExplainsUnfinishedWork,
@@ -41,6 +43,7 @@ type RegisteredTaskTool = ToolDefinition<typeof TasksParameters, TaskDetails>;
 type EventHandler = (event: never, ctx: ExtensionContext) => unknown | Promise<unknown>;
 type CommandHandler = (args: string, ctx: ExtensionCommandContext) => Promise<void> | void;
 type CustomViewFactory = Parameters<ExtensionContext["ui"]["custom"]>[0];
+type CustomViewOptions = Parameters<ExtensionContext["ui"]["custom"]>[1];
 
 let root: string;
 let cwd: string;
@@ -78,6 +81,7 @@ function harness(
   const widgets: Parameters<ExtensionContext["ui"]["setWidget"]>[1][] = [];
   const notifications: string[] = [];
   const customComponents: Component[] = [];
+  const customOptions: CustomViewOptions[] = [];
   let customViews = 0;
   let tool: RegisteredTaskTool | undefined;
   const context = {
@@ -92,10 +96,13 @@ function harness(
       setWidget: (_key: string, content: Parameters<ExtensionContext["ui"]["setWidget"]>[1]) =>
         widgets.push(content),
       notify: (message: string) => notifications.push(message),
-      async custom(factory: CustomViewFactory) {
+      async custom(factory: CustomViewFactory, options?: CustomViewOptions) {
         customViews++;
+        customOptions.push(options);
         const theme = {
           fg: (_color: string, text: string) => text,
+          bg: (_color: string, text: string) => text,
+          bold: (text: string) => text,
           strikethrough: (text: string) => text,
         } as unknown as Theme;
         customComponents.push(
@@ -131,6 +138,7 @@ function harness(
     notifications,
     renderers,
     customComponents,
+    customOptions,
     get customViews() {
       return customViews;
     },
@@ -326,7 +334,9 @@ describe("standalone tasks checklist", () => {
       expect(renderTaskWidget(items, 160, theme)[1]).toBe(
         `  ${icon} first second third æøå 👩‍💻 界`,
       );
-      expect(component.render(160)[1]).toBe(`  ${icon} first second third æøå 👩‍💻 界 [${status}]`);
+      expect(component.render(160).map(stripTerminalSequences).join("\n")).toContain(
+        `  ${icon} first second third æøå 👩‍💻 界 [${status}]`,
+      );
       for (const width of [1, 12, 40, 160]) {
         for (const lines of [renderTaskWidget(items, width, theme), component.render(width)]) {
           expect(lines.every((line) => visibleWidth(line) <= width)).toBe(true);
@@ -791,7 +801,16 @@ describe("standalone tasks checklist", () => {
     expect(formatProgress(plan)).toBe("2 tasks (0 done, 1 in progress, 1 open)");
     expect(tasks.widgets.at(-1)).toBeTypeOf("function");
 
+    installFloatingDialogs(tasks.context.ui as unknown as ExtensionUIContext);
     await tasks.command("view");
+    const component = tasks.customComponents.at(-1);
+    if (component === undefined) throw new Error("Expected a task view component");
+    const modal = component.render(80).join("\n");
+    expect(modal).toContain("─");
+    expect(modal).toContain("Add regression tests");
+    expect(tasks.customOptions).toEqual([
+      { overlay: true, overlayOptions: { anchor: "center", width: 72, margin: 1 } },
+    ]);
     expect(tasks.customViews).toBe(1);
     await tasks.command("clear");
     expect(resultText(await tasks.call({ action: "list" }))).toBe("No tasks.");

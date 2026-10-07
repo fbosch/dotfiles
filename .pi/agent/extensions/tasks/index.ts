@@ -5,7 +5,13 @@ import {
   type ExtensionContext,
   type Theme,
 } from "@earendil-works/pi-coding-agent";
-import { matchesKey, stripTerminalSequences, Text, truncateToWidth } from "@earendil-works/pi-tui";
+import {
+  type Component,
+  matchesKey,
+  stripTerminalSequences,
+  Text,
+  truncateToWidth,
+} from "@earendil-works/pi-tui";
 import type { Static } from "typebox";
 import { Type } from "typebox";
 import {
@@ -14,6 +20,7 @@ import {
   requestClassifier,
 } from "../../lib/classifier";
 import { paintDockBottomEdge, paintDockRow } from "../prompt-ui/dock-rendering";
+import { ModalFrame } from "../prompt-ui/modal-frame";
 
 export const TASKS_STATE_ENTRY = "fbb.tasks-checklist.snapshot";
 export const TASKS_STATE_SCHEMA = "fbb.tasks-checklist/v1";
@@ -280,34 +287,41 @@ function taskGlyph(status: TaskItem["status"], theme: Theme, icons: TaskIcons): 
   return theme.fg(color, icons[status]);
 }
 
-class TaskListComponent {
+class TaskListComponent extends ModalFrame {
   constructor(
-    private readonly items: readonly TaskItem[],
-    private readonly theme: Theme,
-    private readonly icons: TaskIcons,
+    items: readonly TaskItem[],
+    theme: Theme,
+    icons: TaskIcons,
     private readonly done: () => void,
-  ) {}
+  ) {
+    super(theme);
+    const lines =
+      items.length === 0
+        ? [theme.fg("dim", "No tasks yet.")]
+        : items.map(({ title, status }) => {
+            const label = displayTaskTitle(title);
+            const styledLabel =
+              status === "completed"
+                ? theme.fg("dim", theme.strikethrough(label))
+                : theme.fg("text", label);
+            return `  ${taskGlyph(status, theme, icons)} ${styledLabel} ${theme.fg(
+              "muted",
+              `[${status}]`,
+            )}`;
+          });
+    const body: Component[] = lines.map((line) => ({
+      render: (width: number) => [truncateToWidth(line, width)],
+      invalidate() {},
+    }));
+    this.setFrame("Tasks", body, "Press Escape to close");
+  }
 
   handleInput(data: string): void {
     if (matchesKey(data, "escape") || matchesKey(data, "ctrl+c")) this.done();
   }
 
-  invalidate(): void {}
-
-  render(width: number): string[] {
-    const lines = [
-      this.theme.fg("accent", " Tasks "),
-      ...(this.items.length === 0
-        ? [this.theme.fg("dim", "No tasks yet.")]
-        : this.items.map(({ title, status }) => {
-            const label = displayTaskTitle(title);
-            return `  ${taskGlyph(status, this.theme, this.icons)} ${
-              status === "completed" ? this.theme.fg("dim", label) : this.theme.fg("text", label)
-            } ${this.theme.fg("muted", `[${status}]`)}`;
-          })),
-      this.theme.fg("dim", "Press Escape to close"),
-    ];
-    return lines.map((line) => truncateToWidth(line, width));
+  override render(width: number): string[] {
+    return super.render(width).map((line) => truncateToWidth(line, width));
   }
 }
 
