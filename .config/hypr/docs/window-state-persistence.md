@@ -71,7 +71,8 @@ and the user reported that WoW no longer flickered.
 
 ## Validation
 
-The plugin hooks are pinned to Hyprland `19fb395d`. Build it with
+The plugin checks build/runtime compatibility and required hook installation,
+without a hardcoded supported commit. Build it with
 `just check-hyprland-plugins` in the NixOS repository. The native tests cover state
 validation, rejection of older formats, secure atomic writes, and worker lifetime.
 Dotfiles tests cover selector translation, native ownership, PiP delivery, and the

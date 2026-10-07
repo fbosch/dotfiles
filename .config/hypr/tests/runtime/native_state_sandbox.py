@@ -59,7 +59,7 @@ try:
     proc = sp.Popen([hypr + 'Hyprland', '--config', str(config)], env=env, stdout=log, stderr=sp.STDOUT, start_new_session=True)
     for _ in range(100):
         assert proc.poll() is None, 'compositor exited'
-        dirs = list((root / 'hypr').glob('19fb395d*')) if (root / 'hypr').exists() else []
+        dirs = list((root / 'hypr').iterdir()) if (root / 'hypr').exists() else []
         if dirs and (dirs[0] / '.socket.sock').exists():
             sig = dirs[0].name
             break
@@ -71,7 +71,7 @@ try:
     assert not call('configerrors')
     print('LOAD', call('plugin', 'load', plugin), flush=True)
     state = str(root / 'state/persistent-position.state')
-    Path(state).write_text('persistent-position-v2\n' + 'probe'.encode().hex() + '\t' + 'WAYLAND-1'.encode().hex() + '\t20\t30\t320\t180\t1\t-\t-\n')
+    Path(state).write_text('persistent-position-v2\n' + b'probe'.hex() + '\t' + b'WAYLAND-1'.hex() + '\t20\t30\t320\t180\t1\t-\t-\n')
     lua('assert(hl.plugin.persistent_position.import_legacy == nil); assert(hl.plugin.persistent_position.configure(' + json.dumps(state) + ',{{id="probe",matcher="match:class",pattern="^pp-size-probe$"}}))')
     for backend, cmd in [('wayland', 'foot --config=/dev/null --app-id=pp-size-probe --title=probe sleep 600'), ('x11', 'kitty --config=/dev/null -o linux_display_server=x11 --class=pp-size-probe --title=probe sleep 600')]:
         call('dispatch', 'hl.dsp.exec_cmd(' + json.dumps(cmd) + ')')
@@ -122,7 +122,7 @@ try:
     legacy.write_text('error("retired state must not be read")')
     native = root / 'state/hyprland/persistent-position.state'
     native.parent.mkdir(parents=True)
-    native.write_text('persistent-position-v2\n' + 'nemo-main'.encode().hex() + '\t' + 'WAYLAND-1'.encode().hex() + '\t40\t50\t360\t210\t1\t-\t-\n')
+    native.write_text('persistent-position-v2\n' + b'nemo-main'.hex() + '\t' + b'WAYLAND-1'.hex() + '\t40\t50\t360\t210\t1\t-\t-\n')
     repo = str(Path(__file__).resolve().parents[4])
     adapter_expression = 'package.path=' + json.dumps(repo + '/.config/hypr/?.lua;' + repo + '/.config/hypr/?/init.lua;') + '..package.path; package.loaded["plugins.persistent_position"]=nil; local api=hl.plugin.persistent_position; local configure=api.configure; local configured=false; api.configure=function(path,selectors) assert(#selectors==19); local ok,err=configure(path,selectors); configured=ok==true; return ok,err end; local ok,result=pcall(require,"plugins.persistent_position"); api.configure=configure; assert(ok,result); assert(result.native_state and configured)'
     lua(adapter_expression)
