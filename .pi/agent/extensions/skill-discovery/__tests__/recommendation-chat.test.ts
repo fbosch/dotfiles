@@ -59,6 +59,7 @@ describe("recommendation chat entries", () => {
           { name: "æøå", score: 0.9 },
         ],
         scores: new Map(),
+        noMatchScore: 0,
       },
     });
     await handler(event, context);
@@ -88,7 +89,7 @@ describe("recommendation chat entries", () => {
   });
 
   const emptyAttempts: SkillSelectionAttempt[] = [
-    { ok: true, value: { recommendations: [], scores: new Map() } },
+    { ok: true, value: { recommendations: [], scores: new Map(), noMatchScore: 1 } },
     {
       ok: false,
       failure: {

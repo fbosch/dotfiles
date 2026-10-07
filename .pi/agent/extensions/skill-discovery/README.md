@@ -6,6 +6,18 @@ Warm skills remain in Pi's structured prompt. Cold skills stay out of the catalo
 
 `skill_search` ranks names and descriptions through the shared classifier, with BM25 fallback when classification is unavailable. Automatic recommendations use independent relevance scores and add nothing on missing credentials, timeouts, aborts, malformed responses, image prompts, or other classifier failures. Explicit `/skill:name` invocations bypass automatic selection. Neither path sends skill bodies; automatic selection sends the user prompt and bounded candidate metadata to the configured classifier.
 
+## Mid-task experiment
+
+When `classifier.skillSelection.enabled` is true, `turn_end` can make up to two additional classifier attempts per user request. The input check has a separate budget. Mid-task advice is appended to the next normal model context as names and paths, with a chat entry showing the recommendations. It never loads skill bodies, blocks tools, or forces another model turn.
+
+The local gate requires a completed tool-driven turn, observed non-terminating tool results, no queued user message, changed evidence, and eligible skills that have not been read or recommended. Final responses, errors, aborts, unknown tool-completion metadata, and terminating tool batches skip the check. Failed and no-match attempts consume the budget; unchanged evidence is not retried. Session changes cancel pending checks and discard stale responses.
+
+Each bounded snapshot carries the user goal, visible assistant excerpts, unique completed-tool labels and outcomes, and changes since the last attempt. Tool observations support the activity description rather than define future intent. Paths and successful direct or nested `read` calls identify loaded skills locally, but tool arguments, file bodies, raw output, and hidden thinking are not sent. Known credential patterns in visible text are redacted before truncation. Redaction is best-effort, not a guarantee that arbitrary sensitive prose is safe to send to the configured classifier.
+
+The gate is deliberately heuristic. Repeated reads with unchanged visible text add no evidence; new wording or a new tool outcome may trigger a check without a genuine workflow change. Improve this gate if evaluations show wasted checks or missed transitions. The initial version sends no tool-result summaries beyond labels and outcomes, so findings must appear in visible assistant text to inform selection.
+
+Run `/reload` to load the extension changes. `/classifier-status` includes a `midTask` object with attempt count, state, safe reason, and timing for the latest checkpoint. It does not include snapshot text or tool results.
+
 ## Shared classifier gateway routing
 
 Configure provider preferences in global `~/.pi/agent/settings.json`. The first provider is preferred; the gateway makes at most one fallback attempt in the configured order. Each attempt uses its provider's registry credentials and adapter. The first attempt receives roughly half the caller's total deadline when a fallback is configured; fallback work never extends that deadline. Valid `Retry-After` responses cool down that provider while other configured providers remain eligible.

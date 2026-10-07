@@ -113,6 +113,7 @@ function scores(values: Record<string, number>): SkillSelectionResult {
   return {
     recommendations,
     scores: new Map(Object.entries(values)),
+    noMatchScore: recommendations.length === 0 ? 1 : 0,
   };
 }
 

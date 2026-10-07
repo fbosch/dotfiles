@@ -43,6 +43,7 @@ export default function runtimeCheck(pi: ExtensionAPI): void {
           value: {
             recommendations: [{ name: "xstate", score: 0.95 }],
             scores: new Map([["xstate", 0.95]]),
+            noMatchScore: 0,
           },
         };
       },

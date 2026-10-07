@@ -17,6 +17,7 @@ import {
 } from "../../lib/classifier";
 import { fullSkillCatalog } from "../shared/skill-prompt";
 import { disabledSkillNames } from "../skill-tweaks";
+import { createMidTaskSkillSelection } from "./mid-task";
 import {
   configuredSkillSelection,
   DEFAULT_SKILL_SELECTION_CONFIG,
@@ -176,8 +177,10 @@ export function recommendSkillsFromScores(
   candidates: readonly SkillCandidate[],
   scores: ReadonlyMap<string, number>,
   noMatchScore: number,
-  config: Pick<SkillSelectionConfig, "threshold" | "maxRecommendations"> =
-    DEFAULT_SKILL_SELECTION_CONFIG,
+  config: Pick<
+    SkillSelectionConfig,
+    "threshold" | "maxRecommendations"
+  > = DEFAULT_SKILL_SELECTION_CONFIG,
 ): SkillRecommendation[] {
   if (noMatchScore >= config.threshold) return [];
 
@@ -410,6 +413,14 @@ export function createSkillSelectionExtension(
   };
 
   return (pi) => {
+    const midTask = createMidTaskSkillSelection(pi, {
+      select: selectSkillsDetailed,
+      format: formatSkillRecommendations,
+      isExplicitInvocation: isExplicitSkillInvocation,
+      getConfig,
+      now,
+      ...(dependencies.fetch ? { fetch: dependencies.fetch } : {}),
+    });
     pi.registerEntryRenderer<{ skills: string[] }>(
       RECOMMENDATIONS_ENTRY,
       (entry, _options, theme) => {
@@ -429,11 +440,12 @@ export function createSkillSelectionExtension(
     pi.registerCommand("classifier-status", {
       description: "Show the latest advisory skill-selection lifecycle status",
       handler: async (_args, context) => {
-        context.ui.notify(JSON.stringify(status), "info");
+        context.ui.notify(JSON.stringify({ ...status, midTask: midTask.status() }), "info");
       },
     });
 
     pi.on("before_agent_start", async (event: BeforeAgentStartEvent, context) => {
+      midTask.reset();
       const eventCount = status.eventCount + 1;
       const skip = (reason: string, enabled = status.enabled) => {
         status = { enabled, eventCount, state: "skipped", reason, fetchAttempted: false };
@@ -459,6 +471,7 @@ export function createSkillSelectionExtension(
       const candidates = eligibleSkillCandidates(skills, disabledNames);
       if (candidates.length === 0) return skip("no-candidates", true);
       if (candidates.length > MAX_CATALOG_SKILLS) return skip("too-many-candidates", true);
+      const midRequest = midTask.begin(event, context, skills, candidates);
 
       const startedAt = now();
       let fetchAttempted = false;
@@ -473,8 +486,15 @@ export function createSkillSelectionExtension(
         const selectionOptions: SkillSelectionRequestOptions = {
           modelRegistry: context.modelRegistry,
           ...(dependencies.fetch === undefined ? {} : { fetch: dependencies.fetch }),
-          ...(context.signal === undefined ? {} : { signal: context.signal }),
+          ...(midRequest
+            ? {
+                signal: context.signal
+                  ? AbortSignal.any([context.signal, midRequest.controller.signal])
+                  : midRequest.controller.signal,
+              }
+            : {}),
           onFetchAttempt: () => {
+            if (midRequest && !midTask.isCurrent(midRequest)) return;
             fetchAttempted = true;
             status = { ...status, fetchAttempted: true };
           },
@@ -485,6 +505,7 @@ export function createSkillSelectionExtension(
           config,
           selectionOptions,
         );
+        if (midRequest && !midTask.isCurrent(midRequest)) return;
         const elapsedMs = Math.max(0, now() - startedAt);
         if (context.signal?.aborted) {
           status = {
@@ -531,6 +552,7 @@ export function createSkillSelectionExtension(
           fetchAttempted,
         };
         if (result.recommendations.length === 0) return;
+        midTask.recommend(result.recommendations.map(({ name }) => name));
         event.systemPromptOptions.sections[SKILL_RECOMMENDATIONS_SECTION] =
           formatSkillRecommendations(result.recommendations, skills);
         // Custom entries render in chat but are excluded from model context by Pi.
@@ -538,6 +560,7 @@ export function createSkillSelectionExtension(
           skills: result.recommendations.map(({ name }) => name),
         });
       } catch {
+        if (midRequest && !midTask.isCurrent(midRequest)) return;
         status = {
           enabled: true,
           eventCount,
