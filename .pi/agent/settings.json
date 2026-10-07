@@ -66,6 +66,13 @@
     "model": "openai-codex/gpt-6-luna",
     "thinkingLevel": "low"
   },
+  "tasks": {
+    "icons": {
+      "pending": "□",
+      "in_progress": "■",
+      "completed": "✓"
+    }
+  },
   "charts": {
     "fontFamily": "JetBrainsMono NF",
     "fontSize": 14
@@ -130,7 +137,7 @@
     }
   },
   "packages": [
-    "npm:pi-hashline-edit-pro@6.1.2",
+    "npm:pi-hashline-edit-pro@6.2.0",
     "npm:pi-codex-goal@latest",
     "npm:pi-context-view@0.6.0",
     "npm:@ff-labs/pi-fff@0.11.0",

@@ -2,9 +2,11 @@ import { describe, expect, test } from "bun:test";
 import type { AssistantMessage, ToolResultMessage } from "@earendil-works/pi-ai";
 import {
   type BeforeAgentStartEvent,
+  type BeforeAgentStartEventResult,
   createEventBus,
   type ExtensionAPI,
   type ExtensionContext,
+  SessionManager,
   type Skill,
   type TurnEndEvent,
   type TurnEndEventResult,
@@ -42,6 +44,7 @@ const recommend = (name: string): SkillSelectionAttempt => ({
 
 function harness(
   select?: NonNullable<Parameters<typeof createSkillSelectionExtension>[0]>["selectSkillsDetailed"],
+  sessionManager?: SessionManager,
 ) {
   const handlers = new Map<string, (event: unknown, context: ExtensionContext) => unknown>();
   const requests: { prompt: string; names: string[]; signal?: AbortSignal }[] = [];
@@ -49,7 +52,7 @@ function harness(
   const api = {
     events: createEventBus(),
     registerEntryRenderer: () => {},
-    appendEntry: () => {},
+    appendEntry: (type: string, data: unknown) => sessionManager?.appendCustomEntry(type, data),
     registerCommand: (name: string, definition: { handler: typeof notify }) => {
       if (name === "classifier-status") notify = definition.handler;
     },
@@ -63,7 +66,10 @@ function harness(
     signal: controller.signal,
     modelRegistry: registry,
     isProjectTrusted: () => true,
-    sessionManager: { getBranch: () => [] },
+    sessionManager: sessionManager ?? {
+      getBranch: () => [],
+      buildSessionProjection: () => ({ entries: [], messages: [], thinkingLevel: "", model: null }),
+    },
   } as unknown as ExtensionContext;
   createSkillSelectionExtension({
     getConfig: () => config,
@@ -90,7 +96,13 @@ function harness(
       systemPromptOptions: { sections: {}, skills },
       ...options,
     } as unknown as BeforeAgentStartEvent;
-    await emit("before_agent_start", event);
+    sessionManager?.appendMessage({ role: "user", content: goal, timestamp: 1 });
+    const result = (await emit("before_agent_start", event)) as
+      | BeforeAgentStartEventResult
+      | undefined;
+    if (result?.message) {
+      sessionManager?.appendMessage({ role: "custom", ...result.message, timestamp: 2 });
+    }
     await emit("message_start", {
       type: "message_start",
       message: { role: "user", content: goal },
@@ -199,6 +211,8 @@ describe("turn-end skill suggestions", () => {
     expect(snapshot.userGoal).toBe("Fix refresh; [redacted]");
     expect(snapshot.latestVisibleAssistantText).toBe("Investigate signals; [redacted]");
     expect(snapshot.completedToolObservations).toEqual(["Completed read: ok"]);
+    expect(snapshot.purpose).toContain("Require concrete evidence");
+    expect(snapshot.purpose).toContain("not broad topic overlap or hypothetical usefulness");
     expect(snapshot.deltaSinceLastAttempt.visibleAssistantExcerpts).toEqual([
       "Investigate signals; [redacted]",
     ]);
@@ -213,6 +227,49 @@ describe("turn-end skill suggestions", () => {
       expect(request?.prompt).not.toContain(excluded);
     }
     expect(request?.prompt.length ?? 0).toBeLessThanOrEqual(MAX_MID_TASK_PROMPT_CHARS);
+  });
+
+  test("deduplicates input and mid-task advice across later requests and reloads", async () => {
+    const manager = SessionManager.inMemory("/tmp");
+    let count = 0;
+    const h = harness(
+      async () => (++count === 1 ? recommend("gjs") : recommend("writing-clearly")),
+      manager,
+    );
+    await h.start();
+    await h.tool("call");
+    const result = await h.end();
+    expect(h.requests[1]?.names).not.toContain("gjs");
+    for (const entry of result?.entries ?? []) {
+      if (entry.type === "custom") manager.appendCustomEntry(entry.customType, entry.data);
+      if (entry.type === "custom_message") {
+        manager.appendCustomMessageEntry(
+          entry.customType,
+          entry.content,
+          entry.display,
+          entry.details,
+        );
+      }
+    }
+    const before = manager.buildSessionProjection().messages;
+    const reloaded = harness(async () => recommend("writing-clearly"), manager);
+    await reloaded.start("Continue tracing");
+    expect(reloaded.requests[0]?.names).toEqual(["diagnosing-bugs"]);
+    expect(manager.buildSessionProjection().messages.slice(0, before.length)).toEqual(before);
+    expect(manager.getBranch().filter((entry) => entry.type === "context_edit")).toHaveLength(0);
+  });
+
+  test("skips mid-task classification when no complete advice record can fit", async () => {
+    const manager = SessionManager.inMemory("/tmp");
+    const h = harness(async () => noMatch, manager);
+    await h.start();
+    manager.appendCustomMessageEntry("skill-recommendation-advice", "x".repeat(5_950), false, {
+      skills: [],
+    });
+    await h.tool("call");
+    expect(await h.end()).toBeUndefined();
+    expect(h.requests).toHaveLength(1);
+    expect((await h.status()).midTask.reason).toBe("advisory-budget-exhausted");
   });
 
   test("adds fresh advice to next context, preserves previous drafts and never requests continuation", async () => {
@@ -235,6 +292,7 @@ describe("turn-end skill suggestions", () => {
     expect(advice.content).toContain("/skills/gjs/SKILL.md");
     expect(advice.display).toBe(false);
     expect(advice.content).toContain("advisory recommendations");
+    expect(advice.customType).toBe("skill-recommendation-advice");
     await h.tool("call2");
     await h.end(h.turn("Now inspect refresh state", "call2"));
     expect(h.requests[2]?.names).not.toContain("gjs");

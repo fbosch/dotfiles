@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import {
   type BeforeAgentStartEvent,
+  type BeforeAgentStartEventResult,
   createEventBus,
   type EntryRenderer,
   type ExtensionAPI,
@@ -13,7 +14,15 @@ type RecommendationData = { skills: string[] };
 
 function harness(attempt: SkillSelectionAttempt) {
   const entries: { customType: string; data: unknown }[] = [];
-  let handler: ((event: BeforeAgentStartEvent, context: ExtensionContext) => unknown) | undefined;
+  let handler:
+    | ((
+        event: BeforeAgentStartEvent,
+        context: ExtensionContext,
+      ) =>
+        | Promise<BeforeAgentStartEventResult | undefined>
+        | BeforeAgentStartEventResult
+        | undefined)
+    | undefined;
   let renderer: EntryRenderer<RecommendationData> | undefined;
   createSkillSelectionExtension({
     getConfig: () => ({ enabled: true, threshold: 0.72, timeoutMs: 2400, maxRecommendations: 3 }),
@@ -45,7 +54,14 @@ function harness(attempt: SkillSelectionAttempt) {
       })),
     },
   } as unknown as BeforeAgentStartEvent;
-  const context = { cwd: "/tmp", hasUI: true } as ExtensionContext;
+  const context = {
+    cwd: "/tmp",
+    hasUI: true,
+    sessionManager: {
+      getBranch: () => [],
+      buildSessionProjection: () => ({ entries: [], messages: [], thinkingLevel: "", model: null }),
+    },
+  } as unknown as ExtensionContext;
   return { entries, handler, renderer, event, context };
 }
 
@@ -62,14 +78,19 @@ describe("recommendation chat entries", () => {
         noMatchScore: 0,
       },
     });
-    await handler(event, context);
+    const result = await handler(event, context);
+    expect(result).toMatchObject({
+      message: {
+        customType: "skill-recommendation-advice",
+        display: false,
+        content: expect.stringContaining('description="Workflow"'),
+      },
+    });
     expect(entries).toEqual([
       { customType: "skill-recommendations", data: { skills: ["bun", "æøå"] } },
     ]);
     expect(event.systemPrompt).toBe("Original instructions");
-    expect(event.systemPromptOptions.sections.skill_recommendations).toContain(
-      'name="bun" location="/skills/bun/SKILL.md"',
-    );
+    expect(event.systemPromptOptions.sections).toEqual({});
     const component = renderer(
       {
         type: "custom",
@@ -109,7 +130,7 @@ describe("recommendation chat entries", () => {
       const { entries, handler, event, context } = harness(attempt);
       await handler(event, context);
       expect(entries).toEqual([]);
-      expect(event.systemPromptOptions.sections.skill_recommendations).toBeUndefined();
+      expect(event.systemPromptOptions.sections).toEqual({});
     },
   );
 });

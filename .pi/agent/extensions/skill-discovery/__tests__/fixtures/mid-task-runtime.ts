@@ -97,8 +97,7 @@ export default function (pi: ExtensionAPI): void {
         sawAdvice,
         adviceEntries: branch.filter(
           (entry) =>
-            entry.type === "custom_message" &&
-            entry.customType === "mid-task-skill-recommendations",
+            entry.type === "custom_message" && entry.customType === "skill-recommendation-advice",
         ).length,
         chatEntries: branch.filter(
           (entry) => entry.type === "custom" && entry.customType === "skill-recommendations",

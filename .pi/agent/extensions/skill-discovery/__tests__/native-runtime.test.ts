@@ -17,7 +17,7 @@ test.skipIf(pi === null)(
         mkdirSync(path, { recursive: true });
         writeFileSync(
           join(path, "SKILL.md"),
-          `---\nname: ${name}\ndescription: ${name} specialized workflow\n---\nInstructions.\n`,
+          `---\nname: ${name}\ndescription: ${name} specialized workflow\n---\nSKILL_BODY_SENTINEL: Instructions.\n`,
         );
       };
       addSkill(agentDir, "global-warm");
@@ -82,7 +82,8 @@ test.skipIf(pi === null)(
       expect(report.classifierCandidates).not.toContain("explicit-only");
       expect(report.recommendations).toContain('name="xstate"');
       expect(report.recommendations).toContain("/skills/xstate/SKILL.md");
-      expect(report.recommendations).not.toContain("specialized workflow");
+      expect(report.recommendations).toContain('description="xstate specialized workflow"');
+      expect(report.recommendations).not.toContain("SKILL_BODY_SENTINEL");
       expect(report.structuredRecommendation).toBe(true);
       expect(report.recommendationEntries).toEqual([{ skills: ["xstate"] }]);
       expect(report.userOnlyEntryInModelContext).toBe(false);
