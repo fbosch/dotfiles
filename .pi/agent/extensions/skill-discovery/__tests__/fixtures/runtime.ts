@@ -35,7 +35,13 @@ export default function runtimeCheck(pi: ExtensionAPI): void {
       },
     },
     {
-      getConfig: () => ({ enabled: true, threshold: 0.72, timeoutMs: 2400, maxRecommendations: 3 }),
+      getConfig: () => ({
+        enabled: true,
+        midTaskEnabled: true,
+        threshold: 0.72,
+        timeoutMs: 2400,
+        maxRecommendations: 3,
+      }),
       selectSkillsDetailed: async (_prompt, candidates) => {
         classifierCandidates = candidates.map((skill) => skill.name);
         return {

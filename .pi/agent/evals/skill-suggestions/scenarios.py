@@ -27,7 +27,7 @@ def scenario(case):
         if "midtask" in case:
             files["status.md"] = "Queue state: accepted, work remains open. The outgoing shift must hand off to the next owner. Read queue.md and ticket.md to prepare the handoff.\n"
         return {"files": files, "accepted": ["handoff-brief"], "required_groups": [["handoff-brief"]],
-                "outcome_patterns": ["Mira", r"(?i)validate receipt", r"(?i)delivery log", r"(?i)not complete|open|pending"],
+                "outcome_patterns": ["Mira", r"(?i)validate (?:the )?receipt|receipt validation", r"(?i)delivery log", r"(?i)not complete|open|pending"],
                 "application_patterns": [r"(?i)Confirmed:", r"(?i)Open:", r"(?i)Next owner:"], "read_order": ["queue.md", "ticket.md"]}
     if case.startswith("restore-positive") or case == "restore-midtask-cold":
         passing = "variant" in case

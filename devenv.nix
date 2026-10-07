@@ -98,6 +98,7 @@ in
     };
 
     "test:caliper-skill-eval".exec = "python3 -m unittest discover -s tests -p 'caliper*test.py'";
+    "test:skill-suggestions-eval".exec = "python3 -m unittest discover -s .pi/agent/evals/skill-suggestions/__tests__ -p 'test_eval.py'";
     "test:writing-clearly".exec = ''
       set -euo pipefail
       python3 -m unittest discover -s tests -p 'test_writing_clearly_prose.py'
@@ -478,6 +479,7 @@ in
       after = [
         "test:shellcheck"
         "test:caliper-skill-eval"
+        "test:skill-suggestions-eval"
         "test:stow"
         "test:fish"
         "test:git-pull-system-repos"

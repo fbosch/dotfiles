@@ -18,7 +18,13 @@ Advice stays append-only between compactions to preserve existing prompt prefixe
 
 ## Mid-task experiment
 
-When `classifier.skillSelection.enabled` is true, `turn_end` can make up to two additional classifier attempts per user request. The input check has a separate attempt budget. Both append advisory messages to model context, with separate chat entries showing skill names. Neither changes the system prompt, edits earlier advice, loads skill bodies, blocks tools, or forces another model turn.
+When `classifier.skillSelection.enabled` and `classifier.skillSelection.midTaskEnabled` are true, `turn_end` can make up to two additional classifier attempts per user request. The input check has a separate attempt budget. Both append advisory messages to model context, with separate chat entries showing skill names. Neither changes the system prompt, edits earlier advice, loads skill bodies, blocks tools, or forces another model turn.
+
+`midTaskEnabled` defaults to true in the extension. Repository settings disable it
+to keep input-time suggestions and `skill_search` without mid-task classifier
+calls. The [input-only ablation](../../evals/skill-suggestions/INPUT-ONLY-RESULTS.md)
+found little demonstrated benefit from the extra checks in its synthetic tasks.
+The independent switch remains available for future evaluations.
 
 The local gate requires a completed tool-driven turn, observed non-terminating tool results, no queued user message, changed evidence, and eligible skills that have not been read or recommended. Final responses, errors, aborts, unknown tool-completion metadata, and terminating tool batches skip the check. Failed and no-match attempts consume the budget; unchanged evidence is not retried. Session changes cancel pending checks and discard stale responses.
 
@@ -52,6 +58,7 @@ Automatic recommendations are enabled in this repository's global settings, but 
   "classifier": {
     "skillSelection": {
       "enabled": true,
+      "midTaskEnabled": false,
       "threshold": 0.72,
       "timeoutMs": 2400,
       "maxRecommendations": 3
@@ -59,6 +66,10 @@ Automatic recommendations are enabled in this repository's global settings, but 
   }
 }
 ```
+
+Automatic selection deadlines accept integer `timeoutMs` values from 1 to 5000.
+The default and repository setting remain 2400 ms. A longer deadline is an
+explicit opt-in for slower classifier responses, not an extra retry budget.
 
 The offline benchmark is opt-in and uses only frozen synthetic requests:
 

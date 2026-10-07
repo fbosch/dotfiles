@@ -19,6 +19,7 @@ const contents = {
   "large.ts": `export const large = 5;\n// BULK_CONTENT_OMIT ${"x".repeat(80_000)}\n`,
   "manifest.json": '{"files":["a.ts","b.ts"]}\n',
   "config.json": '{"enabled":false,"mode":"slow","keep":"untouched"}\n',
+  "config-large.json": `${JSON.stringify({ enabled: false, mode: "slow", padding: "x".repeat(80_000) })}\n`,
 };
 const parallel =
   'const r = await Promise.allSettled([tools.read({path:"a.ts"}), tools.read({path:"b.ts"})]); text(r.map(x => x.status === "fulfilled" ? x.value.text : String(x.reason)));';
@@ -54,10 +55,21 @@ const cases = [
       'const r = await Promise.allSettled(["large.ts","small.ts"].map(path => tools.read({path}))); text(r.map(x => ({path:x.value.path,line:x.value.lines[0]})));',
     answer: "large.ts aaaa: large = 5; small.ts aaaa: small = 4",
   },
+  {
+    name: "large-edit",
+    script:
+      'const r = await tools.read({path:"config-large.json"}); const c=JSON.parse(r.lines[0].text); c.enabled=true; const acknowledgement=JSON.parse(await tools.write({path:"config-large.json",content:JSON.stringify(c)+"\\n"})); if(!acknowledgement.ok)throw new Error("Write failed"); const back=JSON.parse((await tools.read({path:"config-large.json"})).lines[0].text); if(JSON.stringify(back)!==JSON.stringify(c))throw new Error("Read-back mismatch"); text({path:"config-large.json",enabled:back.enabled,verified:true});',
+    answer: "config-large.json: enabled = true; preserved mode slow and padding; verified.",
+  },
   { name: "single", answer: "alpha = 1" },
 ];
 
-async function executeCase(name: string, script: string | undefined, answer: string) {
+async function executeCase(
+  name: string,
+  script: string | undefined,
+  answer: string,
+  freezePromise = false,
+) {
   const directory = mkdtempSync(join(tmpdir(), "codemode-fixture-test-"));
   const trace = join(directory, "trace.jsonl");
   const previous = {
@@ -106,11 +118,17 @@ async function executeCase(name: string, script: string | undefined, answer: str
       const tool = tools.get(name);
       if (!tool) throw new Error("Missing fixture tool");
       const id = `nested/${nextId++}`;
-      await emit("tool_call", { toolName: name, toolCallId: id, input: args });
+      await emit("tool_call", {
+        toolName: name,
+        toolCallId: id,
+        parentToolCallId: "outer",
+        input: args,
+      });
       const result = await tool.execute(id, args, undefined, undefined, ctx);
       await emit("tool_result", {
         toolName: name,
         toolCallId: id,
+        parentToolCallId: "outer",
         input: args,
         ...result,
         isError: false,
@@ -127,6 +145,8 @@ async function executeCase(name: string, script: string | undefined, answer: str
     if (!tool) throw new Error("Missing native codemode tool");
     const input = script === undefined ? { path: "a.ts" } : { code: script };
     await emit("tool_call", { toolName: name, toolCallId: "outer", input });
+    if (freezePromise && typeof input.code === "string")
+      input.code = `Object.freeze(globalThis.Promise);\n${input.code}`;
     const result = await tool.execute("outer", input, undefined, undefined, ctx);
     await emit("tool_result", {
       toolName: name,
@@ -207,4 +227,47 @@ test("printing duplicate bulk results fails output grading", async () => {
   );
   expect(result.status).not.toBe(0);
   expect(result.error).toContain("Bulk output was printed or spilled");
+});
+
+test("batch instrumentation works with the native frozen Promise constructor", async () => {
+  const result = await executeCase("independent", parallel, cases[0].answer, true);
+  expect(result.error).toBe("");
+  expect(result.status).toBe(0);
+});
+
+test("large edit rejects full intermediate reads and successful write acknowledgements", async () => {
+  const scenario = cases[6];
+  if (!scenario.script) throw new Error("Missing large-edit script");
+  for (const output of ["text(r);", "text(acknowledgement);"]) {
+    const script = scenario.script.replace("text({path:", `${output} text({path:`);
+    const result = await executeCase(scenario.name, script, scenario.answer, true);
+    expect(result.status).not.toBe(0);
+    expect(result.error).toContain("Large edit printed intermediate or full successful output");
+  }
+});
+
+test("large edit rejects changes to unrelated data", async () => {
+  const scenario = cases[6];
+  if (!scenario.script) throw new Error("Missing large-edit script");
+  const result = await executeCase(
+    scenario.name,
+    scenario.script.replace("c.enabled=true;", 'c.padding=""; c.enabled=true;'),
+    scenario.answer,
+    true,
+  );
+  expect(result.status).not.toBe(0);
+  expect(result.error).toContain("Large edit changed unrelated fields");
+});
+
+test("model-visible accounting excludes successful nested results", async () => {
+  const scenario = cases[6];
+  const result = await executeCase(scenario.name, scenario.script, scenario.answer, true);
+  const events: Array<{ kind: string; tool?: string; text?: string }> = result.events
+    .trim()
+    .split("\n")
+    .map((line) => JSON.parse(line));
+  const visible = events.filter((event) => event.kind === "model-output");
+  expect(visible).toHaveLength(1);
+  expect(visible[0].tool).toBe("codemode");
+  expect(visible[0].text?.length).toBeLessThan(1000);
 });

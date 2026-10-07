@@ -1,7 +1,7 @@
 # Codemode batching eval
 
-Seven Caliper cases compare current codemode guidance with the reviewed rule in
-`candidate.md`. The production instruction is not changed by the runner.
+Eight Caliper cases compare codemode instruction snapshots, including a large
+read-and-edit workflow. The runner does not change production instructions.
 
 ## Run
 
@@ -27,9 +27,36 @@ relocating production instructions cannot change the control arm. The candidate
 matches `.pi/agent/instructions/codemode.md`; a regression test checks equality
 and conditional loading. This is not a full personal-extension-stack eval.
 
-Require all 21 candidate attempts to pass before adopting the rule. Report
+Require all 24 candidate attempts to pass before adopting the rule. Report
 infrastructure errors separately. Caliper returning exit code zero does not
 mean every task passed; inspect the per-attempt outcomes and verdicts.
+
+## Compare the output contract
+
+`output-contract-baseline.md` preserves the pre-change instruction text captured
+before the output-contract edit. Override only the candidate snapshot when
+comparing it with the current instructions, without editing production files:
+
+```sh
+CODEMODE_EVAL_CANDIDATE="$PWD/.pi/agent/evals/codemode/output-contract-baseline.md" \
+  scripts/caliper-skill-eval.sh --codemode codemode configured low 3
+scripts/caliper-skill-eval.sh --codemode codemode configured low 3
+```
+
+Check instruction hashes, identical fixture/grader hashes, model and thinking
+settings, and per-case correctness before comparing output or token totals.
+Count `model-output.text` across all top-level results, including direct calls.
+Nested result text stays inside the script and must not be counted again.
+`assistant.usage` records provider usage for each response. Report failed attempts
+separately; lower output from skipped work does not establish an improvement.
+
+The large-edit case reads an 80,000-character configuration payload, edits one
+field, consumes a large successful write acknowledgement, and verifies the file
+in one script. Its grader rejects leaked intermediates and unrelated changes.
+Batch instrumentation uses a local Promise subclass because the native sandbox
+freezes the global constructor. Earlier smoke runs with empty batch records did
+not establish instruction compliance. Historical seven-case comparisons below
+retain their original counts and results.
 
 ## Checks and evidence
 
@@ -120,3 +147,32 @@ Compact trace evidence is in `.caliper/codemode/run.qO1GiE` and
 `.caliper/codemode/run.GwIrSY`. The runs record the same fixture/grader hashes
 as the long-rule comparison. Earlier interrupted smoke/control runs in
 `run.0cYAfV` and `run.4NfsEL` were incomplete and are excluded from comparisons.
+
+## Output-contract retry
+
+The 2026-10-07 retry used `openai-codex/gpt-6-luna-fast` at `low`, with three
+attempts per case. Each comparison verified matching model, thinking level,
+fixture, grader, launcher, and spec hashes. These were isolated fixture runs.
+
+| Scope | Before passes | After passes | Before model tokens | After model tokens |
+| --- | ---: | ---: | ---: | ---: |
+| Eight-case suite | 18/24 | 20/24 | 100,608 | 72,625 |
+| Clarified large-edit case | 1/3 | 3/3 | 7,244 | 9,016 |
+
+Tokens include input, output, and cache reads across all attempts, not peak
+context. Full-suite model-visible tool output fell from 204,266 to 4,033
+characters, mostly by avoiding two bulk dumps in failed baseline attempts.
+Both arms failed the original large-edit prompt because they parsed rendered
+anchor-prefixed text as raw JSON. Those failures remain recorded.
+
+The targeted rerun clarified the read and write encodings identically for both
+arms. All six edits preserved the unrelated data and completed read-back
+verification. Two baseline answers omitted the path and failed reporting checks.
+Both versions already hid the large intermediate results. Tool output was
+321 characters before and 407 after; model tokens increased 24.5%. This does
+not establish cheaper successful read-and-edit execution.
+
+The sample is small and the arms were not interleaved. The 24/24 adoption gate
+was not met. Full evidence and per-attempt outcomes are in
+`.caliper/codemode/output-contract-retry/measurement.json`; the baseline and
+current instruction snapshots are retained with each run.

@@ -6,9 +6,11 @@ import { isRecord } from "../shared/is-record";
 const DEFAULT_THRESHOLD = 0.72;
 const DEFAULT_MAX_RECOMMENDATIONS = 3;
 const MAX_RECOMMENDATIONS = 5;
+export const MAX_SKILL_SELECTION_TIMEOUT_MS = 5_000;
 
 export interface SkillSelectionConfig {
   readonly enabled: boolean;
+  readonly midTaskEnabled: boolean;
   readonly threshold: number;
   readonly timeoutMs: number;
   readonly maxRecommendations: number;
@@ -16,6 +18,7 @@ export interface SkillSelectionConfig {
 
 export const DEFAULT_SKILL_SELECTION_CONFIG: SkillSelectionConfig = {
   enabled: false,
+  midTaskEnabled: true,
   // Experimental starting point, not a calibrated production threshold.
   threshold: DEFAULT_THRESHOLD,
   timeoutMs: DEFAULT_CLASSIFIER_TIMEOUT_MS,
@@ -46,17 +49,22 @@ function readConfigSection(
   if (section === undefined) return current;
   if (section === null) return invalidConfig();
   const unknownFields = Object.keys(section).filter(
-    (field) => !["enabled", "threshold", "timeoutMs", "maxRecommendations"].includes(field),
+    (field) =>
+      !["enabled", "midTaskEnabled", "threshold", "timeoutMs", "maxRecommendations"].includes(
+        field,
+      ),
   );
   if (unknownFields.length > 0) return invalidConfig();
 
   const enabled = section.enabled ?? current.enabled;
+  const midTaskEnabled = section.midTaskEnabled ?? current.midTaskEnabled;
   const threshold = section.threshold ?? current.threshold;
   const timeoutMs = section.timeoutMs ?? current.timeoutMs;
   const maxRecommendations = section.maxRecommendations ?? current.maxRecommendations;
 
   if (
     typeof enabled !== "boolean" ||
+    typeof midTaskEnabled !== "boolean" ||
     typeof threshold !== "number" ||
     Number.isFinite(threshold) === false ||
     threshold < 0 ||
@@ -64,7 +72,7 @@ function readConfigSection(
     typeof timeoutMs !== "number" ||
     Number.isInteger(timeoutMs) === false ||
     timeoutMs < 1 ||
-    timeoutMs > DEFAULT_CLASSIFIER_TIMEOUT_MS ||
+    timeoutMs > MAX_SKILL_SELECTION_TIMEOUT_MS ||
     typeof maxRecommendations !== "number" ||
     Number.isInteger(maxRecommendations) === false ||
     maxRecommendations < 1 ||
@@ -73,7 +81,7 @@ function readConfigSection(
     return invalidConfig();
   }
 
-  return { enabled, threshold, timeoutMs, maxRecommendations };
+  return { enabled, midTaskEnabled, threshold, timeoutMs, maxRecommendations };
 }
 
 export function resolveSkillSelectionConfig(

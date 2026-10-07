@@ -29,7 +29,7 @@ def validate(events: list[dict], expected: dict) -> None:
     artifact = next((e for e in reversed(events) if e["kind"] == "artifacts"), None)
     assert artifact, "Missing fixture artifact snapshot"
     for path, content in expected["contents"].items():
-        if case != "mutations" or path != "config.json":
+        if (case, path) not in {("mutations", "config.json"), ("large-edit", "config-large.json")}:
             assert artifact["files"][path] == content, f"Unauthorized file change: {path}"
     def values(pairs):
         for name, value in pairs:
@@ -51,6 +51,22 @@ def validate(events: list[dict], expected: dict) -> None:
         assert json.loads(artifact["files"]["config.json"]) == {"enabled": True, "mode": "fast", "keep": "untouched"}
         assert all(not any(n > 1 for n in e.get("batches", [])) for e in results), "Conflicting mutations were batched"
         assert all(value in final.lower() for value in ["true", "fast", "untouched"]), "Final configuration not reported"
+        return
+    if case == "large-edit":
+        assert len(scripts) == len(results) == 1, "Large edit must complete in one codemode script"
+        assert len(starts) == 3 and [e["tool"] for e in starts] == ["read", "write", "read"], "Expected read, write, and read-back"
+        assert all(e.get("path") == "config-large.json" and e.get("scriptId") == scripts[0]["id"] for e in starts), "Large edit used direct or unrelated calls"
+        for earlier, later in zip(starts, starts[1:]):
+            end = next(e for e in ends if e["id"] == earlier["id"])
+            assert events.index(end) < events.index(later), "Dependent edit operations overlapped"
+        wanted = json.loads(expected["contents"]["config-large.json"])
+        wanted["enabled"] = True
+        assert json.loads(artifact["files"]["config-large.json"]) == wanted, "Large edit changed unrelated fields"
+        visible = [e for e in events if e["kind"] == "model-output"]
+        assert len(visible) == 1 and visible[0]["tool"] == "codemode", "Incorrect model-visible result accounting"
+        output = visible[0]["text"] + final
+        assert len(output) < 4000 and "Full output:" not in output, "Large edit printed intermediate or full successful output"
+        assert "config-large.json" in final and "true" in final.lower() and "verif" in final.lower(), "Changed value or verification not reported"
         return
     target = ["check_one", "check_two"] if case == "tool-error" else (["large.ts", "small.ts"] if case == "large" else ["a.ts", "b.ts", "c.ts"] if case == "rejected" else ["a.ts", "b.ts"])
     selected = [e for e in starts if (e["tool"] if case == "tool-error" else e.get("path")) in target]

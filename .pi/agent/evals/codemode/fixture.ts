@@ -6,16 +6,18 @@ import { Type } from "typebox";
 export function instrumentScript(source: string): string {
   const options = /^\/\/ @options:[^\n]*\n/u.exec(source)?.[0] ?? "";
   const body = source.slice(options.length);
-  // Measure executed and awaited batches inside the isolated VM, not a textual mention.
-  return `${options}const __caliperOriginal = Promise.allSettled;
+  // The native sandbox freezes global Promise; shadow it locally without mutating it.
+  return `${options}const __caliperOriginal = globalThis.Promise;
 const __caliperCompleted = [];
-Promise.allSettled = function(values) {
-  const items = Array.from(values);
-  return __caliperOriginal.call(this, items).then(results => {
-    __caliperCompleted.push(items.length);
-    return results;
-  });
-};
+class Promise extends __caliperOriginal {
+  static allSettled(values) {
+    const items = Array.from(values);
+    return super.allSettled(items).then(results => {
+      __caliperCompleted.push(items.length);
+      return results;
+    });
+  }
+}
 try {\n${body}\n} finally { store("__caliper_batches", __caliperCompleted); }`;
 }
 
@@ -48,6 +50,7 @@ export default function codemodeFixture(pi: ExtensionAPI): void {
     "c.ts",
     "large.ts",
     "small.ts",
+    "config-large.json",
     "manifest.json",
     "config.json",
   ]);
@@ -116,29 +119,36 @@ export default function codemodeFixture(pi: ExtensionAPI): void {
     name: "write",
     label: "Write fixture file",
     description:
-      "Write the complete content of config.json, only when the user requests a mutation.",
+      "Write authorized fixture configuration. Returns 'Written' for config.json, or a JSON acknowledgement {ok,path,content} for config-large.json.",
     parameters: Type.Object({ path: Type.String(), content: Type.String() }),
     async execute(id, params) {
       const path = fixturePath(params.path);
-      if (scenario !== "mutations" || basename(path) !== "config.json")
-        throw new Error("Mutation not authorized in this case");
+      const name = basename(path);
+      const authorized =
+        (scenario === "mutations" && name === "config.json") ||
+        (scenario === "large-edit" && name === "config-large.json");
+      if (!authorized) throw new Error("Mutation not authorized in this case");
       record("start", {
         id,
         tool: "write",
-        path: "config.json",
+        path: name,
         content: params.content,
         scriptId,
       });
       try {
         JSON.parse(params.content);
         writeFileSync(path, params.content);
-        record("end", { id, tool: "write", path: "config.json", success: true });
-        return { content: [{ type: "text", text: "Written" }], details: undefined };
+        record("end", { id, tool: "write", path: name, success: true });
+        const acknowledgement =
+          scenario === "large-edit"
+            ? JSON.stringify({ ok: true, path: name, content: params.content })
+            : "Written";
+        return { content: [{ type: "text", text: acknowledgement }], details: undefined };
       } catch (error) {
         record("end", {
           id,
           tool: "write",
-          path: "config.json",
+          path: name,
           success: false,
           error: String(error),
         });
@@ -211,6 +221,16 @@ export default function codemodeFixture(pi: ExtensionAPI): void {
     return undefined;
   });
   pi.on("tool_result", (event, ctx) => {
+    if (!event.parentToolCallId)
+      record("model-output", {
+        id: event.toolCallId,
+        tool: event.toolName,
+        error: event.isError,
+        text: event.content
+          .filter((block) => block.type === "text")
+          .map((block) => block.text)
+          .join("\n"),
+      });
     if (event.toolName !== "codemode") return;
     const store = [...ctx.sessionManager.getBranch()]
       .reverse()
@@ -232,6 +252,7 @@ export default function codemodeFixture(pi: ExtensionAPI): void {
   pi.on("message_end", (event) => {
     if (event.message.role !== "assistant") return;
     record("assistant", {
+      usage: event.message.usage,
       stopReason: event.message.stopReason,
       hasToolCalls: event.message.content.some((block) => block.type === "toolCall"),
       text: event.message.content

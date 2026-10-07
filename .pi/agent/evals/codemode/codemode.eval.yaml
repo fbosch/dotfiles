@@ -45,6 +45,16 @@ tasks:
       Read `large.ts` and `small.ts`. Report their exported constant
       declarations with paths and anchors.
     assert: *check
+  - name: Large read, edit, and verification in one script
+    prompt: |
+      [[codemode-case:large-edit]]
+      In one codemode script, inspect `config-large.json`, set `enabled` to true,
+      and preserve all other fields. The read tool's `text` has anchor prefixes;
+      parse the JSON from `lines.map(row => row.text).join("\n")` instead.
+      The write acknowledgement is a JSON string with an `ok` flag; parse and
+      check it. Read the file back to verify the change, then report the changed
+      value and whether verification succeeded.
+    assert: *check
   - name: Single trivial operation
     prompt: |
       [[codemode-case:single]]

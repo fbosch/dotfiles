@@ -42,6 +42,8 @@ def evaluate(events, expected):
             errors.append('baseline received automatic advice')
     elif not any(e['phase'] == 'input' and e.get('validResponse') for e in automatic):
         errors.append('treatment input classifier unavailable')
+    if expected['arm'] == 'input-only' and any(e['phase'] != 'input' for e in automatic):
+        errors.append('input-only arm received mid-task classification')
     main_tokens = sum(e.get('usage', {}).get('totalTokens', 0) for e in events if e['kind'] == 'assistant')
     classifiers = [e for e in events if e['kind'] == 'classifier']
     classifier_tokens = sum(e.get('usage', {}).get('totalTokens', 0) for e in classifiers)

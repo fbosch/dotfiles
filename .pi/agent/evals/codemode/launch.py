@@ -13,7 +13,7 @@ import sys
 import uuid
 from pathlib import Path
 
-CASES = {"independent", "dependent", "rejected", "tool-error", "mutations", "large", "single"}
+CASES = {"independent", "dependent", "rejected", "tool-error", "mutations", "large", "large-edit", "single"}
 
 
 def prepare(repo: Path, run_root: Path, evidence: Path, baseline: bool, model: str, thinking: str) -> None:
@@ -35,13 +35,17 @@ def prepare(repo: Path, run_root: Path, evidence: Path, baseline: bool, model: s
     guidance = (source / "baseline.md").read_text().rstrip("\n")
     if not guidance.strip():
         raise ValueError("Baseline codemode guidance is empty")
-    candidate = (source / "candidate.md").read_text()
+    candidate_path = Path(os.environ.get("CODEMODE_EVAL_CANDIDATE", source / "candidate.md")).resolve()
+    candidate = candidate_path.read_text()
+    if not candidate.strip():
+        raise ValueError("Candidate codemode guidance is empty")
     (evidence / "baseline.md").write_text(guidance + "\n")
     (evidence / "candidate.md").write_text(candidate)
-    files = [source / "fixture.ts", source / "check.py", agent / "extensions/openai-capabilities.ts"]
+    files = [source / "fixture.ts", source / "check.py", source / "launch.py", source / "codemode.eval.yaml", agent / "extensions/openai-capabilities.ts"]
     metadata = {"arm": "baseline" if baseline else "candidate", "model": model, "thinking": thinking,
                 "baseline_sha256": hashlib.sha256(guidance.encode()).hexdigest(),
                 "candidate_sha256": hashlib.sha256(candidate.encode()).hexdigest(),
+                "candidate_source": str(candidate_path),
                 "source_sha256": {str(p.relative_to(repo)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files},
                 "scope": "isolated tools and shared base prompt; not a full personal-extension-stack eval"}
     (evidence / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
@@ -61,6 +65,7 @@ def configure_attempt(home: Path, agent: Path, config: dict, trace: Path, case: 
                 "c.ts": "export const gamma = 3;\n", "small.ts": "export const small = 4;\n",
                 "manifest.json": '{"files":["a.ts","b.ts"]}\n',
                 "config.json": '{"enabled":false,"mode":"slow","keep":"untouched"}\n',
+                "config-large.json": json.dumps({"enabled": False, "mode": "slow", "padding": "x" * 80_000}) + "\n",
                 "large.ts": "export const large = 5;\n" + "// BULK_CONTENT_OMIT " + "x" * 80_000 + "\n"}
     for name, text in contents.items():
         (work / name).write_text(text)
