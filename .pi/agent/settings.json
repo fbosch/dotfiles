@@ -137,7 +137,6 @@
     "npm:@gotgenes/pi-subagents@23.2.0",
     "npm:pi-web-access@0.37.0",
     "npm:pi-lens@4.3.0",
-    "npm:@tintinweb/pi-tasks@0.9.0",
     "npm:pi-compaction-model@0.1.0",
     "npm:pi-codemode-compact@0.1.1"
   ],

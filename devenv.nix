@@ -338,6 +338,13 @@ in
       bun run typecheck
     '';
 
+    "test:pi-tasks".exec = ''
+      set -euo pipefail
+      cd .pi/agent
+      bun test extensions/tasks extensions/__tests__/instruction-fragments.test.ts
+      bun run typecheck
+    '';
+
     "test:nvim-dekit-terminal".exec = ''
       REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE -i NONE \
         -l .config/nvim/tests/dekit_terminal.lua

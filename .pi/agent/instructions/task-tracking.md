@@ -2,10 +2,10 @@
 when:
   tools:
     any:
-      - TaskCreate
+      - tasks
 ---
 
 # Task tracking
 
-- Batch independent task creation calls. Create dependent tasks sequentially when prerequisite IDs are needed.
-- Before finishing tracked work, reconcile task statuses with the actual outcome.
+- Use the `tasks` tool only for the current request: `list`, `set` the full plan, or `update` one item by id.
+- Use `pending`, `in_progress`, and `completed`; mark work completed only after verifying it.
