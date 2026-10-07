@@ -35,6 +35,7 @@ export function renderStartupHeader(
   auth?: StartupOwnerSnapshot,
   art?: StartupHeaderArt,
   updateActionState?: UpdateActionState,
+  now = Date.now(),
 ): string[] {
   if (width <= 0) return [];
 
@@ -47,15 +48,15 @@ export function renderStartupHeader(
     lines.push("", theme.fg("muted", formatCandidateView(candidates.lsp).replace(/^lsp:/, "LSP:")));
   }
 
-  const authLines = renderAuthStatus(theme, width, auth, Date.now());
+  const authLines = renderAuthStatus(theme, width, auth, now);
   if (authLines.length > 0) lines.push("", ...authLines, "");
 
-  const updateStatus = renderUpdateStatus(theme, updates, Date.now());
+  const updateStatus = renderUpdateStatus(theme, updates, now);
   if (updateStatus.length > 0) {
     lines.push(theme.fg("muted", `Updates: ${updateStatus[0]}`));
     lines.push(...updateStatus.slice(1));
   }
-  if (updateActionState !== undefined && readAvailableUpdates(updates, Date.now()) !== undefined) {
+  if (updateActionState !== undefined && readAvailableUpdates(updates, now) !== undefined) {
     const actionLine = renderUpdateAction(theme, updateActionState, width);
     if (actionLine !== undefined) lines.push(actionLine);
   }
@@ -65,6 +66,29 @@ export function renderStartupHeader(
   }
 
   return lines.flatMap((line) => (line === "" ? [line] : wrapTextWithAnsi(line, width)));
+}
+// Cache the visible time state, not clock ticks, so deadlines still change at their exact boundaries.
+export function startupHeaderTimeKey(
+  auth: StartupOwnerSnapshot | undefined,
+  updates: StartupOwnerSnapshot | undefined,
+  now: number,
+): string {
+  const profiles = readAuthStartupPayload(auth?.payload)?.profiles ?? [];
+  const coverage = readUpdateCoverage(updates?.payload);
+  return JSON.stringify([
+    auth?.staleAt !== undefined && auth.staleAt <= now,
+    profiles.map((profile) => [
+      bankedResetDisplay(profile, now),
+      profile.windows.map((window) =>
+        window.allowanceResetAt === undefined
+          ? undefined
+          : formatDeadline(window.allowanceResetAt, now),
+      ),
+    ]),
+    [updates?.staleAt ?? coverage?.staleAt, updates?.expiresAt ?? coverage?.expiresAt].map(
+      (deadline) => deadline !== undefined && deadline <= now,
+    ),
+  ]);
 }
 
 function renderIntegrationStatus(

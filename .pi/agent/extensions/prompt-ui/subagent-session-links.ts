@@ -523,6 +523,7 @@ interface SessionNavigatorModule {
     tui: TUI;
     keys: ReturnType<typeof getKeybindings>;
     theme: TranscriptTheme;
+    keys: ReturnType<typeof getKeybindings>;
     source: SubagentTranscriptSource;
     heading: TranscriptHeading;
     done: (result: undefined) => void;

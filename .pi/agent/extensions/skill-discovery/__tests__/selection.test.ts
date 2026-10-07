@@ -1,12 +1,15 @@
 import { describe, expect, test } from "bun:test";
 import type {
   BeforeAgentStartEvent,
+  BeforeAgentStartEventResult,
   ExtensionAPI,
   ExtensionContext,
   Skill,
 } from "@earendil-works/pi-coding-agent";
-import { createEventBus } from "@earendil-works/pi-coding-agent";
+import { createEventBus, SessionManager } from "@earendil-works/pi-coding-agent";
 import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-classifier-registry";
+import { SKILL_ADVISORY_MESSAGE } from "../advisory-state";
+import { buildMidTaskPrompt } from "../mid-task";
 import {
   createSkillSelectionExtension,
   createSkillSelectionRequest,
@@ -39,7 +42,13 @@ function skill(
 
 function extensionHarness(dependencies: Parameters<typeof createSkillSelectionExtension>[0] = {}) {
   let handler:
-    | ((event: BeforeAgentStartEvent, context: ExtensionContext) => Promise<unknown> | unknown)
+    | ((
+        event: BeforeAgentStartEvent,
+        context: ExtensionContext,
+      ) =>
+        | Promise<BeforeAgentStartEventResult | undefined>
+        | BeforeAgentStartEventResult
+        | undefined)
     | undefined;
   const extension = createSkillSelectionExtension(dependencies);
   const api = {
@@ -77,12 +86,16 @@ function lifecycleHarness(dependencies: Parameters<typeof createSkillSelectionEx
   return { handler, statusCommand };
 }
 
-function context(): ExtensionContext {
+function context(sessionManager?: ExtensionContext["sessionManager"]): ExtensionContext {
   return {
     cwd: "/tmp/skill-selection-test",
     hasUI: false,
     isProjectTrusted: () => true,
     modelRegistry: classifierRegistry,
+    sessionManager: sessionManager ?? {
+      getBranch: () => [],
+      buildSessionProjection: () => ({ entries: [], messages: [], thinkingLevel: "", model: null }),
+    },
   } as unknown as ExtensionContext;
 }
 
@@ -113,6 +126,7 @@ function scores(values: Record<string, number>): SkillSelectionResult {
   return {
     recommendations,
     scores: new Map(Object.entries(values)),
+    noMatchScore: recommendations.length === 0 ? 1 : 0,
   };
 }
 
@@ -152,6 +166,51 @@ describe("skill selection", () => {
     expect(questions.skill_1?.type).toBe("bool");
     expect(questions.none_relevant?.type).toBe("bool");
     expect(JSON.stringify(request)).not.toContain("SKILL.md");
+  });
+
+  test.each([
+    ["input", "What's the status?"],
+    [
+      "mid-task",
+      buildMidTaskPrompt({
+        goal: "What's the status?",
+        latestVisibleActivity: "Checking which tasks are complete.",
+        visibleActivity: ["Checking which tasks are complete."],
+        toolObservations: ["Completed TaskList: ok"],
+        deltaVisibleActivity: ["Checking which tasks are complete."],
+        deltaToolObservations: ["Completed TaskList: ok"],
+        alreadyRead: [],
+        alreadyRecommended: [],
+      }) ?? "",
+    ],
+  ])("requires current workflow evidence in %s selection questions", (_stage, prompt) => {
+    const request = createSkillSelectionRequest(prompt, [
+      {
+        name: "openspec-apply-change",
+        description: "Implement tasks from an OpenSpec change.",
+      },
+    ]);
+    expect(request?.questions.skill_0).toEqual({
+      type: "bool",
+      instructions:
+        "Does the supplied request or current-activity snapshot contain concrete evidence that the specific workflow described by openspec-apply-change applies now? Implement tasks from an OpenSpec change.",
+      criteria: {
+        true: "The described trigger or workflow applies to the requested action or evidenced remaining work, with its required context established.",
+        false:
+          "Only broad topic overlap, hypothetical future usefulness, or missing workflow prerequisites. A generic status check or continuation request is not evidence of a specialized workflow unless the supplied state identifies it. Completed tools alone do not establish intent to perform that workflow next.",
+      },
+    });
+    expect(request?.questions.none_relevant).toEqual({
+      type: "bool",
+      instructions:
+        "Does the supplied request or current-activity snapshot lack concrete evidence for every listed skill's specific workflow?",
+      criteria: {
+        true: "No listed skill's described trigger or workflow applies now with its required context established; broad topic overlap or hypothetical usefulness is insufficient.",
+        false:
+          "At least one listed skill's described trigger or workflow applies to the requested action or evidenced remaining work, with its required context established.",
+      },
+    });
+    expect(DEFAULT_SKILL_SELECTION_CONFIG.threshold).toBe(0.72);
   });
 
   test("supports zero and multiple recommendations with deterministic ordering and cap", () => {
@@ -309,7 +368,7 @@ describe("skill selection", () => {
     expect(result?.recommendations).toEqual([{ name: "writing-clearly", score: 0.9 }]);
   });
 
-  test("appends advisory output without changing the native catalog", async () => {
+  test("returns append-only advice without changing the cache-stable prompt sections", async () => {
     const handler = extensionHarness({
       getConfig: () => ENABLED_CONFIG,
       getDisabledNames: () => new Set(["security-and-hardening"]),
@@ -321,17 +380,96 @@ describe("skill selection", () => {
     const original = event();
     const result = await handler(original, context());
 
-    expect(result).toBeUndefined();
-    const recommendation = original.systemPromptOptions.sections.skill_recommendations;
-    expect(recommendation).toContain(
-      '<skill name="writing-clearly" location="/skills/writing-clearly/SKILL.md" />',
-    );
+    const message = result && "message" in result ? result.message : undefined;
+    const recommendation = message?.content;
+    expect(typeof recommendation).toBe("string");
+    expect(result).toMatchObject({
+      message: {
+        customType: "skill-recommendation-advice",
+        display: false,
+        content: expect.stringContaining(
+          'name="writing-clearly" location="/skills/writing-clearly/SKILL.md" description="Improve documentation prose."',
+        ),
+      },
+    });
+    expect(original.systemPromptOptions.sections).toEqual({});
     expect(original.systemPrompt).toBe(
       "default instructions\n\n<available_skills>catalog</available_skills>",
     );
     expect(original.systemPromptOptions.skills).toHaveLength(3);
     expect(recommendation).not.toContain("hidden-workflow");
     expect(recommendation).not.toContain("security-and-hardening");
+  });
+
+  test("announces exactly the bounded description evaluated by the classifier", async () => {
+    let evaluated = "";
+    const handler = extensionHarness({
+      getConfig: () => ENABLED_CONFIG,
+      getDisabledNames: () => new Set(),
+      selectSkillsDetailed: async (_prompt, candidates) => {
+        evaluated = candidates[0]?.description ?? "";
+        return { ok: true, value: scores({ "writing-clearly": 0.9 }) };
+      },
+    });
+    const request = event();
+    request.systemPromptOptions.skills = [
+      skill("writing-clearly", {
+        description: `  Read   lifecycle   ${"detail ".repeat(100)}UNBOUNDED_TAIL`,
+      }),
+    ];
+    const result = await handler(request, context());
+    expect(evaluated).toHaveLength(400);
+    expect(evaluated).toStartWith("Read lifecycle ");
+    expect(evaluated).toEndWith("…");
+    const message = result && "message" in result ? result.message : undefined;
+    expect(message?.content).toContain(`description="${evaluated}"`);
+    expect(message?.content).not.toContain("UNBOUNDED_TAIL");
+  });
+
+  test("deduplicates successive input advice on the active branch", async () => {
+    let calls = 0;
+    const handler = extensionHarness({
+      getConfig: () => ENABLED_CONFIG,
+      getDisabledNames: () => new Set(["security-and-hardening"]),
+      selectSkillsDetailed: async () => {
+        calls += 1;
+        return { ok: true, value: scores({ "writing-clearly": 0.9 }) };
+      },
+    });
+    const manager = SessionManager.inMemory("/tmp/skill-selection-test");
+    manager.appendMessage({ role: "user", content: "first", timestamp: 1 });
+    const ctx = context(manager);
+    const first = await handler(event(), ctx);
+    if (!first || !("message" in first)) throw new Error("Expected initial advice message");
+    manager.appendMessage({
+      role: "custom",
+      ...first.message,
+      timestamp: 2,
+    });
+
+    const second = await handler(event("Continue"), ctx);
+    expect(second).toBeUndefined();
+    expect(calls).toBe(1);
+  });
+
+  test("skips classifier when positive headroom cannot fit one whole record", async () => {
+    let calls = 0;
+    const handler = extensionHarness({
+      getConfig: () => ENABLED_CONFIG,
+      getDisabledNames: () => new Set<string>(),
+      selectSkillsDetailed: async () => {
+        calls += 1;
+        return { ok: true, value: scores({ "writing-clearly": 0.9 }) };
+      },
+    });
+    const manager = SessionManager.inMemory("/tmp/skill-selection-test");
+    manager.appendMessage({ role: "user", content: "prior", timestamp: 1 });
+    manager.appendCustomMessageEntry(SKILL_ADVISORY_MESSAGE, "x".repeat(5_950), false, {
+      skills: [],
+    });
+    const result = await handler(event(), context(manager));
+    expect(result).toBeUndefined();
+    expect(calls).toBe(0);
   });
 
   test("falls back unchanged for unavailable Classifier, explicit skills, and image prompts", async () => {
@@ -504,9 +642,11 @@ describe("skill selection", () => {
   });
 
   test("formats no block for zero recommendations and escapes names", () => {
-    expect(formatSkillRecommendations([], [])).toBe("");
-    expect(formatSkillRecommendations([{ name: "a&b", score: 0.8 }], [skill("a&b")])).toContain(
-      "a&amp;b",
-    );
+    expect(formatSkillRecommendations([])).toBe("");
+    expect(
+      formatSkillRecommendations([
+        { name: "a&b", path: "/skills/a&b/SKILL.md", description: "A & B" },
+      ]),
+    ).toContain("a&amp;b");
   });
 });

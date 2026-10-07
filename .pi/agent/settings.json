@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "1.0.2",
+  "lastChangelogVersion": "1.0.4",
   "theme": "zenwritten-dark",
   "quietStartup": true,
   "references": {
@@ -66,6 +66,13 @@
     "model": "openai-codex/gpt-6-luna",
     "thinkingLevel": "low"
   },
+  "tasks": {
+    "icons": {
+      "pending": "□",
+      "in_progress": "■",
+      "completed": "✓"
+    }
+  },
   "charts": {
     "fontFamily": "JetBrainsMono NF",
     "fontSize": 14
@@ -130,14 +137,13 @@
     }
   },
   "packages": [
-    "npm:pi-hashline-edit-pro@6.1.2",
+    "npm:pi-hashline-edit-pro@6.2.0",
     "npm:pi-codex-goal@latest",
     "npm:pi-context-view@0.6.0",
     "npm:@ff-labs/pi-fff@0.11.0",
     "npm:@gotgenes/pi-subagents@23.2.0",
     "npm:pi-web-access@0.37.0",
     "npm:pi-lens@4.3.0",
-    "npm:@tintinweb/pi-tasks@0.9.0",
     "npm:pi-compaction-model@0.1.0",
     "npm:pi-codemode-compact@0.1.1"
   ],

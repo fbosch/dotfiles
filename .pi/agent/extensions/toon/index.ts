@@ -410,6 +410,55 @@ export function createToonTransformer(
     return changed ? transformed : undefined;
   }
 
+  function transformCodemodeOutput(text: string): string | undefined {
+    if (Buffer.byteLength(text) > MAX_JSON_BYTES) return undefined;
+    const direct = transformJson(text);
+    if (direct !== undefined) {
+      const leading = text.slice(0, text.length - text.trimStart().length);
+      const trailing = text.slice(text.trimEnd().length);
+      return leading + direct + trailing;
+    }
+    const formatted = transformText(text);
+    let changed = formatted !== undefined;
+    let fence: string | undefined;
+    // Only complete records are eligible; outer truncation can leave partial JSON between notices.
+    const transformed = (formatted ?? text).replace(/[^\r\n]+/g, (line) => {
+      const marker = /^\s*(`{3,}|~{3,})/.exec(line)?.[1];
+      if (marker !== undefined) {
+        if (fence === undefined) fence = marker;
+        else if (marker[0] === fence[0] && marker.length >= fence.length) fence = undefined;
+        return line;
+      }
+      if (fence !== undefined) return line;
+      const toon = transformJson(line);
+      if (toon === undefined) return line;
+      changed = true;
+      return toon;
+    });
+    return changed ? transformed : undefined;
+  }
+
+  function transformCodemodeResult(
+    content: ToolResultEvent["content"],
+  ): ToolResultEvent["content"] | undefined {
+    const first = content[0];
+    if (first?.type !== "text") return undefined;
+    const header = /^Script completed\r?\nWall time [^\r\n]+ seconds\r?\nOutput:\r?\n/.exec(
+      first.text,
+    )?.[0];
+    if (header === undefined) return undefined;
+    let changed = false;
+    const transformed = content.map((part, index) => {
+      if (part.type !== "text") return part;
+      const prefix = index === 0 ? header : "";
+      const output = transformCodemodeOutput(part.text.slice(prefix.length));
+      if (output === undefined) return part;
+      changed = true;
+      return { ...part, text: prefix + output };
+    });
+    return changed ? transformed : undefined;
+  }
+
   return {
     clear(): void {
       convertedOutputs.clear();
@@ -427,6 +476,8 @@ export function createToonTransformer(
         (tools !== undefined && tools.has(event.toolName.toLowerCase()) === false)
       )
         return undefined;
+      if (event.toolName.toLowerCase() === "codemode")
+        return transformCodemodeResult(event.content);
       if (event.content.length !== 1) return undefined;
 
       const content = event.content[0];

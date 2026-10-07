@@ -259,9 +259,9 @@ describe("instruction fragments", () => {
     expect(() => loadInstructionFragments(directory, ["../outside.md"])).toThrow(
       "Instruction fragment escapes its directory: ../outside.md",
     );
-    expect(loadInstructionFragments(directory, ["linked.md"]).map(({ content }) => content)).toEqual([
-      "Outside instruction.",
-    ]);
+    expect(
+      loadInstructionFragments(directory, ["linked.md"]).map(({ content }) => content),
+    ).toEqual(["Outside instruction."]);
     expect(() => loadInstructionFragments(directory, ["linked.md", "linked-alias.md"])).toThrow(
       "Duplicate instruction fragment: linked-alias.md",
     );
@@ -339,7 +339,7 @@ describe("instruction fragments", () => {
       instructionsDirectory,
       "task-tracking.md",
       "# Task tracking",
-      "when:\n  tools:\n    any:\n      - todo",
+      "when:\n  tools:\n    any:\n      - tasks",
     );
     const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
     process.env.PI_CODING_AGENT_DIR = agentDirectory;
@@ -351,7 +351,7 @@ describe("instruction fragments", () => {
             ctx: ExtensionContext,
           ) => BeforeAgentStartEventResult | undefined)
         | undefined;
-      let availableTools = ["subagent", "todo", "ffgrep"];
+      let availableTools = ["subagent", "tasks", "ffgrep"];
       const pi = {
         getAllTools: () => availableTools.map((name) => ({ name })),
         on(event: string, registeredHandler: typeof handler) {
@@ -371,7 +371,7 @@ describe("instruction fragments", () => {
       expect(systemPrompt).toContain("# Subagent orchestration");
       expect(systemPrompt).toContain("# Task tracking");
 
-      availableTools = ["todo"];
+      availableTools = ["tasks"];
       const taskSystemPrompt = handler?.(event, {} as ExtensionContext)?.systemPrompt;
       expect(taskSystemPrompt).toContain("# Task tracking");
       expect(taskSystemPrompt).not.toContain("# Subagent orchestration");

@@ -18,6 +18,16 @@ import {
 import { fullSkillCatalog } from "../shared/skill-prompt";
 import { disabledSkillNames } from "../skill-tweaks";
 import {
+  admitSkillAdvisories,
+  MAX_SKILL_ADVISORY_CHARS,
+  readSkillAdvisoryState,
+  SKILL_ADVISORY_MESSAGE,
+  SKILL_RECOMMENDATIONS_ENTRY,
+  type SkillAdvisoryRecord,
+  skillAdvisoryStatus,
+} from "./advisory-state";
+import { createMidTaskSkillSelection } from "./mid-task";
+import {
   configuredSkillSelection,
   DEFAULT_SKILL_SELECTION_CONFIG,
   type SkillSelectionConfig,
@@ -30,8 +40,6 @@ const MAX_CATALOG_SKILLS = 96;
 const MAX_REQUEST_CHARS = 12_000;
 const MAX_DESCRIPTION_CHARS = 400;
 const SKILL_RECOMMENDATIONS_START = "<skill_recommendations>";
-const SKILL_RECOMMENDATIONS_SECTION = "skill_recommendations";
-const RECOMMENDATIONS_ENTRY = "skill-recommendations";
 const NO_MATCH_QUESTION = "none_relevant";
 
 export interface SkillCandidate {
@@ -116,11 +124,11 @@ export function eligibleSkillCandidates(
 function relevanceQuestion(candidate: SkillCandidate): ClassifierContext["questions"][string] {
   return {
     type: "bool",
-    instructions: `Is the user's request materially relevant to the skill named ${candidate.name}? ${candidate.description}`,
+    instructions: `Does the supplied request or current-activity snapshot contain concrete evidence that the specific workflow described by ${candidate.name} applies now? ${candidate.description}`,
     criteria: {
-      true: "The skill's documented workflow would help complete the request.",
+      true: "The described trigger or workflow applies to the requested action or evidenced remaining work, with its required context established.",
       false:
-        "The skill is not needed for this request, even if its topic is mentioned incidentally.",
+        "Only broad topic overlap, hypothetical future usefulness, or missing workflow prerequisites. A generic status check or continuation request is not evidence of a specialized workflow unless the supplied state identifies it. Completed tools alone do not establish intent to perform that workflow next.",
     },
   };
 }
@@ -134,10 +142,12 @@ function createQuestions(
     ),
     [NO_MATCH_QUESTION]: {
       type: "bool",
-      instructions: "Are none of the listed skills materially relevant to the user's request?",
+      instructions:
+        "Does the supplied request or current-activity snapshot lack concrete evidence for every listed skill's specific workflow?",
       criteria: {
-        true: "No listed skill's documented workflow would help complete the request.",
-        false: "At least one listed skill's documented workflow would help complete the request.",
+        true: "No listed skill's described trigger or workflow applies now with its required context established; broad topic overlap or hypothetical usefulness is insufficient.",
+        false:
+          "At least one listed skill's described trigger or workflow applies to the requested action or evidenced remaining work, with its required context established.",
       },
     },
   };
@@ -176,8 +186,10 @@ export function recommendSkillsFromScores(
   candidates: readonly SkillCandidate[],
   scores: ReadonlyMap<string, number>,
   noMatchScore: number,
-  config: Pick<SkillSelectionConfig, "threshold" | "maxRecommendations"> =
-    DEFAULT_SKILL_SELECTION_CONFIG,
+  config: Pick<
+    SkillSelectionConfig,
+    "threshold" | "maxRecommendations"
+  > = DEFAULT_SKILL_SELECTION_CONFIG,
 ): SkillRecommendation[] {
   if (noMatchScore >= config.threshold) return [];
 
@@ -332,26 +344,51 @@ function isExplicitSkillInvocation(prompt: string): boolean {
 }
 
 function escapeXml(value: string): string {
-  return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&apos;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;");
 }
 
-export function formatSkillRecommendations(
-  recommendations: readonly SkillRecommendation[],
-  skills: readonly Skill[],
-): string {
-  if (recommendations.length === 0) return "";
+export function formatSkillRecommendations(records: readonly SkillAdvisoryRecord[]): string {
+  if (records.length === 0) return "";
 
-  const paths = new Map(skills.map((skill) => [skill.name, skill.filePath]));
-  const lines = recommendations.map(({ name }) => {
-    const path = paths.get(name);
-    if (path === undefined) throw new Error(`Recommendation has no discovered skill path: ${name}`);
-    return `  <skill name="${escapeXml(name)}" location="${escapeXml(path)}" />`;
-  });
+  const lines = records.map(
+    ({ name, path, description }) =>
+      `  <skill name="${escapeXml(name)}" location="${escapeXml(path)}" description="${escapeXml(description)}" />`,
+  );
   return [
     "These are advisory recommendations, not skill loads or new mandatory rules.",
     ...lines,
     "Read the listed SKILL.md before following a skill. Keep the complete skill catalog and all existing instructions authoritative.",
   ].join("\n");
+}
+
+function recommendationRecords(
+  recommendations: readonly SkillRecommendation[],
+  candidates: readonly SkillCandidate[],
+  skills: readonly Skill[],
+): SkillAdvisoryRecord[] {
+  const descriptions = new Map(candidates.map(({ name, description }) => [name, description]));
+  const paths = new Map(skills.map((skill) => [skill.name, skill.filePath]));
+  return recommendations.flatMap(({ name }) => {
+    const path = paths.get(name);
+    const description = descriptions.get(name);
+    return path === undefined || description === undefined ? [] : [{ name, path, description }];
+  });
+}
+
+function candidateAdvisories(
+  candidates: readonly SkillCandidate[],
+  skills: readonly Skill[],
+): SkillAdvisoryRecord[] {
+  const paths = new Map(skills.map((skill) => [skill.name, skill.filePath]));
+  return candidates.flatMap(({ name, description }) => {
+    const path = paths.get(name);
+    return path === undefined ? [] : [{ name, path, description }];
+  });
 }
 
 function disabledNamesForContext(
@@ -410,8 +447,16 @@ export function createSkillSelectionExtension(
   };
 
   return (pi) => {
+    const midTask = createMidTaskSkillSelection(pi, {
+      select: selectSkillsDetailed,
+      format: formatSkillRecommendations,
+      isExplicitInvocation: isExplicitSkillInvocation,
+      getConfig,
+      now,
+      ...(dependencies.fetch ? { fetch: dependencies.fetch } : {}),
+    });
     pi.registerEntryRenderer<{ skills: string[] }>(
-      RECOMMENDATIONS_ENTRY,
+      SKILL_RECOMMENDATIONS_ENTRY,
       (entry, _options, theme) => {
         if (
           !entry.data ||
@@ -429,11 +474,20 @@ export function createSkillSelectionExtension(
     pi.registerCommand("classifier-status", {
       description: "Show the latest advisory skill-selection lifecycle status",
       handler: async (_args, context) => {
-        context.ui.notify(JSON.stringify(status), "info");
+        const advisory = readSkillAdvisoryState(context.sessionManager, [], context.cwd);
+        context.ui.notify(
+          JSON.stringify({
+            ...status,
+            advisory: skillAdvisoryStatus(advisory),
+            midTask: midTask.status(),
+          }),
+          "info",
+        );
       },
     });
 
     pi.on("before_agent_start", async (event: BeforeAgentStartEvent, context) => {
+      midTask.reset();
       const eventCount = status.eventCount + 1;
       const skip = (reason: string, enabled = status.enabled) => {
         status = { enabled, eventCount, state: "skipped", reason, fetchAttempted: false };
@@ -456,9 +510,31 @@ export function createSkillSelectionExtension(
         return skip("config-error", false);
       }
 
-      const candidates = eligibleSkillCandidates(skills, disabledNames);
-      if (candidates.length === 0) return skip("no-candidates", true);
-      if (candidates.length > MAX_CATALOG_SKILLS) return skip("too-many-candidates", true);
+      const allCandidates = eligibleSkillCandidates(skills, disabledNames);
+      if (allCandidates.length === 0) return skip("no-candidates", true);
+      if (allCandidates.length > MAX_CATALOG_SKILLS) return skip("too-many-candidates", true);
+
+      let branchState: ReturnType<typeof readSkillAdvisoryState>;
+      try {
+        branchState = readSkillAdvisoryState(context.sessionManager, skills, context.cwd);
+      } catch {
+        return skip("session-state-error", true);
+      }
+      if (branchState.usedCharacters >= MAX_SKILL_ADVISORY_CHARS) {
+        return skip("advisory-budget-exhausted", true);
+      }
+      const candidates = allCandidates.filter(
+        (candidate) =>
+          !branchState.offered.has(candidate.name) && !branchState.read.has(candidate.name),
+      );
+      if (candidates.length === 0) return skip("no-unread-candidates", true);
+      const possible = admitSkillAdvisories(
+        candidateAdvisories(candidates, skills),
+        branchState,
+        formatSkillRecommendations,
+      );
+      if (possible.records.length === 0) return skip("advisory-budget-exhausted", true);
+      const midRequest = midTask.begin(event, context, skills, candidates, branchState);
 
       const startedAt = now();
       let fetchAttempted = false;
@@ -473,8 +549,15 @@ export function createSkillSelectionExtension(
         const selectionOptions: SkillSelectionRequestOptions = {
           modelRegistry: context.modelRegistry,
           ...(dependencies.fetch === undefined ? {} : { fetch: dependencies.fetch }),
-          ...(context.signal === undefined ? {} : { signal: context.signal }),
+          ...(midRequest
+            ? {
+                signal: context.signal
+                  ? AbortSignal.any([context.signal, midRequest.controller.signal])
+                  : midRequest.controller.signal,
+              }
+            : {}),
           onFetchAttempt: () => {
+            if (midRequest && !midTask.isCurrent(midRequest)) return;
             fetchAttempted = true;
             status = { ...status, fetchAttempted: true };
           },
@@ -485,6 +568,7 @@ export function createSkillSelectionExtension(
           config,
           selectionOptions,
         );
+        if (midRequest && !midTask.isCurrent(midRequest)) return;
         const elapsedMs = Math.max(0, now() - startedAt);
         if (context.signal?.aborted) {
           status = {
@@ -521,23 +605,42 @@ export function createSkillSelectionExtension(
         }
 
         const result = attempt.value;
+        const latestState = readSkillAdvisoryState(context.sessionManager, skills, context.cwd);
+        const records = recommendationRecords(result.recommendations, candidates, skills);
+        const admission = admitSkillAdvisories(records, latestState, formatSkillRecommendations);
+        const reason =
+          admission.records.length > 0
+            ? "recommendations"
+            : admission.skippedForBudget > 0
+              ? "advisory-budget-exhausted"
+              : result.recommendations.length === 0
+                ? "no-match"
+                : "already-offered";
         status = {
           enabled: true,
           eventCount,
           state: "completed",
-          reason: result.recommendations.length === 0 ? "no-match" : "recommendations",
+          reason,
           candidateCount: candidates.length,
           elapsedMs,
           fetchAttempted,
         };
-        if (result.recommendations.length === 0) return;
-        event.systemPromptOptions.sections[SKILL_RECOMMENDATIONS_SECTION] =
-          formatSkillRecommendations(result.recommendations, skills);
-        // Custom entries render in chat but are excluded from model context by Pi.
-        pi.appendEntry(RECOMMENDATIONS_ENTRY, {
-          skills: result.recommendations.map(({ name }) => name),
-        });
+        if (admission.records.length === 0) return;
+
+        midTask.recommend(admission.records, admission.content);
+        const names = admission.records.map(({ name }) => name);
+        // The custom entry is chat-only; the returned custom message is persisted in model context.
+        pi.appendEntry(SKILL_RECOMMENDATIONS_ENTRY, { skills: names });
+        return {
+          message: {
+            customType: SKILL_ADVISORY_MESSAGE,
+            content: admission.content,
+            display: false,
+            details: { skills: admission.records },
+          },
+        };
       } catch {
+        if (midRequest && !midTask.isCurrent(midRequest)) return;
         status = {
           enabled: true,
           eventCount,

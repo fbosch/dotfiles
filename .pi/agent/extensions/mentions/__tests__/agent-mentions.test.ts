@@ -145,7 +145,7 @@ describe("agent mentions", () => {
     expect(formatted.split(color)).toHaveLength(3);
   });
 
-  test("adds the routing instruction only when the subagent tool is active", () => {
+  test("adds the routing instruction only when the subagent tool is active", async () => {
     let handler:
       | ((
           event: BeforeAgentStartEvent,
@@ -167,13 +167,13 @@ describe("agent mentions", () => {
       systemPrompt: "base prompt",
       systemPromptOptions: {},
     } as BeforeAgentStartEvent;
-    const result = handler?.(event, { cwd: "/tmp" } as ExtensionContext);
+    const result = await handler?.(event, { cwd: "/tmp" } as ExtensionContext);
 
     expect(result?.systemPrompt).toStartWith("base prompt\n\n");
     expect(result?.systemPrompt).toContain("@explore");
   });
 
-  test("does not route mentions when the subagent tool is unavailable", () => {
+  test("does not route mentions when the subagent tool is unavailable", async () => {
     let handler:
       | ((
           event: BeforeAgentStartEvent,
@@ -189,7 +189,7 @@ describe("agent mentions", () => {
     } as unknown as ExtensionAPI;
     agentMentions(pi);
 
-    const result = handler?.(
+    const result = await handler?.(
       {
         type: "before_agent_start",
         prompt: "@explore inspect autocomplete",

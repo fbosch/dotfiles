@@ -64,6 +64,7 @@ describe("OpenAI capabilities", () => {
     expect(applyFastServiceTier({}, "gpt-6-sol-fast").model).toBe("gpt-6-sol");
     expect(applyFastServiceTier({}, "gpt-5.6-terra-fast").model).toBe("gpt-5.6-terra");
     expect(applyFastServiceTier({}, "gpt-6-astra-fast").model).toBe("gpt-6-astra");
+    expect(applyFastServiceTier({}, "gpt-6.1-sol-fast").model).toBe("gpt-6.1-sol");
   });
 
   test("routes from the request model independently of the active session model", () => {

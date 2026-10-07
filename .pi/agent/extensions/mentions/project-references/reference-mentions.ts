@@ -19,7 +19,7 @@ function referenceValue(token: string): string {
   return value.startsWith('"') && value.endsWith('"') ? value.slice(1, -1) : value;
 }
 
-function resolveReferencePath(value: string, cwd: string): string {
+export function resolveReferencePath(value: string, cwd: string): string {
   const expandedPath =
     value === "~" ? homedir() : value.startsWith("~/") ? join(homedir(), value.slice(2)) : value;
   return isAbsolute(expandedPath) ? expandedPath : resolve(cwd, expandedPath);
@@ -39,10 +39,21 @@ function isImagePath(value: string, cwd: string): boolean {
   }
 }
 
+export interface ReferencePathState {
+  readonly exists: boolean;
+  readonly isFile: boolean;
+}
+
+type ReferencePathLookup = (value: string) => ReferencePathState;
+
 function matchReferenceMentions(
   text: string,
   references: readonly ProjectReference[],
   cwd: string,
+  lookup: ReferencePathLookup = (value) => ({
+    exists: referencePathExists(value, cwd),
+    isFile: isImagePath(value, cwd),
+  }),
 ): ReferenceMentionMatch[] {
   const referenceNames = new Set(references.map((reference) => reference.name.toLowerCase()));
   const matches: ReferenceMentionMatch[] = [];
@@ -52,12 +63,12 @@ function matchReferenceMentions(
     if (token === undefined) continue;
 
     const value = referenceValue(token);
-    const imagePath = isImagePath(value, cwd);
+    const path = lookup(value);
+    const imagePath = IMAGE_PATH_PATTERN.test(value) && path.isFile;
     if (
       imagePath === false &&
       (token.startsWith("@") === false ||
-        (referenceNames.has(value.toLowerCase()) === false &&
-          referencePathExists(value, cwd) === false))
+        (referenceNames.has(value.toLowerCase()) === false && path.exists === false))
     ) {
       continue;
     }
@@ -97,10 +108,11 @@ export function formatAnsiReferenceMentions(
   foregroundAnsi: string,
   restoreAnsi = "\u001b[39m",
   imageForegroundAnsi = foregroundAnsi,
+  lookup?: ReferencePathLookup,
 ): string {
   return formatAnsiTextRanges(
     text,
-    (plainText) => matchReferenceMentions(plainText, references, cwd),
+    (plainText) => matchReferenceMentions(plainText, references, cwd, lookup),
     (match) => (match.isImagePath ? imageForegroundAnsi : foregroundAnsi),
     restoreAnsi,
   );

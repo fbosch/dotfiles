@@ -43,6 +43,7 @@ export default function runtimeCheck(pi: ExtensionAPI): void {
           value: {
             recommendations: [{ name: "xstate", score: 0.95 }],
             scores: new Map([["xstate", 0.95]]),
+            noMatchScore: 0,
           },
         };
       },
@@ -73,13 +74,29 @@ export default function runtimeCheck(pi: ExtensionAPI): void {
       structuredWarmVisible: systems.includes("<name>global-warm</name>"),
       optionsColdVisible: options?.skills?.some((skill) => skill.name === "xstate"),
       classifierCandidates,
-      recommendations: options?.sections?.skill_recommendations,
-      structuredRecommendation: systems.includes('name=\\"xstate\\"'),
+      recommendations: event.messages
+        .flatMap((message) =>
+          message.role === "custom" &&
+          message.customType === "skill-recommendation-advice" &&
+          typeof message.content === "string"
+            ? [message.content]
+            : [],
+        )
+        .join("\n"),
+      structuredRecommendation: event.messages.some(
+        (message) =>
+          message.role === "custom" &&
+          message.customType === "skill-recommendation-advice" &&
+          typeof message.content === "string" &&
+          message.content.includes('name="xstate"'),
+      ),
       recommendationEntries: ctx.sessionManager
         .getBranch()
         .filter((entry) => entry.type === "custom" && entry.customType === "skill-recommendations")
         .map((entry) => (entry.type === "custom" ? entry.data : undefined)),
-      userOnlyEntryInModelContext: JSON.stringify(event.messages).includes("skill-recommendations"),
+      userOnlyEntryInModelContext: event.messages.some(
+        (message) => message.role === "custom" && message.customType === "skill-recommendations",
+      ),
       searchResult,
     };
     console.log(`SKILL_RUNTIME_CHECK ${JSON.stringify(report)}`);

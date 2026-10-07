@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import type {
   ExtensionAPI,
   ExtensionCommandContext,
@@ -16,6 +16,7 @@ import startupHeader from "../index";
 interface HeaderComponent {
   render(width: number): string[];
   handleMouse?(event: TuiMouseEvent): { handled?: boolean } | undefined;
+  invalidate?(): void;
 }
 
 type Handler = (event: unknown, context: ExtensionContext) => void;
@@ -130,6 +131,8 @@ function createHarness() {
     uiMutations,
     emit,
     render,
+    renderAgain: (width = 120) => headerComponent?.render(width) ?? [],
+    invalidate: () => headerComponent?.invalidate?.(),
     clickHeader(event: TuiMouseEvent) {
       return headerComponent?.handleMouse?.(event);
     },
@@ -180,6 +183,52 @@ function publishUpdateSnapshot(
 }
 
 describe("startup header registration", () => {
+  test("cached headers still become stale and expire at exact deadlines", () => {
+    const harness = createHarness();
+    startupHeader(harness.pi, dependencies);
+    harness.emit("session_start");
+    const baseline = Date.now();
+    const clock = spyOn(Date, "now").mockReturnValue(baseline);
+    try {
+      publishUpdateSnapshot(harness, {
+        name: "pi-test",
+        current: "1.0.0",
+        latest: "1.1.0",
+        scope: "user",
+      });
+      const first = harness.render();
+      expect(first.join("\n")).toContain("[ Update all ]");
+      clock.mockReturnValue(baseline + 59_999);
+      expect(harness.renderAgain()).toBe(first);
+      clock.mockReturnValue(baseline + 60_000);
+      expect(harness.renderAgain().join("\n")).toContain("stale");
+      expect(harness.renderAgain().join("\n")).not.toContain("[ Update all ]");
+      clock.mockReturnValue(baseline + 120_000);
+      expect(harness.renderAgain().join("\n")).not.toContain("Updates:");
+    } finally {
+      clock.mockRestore();
+      harness.emit("session_shutdown");
+    }
+  });
+  test("reuses unchanged header layout and invalidates on width, theme, and owner changes", () => {
+    const harness = createHarness();
+    startupHeader(harness.pi, dependencies);
+    harness.emit("session_start");
+    const first = harness.render();
+    for (let frame = 0; frame < 20; frame++) expect(harness.renderAgain()).toBe(first);
+    expect(harness.renderAgain(80)).not.toBe(first);
+    harness.invalidate();
+    const invalidated = harness.renderAgain(80);
+    expect(harness.renderAgain(80)).toBe(invalidated);
+    publishUpdateSnapshot(harness, {
+      name: "npm:pi-test",
+      current: "1.0.0",
+      latest: "1.1.0",
+      scope: "user",
+    });
+    expect(harness.renderAgain(80)).not.toBe(invalidated);
+    harness.emit("session_shutdown");
+  });
   test("subscribes before requesting owners and rejects replies from replaced generations", () => {
     const harness = createHarness();
     startupHeader(harness.pi, dependencies);

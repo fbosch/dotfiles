@@ -12,6 +12,7 @@ import {
   setThemeInstance,
   theme,
 } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
+import { AgentMentionCache } from "../../mentions/agent-mentions";
 import { PromptEditor, type PromptEditorState } from "../prompt-editor";
 
 const tui = {
@@ -28,10 +29,11 @@ const state: PromptEditorState = {
 };
 
 describe("prompt reference colors", () => {
-  test("renders existing file references with markdown-link color", () => {
+  test("renders existing file references with markdown-link color", async () => {
     setThemeInstance(
       loadThemeFromPath(new URL("../../../themes/zenwritten-dark.json", import.meta.url).pathname),
     );
+    const cache = new AgentMentionCache(REPO_ROOT, REPO_ROOT, false);
     const editor = new PromptEditor(
       tui,
       getEditorTheme(),
@@ -45,12 +47,16 @@ describe("prompt reference colors", () => {
       } as unknown as ExtensionContext,
       state,
       { rules: new Map(), lengths: new Set() },
+      cache,
     );
     editor.setText("check this @.pi/agent/extensions/mentions/project-references/index.ts");
 
+    editor.render(100);
+    await cache.refresh();
     expect(editor.render(100).join("\n")).toContain(
       `${theme.getFgAnsi("mdLink")}@.pi/agent/extensions/mentions/project-references/index.ts`,
     );
     editor.dispose();
+    cache.dispose();
   });
 });

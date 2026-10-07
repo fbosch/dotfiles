@@ -2,7 +2,6 @@ import {
   CustomEditor,
   type ExtensionAPI,
   type ExtensionContext,
-  getAgentDir,
   type KeybindingsManager,
   type Theme,
 } from "@earendil-works/pi-coding-agent";
@@ -16,10 +15,9 @@ import {
 } from "@earendil-works/pi-tui";
 import {
   type AgentMention,
+  type AgentMentionCache,
   agentMentionForegroundAnsi,
   formatAnsiAgentMentions,
-  loadAgentMentions,
-  pathShadowsAgentMention,
 } from "../mentions/agent-mentions";
 import {
   assertNoAgentMentionCollisions,
@@ -95,10 +93,41 @@ function formatCwd(cwd: string): string {
   return cwd;
 }
 
-function renderContext(theme: Theme, ctx: ExtensionContext): string {
-  const usage = ctx.getContextUsage();
+type ContextUsage = ReturnType<ExtensionContext["getContextUsage"]>;
+
+function renderContext(theme: Theme, usage: ContextUsage): string {
   const indicator = contextIndicator(usage?.tokens, usage?.percent);
   return theme.fg(indicator.color, indicator.text);
+}
+
+function promptThemeKey(theme: Theme): string {
+  return [
+    theme.getFgAnsi("accent"),
+    theme.getFgAnsi("text"),
+    theme.getFgAnsi("muted"),
+    theme.getFgAnsi("dim"),
+    theme.getFgAnsi("warning"),
+    theme.getFgAnsi("error"),
+    theme.getFgAnsi("success"),
+    theme.getFgAnsi("borderMuted"),
+    theme.getFgAnsi("mdLink"),
+    theme.getBgAnsi("userMessageBg"),
+  ].join("\0");
+}
+
+type ThinkingLevel = ReturnType<ExtensionAPI["getThinkingLevel"]>;
+
+export interface PromptRenderInput {
+  readonly width: number;
+  readonly editorWidth: number;
+  readonly inputLines: readonly string[];
+  readonly theme: Theme;
+  readonly modelName: string | undefined;
+  readonly modelProvider: string | undefined;
+  readonly thinkingLevel: ThinkingLevel;
+  readonly usage: ContextUsage;
+  readonly profileName: string;
+  readonly isWorking: boolean;
 }
 
 function formatProvider(provider: string): string {
@@ -208,18 +237,32 @@ export function renderPromptHints(
   return fitColumns(renderedLeft, hintRight, width);
 }
 
+interface CachedPromptLayout {
+  readonly key: string;
+  readonly theme: Theme;
+  readonly lines: string[];
+  readonly suggestions: string[];
+}
+
 export class PromptEditor extends CustomEditor {
   private readonly appKeybindings: KeybindingsManager;
+  private readonly requestRender: () => void;
   private readonly pi: ExtensionAPI;
   private readonly ctx: ExtensionContext;
   private readonly promptState: PromptEditorState;
   private readonly autocompleteOverlay: AutocompleteOverlay;
   private readonly disposeSubagentSessionLinks: () => void;
   private readonly typoRules: TypoCorrectionRules;
-  private readonly agentMentions: readonly AgentMention[];
+  private readonly agentMentionCache: AgentMentionCache;
+  private readonly unsubscribeAgentMentions: () => void;
+  private agentMentions: readonly AgentMention[];
   private readonly projectReferences: readonly ProjectReference[];
+  private baseAutocompleteProvider: AutocompleteProvider | undefined;
+  private autocompleteProviderRevision = 0;
   private autocompleteItems: readonly AutocompleteItem[] = [];
   private autocompleteTokenPrefixes = new Set(["/", "@", "#"]);
+  private layoutCache: CachedPromptLayout | undefined;
+  private contextCache: { model: ExtensionContext["model"]; usage: ContextUsage } | undefined;
 
   constructor(
     tui: TUI,
@@ -229,40 +272,57 @@ export class PromptEditor extends CustomEditor {
     ctx: ExtensionContext,
     state: PromptEditorState,
     typoRules: TypoCorrectionRules,
+    agentMentionCache: AgentMentionCache,
   ) {
     super(tui, theme, keybindings, {
       paddingX: EDITOR_PADDING_X,
       autocompleteMaxVisible: AUTOCOMPLETE_MAX_VISIBLE,
     });
     this.appKeybindings = keybindings;
+    this.requestRender = () => tui.requestRender();
     this.pi = pi;
     this.ctx = ctx;
     this.promptState = state;
     this.typoRules = typoRules;
-    const knownAgentMentions = loadAgentMentions(
-      this.ctx.cwd,
-      getAgentDir(),
-      this.ctx.isProjectTrusted?.() ?? false,
-    );
-    this.agentMentions = knownAgentMentions.filter(
-      (mention) => pathShadowsAgentMention(mention.name, this.ctx.cwd) === false,
-    );
+    this.agentMentionCache = agentMentionCache;
+    this.agentMentions = this.availableAgentMentions();
     this.projectReferences = [];
     try {
       const projectReferences = loadProjectReferences(
         this.ctx.cwd,
         this.ctx.isProjectTrusted?.() ?? false,
       );
-      assertNoAgentMentionCollisions(projectReferences, knownAgentMentions);
+      assertNoAgentMentionCollisions(projectReferences, agentMentionCache.getMentions());
       this.projectReferences = projectReferences;
     } catch {
       // The project-references extension reports the same configuration error during startup.
     }
     this.disposeSubagentSessionLinks = installClickableSubagentSessions(tui, ctx);
     this.autocompleteOverlay = new AutocompleteOverlay(tui);
+    this.unsubscribeAgentMentions = agentMentionCache.subscribe(() => {
+      this.agentMentions = this.availableAgentMentions();
+      this.layoutCache = undefined;
+      if (this.baseAutocompleteProvider !== undefined) {
+        this.installAutocompleteProvider(this.baseAutocompleteProvider);
+      }
+      this.requestRender();
+    });
+  }
+  invalidateContextUsage(): void {
+    this.contextCache = undefined;
+  }
+
+  private contextUsage(): ContextUsage {
+    const model = this.ctx.model;
+    if (this.contextCache === undefined || this.contextCache.model !== model) {
+      this.contextCache = { model, usage: this.ctx.getContextUsage() };
+    }
+    return this.contextCache.usage;
   }
 
   dispose(): void {
+    this.unsubscribeAgentMentions();
+    this.autocompleteProviderRevision += 1;
     this.disposeSubagentSessionLinks();
     this.autocompleteOverlay.dispose();
   }
@@ -273,6 +333,12 @@ export class PromptEditor extends CustomEditor {
   }
 
   setAutocompleteProvider(provider: AutocompleteProvider): void {
+    this.baseAutocompleteProvider = provider;
+    this.installAutocompleteProvider(provider);
+  }
+
+  private installAutocompleteProvider(provider: AutocompleteProvider): void {
+    const revision = ++this.autocompleteProviderRevision;
     this.autocompleteItems = [];
     this.autocompleteTokenPrefixes = new Set([
       "/",
@@ -300,10 +366,18 @@ export class PromptEditor extends CustomEditor {
           cursorCol,
           options,
         );
-        this.autocompleteItems = suggestions?.items ?? [];
+        if (revision === this.autocompleteProviderRevision) {
+          this.autocompleteItems = suggestions?.items ?? [];
+        }
         return suggestions;
       },
     });
+  }
+
+  private availableAgentMentions(): readonly AgentMention[] {
+    return this.agentMentionCache
+      .getMentions()
+      .filter((mention) => this.agentMentionCache.isPathShadowed(mention.name) === false);
   }
 
   private hasAutocompleteTokenAtCursor(line: string, cursorCol: number): boolean {
@@ -359,15 +433,77 @@ export class PromptEditor extends CustomEditor {
     }
 
     const theme = this.ctx.ui.theme;
-    const editorBorder = (text: string) => this.borderColor(text);
     const editorWidth = width - DOCK_CHROME_WIDTH;
-    const { content, suggestions } = splitEditorLines(super.render(editorWidth), editorBorder);
-    const coloredContent = content.map((line) => {
+    const inputLines = super.render(editorWidth);
+    const model = this.ctx.model;
+    const thinkingLevel = this.pi.getThinkingLevel();
+    const usage = this.contextUsage();
+    const profileName = sanitizeStatus(this.promptState.getProfileName() ?? "");
+    const isWorking = this.promptState.isWorking();
+    const key = JSON.stringify([
+      width,
+      inputLines,
+      promptThemeKey(theme),
+      model?.name,
+      model?.provider,
+      thinkingLevel,
+      theme.getThinkingBorderColor(thinkingLevel)(thinkingLevel),
+      usage?.tokens,
+      usage?.percent,
+      profileName,
+      isWorking,
+      this.agentMentionCache.version,
+    ]);
+    let cached = this.layoutCache;
+    if (cached === undefined || cached.key !== key || cached.theme !== theme) {
+      const result = this.buildPromptLayout({
+        width,
+        editorWidth,
+        inputLines,
+        theme,
+        modelName: model?.name,
+        modelProvider: model?.provider,
+        thinkingLevel,
+        usage,
+        profileName,
+        isWorking,
+      });
+      cached = { key, theme, ...result };
+      this.layoutCache = cached;
+    }
+
+    const suggestionsRail = theme.fg("borderMuted", DOCK_RAIL);
+    const suggestionRails = cached.suggestions.map((line) => {
+      const status = getSuggestionGitStatus(line, this.autocompleteItems);
+      return (status === undefined ? "" : formatFffGitStatus(theme, status)) || suggestionsRail;
+    });
+    const backgroundAnsi = theme.getBgAnsi("userMessageBg");
+    const rightBorder = theme.fg("borderMuted", DOCK_RIGHT_BORDER);
+    this.autocompleteOverlay.update(
+      cached.suggestions,
+      suggestionRails,
+      width,
+      cached.lines.length,
+      {
+        rail: suggestionsRail,
+        rightBorder,
+        backgroundAnsi,
+        selectedBackgroundAnsi: foregroundToBackground(theme.getFgAnsi("accent")),
+        selectedForegroundAnsi: backgroundToForeground(backgroundAnsi),
+      },
+    );
+    return cached.lines;
+  }
+
+  protected highlightPromptContent(content: readonly string[], theme: Theme): string[] {
+    return content.map((line) => {
       const coloredAgents = formatAnsiAgentMentions(
         line,
         this.agentMentions,
         this.ctx.cwd,
         (mention) => agentMentionForegroundAnsi(theme, mention),
+        "\u001b[39m",
+        (name) => this.agentMentionCache.isPathShadowed(name),
       );
       return formatAnsiReferenceMentions(
         coloredAgents,
@@ -376,55 +512,54 @@ export class PromptEditor extends CustomEditor {
         theme.getFgAnsi("mdLink"),
         "\u001b[39m",
         theme.getFgAnsi("accent"),
+        (value) => this.agentMentionCache.referencePathState(value),
       );
     });
-    const model = this.ctx.model;
-    const thinkingLevel = this.pi.getThinkingLevel();
-    const separator = theme.fg("dim", " · ");
+  }
+
+  protected renderContextLine(theme: Theme, usage: ContextUsage): string {
+    return renderContext(theme, usage);
+  }
+
+  protected buildPromptLayout(input: PromptRenderInput): {
+    lines: string[];
+    suggestions: string[];
+  } {
+    const editorBorder = (text: string) => this.borderColor(text);
+    const { content, suggestions } = splitEditorLines(input.inputLines, editorBorder);
+    const coloredContent = this.highlightPromptContent(content, input.theme);
+    const separator = input.theme.fg("dim", " · ");
     const modelLeft =
-      model === undefined
-        ? theme.fg("muted", " No model")
+      input.modelName === undefined || input.modelProvider === undefined
+        ? input.theme.fg("muted", " No model")
         : [
-            theme.fg("text", ` ${model.name}`),
+            input.theme.fg("text", ` ${input.modelName}`),
             " ",
-            theme.fg("muted", formatProvider(model.provider)),
+            input.theme.fg("muted", formatProvider(input.modelProvider)),
             separator,
-            theme.getThinkingBorderColor(thinkingLevel)(thinkingLevel),
+            input.theme.getThinkingBorderColor(input.thinkingLevel)(input.thinkingLevel),
           ].join("");
-    const profileName = sanitizeStatus(this.promptState.getProfileName() ?? "");
     const modelRight = [
-      renderContext(theme, this.ctx),
-      profileName.length > 0 ? `${separator}${theme.fg("muted", profileName)}` : "",
+      this.renderContextLine(input.theme, input.usage),
+      input.profileName.length > 0
+        ? `${separator}${input.theme.fg("muted", input.profileName)}`
+        : "",
       " ",
     ].join("");
-    const modelRow = fitColumns(modelLeft, modelRight, editorWidth);
-    const inputBorderColor = this.promptState.isWorking() ? "accent" : "borderMuted";
-    const inputRail = theme.fg(inputBorderColor, DOCK_RAIL);
-    const suggestionsRail = theme.fg("borderMuted", DOCK_RAIL);
-    const rightBorder = theme.fg("borderMuted", DOCK_RIGHT_BORDER);
-    const backgroundAnsi = theme.getBgAnsi("userMessageBg");
+    const modelRow = fitColumns(modelLeft, modelRight, input.editorWidth);
+    const inputBorderColor = input.isWorking ? "accent" : "borderMuted";
+    const inputRail = input.theme.fg(inputBorderColor, DOCK_RAIL);
+    const rightBorder = input.theme.fg("borderMuted", DOCK_RIGHT_BORDER);
+    const backgroundAnsi = input.theme.getBgAnsi("userMessageBg");
     const dockRows = ["", ...coloredContent, "", modelRow].map((line) =>
-      paintDockRow(line, width, inputRail, backgroundAnsi, rightBorder),
+      paintDockRow(line, input.width, inputRail, backgroundAnsi, rightBorder),
     );
     const bottomEdge = paintDockBottomEdge(
-      width,
-      theme.fg(inputBorderColor, "▘"),
-      theme.fg("borderMuted", "▝"),
+      input.width,
+      input.theme.fg(inputBorderColor, "▘"),
+      input.theme.fg("borderMuted", "▝"),
       backgroundAnsi,
     );
-    const promptLayout = [...dockRows, bottomEdge];
-
-    const suggestionRails = suggestions.map((line) => {
-      const status = getSuggestionGitStatus(line, this.autocompleteItems);
-      return (status === undefined ? "" : formatFffGitStatus(theme, status)) || suggestionsRail;
-    });
-    this.autocompleteOverlay.update(suggestions, suggestionRails, width, promptLayout.length, {
-      rail: suggestionsRail,
-      rightBorder,
-      backgroundAnsi,
-      selectedBackgroundAnsi: foregroundToBackground(theme.getFgAnsi("accent")),
-      selectedForegroundAnsi: backgroundToForeground(backgroundAnsi),
-    });
-    return promptLayout;
+    return { lines: [...dockRows, bottomEdge], suggestions };
   }
 }

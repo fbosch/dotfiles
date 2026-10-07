@@ -6,7 +6,7 @@ import {
   getAgentDir,
   UserMessageComponent,
 } from "@earendil-works/pi-coding-agent";
-import { type AgentMention, loadAgentMentions } from "../agent-mentions";
+import { type AgentMention, AgentMentionCache, loadAgentMentions } from "../agent-mentions";
 import { createReferenceAutocompleteProvider } from "./autocomplete";
 import { loadConfiguredGlobalReferences, loadConfiguredProjectReferences } from "./configured";
 import { loadDocsCacheReferences } from "./docs-cache";
@@ -22,6 +22,7 @@ interface UserMessageReferenceColors {
   foregroundAnsi: string;
   imageForegroundAnsi: string;
   restoreAnsi: string;
+  pathCache: AgentMentionCache;
 }
 
 type UserMessageRender = (this: UserMessageComponent, width: number) => string[];
@@ -58,6 +59,7 @@ function installUserMessageReferenceColors(
           activeColors.foregroundAnsi,
           activeColors.restoreAnsi,
           activeColors.imageForegroundAnsi,
+          (value) => activeColors.pathCache.referencePathState(value),
         ),
       );
     };
@@ -156,10 +158,12 @@ export {
 export default function projectReferences(pi: ExtensionAPI, agentDirectory = getAgentDir()): void {
   let references: ProjectReference[] = [];
   let activeContext: ExtensionContext | undefined;
+  let pathCache: AgentMentionCache | undefined;
   const disposeUserMessageColors = installUserMessageReferenceColors(() => {
-    if (activeContext === undefined) return undefined;
+    if (activeContext === undefined || pathCache === undefined) return undefined;
     return {
       cwd: activeContext.cwd,
+      pathCache,
       references,
       foregroundAnsi: activeContext.ui.theme.getFgAnsi("mdLink"),
       imageForegroundAnsi: activeContext.ui.theme.getFgAnsi("accent"),
@@ -167,8 +171,12 @@ export default function projectReferences(pi: ExtensionAPI, agentDirectory = get
     };
   });
 
-  pi.on("session_start", (_event, ctx) => {
+  pi.on("session_start", async (_event, ctx) => {
     activeContext = ctx;
+    pathCache?.dispose();
+    pathCache = new AgentMentionCache(ctx.cwd, agentDirectory, ctx.isProjectTrusted());
+    pathCache.subscribe(() => pi.events.emit("dotfiles:mentions-changed", undefined));
+    await pathCache.start();
     try {
       references = loadProjectReferences(
         ctx.cwd,
@@ -188,6 +196,8 @@ export default function projectReferences(pi: ExtensionAPI, agentDirectory = get
   });
   pi.on("session_shutdown", () => {
     activeContext = undefined;
+    pathCache?.dispose();
+    pathCache = undefined;
     disposeUserMessageColors();
   });
 

@@ -566,6 +566,7 @@ describe("subagent session links", () => {
     const overlay = createClosingOverlayTui({
       onShow: (component) => {
         try {
+          component.render(76);
           component.handleInput?.("\u001b[H");
           firstRaw = component.render(76).join("\n");
           first = stripTerminalSequences(firstRaw);
@@ -634,6 +635,7 @@ describe("subagent session links", () => {
     expect(first).toMatch(/transcript row 1\b/);
     expect(first).not.toContain("transcript row 120");
     expect(last).toContain("transcript row 120");
+    expect(last).toContain("122 lines · 100%");
     expect(previousPage).not.toContain("transcript row 120");
     expect(frames).toHaveLength(3);
     for (const { width, rows, lines } of frames) {

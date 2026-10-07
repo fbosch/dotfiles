@@ -4,6 +4,11 @@ if string match -q vscode $TERM_PROGRAM
     exec dash
 end
 
+# Pi does not detect Herdr's Kitty graphics support; preserve explicit overrides.
+if test "$TERM_PROGRAM" = herdr; and not set -q PI_IMAGE_PROTOCOL
+    set -gx PI_IMAGE_PROTOCOL kitty
+end
+
 function hyprstart
     # Launch Hyprland with UWSM for proper systemd integration and watchdog notifications
     # The -F flag (finalize) enables watchdog support, preventing TXT_KEY_NOTIF_NO_WATCHDOG warnings
