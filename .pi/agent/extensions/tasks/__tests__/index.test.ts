@@ -13,7 +13,12 @@ import type {
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { stripTerminalSequences, type TUI, visibleWidth } from "@earendil-works/pi-tui";
+import {
+  type Component,
+  stripTerminalSequences,
+  type TUI,
+  visibleWidth,
+} from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
 import { installSubagentWidgetFrame } from "../../prompt-ui/subagent-widget-frame";
 import tasksExtension, {
@@ -22,6 +27,7 @@ import tasksExtension, {
   type ReconciliationResult,
   renderTaskWidget,
   resolveTaskIcons,
+  TASKS_INPUT_ENTRY,
   TASKS_RECONCILIATION_ENTRY,
   TASKS_STATE_ENTRY,
   TASKS_STATE_SCHEMA,
@@ -34,6 +40,7 @@ type TaskDetails = { action: TasksInput["action"]; items: TaskItem[] };
 type RegisteredTaskTool = ToolDefinition<typeof TasksParameters, TaskDetails>;
 type EventHandler = (event: never, ctx: ExtensionContext) => unknown | Promise<unknown>;
 type CommandHandler = (args: string, ctx: ExtensionCommandContext) => Promise<void> | void;
+type CustomViewFactory = Parameters<ExtensionContext["ui"]["custom"]>[0];
 
 let root: string;
 let cwd: string;
@@ -70,6 +77,7 @@ function harness(
   const renderers = new Map<string, EntryRenderer>();
   const widgets: Parameters<ExtensionContext["ui"]["setWidget"]>[1][] = [];
   const notifications: string[] = [];
+  const customComponents: Component[] = [];
   let customViews = 0;
   let tool: RegisteredTaskTool | undefined;
   const context = {
@@ -84,8 +92,15 @@ function harness(
       setWidget: (_key: string, content: Parameters<ExtensionContext["ui"]["setWidget"]>[1]) =>
         widgets.push(content),
       notify: (message: string) => notifications.push(message),
-      async custom() {
+      async custom(factory: CustomViewFactory) {
         customViews++;
+        const theme = {
+          fg: (_color: string, text: string) => text,
+          strikethrough: (text: string) => text,
+        } as unknown as Theme;
+        customComponents.push(
+          await factory({} as TUI, theme, {} as Parameters<CustomViewFactory>[2], () => {}),
+        );
       },
     },
   };
@@ -115,6 +130,7 @@ function harness(
     widgets,
     notifications,
     renderers,
+    customComponents,
     get customViews() {
       return customViews;
     },
@@ -289,6 +305,43 @@ describe("standalone tasks checklist", () => {
     }
   });
 
+  test.each(["pending", "in_progress", "completed"] as const)(
+    "sanitizes task titles in both views without changing saved values: %s",
+    async (status) => {
+      const manager = createSession();
+      const tasks = harness(manager);
+      await tasks.event("session_start");
+      const title =
+        "first\x1b[31m\nsecond\x1b[0m\tthird\x1b]8;;https://example.invalid\x1b\\\u0007\r\u2028\u2029\u007f\u0085æøå\x1b]8;;\x1b\\ 👩‍💻 界\x1b]52;c;dGVzdA==\u0007";
+      const items: TaskItem[] = [{ id: "unsafe", title, status }];
+      await tasks.call({ action: "set", items });
+      await tasks.command("view");
+      const component = tasks.customComponents.at(-1);
+      if (component === undefined) throw new Error("Expected a task command component");
+      const theme = {
+        fg: (_color: string, text: string) => text,
+        strikethrough: (text: string) => text,
+      };
+      const icon = { pending: "□", in_progress: "■", completed: "✓" }[status];
+      expect(renderTaskWidget(items, 160, theme)[1]).toBe(
+        `  ${icon} first second third æøå 👩‍💻 界`,
+      );
+      expect(component.render(160)[1]).toBe(`  ${icon} first second third æøå 👩‍💻 界 [${status}]`);
+      for (const width of [1, 12, 40, 160]) {
+        for (const lines of [renderTaskWidget(items, width, theme), component.render(width)]) {
+          expect(lines.every((line) => visibleWidth(line) <= width)).toBe(true);
+          expect(
+            lines.every((line) => !/[\p{Cc}\p{Zl}\p{Zp}]/u.test(stripTerminalSequences(line))),
+          ).toBe(true);
+        }
+      }
+      expect((await tasks.call({ action: "list" })).details?.items).toEqual(items);
+      const reloaded = harness(manager);
+      await reloaded.event("session_start", { reason: "reload" });
+      expect((await reloaded.call({ action: "list" })).details?.items).toEqual(items);
+    },
+  );
+
   test("only suppresses reminders for high-confidence explanations", () => {
     expect(confidentlyExplainsUnfinishedWork({ type: "bool", probability: 0.95 })).toBe(true);
     expect(confidentlyExplainsUnfinishedWork({ type: "bool", probability: 0.84 })).toBe(false);
@@ -333,6 +386,101 @@ describe("standalone tasks checklist", () => {
     expect(await reloaded.event("agent_before_settle", completion)).toMatchObject({
       continue: true,
     });
+  });
+
+  test.each([false, true])(
+    "retains reconciliation across persisted extension input and navigation: suppressed=%s",
+    async (suppressed) => {
+      const manager = createSession();
+      let checks = 0;
+      const classify = async () => {
+        checks++;
+        return suppressed;
+      };
+      const tasks = harness(manager, classify);
+      await tasks.event("session_start");
+      await tasks.call({ action: "set", items: plan });
+      const completion = {
+        outcome: "completed",
+        context: {
+          llmMessages: [{ role: "assistant", content: [{ type: "text", text: "Done." }] }],
+        },
+      };
+      expect(await tasks.event("agent_before_settle", completion)).toBeDefined();
+      manager.appendCustomEntry(TASKS_RECONCILIATION_ENTRY);
+      await tasks.event("input", { source: "extension", text: "Automated follow-up" });
+      manager.appendMessage({
+        role: "user",
+        content: "Automated follow-up",
+        timestamp: Date.now(),
+      });
+      const inputEntry = manager
+        .getBranch()
+        .find((entry) => entry.type === "custom" && entry.customType === TASKS_INPUT_ENTRY);
+      if (inputEntry?.type !== "custom") throw new Error("Missing persisted input decision");
+      expect(inputEntry.data).toEqual({ resetReminder: false });
+      expect(JSON.stringify(manager.buildSessionContext().messages)).not.toContain(
+        TASKS_INPUT_ENTRY,
+      );
+      const extensionPoint = manager.getLeafId();
+      if (extensionPoint === null) throw new Error("Missing extension-input branch point");
+      expect(await tasks.event("agent_before_settle", completion)).toBeUndefined();
+      await tasks.event("session_start", { reason: "reload" });
+      expect(await tasks.event("agent_before_settle", completion)).toBeUndefined();
+
+      const file = manager.getSessionFile();
+      if (file === undefined) throw new Error("Session file was not created");
+      const resumed = harness(SessionManager.open(file), classify);
+      await resumed.event("session_start", { reason: "resume" });
+      expect(await resumed.event("agent_before_settle", completion)).toBeUndefined();
+      const forkFile = manager.createBranchedSession(extensionPoint);
+      if (forkFile === undefined) throw new Error("Fork session was not created");
+      const forked = harness(SessionManager.open(forkFile), classify);
+      await forked.event("session_start", { reason: "fork" });
+      expect(await forked.event("agent_before_settle", completion)).toBeUndefined();
+
+      await tasks.event("input", { source: "interactive", text: "Continue" });
+      manager.appendMessage({ role: "user", content: "Continue", timestamp: Date.now() });
+      await tasks.event("session_tree");
+      expect(await tasks.event("agent_before_settle", completion)).toBeDefined();
+      expect(checks).toBe(2);
+      manager.branch(extensionPoint);
+      await tasks.event("session_tree");
+      expect(await tasks.event("agent_before_settle", completion)).toBeUndefined();
+      expect(checks).toBe(2);
+    },
+  );
+
+  test.each(["interactive", "rpc"])(
+    "persists a real-input reset before user-message delivery: %s",
+    async (source) => {
+      const manager = createSession();
+      const tasks = harness(manager, async () => false);
+      await tasks.event("session_start");
+      await tasks.call({ action: "set", items: plan });
+      manager.appendCustomEntry(TASKS_RECONCILIATION_ENTRY);
+      await tasks.event("session_start", { reason: "reload" });
+      await tasks.event("input", { source, text: "Queued request" });
+      const reloaded = harness(manager, async () => false);
+      await reloaded.event("session_start", { reason: "reload" });
+      expect(
+        await reloaded.event("agent_before_settle", {
+          outcome: "completed",
+          context: {
+            llmMessages: [{ role: "assistant", content: [{ type: "text", text: "Done." }] }],
+          },
+        }),
+      ).toMatchObject({ continue: true });
+    },
+  );
+
+  test("rejects malformed persisted reminder-reset decisions", async () => {
+    const manager = createSession();
+    manager.appendCustomEntry(TASKS_INPUT_ENTRY, { resetReminder: "false" });
+    const tasks = harness(manager);
+    await expect(tasks.event("session_start", { reason: "resume" })).rejects.toThrow(
+      `Invalid ${TASKS_INPUT_ENTRY} session entry`,
+    );
   });
 
   test("ignores a stale classifier result after user input and skips aborted runs", async () => {

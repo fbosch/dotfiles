@@ -28,6 +28,7 @@ local launch_state_file = kit:instance_path("waybar-launch.pending")
 local visibility_state_file = kit:instance_path("waybar-visibility.state")
 
 local pointer_zone = "neutral"
+local pointer_monitor = nil
 local waybar_mapped = false
 local mapped_layer_count = 0
 local mapped_layer_ids = {}
@@ -52,6 +53,8 @@ local visibility_worker = nil
 local pip_worker = nil
 local hide_probe_worker = nil
 local control_socket = nil
+local event_socket = nil
+local event_partial = ""
 
 local valid_zones = { show = true, neutral = true, hide = true }
 
@@ -585,19 +588,31 @@ local control_handlers = {
 	end,
 }
 
-local function handle_control(message)
-	local zone = message:match("^pointer%-zone%s+(%a+)$")
-	if valid_zones[zone] then
-		pointer_zone = zone
-		if zone ~= "show" then
-			show_started_at = nil
-		end
-		if zone ~= "hide" then
-			hide_started_at = nil
-		end
-		return false, "ok"
+local function set_pointer_zone(zone, monitor)
+	if pointer_zone == zone and pointer_monitor == monitor then
+		return
 	end
+	pointer_zone = zone
+	pointer_monitor = monitor
+	if zone ~= "show" then
+		show_started_at = nil
+	end
+	if zone ~= "hide" then
+		hide_started_at = nil
+	end
+end
 
+local function handle_event(line)
+	local zone, monitor = line:match("^pointeredgezone>>([a-z]+),(%d+)$")
+	if valid_zones[zone] then
+		set_pointer_zone(zone, tonumber(monitor))
+	elseif line:match("^monitorremoved>>") then
+		-- A removed output can invalidate the last pointer sample even without mouse motion.
+		set_pointer_zone("neutral", nil)
+	end
+end
+
+local function handle_control(message)
 	local handler = control_handlers[message]
 	if not handler then
 		return false, "error: invalid-command"
@@ -685,6 +700,25 @@ local function cleanup_control_socket()
 		control_socket:close()
 		control_socket = nil
 	end
+	if event_socket then
+		event_socket:close()
+		event_socket = nil
+	end
+end
+
+local function sync_pointer()
+	command.ok(
+		"timeout --foreground 0.5s hyprctl eval "
+			.. command.arg("hl.plugin.pointer_edge_hooks.sync()")
+			.. " >/dev/null 2>&1"
+	)
+end
+
+local function connect_pointer_events()
+	-- Socket2 has no replay: subscribe before forcing a snapshot on startup or reconnect.
+	event_partial = ""
+	event_socket = kit:connect_events({ read_timeout = 0 })
+	sync_pointer()
 end
 
 local function run()
@@ -702,11 +736,7 @@ local function run()
 	end
 
 	control_socket = kit:control_socket("waybar-monitor.sock")
-	command.ok(
-		"timeout --foreground 0.5s hyprctl eval "
-			.. command.arg("hl.plugin.pointer_edge_hooks.sync()")
-			.. " >/dev/null 2>&1"
-	)
+	connect_pointer_events()
 
 	while true do
 		reap_workers()
@@ -717,14 +747,44 @@ local function run()
 		if launch_worker or visibility_worker or pip_worker or hide_probe_worker then
 			interval = math.min(interval, worker_interval_ms)
 		end
-		local ready = socket.select({ control_socket:reader() }, nil, interval / 1000)
-		if #ready > 0 then
-			local action = control_socket:handle_ready(handle_control)
-			if action then
-				return action
+		local ready = socket.select({ control_socket:reader(), event_socket }, nil, interval / 1000)
+		for _, reader in ipairs(ready) do
+			if reader == control_socket:reader() then
+				local action = control_socket:handle_ready(handle_control)
+				if action then
+					return action
+				end
+				-- handle_ready sent the response before returning, so public effects start here.
+				reconcile()
+			elseif reader == event_socket then
+				-- LuaSocket returns incomplete stream fragments separately on a nonblocking read.
+				-- Drain buffered lines too; select need not wake again for bytes already in LuaSocket.
+				for _ = 1, 64 do
+					local line, err, partial = event_socket:receive("*l")
+					if line then
+						line = event_partial .. line
+						event_partial = ""
+						handle_event(line)
+						if line:match("^monitorremoved>>") then
+							sync_pointer()
+						end
+					elseif err == "timeout" then
+						event_partial = event_partial .. (partial or "")
+						if #event_partial > 1100 then
+							event_partial = ""
+							set_pointer_zone("neutral", nil)
+							sync_pointer()
+						end
+						break
+					end
+					if err == "closed" then
+						event_socket:close()
+						set_pointer_zone("neutral", nil)
+						connect_pointer_events()
+						break
+					end
+				end
 			end
-			-- handle_ready sent the response before returning, so public effects start here.
-			reconcile()
 		end
 	end
 end

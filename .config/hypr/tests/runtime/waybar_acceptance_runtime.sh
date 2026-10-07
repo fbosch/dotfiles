@@ -5,10 +5,15 @@ repo_root="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/../../../.." && pwd
 hypr_dir="$repo_root/.config/hypr"
 test_dir="$(mktemp -d)"
 monitor_pid=""
+event_server_pid=""
 cleanup() {
   if [[ -n "$monitor_pid" ]] && kill -0 "$monitor_pid" 2>/dev/null; then
     kill "$monitor_pid" 2>/dev/null || true
     wait "$monitor_pid" 2>/dev/null || true
+  fi
+  if [[ -n "$event_server_pid" ]]; then
+    kill "$event_server_pid" 2>/dev/null || true
+    wait "$event_server_pid" 2>/dev/null || true
   fi
   rm -rf "$test_dir"
 }
@@ -21,6 +26,34 @@ bin="$test_dir/bin"
 signature="waybar-acceptance"
 instance="$runtime/hypr/$signature"
 mkdir -p "$config/runtime/desktop" "$instance" "$bin"
+# Keep a private Socket2 listener available across daemon quit and restart.
+python3 - "$instance/.socket2.sock" <<'PY_SOCKET' &
+import socket
+import sys
+import selectors
+
+server = socket.socket(socket.AF_UNIX)
+server.bind(sys.argv[1])
+server.listen()
+server.setblocking(False)
+selector = selectors.DefaultSelector()
+selector.register(server, selectors.EVENT_READ)
+while True:
+    for key, _ in selector.select():
+        if key.fileobj is server:
+            client, _ = server.accept()
+            client.setblocking(False)
+            selector.register(client, selectors.EVENT_READ)
+        elif not key.fileobj.recv(4096):
+            selector.unregister(key.fileobj)
+            key.fileobj.close()
+PY_SOCKET
+event_server_pid=$!
+for _ in {1..50}; do
+  [[ -S "$instance/.socket2.sock" ]] && break
+  sleep 0.02
+done
+[[ -S "$instance/.socket2.sock" ]]
 ln -s "$hypr_dir/lib" "$config/lib"
 ln -s "$hypr_dir/gaming" "$config/gaming"
 ln -s "$hypr_dir/runtime/lib" "$config/runtime/lib"
@@ -87,7 +120,7 @@ wait "$monitor_pid"
 monitor_pid=""
 sleep 0.05
 [[ ! -e "$WAYBAR_ACCEPTANCE_LAUNCHED" ]]
-if pgrep -f "$test_dir" >/dev/null; then
+if pgrep -f "$test_dir" | grep -vx "$event_server_pid" >/dev/null; then
   printf 'Waybar monitor left a worker process running after quit\n' >&2
   exit 1
 fi
@@ -116,7 +149,7 @@ monitor_pid=""
 [[ "$restart_status" -eq 75 ]]
 sleep 0.05
 [[ ! -e "$WAYBAR_ACCEPTANCE_LAUNCHED" ]]
-if pgrep -f "$test_dir" >/dev/null; then
+if pgrep -f "$test_dir" | grep -vx "$event_server_pid" >/dev/null; then
   printf 'Waybar monitor left a worker process running after restart\n' >&2
   exit 1
 fi
