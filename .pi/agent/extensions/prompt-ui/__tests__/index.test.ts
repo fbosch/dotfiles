@@ -31,7 +31,7 @@ test("headless startup does not load prompt UI rules", async () => {
         `
 const { default: extension } = await import(process.argv[1]);
 let sessionStart;
-extension({ on(event, handler) { if (event === "session_start") sessionStart = handler; } });
+extension({ events: { on() {} }, on(event, handler) { if (event === "session_start") sessionStart = handler; } });
 await sessionStart({ type: "session_start", reason: "startup" }, { hasUI: false });
 console.log("headless");
 `,

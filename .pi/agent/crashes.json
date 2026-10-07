@@ -8,5 +8,15 @@
     "sessionFile": "/Users/fbb/dotfiles/.pi/agent/sessions/--Users-fbb-dotfiles--/2026-10-06T10-20-47-152Z_01a110ba-e8b0-763b-944f-a26ec8993926.jsonl",
     "cwd": "/Users/fbb/dotfiles",
     "notified": true
+  },
+  {
+    "timestamp": "2026-10-07T09:00:34.563Z",
+    "version": "1.0.4",
+    "kind": "uncaught_exception",
+    "message": "undefined is not an object (evaluating 'this.keys.getKeys')",
+    "stack": "TypeError: undefined is not an object (evaluating 'this.keys.getKeys')\n    at <anonymous> (/Users/fbb/dotfiles/.pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigator.ts:346:38)\n    at keyPair (/Users/fbb/dotfiles/.pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigator.ts:346:12)\n    at footerHint (/Users/fbb/dotfiles/.pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigator.ts:338:30)\n    at render (/Users/fbb/dotfiles/.pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigator.ts:311:47)\n    at render (/Users/fbb/dotfiles/.pi/agent/extensions/prompt-ui/subagent-transcript-frame.ts:32:11)\n    at compositeOverlays (/$bunfs/root/pi:117696:44)\n    at doRender (/$bunfs/root/pi:126185:38)\n    at <anonymous> (/$bunfs/root/pi:117452:22)",
+    "sessionFile": "/Users/fbb/dotfiles/.pi/agent/sessions/--Users-fbb-dotfiles--/2026-10-07T08-54-25-413Z_01a11592-3385-7675-892b-f9dbc4fae218.jsonl",
+    "cwd": "/Users/fbb/dotfiles",
+    "notified": true
   }
 ]

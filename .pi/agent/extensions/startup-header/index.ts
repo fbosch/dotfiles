@@ -26,7 +26,7 @@ import { readHeaderOwnerSnapshot } from "./header-snapshot";
 import { captureStartupBaseline, deferStartupMeasurement } from "./startup-time";
 import { type UpdateAllResult, updateAllAvailablePackages } from "./update-all";
 import { readAvailableUpdates, type UpdateDetail } from "./updates";
-import { renderStartupHeader, UPDATE_ALL_BUTTON_TEXT } from "./view-model";
+import { renderStartupHeader, startupHeaderTimeKey, UPDATE_ALL_BUTTON_TEXT } from "./view-model";
 import { inspectWorkspace, type WorkspaceIdentity } from "./workspace";
 
 export interface StartupHeaderDependencies {
@@ -211,10 +211,24 @@ export default function startupHeader(
       .catch(() => {});
 
     ctx.ui.setHeader((tui, theme) => {
-      requestRender = () => tui.requestRender();
+      let revision = 0;
+      let cachedWidth: number | undefined;
+      let cachedRevision = -1;
+      let cachedTime = "";
+      requestRender = () => {
+        revision += 1;
+        tui.requestRender();
+      };
       let renderedLines: string[] = [];
       return {
         render: (width) => {
+          const now = Date.now();
+          const time = startupHeaderTimeKey(owners.get("auth"), owners.get("updates"), now);
+          if (cachedWidth === width && cachedRevision === revision && cachedTime === time)
+            return renderedLines;
+          cachedWidth = width;
+          cachedRevision = revision;
+          cachedTime = time;
           renderedLines = renderStartupHeader(
             theme,
             width,
@@ -231,6 +245,7 @@ export default function startupHeader(
             owners.get("auth"),
             art,
             updateActionState,
+            now,
           );
           return renderedLines;
         },
@@ -249,7 +264,9 @@ export default function startupHeader(
           requestUpdateAll();
           return { handled: true };
         },
-        invalidate() {},
+        invalidate() {
+          cachedWidth = undefined;
+        },
       };
     });
 

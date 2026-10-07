@@ -440,7 +440,13 @@ describe("project references", () => {
           | Promise<BeforeAgentStartEventResult | undefined>)
       | undefined;
     let sessionShutdown: (() => void) | undefined;
+    let metadataChanged: (() => void) | undefined;
     const pi = {
+      events: {
+        emit() {
+          metadataChanged?.();
+        },
+      },
       on(event: string, handler: typeof sessionStart | typeof beforeAgentStart) {
         if (event === "session_start") sessionStart = handler as typeof sessionStart;
         if (event === "before_agent_start") beforeAgentStart = handler as typeof beforeAgentStart;
@@ -461,7 +467,7 @@ describe("project references", () => {
         theme,
       },
     } as unknown as ExtensionContext;
-    sessionStart?.({} as SessionStartEvent, context);
+    await sessionStart?.({} as SessionStartEvent, context);
 
     const result = await beforeAgentStart?.(
       {
@@ -473,9 +479,13 @@ describe("project references", () => {
       context,
     );
     expect(result?.systemPrompt).toContain('"reference-material":{"path":');
-    const rendered = new UserMessageComponent("Inspect @reference-material and screenshot.png")
-      .render(80)
-      .join("\n");
+    const message = new UserMessageComponent("Inspect @reference-material and screenshot.png");
+    const updated = new Promise<void>((resolve) => {
+      metadataChanged = resolve;
+    });
+    message.render(80);
+    await updated;
+    const rendered = message.render(80).join("\n");
     expect(rendered).toContain(`${theme.getFgAnsi("mdLink")}@reference-material`);
     expect(rendered).toContain(`${theme.getFgAnsi("accent")}screenshot.png`);
     sessionShutdown?.();

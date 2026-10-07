@@ -1,4 +1,4 @@
-import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { type ExtensionAPI, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { getKeybindings, type TUI } from "@earendil-works/pi-tui";
 import { installFloatingDialogs } from "./floating-dialogs";
 import {
@@ -18,7 +18,11 @@ export default function promptUi(pi: ExtensionAPI): void {
   let workingPulseIndex = 0;
   let workingPulseTimer: ReturnType<typeof setInterval> | undefined;
   let activeTui: TUI | undefined;
+  let sessionGeneration = 0;
   let disposePromptEditor = () => {};
+  let disposeAgentMentionCache = () => {};
+  let invalidateContextUsage = () => {};
+  let disposeMentionListener = () => {};
   let disposeSubagentWidgetFrame = () => {};
   let getBranch = (): string | null => null;
   let getProfileName = (): string | undefined => undefined;
@@ -58,22 +62,61 @@ export default function promptUi(pi: ExtensionAPI): void {
 
   // Custom compaction can finish after agent_settled; redraw the live usage counter then.
   pi.on("session_compact", () => {
+    invalidateContextUsage();
     activeTui?.requestRender();
   });
 
+  pi.on("message_start", () => invalidateContextUsage());
+  pi.on("message_update", () => invalidateContextUsage());
+  pi.on("message_end", () => invalidateContextUsage());
+  pi.on("session_tree", () => {
+    invalidateContextUsage();
+    activeTui?.requestRender();
+  });
   pi.on("session_shutdown", () => {
+    sessionGeneration += 1;
     stopWorkingPulse();
     disposePromptEditor();
     disposePromptEditor = () => {};
+    invalidateContextUsage = () => {};
+    disposeMentionListener();
+    disposeMentionListener = () => {};
+    disposeAgentMentionCache();
+    disposeAgentMentionCache = () => {};
     disposeSubagentWidgetFrame();
     disposeSubagentWidgetFrame = () => {};
     activeTui = undefined;
   });
 
   pi.on("session_start", async (_event, ctx) => {
+    const generation = ++sessionGeneration;
+    disposePromptEditor();
+    disposePromptEditor = () => {};
+    invalidateContextUsage = () => {};
+    disposeMentionListener();
+    disposeMentionListener = () => {};
+    disposeAgentMentionCache();
+    disposeAgentMentionCache = () => {};
+    activeTui = undefined;
     if (!ctx.hasUI) return;
 
+    disposeMentionListener = pi.events.on("dotfiles:mentions-changed", () => {
+      activeTui?.invalidate();
+      activeTui?.requestRender();
+    });
     const { loadTypoCorrectionRules } = await import("../typo-abolish");
+    const { AgentMentionCache } = await import("../mentions/agent-mentions");
+    const agentMentionCache = new AgentMentionCache(
+      ctx.cwd,
+      getAgentDir(),
+      ctx.isProjectTrusted?.() ?? false,
+    );
+    await agentMentionCache.start();
+    if (generation !== sessionGeneration) {
+      agentMentionCache.dispose();
+      return;
+    }
+    disposeAgentMentionCache = () => agentMentionCache.dispose();
     const typoRules = loadTypoCorrectionRules();
     const {
       FILE_CHANGES_STATUS_KEY,
@@ -82,6 +125,7 @@ export default function promptUi(pi: ExtensionAPI): void {
       renderFooterStatus,
       renderPromptHints,
     } = await import("./prompt-editor");
+    if (generation !== sessionGeneration) return;
 
     let footerCustomization: FooterCustomization | undefined;
     try {
@@ -154,8 +198,18 @@ export default function promptUi(pi: ExtensionAPI): void {
     });
 
     ctx.ui.setEditorComponent((tui, theme, keybindings) => {
-      const editor = new PromptEditor(tui, theme, keybindings, pi, ctx, state, typoRules);
+      const editor = new PromptEditor(
+        tui,
+        theme,
+        keybindings,
+        pi,
+        ctx,
+        state,
+        typoRules,
+        agentMentionCache,
+      );
       disposePromptEditor = () => editor.dispose();
+      invalidateContextUsage = () => editor.invalidateContextUsage();
       activeTui = tui;
       return editor;
     });

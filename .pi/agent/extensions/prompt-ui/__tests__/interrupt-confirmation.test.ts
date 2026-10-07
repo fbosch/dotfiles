@@ -12,6 +12,7 @@ import {
   setThemeInstance,
   theme,
 } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
+import { AgentMentionCache } from "../../mentions/agent-mentions";
 import { PromptEditor, type PromptEditorState } from "../prompt-editor";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../../../", import.meta.url));
@@ -49,6 +50,7 @@ function createEditor(working: boolean) {
     } as unknown as ExtensionContext,
     state,
     { rules: new Map(), lengths: new Set() },
+    new AgentMentionCache(REPO_ROOT, REPO_ROOT, false),
   );
   editor.onEscape = () => {
     interruptCount += 1;

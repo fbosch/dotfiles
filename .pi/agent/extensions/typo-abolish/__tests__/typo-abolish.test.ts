@@ -13,6 +13,7 @@ import {
   getKeybindings,
   type TUI,
 } from "@earendil-works/pi-tui";
+import { AgentMentionCache } from "../../mentions/agent-mentions";
 import { PromptEditor, type PromptEditorState } from "../../prompt-ui/prompt-editor";
 import { correctedPromptForInput } from "..";
 import { parseTypoRules, typoRuleLengths } from "../typo-engine";
@@ -74,6 +75,7 @@ function createEditor(): PromptEditor {
     { cwd: process.cwd() } as ExtensionContext,
     state,
     typoRules,
+    new AgentMentionCache(process.cwd(), process.cwd(), false),
   );
 }
 
