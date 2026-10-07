@@ -1,6 +1,7 @@
 # Window state persistence
 
-`rules/window-state-selectors.lua` is the opt-in policy. Native state API v2 in
+`rules/persistent_position.lua` is the opt-in policy. It declares native
+`hl.window_rule(...)` effects only when the plugin adapter is enabled.
 `persistent-position` owns saved position, size, initial windowed state, and PiP
 placement. It restores them before initial layout. Saving does not rewrite rules,
 reload the compositor, or move an already-open window.
@@ -21,18 +22,42 @@ and existing backups are no longer read or migrated.
 
 ## Policy
 
-Selectors match in declaration order using Hyprland's full-match regex engine.
-The first matching, nonexcluded selector wins. Stable selector IDs identify state;
-window addresses and process IDs do not. Nemo excludes File Operations and
-Preparing windows.
+Hyprland owns matching, including multiple `match` fields and `negative:` regexes,
+rule precedence, and rule enabled state. The last applicable persistence effect
+wins. The `persistent_position:remember` value is the stable state identity;
+editing its matcher does not create a new identity. Existing IDs and version-2
+state files remain unchanged.
 
-- `per_monitor` defaults to true. Each selector and monitor has an independent
-  monitor-relative logical position and size. Global selectors share one record.
-- `restore_size` defaults to true. Saved size takes the same precedence as the
-  former generated size rule. Explicit `move` and `center` still win for ordinary
-  position restoration.
-- `force_windowed` defaults to true and affects initial mapping only. A later
-  fullscreen request remains allowed.
+```lua
+local persistence = require("plugins.persistent_position")
+if not persistence.enabled then
+    return
+end
+
+hl.window_rule({
+    match = {
+        class = "^nemo$",
+        initial_title = "negative:^(File Operations|Preparing)$",
+    },
+    ["persistent_position:remember"] = "nemo-main",
+})
+```
+
+The adapter requires state API v2 and native rule API v1, then calls
+`configure(state_path)` before marking persistence enabled. A deferred, failed,
+or incompatible load skips the persistence-only declarations. Ordinary window
+rules remain active; the loader reports configuration failures without a
+selector-based or reload-based fallback.
+
+- Ordinary policies default to independent monitor-relative state for each
+  identity and named monitor. `["persistent_position:per_monitor"] = false`
+  shares one record across outputs.
+- Saved size restores by default and overrides a static size rule.
+  `["persistent_position:restore_size"] = false` keeps client-owned size.
+  Explicit `move` and `center` still win for ordinary position restoration.
+- Ordinary policies restore an initial windowed state by default.
+  `["persistent_position:force_windowed"] = false` preserves initial client
+  fullscreen intent. Later fullscreen requests remain allowed in either case.
 - Fullscreen, maximized, tiled, and excluded windows do not overwrite ordinary
   saved geometry. Programmatic moves need an explicit `capture_focused()` call;
   the plugin does not infer user intent from every geometry notification.
@@ -50,9 +75,11 @@ corresponding corner tag and entry animation, and clear other corner tags. Free
 placement restores no corner tag. A missing saved monitor uses normal routing
 without discarding the record.
 
-PiP sets `restore_size = false` and `force_windowed = false`: its native/browser
-size policy remains authoritative. Generic capture never records PiP or temporary
-Waybar avoidance as a new accepted placement.
+The `["persistent_position:profile"] = "pip"` effect selects global
+accepted-placement state, saved-monitor routing, no size restoration, and no
+initial-windowed forcing. Its native/browser size policy remains authoritative.
+Generic capture never records PiP or temporary Waybar avoidance as a new accepted
+placement.
 
 ## Upgrade and retirement
 
@@ -75,7 +102,7 @@ The plugin checks build/runtime compatibility and required hook installation,
 without a hardcoded supported commit. Build it with
 `just check-hyprland-plugins` in the NixOS repository. The native tests cover state
 validation, rejection of older formats, secure atomic writes, and worker lifetime.
-Dotfiles tests cover selector translation, native ownership, PiP delivery, and the
+Dotfiles tests cover guarded native declarations, stable identities, PiP delivery, and the
 absence of generated-rule loading in native mode.
 
 Run runtime probes only in a separate nested compositor with private config,

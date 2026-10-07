@@ -165,3 +165,5 @@ hl.window_rule({
 
 -- Must follow app-specific privacy tag assignment rules.
 hl.window_rule({ match = { tag = window_tags.privacy }, no_screen_share = true })
+
+require("rules.persistent_position")

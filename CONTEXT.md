@@ -54,18 +54,12 @@ should use these terms; new concepts named during design work land here.
 - **source/derived rule pipeline** — writable policy and selector sources
   generate runtime rule data. Generated outputs are never edited directly,
   and their application order relative to static rules is significant.
-- **window-state selectors** — writable source list
-  (`rules/window-state-selectors.lua`) describing which floating windows get
-  position/size persistence; `rules/window-state.lua` is generated data
-  produced by the window-state daemon from captured state.
-- **window-state capture** — pure snapshot module
-  (`runtime/windows/daemons/window-state/capture.lua`) that turns normalized
-  selectors, clients, and monitors into deterministic persisted JSON. The
-  window-state daemon owns IPC queries and scheduling.
-- **window-state publication** — activation step that merges a stable capture
-  into retained selector state, prunes state when selectors change, atomically
-  replaces derived rules only when their content changes, and then refreshes
-  active rules. Capture and scheduling remain outside this step.
+- **window persistence policy** — opt-in window rules that identify which
+  floating windows retain geometry between openings. Native matching and rule
+  precedence determine the applicable policy.
+- **remembered window state** — durable position, size, or accepted PiP placement
+  associated with a stable policy identity and, by default, a named monitor.
+  Window addresses and process IDs are not persistence identities.
 - **stable target identity** — identity used to approve and revalidate a
   window before targeted actions. Prefer stable client IDs, use addresses only
   as a fallback, and never treat broad class/title selectors as sufficient

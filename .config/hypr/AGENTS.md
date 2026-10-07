@@ -13,7 +13,8 @@ Hyprland compositor configuration deployed with GNU Stow; system packages are ma
 - Keep general static Lua rules as direct `hl.workspace_rule(...)` and `hl.window_rule(...)` calls under `rules/workspace.lua` and `rules/window.lua`; keep cohesive policy-owned rules with their policy module.
 - Keep static layer rules under `rules/layer.lua`; load them from the entrypoint where live config order places them, not from `rules/init.lua` if that would change their established ordering.
 - Keep generated rules in `rules/generated.lua`; do not edit generated outputs directly. Retired `rules/window-state.lua` data is not read or migrated.
-- Keep `rules/window-state-selectors.lua` as the writable policy for native persistence; see [window-state persistence](docs/window-state-persistence.md). Do not restore persistence by writing rules or reloading configuration.
+- Keep `rules/persistent_position.lua` as the writable policy for native persistence; see [window-state persistence](docs/window-state-persistence.md). Do not restore persistence by writing rules or reloading configuration.
+- Guard persistence-only `hl.window_rule(...)` declarations with the plugin adapter's `enabled` state so unavailable custom effects are never declared.
 - Keep cross-module policy tables declarative and typed at their writable source; consumers must read them instead of duplicating per-client exceptions.
 - Preserve window-rule declaration order: generated rules, then static rules. Persisted geometry is applied natively before layout.
 - For performance-sensitive read-only Hyprland queries in scripts, prefer the IPC query socket over spawning `hyprctl`, e.g. `printf 'j/clients' | nc -U "$XDG_RUNTIME_DIR/hypr/$HYPRLAND_INSTANCE_SIGNATURE/.socket.sock"`; keep a `hyprctl` fallback when practical.

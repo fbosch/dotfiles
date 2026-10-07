@@ -12,7 +12,6 @@ local ok, err = pcall(function()
 	if not state_home or state_home == "" then
 		state_home = assert(os.getenv("HOME"), "XDG_STATE_HOME or HOME is required") .. "/.local/state"
 	end
-	local selectors = require("plugins.persistent_position_selectors")
 
 	hl.plugin.load(plugin_path)
 	for _, plugin in ipairs(hl.get_loaded_plugins()) do
@@ -21,7 +20,8 @@ local ok, err = pcall(function()
 			local state_path = state_home .. "/hyprland/persistent-position.state"
 			local api = hl.plugin.persistent_position
 			assert(api.state_version and api.state_version() == 2, "native state API v2 is required")
-			local configured, config_err = hl.plugin.persistent_position.configure(state_path, selectors)
+			assert(api.rule_api_version and api.rule_api_version() == 1, "native rule API v1 is required")
+			local configured, config_err = api.configure(state_path)
 			assert(configured, "configure: " .. tostring(config_err))
 			M.enabled = true
 			M.native_state = true

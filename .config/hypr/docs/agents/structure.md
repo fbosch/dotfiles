@@ -7,5 +7,5 @@
 - `actions/` and `lib/` - Lua actions and shared helpers
 - `runtime/` - Categorized shell helpers used by Lua config and UI integrations
 - `hyprlock.conf` - Screen lock settings
-- `rules/window-state-selectors.lua` - Window state persistence selector source
+- `rules/persistent_position.lua` - Guarded native window persistence rules
 - `hyprpaper.conf.example` - Wallpaper config template
