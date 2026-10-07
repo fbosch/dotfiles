@@ -5,14 +5,19 @@ Apply common Hyprland window rules from Vicinae after selecting a window with `h
 ## What It Changes
 
 - Generated rules are written to `~/.config/hypr/rules/generated.lua`.
-- Window-state selectors are appended to `~/.config/hypr/rules/window-state-selectors.lua`.
-- Snapshot state writes current monitor-relative size and position to `~/.config/hypr/rules/window-state.lua`.
-- Hyprland config is reloaded after applying a rule.
+- Persistence profiles append guarded native window rules to `~/.config/hypr/rules/persistent_position.lua`; existing hand-written rules and comments remain intact.
+- The native persistence plugin captures floating geometry when tracked windows move or resize. Quickrule does not capture geometry itself.
+- Hyprland config is reloaded after adding a rule; repeated persistence matches do not reload it.
+
+Quickrule appends to guarded literal declarations. If the module uses computed
+expressions or assigned rule handles, edit it manually; Quickrule refuses the
+operation without changing the file.
 
 ## Requirements
 
 - Hyprland.
 - `hyprprop` on `PATH`.
+- For persistence profiles: a matching `persistent-position` plugin with native rule API v1.
 
 ## Usage
 
@@ -27,7 +32,7 @@ Apply common Hyprland window rules from Vicinae after selecting a window with `h
 - Fullscreen and picture-in-picture profiles.
 - Appearance profiles for decorations, borders, shadows, opacity, and animation behavior.
 - Specialized profiles for games, dialogs, utility windows, and file managers.
-- Persistence profiles for remembered or snapshotted window state.
+- Persistence profiles for class-based or selected-field tracking.
 
 ## Keybindings
 

@@ -1,32 +1,47 @@
+local plugin = require("plugins.transient_placement")
+
 local M = {}
 
-local obsidian_dialog_size = { x = 970, y = 1050 }
-
--- Add children under the class of the window that opens them.
-local child_classes_by_parent_class = {
-	["app.zen_browser.zen"] = {
-		"app.zen_browser.zen-popup",
+---@type TransientPlacementRule[]
+local rules = {
+	{
+		parent_class = "app.zen_browser.zen",
+		child_class = "app.zen_browser.zen-popup",
+		infer_focused_parent = true,
+		no_anim = true,
 	},
-	helium = {
-		"helium-popup",
+	{
+		parent_class = "helium",
+		child_class = "helium-popup",
+		infer_focused_parent = true,
+		no_anim = true,
 	},
-	nemo = {
-		"zenity",
-		"org.gnome.FileRoller",
-		"org.gnome.Loupe",
+	{
+		parent_class = "nemo",
+		child_class = "zenity",
+		infer_focused_parent = true,
+		no_anim = true,
+	},
+	{
+		parent_class = "nemo",
+		child_class = "org.gnome.FileRoller",
+		infer_focused_parent = true,
+		no_anim = true,
+	},
+	{
+		parent_class = "nemo",
+		child_class = "org.gnome.Loupe",
+		infer_focused_parent = true,
+		no_anim = true,
+	},
+	{
+		parent_class = "md.obsidian.Obsidian",
+		child_class = "md.obsidian.Obsidian",
+		child_title_prefixes = { "Settings - ", "Community plugins - " },
+		infer_focused_parent = true,
+		no_anim = true,
 	},
 }
-
-local function centered_position(parent, dialog)
-	if not parent.at or not parent.size or not dialog.at or not dialog.size then
-		return nil
-	end
-
-	return {
-		x = math.floor(parent.at.x + (parent.size.x - dialog.size.x) / 2 + 0.5),
-		y = math.floor(parent.at.y + (parent.size.y - dialog.size.y) / 2 + 0.5),
-	}
-end
 
 function M.register()
 	hl.window_rule({
@@ -38,57 +53,7 @@ function M.register()
 		size = "970 1050",
 		no_anim = true,
 	})
-
-	hl.on("window.open", function(dialog)
-		local parent = hl.get_last_window()
-		local title = dialog.title or dialog.initial_title or ""
-		local is_obsidian_dialog = parent
-			and parent.class == "md.obsidian.Obsidian"
-			and dialog.class == "md.obsidian.Obsidian"
-			and (title:sub(1, 11) == "Settings - " or title:sub(1, 20) == "Community plugins - ")
-		if is_obsidian_dialog then
-			local position = centered_position(parent, { at = dialog.at, size = obsidian_dialog_size })
-			if not position then
-				return
-			end
-
-			hl.dispatch(hl.dsp.window.move({
-				x = position.x,
-				y = position.y,
-				window = "address:" .. dialog.address,
-			}))
-			return
-		end
-
-		local child_classes = parent and child_classes_by_parent_class[parent.class]
-		if not child_classes then
-			return
-		end
-
-		local matches_child_class = false
-		for _, child_class in ipairs(child_classes) do
-			if child_class == dialog.class then
-				matches_child_class = true
-				break
-			end
-		end
-		if matches_child_class == false then
-			return
-		end
-
-		local position = centered_position(parent, dialog)
-		if not position then
-			return
-		end
-
-		local window = "address:" .. dialog.address
-		hl.dispatch(hl.dsp.window.set_prop({ prop = "no_anim", value = "1", window = window }))
-		hl.dispatch(hl.dsp.window.move({
-			x = position.x,
-			y = position.y,
-			window = window,
-		}))
-	end)
+	return plugin.configure(rules)
 end
 
 return M

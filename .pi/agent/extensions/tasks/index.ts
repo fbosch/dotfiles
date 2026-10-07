@@ -5,7 +5,13 @@ import {
   type ExtensionContext,
   type Theme,
 } from "@earendil-works/pi-coding-agent";
-import { matchesKey, Text, truncateToWidth } from "@earendil-works/pi-tui";
+import {
+  type Component,
+  matchesKey,
+  stripTerminalSequences,
+  Text,
+  truncateToWidth,
+} from "@earendil-works/pi-tui";
 import type { Static } from "typebox";
 import { Type } from "typebox";
 import {
@@ -14,10 +20,12 @@ import {
   requestClassifier,
 } from "../../lib/classifier";
 import { paintDockBottomEdge, paintDockRow } from "../prompt-ui/dock-rendering";
+import { ModalFrame } from "../prompt-ui/modal-frame";
 
 export const TASKS_STATE_ENTRY = "fbb.tasks-checklist.snapshot";
 export const TASKS_STATE_SCHEMA = "fbb.tasks-checklist/v1";
 export const TASKS_RECONCILIATION_ENTRY = "fbb.tasks-checklist.reconciliation";
+export const TASKS_INPUT_ENTRY = "fbb.tasks-checklist.input";
 const RECONCILIATION_MESSAGE_TYPE = "fbb.tasks-checklist.reminder";
 const RECONCILIATION_CONFIDENCE = 0.85;
 const MAX_RESPONSE_CHARS = 4_000;
@@ -213,6 +221,10 @@ function restoreTasks(ctx: ExtensionContext): TaskItem[] {
   return parseSnapshot(lastEntry.data);
 }
 
+function displayTaskTitle(title: string): string {
+  return stripTerminalSequences(title).replace(/[\p{Cc}\p{Zl}\p{Zp}]+/gu, " ");
+}
+
 export function renderTaskWidget(
   items: readonly TaskItem[],
   width: number,
@@ -223,7 +235,7 @@ export function renderTaskWidget(
   const lines = [
     theme.fg("accent", `• ${formatProgress(items)}`),
     ...items.map(({ title, status }) => {
-      const label = title.replace(/[\r\n\t]+/g, " ");
+      const label = displayTaskTitle(title);
       if (status === "completed") {
         return `  ${theme.fg("success", icons.completed)} ${theme.fg("dim", theme.strikethrough(label))}`;
       }
@@ -275,34 +287,41 @@ function taskGlyph(status: TaskItem["status"], theme: Theme, icons: TaskIcons): 
   return theme.fg(color, icons[status]);
 }
 
-class TaskListComponent {
+class TaskListComponent extends ModalFrame {
   constructor(
-    private readonly items: readonly TaskItem[],
-    private readonly theme: Theme,
-    private readonly icons: TaskIcons,
+    items: readonly TaskItem[],
+    theme: Theme,
+    icons: TaskIcons,
     private readonly done: () => void,
-  ) {}
+  ) {
+    super(theme);
+    const lines =
+      items.length === 0
+        ? [theme.fg("dim", "No tasks yet.")]
+        : items.map(({ title, status }) => {
+            const label = displayTaskTitle(title);
+            const styledLabel =
+              status === "completed"
+                ? theme.fg("dim", theme.strikethrough(label))
+                : theme.fg("text", label);
+            return `  ${taskGlyph(status, theme, icons)} ${styledLabel} ${theme.fg(
+              "muted",
+              `[${status}]`,
+            )}`;
+          });
+    const body: Component[] = lines.map((line) => ({
+      render: (width: number) => [truncateToWidth(line, width)],
+      invalidate() {},
+    }));
+    this.setFrame("Tasks", body, "Press Escape to close");
+  }
 
   handleInput(data: string): void {
     if (matchesKey(data, "escape") || matchesKey(data, "ctrl+c")) this.done();
   }
 
-  invalidate(): void {}
-
-  render(width: number): string[] {
-    const lines = [
-      this.theme.fg("accent", " Tasks "),
-      ...(this.items.length === 0
-        ? [this.theme.fg("dim", "No tasks yet.")]
-        : this.items.map(
-            ({ title, status }) =>
-              `  ${taskGlyph(status, this.theme, this.icons)} ${
-                status === "completed" ? this.theme.fg("dim", title) : this.theme.fg("text", title)
-              } ${this.theme.fg("muted", `[${status}]`)}`,
-          )),
-      this.theme.fg("dim", "Press Escape to close"),
-    ];
-    return lines.map((line) => truncateToWidth(line, width));
+  override render(width: number): string[] {
+    return super.render(width).map((line) => truncateToWidth(line, width));
   }
 }
 
@@ -326,15 +345,24 @@ function latestAssistantText(messages: readonly unknown[]): string {
 }
 
 function hasReconciliationMarker(ctx: ExtensionContext): boolean {
-  const branch = ctx.sessionManager.getBranch();
-  let latestUserMessage = -1;
-  let latestMarker = -1;
-  branch.forEach((entry, index) => {
-    if (entry.type === "message" && entry.message.role === "user") latestUserMessage = index;
-    if (entry.type === "custom" && entry.customType === TASKS_RECONCILIATION_ENTRY)
-      latestMarker = index;
-  });
-  return latestMarker > latestUserMessage;
+  let reminderSent = false;
+  let hasInputDecisions = false;
+  for (const entry of ctx.sessionManager.getBranch()) {
+    if (entry.type === "custom" && entry.customType === TASKS_INPUT_ENTRY) {
+      const data = entry.data;
+      if (!isRecord(data) || typeof data.resetReminder !== "boolean") {
+        throw new Error(`Invalid ${TASKS_INPUT_ENTRY} session entry`);
+      }
+      hasInputDecisions = true;
+      if (data.resetReminder) reminderSent = false;
+    } else if (entry.type === "custom" && entry.customType === TASKS_RECONCILIATION_ENTRY) {
+      reminderSent = true;
+    } else if (!hasInputDecisions && entry.type === "message" && entry.message.role === "user") {
+      // Legacy history uses user messages only until its first recorded input decision.
+      reminderSent = false;
+    }
+  }
+  return reminderSent;
 }
 
 // Best-effort guard: skip inference rather than send detected credentials or private references.
@@ -507,7 +535,10 @@ export default function tasksExtension(
   });
   pi.on("input", (event) => {
     invalidateCheck();
-    if (event.source !== "extension") reminderSent = false;
+    const resetReminder = event.source !== "extension";
+    // Persist the decision before Pi stores a user message without its input source.
+    pi.appendEntry(TASKS_INPUT_ENTRY, { resetReminder });
+    if (resetReminder) reminderSent = false;
   });
   pi.on("agent_before_settle", async (event, ctx) => {
     if (

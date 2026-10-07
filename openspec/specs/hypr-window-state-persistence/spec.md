@@ -1,113 +1,110 @@
 ## Purpose
 
-Persist the last observed floating geometry for configured Hyprland clients and
-restore it through generated window rules.
+Persist accepted floating window geometry under stable policy identities and
+restore it natively before initial layout, without generating rules or reloading
+configuration when geometry changes.
 
 ## Requirements
 
-### Requirement: Configured selectors identify windows whose floating geometry is persisted
-The system SHALL read window-state selectors from
-`rules/window-state-selectors.lua` and persist geometry only for floating
-clients that match a configured selector. A selector SHALL identify one of the
-supported client fields and a pattern. When more than one selector matches a
-client, the first configured matching selector SHALL identify the persisted
-state.
+### Requirement: Native window rules select persistence policies
+
+The system SHALL declare persistence policies through `hl.window_rule(...)` in
+`rules/persistent_position.lua`. Hyprland SHALL own matching, including multiple
+match properties, negative regexes, declaration precedence, and rule enabled
+state. The last applicable `persistent_position:remember` effect SHALL supply
+the stable identity used for persisted state.
 
 #### Scenario: Matching floating client is tracked
-- **WHEN** a floating client matches a configured selector
-- **THEN** the system records its geometry using that selector
+- **WHEN** a windowed floating client matches an enabled persistence rule
+- **THEN** an accepted user move or resize records geometry under that rule's
+  stable identity
 
-#### Scenario: Tiled client is ignored
-- **WHEN** a client matching a configured selector is not floating
-- **THEN** the system does not record its geometry
+#### Scenario: Excluded client is ignored
+- **WHEN** Nemo's initial title matches `File Operations` or `Preparing`
+- **THEN** the native negative initial-title matcher excludes it from Nemo's
+  persistence policy
 
-#### Scenario: Unmatched floating client is ignored
-- **WHEN** a floating client does not match a configured selector
-- **THEN** the system does not record its geometry
+#### Scenario: Native precedence selects the identity
+- **WHEN** a client matches multiple enabled rules specifying a persistence
+  identity
+- **THEN** the last applicable effect supplies the identity
 
-#### Scenario: First configured selector wins
-- **WHEN** a floating client matches more than one configured selector
-- **THEN** the system records its geometry using the first matching selector
+#### Scenario: Disabled rule is ignored
+- **WHEN** a persistence rule is disabled
+- **THEN** that rule does not select geometry for capture or initial restoration
 
-### Requirement: Saved geometry is monitor-relative
-The system SHALL record a matching floating client's position relative to the
-origin of the monitor on which the client resides, together with its width and
-height.
+### Requirement: Unavailable plugin effects are not declared
 
-#### Scenario: Global client position is converted to monitor-relative position
-- **WHEN** a matching floating client is positioned on a monitor whose origin
-  is not `0,0`
-- **THEN** the saved x and y coordinates equal the client position minus that
-  monitor's origin
+The persistence rules module SHALL check the plugin adapter's enabled state
+before declaring custom effects. The adapter SHALL require state API v2, native
+rule API v1, and successful storage configuration before enabling persistence.
 
-#### Scenario: Saved geometry includes size
-- **WHEN** a matching floating client is tracked
-- **THEN** the saved geometry includes its width and height
+#### Scenario: Plugin loading is unavailable
+- **WHEN** loading is deferred, rejected, or incompatible, or storage
+  configuration fails
+- **THEN** the persistence-only rule declarations are skipped
+- **AND** ordinary window rules remain available without unknown persistence
+  effect fields
 
-### Requirement: Each selector retains one last-observed geometry
-The system SHALL retain one geometry entry for each selector. A later observed
-geometry for the same selector SHALL replace the previous entry, including
-when the client is on a different monitor.
+### Requirement: Geometry is keyed by stable identity and monitor
 
-#### Scenario: Later movement replaces saved geometry
-- **WHEN** a matching floating client is moved or resized and its geometry
-  becomes stable
-- **THEN** the selector's saved entry is updated to the later geometry
+Saved geometry SHALL use the literal persistence identity rather than a window
+address, process ID, or generated regex-to-identity mapping. Ordinary policies
+SHALL default to independent monitor-relative logical position and size for each
+named monitor. An explicit global policy SHALL share one geometry record.
 
-#### Scenario: Moving to another monitor replaces prior monitor state
-- **WHEN** a matching floating client is observed on a different monitor
-- **THEN** the selector retains the later monitor and its geometry instead of
-  retaining a separate entry for the previous monitor
+#### Scenario: Matcher changes preserve identity
+- **WHEN** a rule's match expression changes but its persistence identity remains
+  the same
+- **THEN** its saved state remains associated with that identity
 
-### Requirement: Saved geometry is emitted as a Hyprland window rule
-The system SHALL generate a window-state rule for each saved selector. The
-rule SHALL match the selector's client field and pattern, set the saved size
-and monitor-relative position, and direct the client to the saved monitor.
+#### Scenario: Multiple monitors retain independent geometry
+- **WHEN** a per-monitor policy captures geometry on a second monitor
+- **THEN** it retains the first monitor's record and stores the second separately
 
-#### Scenario: Literal selector is matched exactly
-- **WHEN** a selector pattern contains no regular-expression metacharacters
-- **THEN** its generated window-rule matcher anchors the pattern at both ends
+### Requirement: Initial geometry is restored natively
 
-#### Scenario: Regular-expression selector is preserved
-- **WHEN** a selector pattern contains regular-expression metacharacters
-- **THEN** its generated window-rule matcher preserves the pattern
+The plugin SHALL read durable version-2 state at storage configuration time and
+restore geometry from memory before initial layout. Ordinary policies SHALL
+restore saved size and initial windowed state by default. Explicit move and
+center rules SHALL retain precedence over ordinary saved position. Later
+fullscreen requests SHALL remain available.
 
-#### Scenario: Saved monitor is restored
-- **WHEN** a generated window-state rule applies to a new client
-- **THEN** the rule sets the client monitor to the monitor saved with the
-  geometry
+#### Scenario: Accepted geometry survives reopening
+- **WHEN** a matching floating client reopens after an accepted capture
+- **THEN** its selected saved size and monitor-relative position are restored
+  before initial layout
 
-### Requirement: Generated rules persist across daemon restarts and reload dynamically
-The system SHALL store saved geometry as generated Lua rules in
-`rules/window-state.lua`. After a saved entry changes, it SHALL atomically
-replace the generated rules file and refresh the window-state rule phase in
-Hyprland.
+#### Scenario: Saving does not publish generated rules
+- **WHEN** an accepted user move or resize changes saved state
+- **THEN** the plugin queues an asynchronous atomic state write
+- **AND** it does not rewrite window rules, reload configuration, or reposition
+  an already-open window to publish the save
 
-#### Scenario: Saved geometry survives daemon restart
-- **WHEN** the daemon restarts after a generated window-state rule exists
-- **THEN** the daemon loads that rule as the selector's saved geometry
+### Requirement: PiP has a distinct accepted-placement profile
 
-#### Scenario: Changed geometry refreshes active window-state rules
-- **WHEN** saved geometry changes
-- **THEN** the system regenerates the window-state rules and refreshes their
-  Hyprland rule phase
+The `["persistent_position:profile"] = "pip"` effect SHALL select global
+accepted-placement storage and saved-monitor routing without generic geometry
+capture, size restoration, or initial-windowed forcing. The PiP reducer SHALL
+remain authoritative for accepting corner or free placement and rejecting
+transient Waybar avoidance.
 
-#### Scenario: Unchanged geometry does not rewrite generated rules
-- **WHEN** the generated rules already represent the saved geometry
-- **THEN** the system does not rewrite the generated rules file or refresh the
-  rule phase
+#### Scenario: PiP placement is restored
+- **WHEN** a PiP window reopens after an accepted corner or free placement
+- **THEN** the plugin restores that placement using the final initial size
+- **AND** a missing saved monitor uses normal routing without discarding state
 
-### Requirement: Selector changes remove obsolete saved rules
-The system SHALL remove saved entries for selectors no longer present in
-`rules/window-state-selectors.lua` when the configuration reloads.
+### Requirement: Existing durable state remains usable
 
-#### Scenario: Removed selector is pruned
-- **WHEN** a previously saved selector is removed from the selector source and
-  Hyprland reloads its configuration
-- **THEN** the generated window-state rules no longer include that selector
+The implementation SHALL retain the existing version-2 state format and existing
+literal policy identities. Unsupported or malformed state SHALL be rejected
+without overwriting the file. Retired selector-table and generated-state files
+SHALL NOT be read or migrated.
 
-#### Scenario: Remaining selector is retained
-- **WHEN** one saved selector remains in the selector source after another is
-  removed
-- **THEN** the generated window-state rules retain the remaining selector's
-  saved geometry
+#### Scenario: Existing state survives the interface change
+- **WHEN** the guarded native rules use the existing literal identities
+- **THEN** the plugin reads their existing version-2 state without migration
+
+#### Scenario: Invalid state is rejected safely
+- **WHEN** the state file has an unsupported version or malformed records
+- **THEN** configuration fails without replacing that file

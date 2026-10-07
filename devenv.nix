@@ -305,6 +305,7 @@ in
         set -euo pipefail
         pnpm --dir .config/vicinae/extensions run lint
         pnpm --dir .config/vicinae/extensions/home-assistant run test
+        bun test ./.config/vicinae/extensions/hypr-quickrule/src/__tests__
         pnpm --dir .config/vicinae/extensions run build
       '';
     };

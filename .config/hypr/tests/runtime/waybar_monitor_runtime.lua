@@ -65,6 +65,8 @@ local function run_scenario(options)
 		steps = options.steps,
 		step_index = 0,
 		reader = {},
+		event_reader = {},
+		connects = 0,
 	}
 
 	function scenario:complete_worker(label)
@@ -96,6 +98,31 @@ local function run_scenario(options)
 	function control:close() end
 
 	local kit = {}
+	function kit:connect_events()
+		scenario.connects = scenario.connects + 1
+		scenario.trace[#scenario.trace + 1] = "connect"
+		local client = {}
+		function client:receive()
+			local step = assert(scenario.current_step)
+			step.read_index = (step.read_index or 0) + 1
+			if step.chunks then
+				local chunk = step.chunks[step.read_index]
+				if chunk then
+					return chunk[1], chunk[2], chunk[3]
+				end
+			end
+			if step.disconnect and step.read_index == 1 then
+				return nil, "closed"
+			end
+			if step.event and step.read_index == 1 then
+				return step.event
+			end
+			return nil, "timeout", ""
+		end
+		function client:close() end
+		scenario.event_reader = client
+		return client
+	end
 	function kit:instance_path(name)
 		return "/fixture/" .. name
 	end
@@ -150,6 +177,9 @@ local function run_scenario(options)
 			if step.message then
 				return { scenario.reader }
 			end
+			if step.event or step.disconnect or step.chunks then
+				return { scenario.event_reader }
+			end
 			return {}
 		end,
 	}
@@ -167,6 +197,9 @@ local function run_scenario(options)
 		end,
 		ok = function(command_line)
 			scenario.commands[#scenario.commands + 1] = command_line
+			if command_line:match("pointer_edge_hooks%.sync") then
+				scenario.trace[#scenario.trace + 1] = "sync"
+			end
 			if command_line:match("waybar%-process%.sh replace%-unit") then
 				if scenario.launch_ok then
 					scenario.process_running = true
@@ -309,7 +342,7 @@ end
 
 local one_shot_deadline = run_scenario({
 	steps = {
-		{ message = "pointer-zone show" },
+		{ event = "pointeredgezone>>show,1" },
 		{ advance = 199 },
 		{ advance = 1 },
 		{ message = "quit" },
@@ -317,6 +350,82 @@ local one_shot_deadline = run_scenario({
 })
 assert(math.abs(one_shot_deadline.intervals[2] - 0.2) < 0.0001, "show must wait on its exact deadline")
 assert(math.abs(one_shot_deadline.intervals[3] - 0.001) < 0.0001, "early wakeups must retain the remaining deadline")
+
+assert(one_shot_deadline.trace[1] == "connect" and one_shot_deadline.trace[2] == "sync")
+
+local repeated_sync = run_scenario({
+	steps = {
+		{ event = "pointeredgezone>>show,1" },
+		{ advance = 100, event = "pointeredgezone>>show,1" },
+		{ advance = 99, event = "pointeredgezone>>show,2" },
+		{ advance = 1 },
+		{ message = "quit" },
+	},
+})
+assert(math.abs(repeated_sync.intervals[4] - 0.001) < 0.0001, "same-zone sync must not restart show deadline")
+assert(count_matching(repeated_sync.trace, "worker:launch") == 1)
+
+local reconnect = run_scenario({
+	steps = {
+		{ event = "pointeredgezone>>show,1" },
+		{ advance = 100, disconnect = true },
+		{ event = "pointeredgezone>>show,1" },
+		{ advance = 199 },
+		{ advance = 1 },
+		{ message = "quit" },
+	},
+})
+assert(reconnect.connects == 2)
+assert(count_matching(reconnect.trace, "sync") == 2)
+assert(math.abs(reconnect.intervals[4] - 0.2) < 0.0001)
+assert(math.abs(reconnect.intervals[5] - 0.001) < 0.0001)
+
+local removed = run_scenario({
+	steps = {
+		{ event = "pointeredgezone>>show,1" },
+		{ event = "monitorremoved>>DP-2" },
+		{ advance = 300 },
+		{ message = "pointer-zone show" },
+		{ message = "quit" },
+	},
+})
+assert(count_matching(removed.trace, "sync") == 2)
+assert(not contains(removed.trace, "worker:launch"))
+assert(removed.responses[1] == "error: invalid-command")
+
+local malformed = run_scenario({
+	steps = {
+		{ event = "pointeredgezone>>show,1,extra" },
+		{ event = "pointeredgezone>>bogus,1" },
+		{ event = "pointeredgezone>>show,-1" },
+		{ advance = 400 },
+		{ message = "quit" },
+	},
+})
+assert(not contains(malformed.trace, "worker:launch"))
+
+local fragmented = run_scenario({
+	steps = {
+		{ chunks = { { nil, "timeout", "pointeredge" } } },
+		{ chunks = { { nil, "timeout", "zone>>show," } } },
+		{ chunks = { { "1" } } },
+		{ advance = 199 },
+		{ advance = 1 },
+		{ message = "quit" },
+	},
+})
+assert(math.abs(fragmented.intervals[4] - 0.2) < 0.0001)
+assert(math.abs(fragmented.intervals[5] - 0.001) < 0.0001)
+assert(count_matching(fragmented.trace, "worker:launch") == 1)
+
+local burst = run_scenario({
+	steps = {
+		{ chunks = { { "pointeredgezone>>show,1" }, { "pointeredgezone>>hide,1" } } },
+		{ advance = 400 },
+		{ message = "quit" },
+	},
+})
+assert(not contains(burst.trace, "worker:launch"), "all queued Socket2 lines must be processed")
 
 local acknowledged_before_effects = run_scenario({
 	steps = {
@@ -329,8 +438,8 @@ local acknowledged_before_effects = run_scenario({
 assert(acknowledged_before_effects.responses[1] == "ok")
 assert(acknowledged_before_effects.responses[2] == "ok")
 assert(acknowledged_before_effects.responses[3] == "ok")
-assert(acknowledged_before_effects.trace[1] == "response:show")
-assert(acknowledged_before_effects.trace[2] == "worker:launch")
+assert(acknowledged_before_effects.trace[3] == "response:show")
+assert(acknowledged_before_effects.trace[4] == "worker:launch")
 assert(not contains(acknowledged_before_effects.commands, "replace%-unit"))
 assert(acknowledged_before_effects.visibility_state == "hidden\n")
 assert(contains(acknowledged_before_effects.cancellations, "term:launch"))

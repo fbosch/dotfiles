@@ -219,3 +219,14 @@ runtime and a graphical session.
 9. Confirm dynamic shell values are quoted and optional dependency failures
    remain local to the feature.
 10. Confirm logs identify the feature, failure, and recovery action.
+
+## Waybar pointer edge events
+
+`pointer-edge-hooks` posts `pointeredgezone>>zone,monitor-id` to Hyprland
+Socket2. `waybar-monitor.lua` subscribes before requesting the current zone
+with `hl.plugin.pointer_edge_hooks.sync()` and repeats that request after a
+Socket2 reconnect. It buffers fragmented lines, drains bursts, ignores malformed
+zones, and resets its pointer state on disconnect or monitor removal. Duplicate current-zone events retain the
+existing 200 ms show or 300 ms hide deadline. The public control socket
+continues to accept `show`, `hide`, `prewarm`, `hold`, and `release`; it does
+not accept pointer-zone forwarding.

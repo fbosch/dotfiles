@@ -21,7 +21,7 @@ Window rules are applied in this order:
 1. Generated rules from `rules/generated.lua`.
 2. Static rules from `rules/`.
 
-Edit `rules/window-state-selectors.lua` when changing which windows should
+Edit `rules/persistent_position.lua` when changing which windows should
 persist size and position. Do not edit generated rule outputs directly. See
 [window-state persistence](docs/window-state-persistence.md) for the data flow
 and upgrade debugging procedure.
