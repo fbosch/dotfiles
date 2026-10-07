@@ -4,7 +4,7 @@ description: Synthesizes source-backed answers, comparisons, and tradeoffs acros
 prompt_mode: replace
 model: openai-codex/gpt-6.1-sol
 thinking: high
-tools: read, grep, find, ls, fffind, ffgrep, websearch, webfetch, mcp__context7, mcp__github
+tools: read, grep, find, ls, fffind, ffgrep, codemode, websearch, webfetch, mcp__context7, mcp__github
 permission:
   "*": deny
   bash: deny

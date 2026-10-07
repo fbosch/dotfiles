@@ -1,6 +1,6 @@
 ---
 description: Maps repository structure and locates relevant files or symbols without edits or command execution. Delivers bounded orientation with file-and-line references.
-tools: read, grep, find, ls, fffind, ffgrep
+tools: read, grep, find, ls, fffind, ffgrep, codemode
 prompt_mode: replace
 model: openai-codex/gpt-6-luna-fast
 thinking: minimal

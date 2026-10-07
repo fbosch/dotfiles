@@ -4,7 +4,7 @@ description: Runs bounded, read-only post-change checks including formatting, li
 prompt_mode: replace
 model: openai-codex/gpt-6-luna-fast
 thinking: medium
-tools: read, grep, find, ls, fffind, ffgrep, bash
+tools: read, grep, find, ls, fffind, ffgrep, codemode, bash
 permission:
   "*": deny
   external_directory_write:

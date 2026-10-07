@@ -4,7 +4,7 @@ description: Assesses changed or existing code for correctness, security, perfor
 prompt_mode: replace
 model: openai-codex/gpt-6-astra
 thinking: high
-tools: read, grep, find, ls, fffind, ffgrep, git_diff, lsp, typesafe_question
+tools: read, grep, find, ls, fffind, ffgrep, codemode, git_diff, lsp, typesafe_question
 permission:
   "*": deny
   typesafe_question: allow
