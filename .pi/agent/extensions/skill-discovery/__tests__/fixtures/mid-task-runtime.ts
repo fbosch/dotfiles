@@ -8,7 +8,13 @@ export default function (pi: ExtensionAPI): void {
   let classifierCalls = 0;
   let sawAdvice = false;
   createSkillSelectionExtension({
-    getConfig: () => ({ enabled: true, threshold: 0.72, timeoutMs: 2400, maxRecommendations: 3 }),
+    getConfig: () => ({
+      enabled: true,
+      midTaskEnabled: process.env.PI_SKILL_TEST_INPUT_ONLY !== "1",
+      threshold: 0.72,
+      timeoutMs: 2400,
+      maxRecommendations: 3,
+    }),
     getDisabledNames: () => new Set(),
     selectSkillsDetailed: async () => {
       classifierCalls += 1;

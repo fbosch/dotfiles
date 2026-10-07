@@ -17,7 +17,11 @@ from pathlib import Path
 from scenarios import CASES, WARM, COLD, scenario
 
 
-def prepare(repo, run_root, evidence, baseline, model, thinking):
+def prepare(repo, run_root, evidence, baseline, model, thinking, input_only=False, selection_timeout_ms=2400):
+    if type(selection_timeout_ms) is not int or not 1 <= selection_timeout_ms <= 5000:
+        raise ValueError('Selection deadline must be an integer from 1 to 5000 ms')
+    if baseline and input_only:
+        raise ValueError('Baseline and input-only arms are mutually exclusive')
     source = repo / '.pi/agent/evals/skill-suggestions'
     agent = repo / '.pi/agent'
     evidence.mkdir(parents=True, exist_ok=True)
@@ -42,8 +46,9 @@ def prepare(repo, run_root, evidence, baseline, model, thinking):
     settings = json.loads((agent / 'settings.json').read_text())
     classifier = settings.get('classifier', {})
     routing = classifier.get('providers')
-    config = {'arm': 'baseline' if baseline else 'treatment', 'model': model, 'thinking': thinking,
+    config = {'arm': 'baseline' if baseline else 'input-only' if input_only else 'treatment', 'model': model, 'thinking': thinking,
               'evidence': str(evidence), 'repo': str(repo), 'classifierProviders': routing,
+              'selectionTimeoutMs': selection_timeout_ms,
               'extensions': [str(source / 'fixture.ts'), str(agent / 'extensions/skill-discovery/index.ts'), str(agent / 'extensions/openai-capabilities.ts')]}
     for name in ('launch.py', 'scenarios.py', 'check.py', 'compare.py'):
         shutil.copy2(source / name, evidence / name)
@@ -62,6 +67,8 @@ def prepare(repo, run_root, evidence, baseline, model, thinking):
 
 
 def configure_attempt(home, agent, config, trace, case):
+    if config.get('arm') not in ('baseline', 'input-only', 'treatment'):
+        raise ValueError('Unsupported skill suggestion arm')
     if agent.resolve() != (home / '.pi/agent').resolve():
         raise ValueError('Unexpected Caliper agent directory')
     work = home / 'fixture'
@@ -73,8 +80,8 @@ def configure_attempt(home, agent, config, trace, case):
     agent.mkdir(parents=True, exist_ok=True)
     skill_root = agent / 'skills'
     shutil.copytree(evidence / 'skills', skill_root, dirs_exist_ok=True)
-    classifier = {'enabled': True, 'skillSelection': {'enabled': config['arm'] == 'treatment', 'threshold': 0.72,
-                  'timeoutMs': 2400, 'maxRecommendations': 3}, 'toolDiscovery': {'enabled': True, 'timeoutMs': 2400}}
+    classifier = {'enabled': True, 'skillSelection': {'enabled': config['arm'] != 'baseline', 'midTaskEnabled': config['arm'] != 'input-only', 'threshold': 0.72,
+                  'timeoutMs': config['selectionTimeoutMs'], 'maxRecommendations': 3}, 'toolDiscovery': {'enabled': True, 'timeoutMs': 2400}}
     if config['classifierProviders'] is not None:
         classifier['providers'] = config['classifierProviders']
     settings = {'packages': [], 'extensions': ['-builtin:mcp', '-builtin:tool-search', '-builtin:codemode', *config['extensions']],
@@ -120,6 +127,6 @@ def launch(pi, args):
 
 if __name__ == '__main__':
     if sys.argv[1] == 'prepare':
-        prepare(Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]), sys.argv[5] == 'true', *sys.argv[6:8])
+        prepare(Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]), sys.argv[5] == 'true', *sys.argv[6:8], input_only=sys.argv[8] == 'true', selection_timeout_ms=int(sys.argv[9]))
     else:
         raise SystemExit(launch(sys.argv[1], sys.argv[2:]))

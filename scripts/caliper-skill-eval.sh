@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: caliper-skill-eval.sh [--ablate] [--auth-profile NAME] [--spec PATH] [--orchestration [--without-instructions]] [--codemode [--baseline]] [--skill-suggestions [--baseline]] SKILL [MODEL] [THINKING] [K] [JUDGE_MODEL] [JUDGE_THINKING]
+Usage: caliper-skill-eval.sh [--ablate] [--auth-profile NAME] [--spec PATH] [--orchestration [--without-instructions]] [--codemode [--baseline]] [--skill-suggestions [--baseline | --input-only] [--selection-timeout-ms MS]] SKILL [MODEL] [THINKING] [K] [JUDGE_MODEL] [JUDGE_THINKING]
 EOF
 }
 
@@ -15,8 +15,24 @@ without_instructions=false
 codemode=false
 baseline=false
 skill_suggestions=false
+input_only=false
+selection_timeout_ms=2400
+selection_timeout_set=false
 while (($# > 0)); do
   case "$1" in
+  --selection-timeout-ms)
+    if (($# < 2)) || [[ "$2" == -* ]]; then
+      printf '%s\n' '--selection-timeout-ms requires a positive millisecond value' >&2
+      exit 2
+    fi
+    selection_timeout_ms="$2"
+    selection_timeout_set=true
+    shift 2
+    ;;
+  --input-only)
+    input_only=true
+    shift
+    ;;
   --skill-suggestions)
     skill_suggestions=true
     shift
@@ -136,6 +152,19 @@ if [[ "$orchestration" == true ]]; then
   spec_override="${spec_override:-$repo_root/.pi/agent/evals/orchestration/orchestration.eval.yaml}"
 fi
 
+if [[ "$selection_timeout_set" == true ]]; then
+  if [[ "$skill_suggestions" != true || ! "$selection_timeout_ms" =~ ^[1-9][0-9]*$ ]] ||
+    (( ${#selection_timeout_ms} > 4 || selection_timeout_ms > 5000 )); then
+    printf '%s\n' '--selection-timeout-ms requires --skill-suggestions and a value from 1 to 5000' >&2
+    exit 2
+  fi
+fi
+
+if [[ "$input_only" == true && ( "$skill_suggestions" != true || "$baseline" == true ) ]]; then
+  printf '%s\n' '--input-only requires --skill-suggestions and cannot be combined with --baseline' >&2
+  exit 2
+fi
+
 if [[ "$skill_suggestions" == true ]]; then
   if [[ "$orchestration" == true || "$codemode" == true || "$ablate" == true || "$skill" != skill-suggestions ]]; then
     printf '%s\n' 'Use --skill-suggestions with subject skill-suggestions and optional --baseline only.' >&2
@@ -200,7 +229,7 @@ if [[ "$skill_suggestions" == true ]]; then
   SKILL_SUGGESTIONS_EVAL_RUN="$(mktemp -d "$repo_root/.caliper/skill-suggestions/run.XXXXXX")"
   export SKILL_SUGGESTIONS_EVAL_RUN
   python3 "$repo_root/.pi/agent/evals/skill-suggestions/launch.py" prepare \
-    "$repo_root" "$run_root" "$SKILL_SUGGESTIONS_EVAL_RUN" "$baseline" "$model" "$thinking"
+    "$repo_root" "$run_root" "$SKILL_SUGGESTIONS_EVAL_RUN" "$baseline" "$model" "$thinking" "$input_only" "$selection_timeout_ms"
   printf 'Skill suggestions evidence: %s\n' "$SKILL_SUGGESTIONS_EVAL_RUN"
 fi
 

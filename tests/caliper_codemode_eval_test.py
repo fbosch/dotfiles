@@ -48,6 +48,25 @@ class CodemodeEvalTests(unittest.TestCase):
         self.assertEqual(a["arm"], "baseline")
         self.assertEqual(b["arm"], "candidate")
 
+    def test_explicit_candidate_snapshot_does_not_change_production(self):
+        original = (SOURCE / "candidate.md").read_text()
+        old_rule = self.root / "before.md"
+        old_rule.write_text("# Previous codemode guidance\n")
+        with patch.dict(os.environ, {"CODEMODE_EVAL_CANDIDATE": str(old_rule)}):
+            _, evidence, config = self.prepare(False)
+        self.assertEqual((evidence / "candidate.md").read_text(), old_rule.read_text())
+        self.assertEqual(config["candidate_source"], str(old_rule.resolve()))
+        self.assertEqual((SOURCE / "candidate.md").read_text(), original)
+
+    def test_large_edit_fixture_preserves_large_unrelated_data(self):
+        run, _, config = self.prepare(False)
+        home = run / "large-edit"
+        work = LAUNCH.configure_attempt(home, home / ".pi/agent", config, run / "trace.jsonl", "large-edit")
+        content = json.loads((work / "config-large.json").read_text())
+        self.assertIs(content["enabled"], False)
+        self.assertEqual(content["mode"], "slow")
+        self.assertEqual(content["padding"], "x" * 80_000)
+
     def test_attempt_isolation_preserves_fixtures_and_injects_only_selected_rule(self):
         run, _, config = self.prepare(False)
         home = run / "attempt"

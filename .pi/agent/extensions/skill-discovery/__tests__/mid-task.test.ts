@@ -45,6 +45,7 @@ const recommend = (name: string): SkillSelectionAttempt => ({
 function harness(
   select?: NonNullable<Parameters<typeof createSkillSelectionExtension>[0]>["selectSkillsDetailed"],
   sessionManager?: SessionManager,
+  midTaskEnabled = true,
 ) {
   const handlers = new Map<string, (event: unknown, context: ExtensionContext) => unknown>();
   const requests: { prompt: string; names: string[]; signal?: AbortSignal }[] = [];
@@ -72,7 +73,7 @@ function harness(
     },
   } as unknown as ExtensionContext;
   createSkillSelectionExtension({
-    getConfig: () => config,
+    getConfig: () => ({ ...config, midTaskEnabled }),
     getDisabledNames: () => new Set(),
     selectSkillsDetailed: async (prompt, candidates, options, requestOptions) => {
       requests.push({
@@ -194,6 +195,20 @@ function harness(
 }
 
 describe("turn-end skill suggestions", () => {
+  test("input-only mode keeps initial advice but performs no mid-task classification", async () => {
+    const h = harness(async () => recommend("gjs"), undefined, false);
+    await h.start("Fix the GJS widget");
+    expect(h.requests).toHaveLength(1);
+    await h.tool("call");
+    expect(await h.end()).toBeUndefined();
+    expect(h.requests).toHaveLength(1);
+    expect((await h.status()).midTask).toMatchObject({
+      state: "skipped",
+      reason: "mid-task-disabled",
+      attempts: 0,
+    });
+  });
+
   test("sends bounded goal/visible activity/delta and allowlisted metadata, not tool bodies or thinking", async () => {
     const h = harness();
     await h.start("Fix refresh; password=secret123");

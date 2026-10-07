@@ -25,7 +25,13 @@ function harness(attempt: SkillSelectionAttempt) {
     | undefined;
   let renderer: EntryRenderer<RecommendationData> | undefined;
   createSkillSelectionExtension({
-    getConfig: () => ({ enabled: true, threshold: 0.72, timeoutMs: 2400, maxRecommendations: 3 }),
+    getConfig: () => ({
+      enabled: true,
+      midTaskEnabled: true,
+      threshold: 0.72,
+      timeoutMs: 2400,
+      maxRecommendations: 3,
+    }),
     getDisabledNames: () => new Set(),
     selectSkillsDetailed: async () => attempt,
   })({

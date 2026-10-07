@@ -5,9 +5,13 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
 const pi = Bun.which("pi");
-test.skipIf(pi === null).each([false, true])(
-  "installed Pi uses only natural turns for skill advice, terminating batch: %s",
-  (terminating) => {
+test.skipIf(pi === null).each([
+  { terminating: false, midTaskEnabled: true },
+  { terminating: true, midTaskEnabled: true },
+  { terminating: false, midTaskEnabled: false },
+])(
+  "installed Pi uses only natural turns for skill advice: %j",
+  ({ terminating, midTaskEnabled }) => {
     const root = mkdtempSync(join(tmpdir(), "pi-mid-task-runtime-"));
     try {
       const agentDir = join(root, "agent");
@@ -45,6 +49,7 @@ test.skipIf(pi === null).each([false, true])(
             ...process.env,
             PI_CODING_AGENT_DIR: agentDir,
             PI_SKILL_TEST_TERMINATE: terminating ? "1" : "0",
+            PI_SKILL_TEST_INPUT_ONLY: midTaskEnabled ? "0" : "1",
           },
           encoding: "utf8",
           timeout: 30_000,
@@ -54,10 +59,10 @@ test.skipIf(pi === null).each([false, true])(
       expect(line).toBeDefined();
       expect(JSON.parse(line?.slice("MID_TASK_RUNTIME_CHECK ".length) ?? "{}")).toEqual({
         modelCalls: terminating ? 1 : 2,
-        classifierCalls: terminating ? 1 : 2,
-        sawAdvice: !terminating,
-        adviceEntries: terminating ? 0 : 1,
-        chatEntries: terminating ? 0 : 1,
+        classifierCalls: terminating || !midTaskEnabled ? 1 : 2,
+        sawAdvice: !terminating && midTaskEnabled,
+        adviceEntries: terminating || !midTaskEnabled ? 0 : 1,
+        chatEntries: terminating || !midTaskEnabled ? 0 : 1,
       });
       expect(output).not.toContain("SKILL BODY MUST NOT BE LOADED");
     } finally {

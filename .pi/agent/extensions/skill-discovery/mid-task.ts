@@ -292,6 +292,7 @@ export function createMidTaskSkillSelection(pi: ExtensionAPI, dependencies: Depe
         return skip("config-error");
       }
       if (!config.enabled) return skip("disabled");
+      if (!config.midTaskEnabled) return skip("mid-task-disabled");
       if (state.attempts >= MAX_MID_TASK_ATTEMPTS) return skip("attempt-budget");
 
       const visible = sanitizeClassifierText(

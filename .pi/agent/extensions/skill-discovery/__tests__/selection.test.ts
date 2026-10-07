@@ -617,13 +617,57 @@ describe("skill selection", () => {
     );
   });
 
+  test("accepts a bounded longer deadline without changing the default", () => {
+    expect(resolveSkillSelectionConfig({}, {}).timeoutMs).toBe(2400);
+    expect(
+      resolveSkillSelectionConfig(
+        { classifier: { skillSelection: { enabled: true, timeoutMs: 5000 } } },
+        {},
+      ),
+    ).toMatchObject({ enabled: true, timeoutMs: 5000 });
+    for (const timeoutMs of [5001, 0, 5000.5, "5000"]) {
+      expect(
+        resolveSkillSelectionConfig(
+          { classifier: { skillSelection: { enabled: true, timeoutMs } } },
+          {},
+        ).enabled,
+      ).toBe(false);
+    }
+  });
+
+  test("mid-task enablement defaults on and honors independently validated overrides", () => {
+    expect(resolveSkillSelectionConfig({}, {}).midTaskEnabled).toBe(true);
+    const global = { classifier: { skillSelection: { enabled: true, midTaskEnabled: false } } };
+    expect(resolveSkillSelectionConfig(global, {})).toMatchObject({
+      enabled: true,
+      midTaskEnabled: false,
+    });
+    expect(
+      resolveSkillSelectionConfig(global, {
+        classifier: { skillSelection: { midTaskEnabled: true } },
+      }),
+    ).toMatchObject({ enabled: true, midTaskEnabled: true });
+    expect(
+      resolveSkillSelectionConfig(
+        { classifier: { skillSelection: { enabled: true, midTaskEnabled: "off" } } },
+        {},
+      ).enabled,
+    ).toBe(false);
+  });
+
   test("honors global and project config overrides and disables malformed config", () => {
     expect(
       resolveSkillSelectionConfig(
         { classifier: { skillSelection: { threshold: 0.8, timeoutMs: 500 } } },
         { classifier: { skillSelection: { maxRecommendations: 2 } } },
       ),
-    ).toEqual({ enabled: false, threshold: 0.8, timeoutMs: 500, maxRecommendations: 2 });
+    ).toEqual({
+      enabled: false,
+      midTaskEnabled: true,
+      threshold: 0.8,
+      timeoutMs: 500,
+      maxRecommendations: 2,
+    });
     expect(
       resolveSkillSelectionConfig({ classifier: { skillSelection: { threshold: "high" } } }, {}),
     ).toEqual({
