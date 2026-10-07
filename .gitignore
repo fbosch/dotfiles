@@ -10,6 +10,7 @@ storybook-static
 ./TODO.md
 .devenv
 .direnv
+.caliper
 
 # Cursor keeps this state outside the managed configuration tree.
 .cursor/.agent-tools
