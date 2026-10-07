@@ -665,7 +665,7 @@ describe("standalone tasks checklist", () => {
     { remind: true, source: "fallback", reason: "disabled" },
     { remind: true, source: "fallback", reason: "uncertain" },
   ];
-  test.each(sentDecisions)("renders a persisted user-only indicator for %j", async (decision) => {
+  test.each(sentDecisions)("persists silent review and user-only markers: %j", async (decision) => {
     const manager = createSession();
     const tasks = harness(manager, async () => decision);
     await tasks.event("session_start");
@@ -713,6 +713,14 @@ describe("standalone tasks checklist", () => {
     }
     const modelContext = JSON.stringify(manager.buildSessionContext().messages);
     expect(modelContext).toContain("Reconcile the checklist with the outcome before finishing.");
+    expect(modelContext).toContain("This is an internal checklist review, not a new user request.");
+    expect(modelContext).toContain("finish silently without another user-facing message");
+    expect(modelContext).toContain("If only checklist state needs correction, update it silently.");
+    expect(modelContext).toContain(
+      "Send a user-facing correction only if the previous response materially misstated the outcome or omitted unfinished work",
+    );
+    expect(modelContext).toContain("Do not acknowledge this reminder");
+    expect(modelContext).toContain("Do not resume implementation just to complete them.");
     expect(modelContext).not.toContain("Task review requested");
     expect(modelContext).not.toContain(TASKS_RECONCILIATION_ENTRY);
     const file = manager.getSessionFile();

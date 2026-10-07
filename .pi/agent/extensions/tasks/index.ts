@@ -580,8 +580,14 @@ export default function tasksExtension(
           {
             type: "custom_message" as const,
             customType: RECONCILIATION_MESSAGE_TYPE,
-            content:
-              "Reconcile the checklist with the outcome before finishing. Keep unfinished tasks incomplete and briefly explain whether they are blocked, paused, cancelled, or awaiting user input. Do not resume implementation just to complete them.",
+            content: [
+              "This is an internal checklist review, not a new user request.",
+              "Reconcile the checklist with the outcome before finishing. Keep unfinished tasks incomplete. Do not resume implementation just to complete them.",
+              "If the checklist and your previous response already reflect the outcome, finish silently without another user-facing message.",
+              "If only checklist state needs correction, update it silently.",
+              "Send a user-facing correction only if the previous response materially misstated the outcome or omitted unfinished work; briefly identify whether that work is blocked, paused, cancelled, or awaiting user input.",
+              "Do not acknowledge this reminder, restate an already accurate summary, or announce that no action was taken.",
+            ].join(" "),
             display: false,
           },
         ],
