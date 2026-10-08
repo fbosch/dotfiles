@@ -171,6 +171,12 @@ function renderPromptBase(
       ? [theme.fg("muted", "Patterns"), ...patterns.map((pattern) => `- ${pattern.value}`)]
       : []),
     ...renderRequest(facts, theme),
+    ...facts
+      .filter((fact) => fact.label === "concern")
+      .map((fact) => theme.fg("warning", fact.value)),
+    ...facts
+      .filter((fact) => fact.label === "directory")
+      .map((fact) => theme.fg("muted", `Working directory: ${fact.value}`)),
   ];
 }
 

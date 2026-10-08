@@ -113,7 +113,8 @@
   "classifier": {
     "enabled": true,
     "commandGuard": {
-      "enabled": true
+      "enabled": true,
+      "mode": "confirm"
     },
     "providers": [
       {

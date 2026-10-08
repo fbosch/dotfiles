@@ -34,8 +34,8 @@ export type Inspection =
 
 export function inspectCommand(command: string): Inspection {
   if (command.length > MAX_COMMAND_CHARS) return { kind: "oversized" };
-  // shortcut: lexical sampling is for shadow feedback, not shell authorization.
-  // Replace it with a shell parser before using these summaries to block execution.
+  // shortcut: lexical selection and summaries can miss shell semantics.
+  // Use a shell parser before claiming comprehensive command coverage.
   if (/^\s*(?:cat|ls|pwd|rg|grep|head|tail|wc|echo|printf)\b[^;|&$`\n<>]*$/.test(command))
     return { kind: "skip" };
   if (/^\s*rm\s+(?:-[rfRF]+\s+)*(?:\.\/)?(?:dist|build|\.cache)\/?\s*$/.test(command))

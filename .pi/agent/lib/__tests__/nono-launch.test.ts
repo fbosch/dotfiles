@@ -10,7 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { launchArguments, launchCommand } from "../nono-launch";
+import { launchArguments, launchCommand, launchEnvironment, nonoProfilePath } from "../nono-launch";
 
 const created: string[] = [];
 function fixture() {
@@ -30,6 +30,74 @@ afterEach(() => {
 function grants(args: string[]): string[] {
   return args.flatMap((arg, i) => (arg === "--allow" ? [args[i + 1] ?? ""] : []));
 }
+
+test("prefers the Nix-owned profile without reading the migration fallback", () => {
+  const { root } = fixture();
+  const systemProfile = join(root, "system.json");
+  writeFileSync(systemProfile, "{}");
+  expect(nonoProfilePath(systemProfile, join(root, "absent-stow.json"))).toBe(systemProfile);
+});
+
+test("uses the Stow profile when the system profile has not been deployed", () => {
+  const { root } = fixture();
+  const stowProfile = join(root, "stow.json");
+  writeFileSync(stowProfile, "{}");
+  expect(nonoProfilePath(join(root, "undeployed", "pi.json"), stowProfile)).toBe(stowProfile);
+});
+
+test("preserves the installed profile symlink path", () => {
+  const { root } = fixture();
+  const target = join(root, "store-profile.json");
+  const systemProfile = join(root, "system.json");
+  writeFileSync(target, "{}");
+  symlinkSync(target, systemProfile);
+  expect(nonoProfilePath(systemProfile, join(root, "absent-stow.json"))).toBe(systemProfile);
+});
+
+test("does not fall back from a dangling installed profile symlink", () => {
+  const { root } = fixture();
+  const systemProfile = join(root, "system.json");
+  const stowProfile = join(root, "stow.json");
+  symlinkSync(join(root, "missing-store-profile.json"), systemProfile);
+  writeFileSync(stowProfile, "{}");
+  expect(() => nonoProfilePath(systemProfile, stowProfile)).toThrow("ENOENT");
+});
+
+test("does not fall back from a directory at the installed profile path", () => {
+  const { root } = fixture();
+  const systemProfile = join(root, "system.json");
+  const stowProfile = join(root, "stow.json");
+  mkdirSync(systemProfile);
+  writeFileSync(stowProfile, "{}");
+  expect(() => nonoProfilePath(systemProfile, stowProfile)).toThrow("Not a nono profile file");
+});
+
+test("does not fall back when a system profile ancestor is not a directory", () => {
+  const { root } = fixture();
+  const ancestor = join(root, "not-a-directory");
+  const stowProfile = join(root, "stow.json");
+  writeFileSync(ancestor, "fixture");
+  writeFileSync(stowProfile, "{}");
+  expect(() => nonoProfilePath(join(ancestor, "pi.json"), stowProfile)).toThrow("ENOTDIR");
+});
+
+test("keeps malformed installed policy authoritative for nono to reject", () => {
+  const { root } = fixture();
+  const systemProfile = join(root, "system.json");
+  const stowProfile = join(root, "stow.json");
+  writeFileSync(systemProfile, "invalid JSON");
+  writeFileSync(stowProfile, "{}");
+  expect(nonoProfilePath(systemProfile, stowProfile)).toBe(systemProfile);
+});
+
+test("fails when neither revision provides a usable profile file", () => {
+  const { root } = fixture();
+  const systemProfile = join(root, "missing-system.json");
+  const stowProfile = join(root, "missing-stow.json");
+  expect(() => nonoProfilePath(systemProfile, stowProfile)).toThrow("ENOENT");
+  mkdirSync(stowProfile);
+  expect(() => nonoProfilePath(systemProfile, stowProfile)).toThrow("Not a nono profile file");
+});
 
 test("grants canonical global references and Stow target without granting HOME", () => {
   const { root, home, cwd, agent } = fixture();
@@ -172,6 +240,87 @@ test("grants direnv approval state as read-only", () => {
   expect(grants(args)).not.toContain(allowDirectory);
 });
 
+test("grants only Podman connection files and public SSH host keys", () => {
+  const { home, cwd, agent } = fixture();
+  const connection = join(home, ".config", "containers", "podman-connections.json");
+  const identity = join(home, ".local", "share", "containers", "podman", "machine", "machine");
+  const knownHosts = join(home, ".ssh", "known_hosts");
+  const otherKey = join(home, ".ssh", "id_ed25519");
+  for (const path of [connection, identity, knownHosts, otherKey]) {
+    mkdirSync(join(path, ".."), { recursive: true });
+    writeFileSync(path, "fixture");
+  }
+
+  const args = launchArguments(cwd, agent, home, {});
+  for (const path of [connection, identity, knownHosts]) {
+    expect(args.slice(args.indexOf(path) - 1, args.indexOf(path) + 1)).toEqual([
+      "--read-file",
+      path,
+    ]);
+  }
+  const bypasses = args.flatMap((arg, i) => (arg === "--bypass-protection" ? [args[i + 1]] : []));
+  expect(bypasses).toEqual([knownHosts]);
+  for (const path of [
+    otherKey,
+    home,
+    join(home, "Projects"),
+    join(home, ".ssh"),
+    join(home, ".config", "containers"),
+    join(home, ".local", "share", "containers"),
+    join(identity, ".."),
+    "/private/var/run",
+  ]) {
+    expect(args).not.toContain(path);
+  }
+});
+
+test("does not grant SSH files without Podman connection configuration", () => {
+  const { home, cwd, agent } = fixture();
+  const knownHosts = join(home, ".ssh", "known_hosts");
+  mkdirSync(join(home, ".ssh"));
+  writeFileSync(knownHosts, "fixture");
+  const args = launchArguments(cwd, agent, home, {});
+  expect(args).not.toContain(knownHosts);
+  expect(args).not.toContain("--bypass-protection");
+});
+
+test("honors Podman XDG paths and omits absent identity and host-key files", () => {
+  const { root, home, cwd, agent } = fixture();
+  const config = join(root, "config");
+  const data = join(root, "data");
+  const connection = join(config, "containers", "podman-connections.json");
+  const identity = join(data, "containers", "podman", "machine", "machine");
+  mkdirSync(join(connection, ".."), { recursive: true });
+  mkdirSync(join(identity, ".."), { recursive: true });
+  writeFileSync(connection, "fixture");
+  writeFileSync(identity, "fixture");
+  const environment = { XDG_CONFIG_HOME: config, XDG_DATA_HOME: data };
+  const args = launchArguments(cwd, agent, home, environment);
+  for (const path of [connection, identity]) {
+    expect(args.slice(args.indexOf(path) - 1, args.indexOf(path) + 1)).toEqual([
+      "--read-file",
+      path,
+    ]);
+  }
+  expect(args).not.toContain("--bypass-protection");
+  expect(args).not.toContain(join(home, ".config", "containers", "podman-connections.json"));
+  rmSync(identity);
+  expect(launchArguments(cwd, agent, home, environment)).not.toContain(identity);
+});
+
+test("uses temporary runtime state on macOS without changing configured or Linux runtimes", () => {
+  const environment = { TMPDIR: "/private/tmp/runtime", TOKEN: "preserved" };
+  expect(launchEnvironment(environment, "darwin")).toEqual({
+    ...environment,
+    XDG_RUNTIME_DIR: environment.TMPDIR,
+  });
+  expect(environment).not.toHaveProperty("XDG_RUNTIME_DIR");
+  const configured = { ...environment, XDG_RUNTIME_DIR: "/existing/runtime" };
+  expect(launchEnvironment(configured, "darwin")).toBe(configured);
+  expect(launchEnvironment(environment, "linux")).toBe(environment);
+  expect(launchEnvironment({}, "darwin").XDG_RUNTIME_DIR).toBe(tmpdir());
+});
+
 test("local profile keeps default protection and platform-specific runtime groups", () => {
   const profile = JSON.parse(
     readFileSync(join(import.meta.dir, "..", "nono", "pi.json"), "utf8"),
@@ -201,14 +350,12 @@ test("--no-sandbox bypasses policy loading and passes remaining arguments direct
   const { cwd, agent, home } = fixture();
   writeFileSync(join(agent, "settings.json"), "invalid JSON");
   const args = ["--print", "a prompt with spaces", "--", "--no-sandbox"];
-  expect(launchCommand(["--no-sandbox", ...args], cwd, agent, home, false)).toEqual([
-    "/run/current-system/sw/bin/pi",
-    ...args,
-  ]);
-  expect(launchCommand(["--no-sandbox", ...args], cwd, agent, home, true)).toEqual([
-    "/run/current-system/sw/bin/pi",
-    ...args,
-  ]);
+  for (const environment of [{}, { NONO_CAP_FILE: "/missing/nono-cap.json" }]) {
+    expect(launchCommand(["--no-sandbox", ...args], cwd, agent, home, environment)).toEqual([
+      "/run/current-system/sw/bin/pi",
+      ...args,
+    ]);
+  }
 });
 
 test("--no-sandbox is not consumed from a Pi option value or after the argument separator", () => {
@@ -217,21 +364,32 @@ test("--no-sandbox is not consumed from a Pi option value or after the argument 
     ["--append-system-prompt", "--no-sandbox"],
     ["--", "--no-sandbox"],
   ]) {
-    const command = launchCommand(args, cwd, agent, home, false);
+    const command = launchCommand(args, cwd, agent, home, {});
     expect(command[0]).toBe("/run/current-system/sw/bin/nono");
     expect(command.slice(-args.length)).toEqual(args);
   }
 });
 
-test("a nested Pi preserves argv and does not resolve references or start another nono", () => {
+test("public launches always select nono regardless of capability markers and preserve argv", () => {
+  const { root, cwd, agent, home } = fixture();
+  const manifest = join(root, "capabilities.json");
+  writeFileSync(manifest, "{}");
+  const args = ["--print", "--", "a prompt with spaces", "--json"];
+  for (const marker of [undefined, "", join(root, "missing.json"), manifest]) {
+    const command = launchCommand(args, cwd, agent, home, { NONO_CAP_FILE: marker });
+    expect(command[0]).toBe("/run/current-system/sw/bin/nono");
+    expect(command.slice(-args.length - 2)).toEqual([
+      "--",
+      "/run/current-system/sw/bin/pi",
+      ...args,
+    ]);
+  }
+});
+
+test("a capability marker does not bypass invalid reference configuration", () => {
   const { cwd, agent, home } = fixture();
   writeFileSync(join(agent, "settings.json"), "invalid JSON");
-  const args = ["--print", "--", "a prompt with spaces", "--json"];
-  expect(launchCommand(args, cwd, agent, home, true)).toEqual([
-    "/run/current-system/sw/bin/pi",
-    ...args,
-  ]);
-  expect(() => launchCommand(args, cwd, agent, home, false)).toThrow(
-    "Cannot load project references",
-  );
+  expect(() =>
+    launchCommand(["--version"], cwd, agent, home, { NONO_CAP_FILE: "/missing/nono-cap.json" }),
+  ).toThrow("Cannot load project references");
 });

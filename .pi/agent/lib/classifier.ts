@@ -19,6 +19,7 @@ export const CLASSIFIER_PROVIDER_IDS = [
   VERCEL_GATEWAY_PROVIDER_ID,
 ] as const;
 export const DEFAULT_CLASSIFIER_TIMEOUT_MS = 2_400;
+export const INTERACTIVE_CLASSIFIER_TIMEOUT_MS = 10_000;
 export type ClassifierRegistry = Pick<ModelRegistry, "findOfType" | "classify">;
 export type ClassifierFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 export type ClassifierProviderId = (typeof CLASSIFIER_PROVIDER_IDS)[number];

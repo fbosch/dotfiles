@@ -13,6 +13,7 @@ import {
   type ClassifierFetch,
   type ClassifierRegistry,
   createClassifierRequester,
+  INTERACTIVE_CLASSIFIER_TIMEOUT_MS,
   normalizeClassifierAnswers,
   requestClassifier,
 } from "../../lib/classifier";
@@ -21,7 +22,6 @@ export type { ClassifierRegistry } from "../../lib/classifier";
 
 const MAX_REQUEST_BYTES = 64_000;
 const MAX_RESULT_BYTES = 50_000;
-const QUESTION_TIMEOUT_MS = 10_000;
 const ID = "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$";
 
 const Question = Type.Union([
@@ -117,7 +117,7 @@ export async function classifyQuestion(
   options: ClassifyOptions = {},
 ): Promise<{ answers: Record<string, ClassifierAnswer>; usage?: Usage }> {
   const normalized = normalizeQuestionInput(input);
-  const timeoutMs = options.timeoutMs ?? QUESTION_TIMEOUT_MS;
+  const timeoutMs = options.timeoutMs ?? INTERACTIVE_CLASSIFIER_TIMEOUT_MS;
   if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) throw new Error("Invalid Classifier timeout");
   const request =
     options.agentDirectory === undefined

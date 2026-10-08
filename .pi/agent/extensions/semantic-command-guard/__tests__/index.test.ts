@@ -2,11 +2,17 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import { setTimeout as delay } from "node:timers/promises";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+  KeybindingsManager,
+  Theme,
+} from "@earendil-works/pi-coding-agent";
 import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-classifier-registry";
 import { type ClassifierRequestResult, createClassifierRequester } from "../../../lib/classifier";
 import { readJsonConfig } from "../../../lib/extension-config";
-import semanticCommandGuard, { commandGuardEnabled } from "../index";
+import semanticCommandGuard, { resolveCommandGuardSettings } from "../index";
 import { flaggedRisks, inspectCommand } from "../inspection";
 
 const ENABLED = { classifier: { commandGuard: { enabled: true } } };
@@ -36,17 +42,24 @@ const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
 function harness(
   request: typeof import("../../../lib/classifier").requestClassifier = async () => FLAGGED,
   loadSettings: () => unknown = () => ENABLED,
+  confirm: (signal: AbortSignal | undefined) => Promise<boolean> = async () => false,
 ) {
   const handlers = new Map<string, (event: unknown, ctx: ExtensionContext) => unknown>();
   const notifications: string[] = [];
+  const prompts: { title: string; message: string; signal: AbortSignal | undefined }[] = [];
   const controller = new AbortController();
   const ctx = {
+    mode: "rpc",
     cwd: "/private-workspace",
     hasUI: true,
     signal: controller.signal,
     modelRegistry: {},
     isProjectTrusted: () => false,
     ui: {
+      async confirm(title: string, message: string, options?: { signal?: AbortSignal }) {
+        prompts.push({ title, message, signal: options?.signal });
+        return confirm(options?.signal);
+      },
       notify: (message: string) => {
         notifications.push(message);
       },
@@ -69,7 +82,7 @@ function harness(
       },
       ctx,
     );
-  return { call, handlers, notifications, ctx, controller };
+  return { call, handlers, notifications, prompts, ctx, controller };
 }
 
 describe("settings", () => {
@@ -78,24 +91,36 @@ describe("settings", () => {
     {},
     { classifier: {} },
     { classifier: { commandGuard: { enabled: false } } },
-  ])("defaults to off or honors false: %j", (settings) => {
-    expect(commandGuardEnabled(settings)).toBe(false);
+  ])("defaults to disabled shadow: %j", (settings) => {
+    expect(resolveCommandGuardSettings(settings)).toEqual({ enabled: false, mode: "shadow" });
   });
-  test("enables explicitly and honors the global classifier switch", () => {
-    expect(commandGuardEnabled(ENABLED)).toBe(true);
+  test("defaults enabled guards to shadow and honors the global switch", () => {
+    expect(resolveCommandGuardSettings(ENABLED)).toEqual({ enabled: true, mode: "shadow" });
     expect(
-      commandGuardEnabled({ classifier: { enabled: false, commandGuard: { enabled: true } } }),
-    ).toBe(false);
+      resolveCommandGuardSettings({
+        classifier: { enabled: false, commandGuard: { enabled: true, mode: "confirm" } },
+      }),
+    ).toEqual({ enabled: false, mode: "shadow" });
   });
-  test.each([
-    null,
-    [[]],
-    { classifier: [] },
-    { classifier: { enabled: "true" } },
-    { classifier: { commandGuard: {} } },
-    { classifier: { commandGuard: { enabled: "false" } } },
-  ])("rejects malformed settings: %j", (settings) => {
-    expect(() => commandGuardEnabled(settings)).toThrow();
+  test.each(["shadow", "confirm"])("accepts explicit mode %s", (mode) => {
+    expect(
+      resolveCommandGuardSettings({ classifier: { commandGuard: { enabled: true, mode } } }),
+    ).toEqual({ enabled: true, mode });
+  });
+  test.each(
+    [
+      null,
+      [],
+      { classifier: [] },
+      { classifier: { enabled: "true" } },
+      { classifier: { commandGuard: {} } },
+      { classifier: { commandGuard: { enabled: "false" } } },
+      ...["enforce", "", null, 1, false].map((mode) => ({
+        classifier: { commandGuard: { enabled: true, mode } },
+      })),
+    ].map((settings) => [settings] as const),
+  )("rejects malformed settings: %j", (settings) => {
+    expect(() => resolveCommandGuardSettings(settings)).toThrow();
   });
 });
 
@@ -376,4 +401,449 @@ test("shared requester honors a trusted-project classifier opt-out before networ
   await flush();
   expect(fetches).toBe(0);
   expect(h.notifications).toEqual([]);
+});
+
+const CONFIRM = { classifier: { commandGuard: { enabled: true, mode: "confirm" } } };
+const CLEAR: ClassifierRequestResult = {
+  ok: true,
+  value: {
+    answers: {
+      destructive: { type: "bool", probability: 0.01 },
+      exfiltration: { type: "bool", probability: 0.01 },
+    },
+  },
+};
+
+describe("confirm mode", () => {
+  test.each([
+    { key: "\r", approved: true },
+    { key: "\u001b", approved: false },
+  ])("TUI approvals use the inline permission component: %j", async ({ key, approved }) => {
+    const h = harness(
+      async () => FLAGGED,
+      () => CONFIRM,
+    );
+    h.ctx.mode = "tui";
+    let customCalls = 0;
+    let rendered = "";
+    h.ctx.ui.custom = async <T>(
+      factory: Parameters<typeof h.ctx.ui.custom<T>>[0],
+      options?: Parameters<typeof h.ctx.ui.custom<T>>[1],
+    ) => {
+      customCalls += 1;
+      expect(options).toEqual({ overlay: false });
+      const decision = deferred<T>();
+      const component = await factory(
+        { requestRender() {} } as import("@earendil-works/pi-tui").TUI,
+        {
+          fg: (_color: string, text: string) => text,
+          inverse: (text: string) => text,
+        } as unknown as Theme,
+        {} as KeybindingsManager,
+        decision.resolve,
+      );
+      rendered = component.render(120).join("\n");
+      component.handleInput?.(key);
+      const result = await decision.promise;
+      component.dispose?.();
+      return result;
+    };
+    expect(await h.call()).toEqual(
+      approved
+        ? undefined
+        : {
+            block: true,
+            reason: "Bash command was not approved.",
+          },
+    );
+    expect(customCalls).toBe(1);
+    expect(h.prompts).toHaveLength(0);
+    expect(rendered).toContain("Permission required");
+    expect(rendered).toContain('Execute command "rm -rf src"');
+    expect(rendered).toContain('Working directory: "/private-workspace"');
+    expect(rendered).toContain("Possible destructive changes.");
+  });
+
+  test("a slow primary verdict reaches approval instead of the forbidden fallback", async () => {
+    const root = mkdtempSync(join(tmpdir(), "command-guard-deadline-"));
+    roots.push(root);
+    writeFileSync(join(root, "settings.json"), JSON.stringify(CONFIRM));
+    const registry = await createNativeClassifierRegistry();
+    const request = createClassifierRequester(Date.now, root);
+    let fetches = 0;
+    const h = harness(
+      (modelRegistry, input, options) =>
+        request(modelRegistry, input, {
+          ...options,
+          fetch: async (_url, init) => {
+            fetches += 1;
+            if (fetches > 1) return new Response("Forbidden", { status: 403 });
+            await delay(1600, undefined, { signal: init?.signal ?? undefined });
+            return new Response(
+              JSON.stringify({
+                answers: {
+                  destructive: {
+                    type: "noul",
+                    noul: 0.99,
+                    trueProbability: 0.99,
+                    falseProbability: 0.01,
+                    confidence: 0.99,
+                  },
+                  exfiltration: {
+                    type: "noul",
+                    noul: 0.01,
+                    trueProbability: 0.01,
+                    falseProbability: 0.99,
+                    confidence: 0.99,
+                  },
+                },
+              }),
+              { headers: { "content-type": "application/json" } },
+            );
+          },
+        }),
+      () => CONFIRM,
+      async () => true,
+    );
+    h.ctx.modelRegistry = registry;
+    expect(await h.call()).toBeUndefined();
+    expect(h.prompts).toHaveLength(1);
+    expect(fetches).toBe(1);
+    expect(h.notifications).toEqual([]);
+  });
+
+  test.each([true, false])(
+    "waits for classification and the user's decision: %s",
+    async (approved) => {
+      const result = deferred<ClassifierRequestResult>();
+      const decision = deferred<boolean>();
+      const h = harness(
+        async () => result.promise,
+        () => CONFIRM,
+        async () => decision.promise,
+      );
+      let finished = false;
+      const call = Promise.resolve(h.call()).then((value) => {
+        finished = true;
+        return value;
+      });
+      await flush();
+      expect(finished).toBe(false);
+      expect(h.prompts).toHaveLength(0);
+      result.resolve(FLAGGED);
+      await flush();
+      expect(finished).toBe(false);
+      expect(h.prompts).toHaveLength(1);
+      expect(h.prompts[0]?.title).toBe("Run flagged bash command?");
+      expect(h.prompts[0]?.message).toContain('Command: "rm -rf src"');
+      expect(h.prompts[0]?.signal?.aborted).toBe(false);
+      decision.resolve(approved);
+      expect(await call).toEqual(
+        approved ? undefined : { block: true, reason: "Bash command was not approved." },
+      );
+    },
+  );
+
+  test.each([
+    { settings: ENABLED, timeoutMs: undefined },
+    { settings: CONFIRM, timeoutMs: 10_000 },
+  ])("uses the interactive budget only in confirm mode: %j", async ({ settings, timeoutMs }) => {
+    let observed: number | undefined;
+    const h = harness(
+      async (_registry, _input, options) => {
+        observed = options?.timeoutMs;
+        return CLEAR;
+      },
+      () => settings,
+    );
+    await h.call();
+    await flush();
+    expect(observed).toBe(timeoutMs);
+    expect(h.prompts).toHaveLength(0);
+  });
+
+  test("allows unflagged verdicts without prompting, including without UI", async () => {
+    const h = harness(
+      async () => CLEAR,
+      () => CONFIRM,
+    );
+    h.ctx.hasUI = false;
+    expect(await h.call()).toBeUndefined();
+    expect(h.prompts).toHaveLength(0);
+  });
+
+  test("blocks flagged headless commands without attempting a dialog", async () => {
+    const h = harness(
+      async () => FLAGGED,
+      () => CONFIRM,
+      async () => {
+        throw new Error("No dialog expected");
+      },
+    );
+    h.ctx.hasUI = false;
+    expect(await h.call()).toEqual({
+      block: true,
+      reason: "Semantic command guard flagged this command; interactive approval is required.",
+    });
+    expect(h.prompts).toHaveLength(0);
+  });
+
+  test("checks every concurrent selected call and serializes separate approvals", async () => {
+    let requests = 0;
+    const firstDecision = deferred<boolean>();
+    const secondDecision = deferred<boolean>();
+    let dialogs = 0;
+    const h = harness(
+      async () => {
+        requests += 1;
+        return FLAGGED;
+      },
+      () => CONFIRM,
+      async () => {
+        dialogs += 1;
+        return dialogs === 1 ? firstDecision.promise : secondDecision.promise;
+      },
+    );
+    const first = h.call("rm -rf one");
+    const second = h.call("rm -rf two", { parentToolCallId: "codemode-parent" });
+    await flush();
+    expect(requests).toBe(2);
+    expect(h.prompts).toHaveLength(1);
+    firstDecision.resolve(true);
+    expect(await first).toBeUndefined();
+    await flush();
+    expect(h.prompts).toHaveLength(2);
+    expect(h.prompts[1]?.message).toContain('Command: "rm -rf two"');
+    secondDecision.resolve(false);
+    expect(await second).toEqual({ block: true, reason: "Bash command was not approved." });
+  });
+
+  test("never offers an override for catastrophic commands", async () => {
+    let requests = 0;
+    const h = harness(
+      async () => {
+        requests += 1;
+        return FLAGGED;
+      },
+      () => CONFIRM,
+      async () => true,
+    );
+    expect(await h.call("rm -rf /")).toEqual({
+      block: true,
+      reason: "Blocked recursive deletion of filesystem root.",
+    });
+    expect(await h.call("mkfs.ext4 /dev/sda")).toEqual({
+      block: true,
+      reason: "Blocked filesystem formatter command on block device.",
+    });
+    expect(requests).toBe(0);
+    expect(h.prompts).toHaveLength(0);
+  });
+
+  test("blocks oversized input while routine and non-bash calls still skip checks", async () => {
+    let requests = 0;
+    const h = harness(
+      async () => {
+        requests += 1;
+        return FLAGGED;
+      },
+      () => CONFIRM,
+    );
+    expect(h.call("git status")).toBeUndefined();
+    expect(h.call("ignored", { toolName: "read" })).toBeUndefined();
+    expect(await h.call(`rm ${"x".repeat(16_001)}`)).toEqual({
+      block: true,
+      reason: "Semantic command guard cannot assess an oversized command.",
+    });
+    expect(requests).toBe(0);
+  });
+
+  test.each(["timeout", "auth-failure", "invalid-response", "caller-cancellation"] as const)(
+    "blocks unavailable verdicts: %s",
+    async (reason) => {
+      const h = harness(
+        async () => ({ ok: false, stage: "request", reason }),
+        () => CONFIRM,
+      );
+      expect(await h.call()).toEqual({
+        block: true,
+        reason: "Semantic command guard could not assess this command.",
+      });
+      expect(h.prompts).toHaveLength(0);
+    },
+  );
+
+  test("honors an explicit classifier policy opt-out rather than treating it as a failure", async () => {
+    const h = harness(
+      async () => ({ ok: false, stage: "config", reason: "disabled" }),
+      () => CONFIRM,
+    );
+    expect(await h.call()).toBeUndefined();
+    expect(h.prompts).toHaveLength(0);
+  });
+
+  test("blocks exceptions from either the classifier or dialog", async () => {
+    for (const dialogFailure of [true, false]) {
+      const h = harness(
+        async () => {
+          if (!dialogFailure) throw new Error("PRIVATE_FAILURE");
+          return FLAGGED;
+        },
+        () => CONFIRM,
+        async () => {
+          throw new Error("PRIVATE_UI_FAILURE");
+        },
+      );
+      expect(await h.call()).toEqual({
+        block: true,
+        reason: "Semantic command guard could not approve this command.",
+      });
+      expect(h.notifications.join(" ")).not.toContain("PRIVATE");
+    }
+  });
+
+  test.each(["session_before_switch", "session_shutdown", "abort"])(
+    "blocks cancelled reviews even if a late verdict flags the command: %s",
+    async (event) => {
+      const pending = deferred<ClassifierRequestResult>();
+      const h = harness(
+        async () => pending.promise,
+        () => CONFIRM,
+      );
+      const call = h.call();
+      if (event === "abort") h.controller.abort();
+      else h.handlers.get(event)?.({}, h.ctx);
+      pending.resolve(FLAGGED);
+      expect(await call).toEqual({
+        block: true,
+        reason: "Semantic command guard review was cancelled.",
+      });
+      expect(h.prompts).toHaveLength(0);
+    },
+  );
+
+  test("blocks cancellation during a dialog even if it later returns approval", async () => {
+    const decision = deferred<boolean>();
+    const h = harness(
+      async () => FLAGGED,
+      () => CONFIRM,
+      async () => decision.promise,
+    );
+    const call = h.call();
+    await flush();
+    h.controller.abort();
+    expect(h.prompts[0]?.signal?.aborted).toBe(true);
+    decision.resolve(true);
+    expect(await call).toEqual({
+      block: true,
+      reason: "Semantic command guard review was cancelled.",
+    });
+  });
+
+  test("rejects stale approvals after command input changes", async () => {
+    const decision = deferred<boolean>();
+    const h = harness(
+      async () => FLAGGED,
+      () => CONFIRM,
+      async () => decision.promise,
+    );
+    const input = { command: "rm -rf one" };
+    const call = h.call("ignored", { input });
+    await flush();
+    input.command = "rm -rf /";
+    decision.resolve(true);
+    expect(await call).toEqual({
+      block: true,
+      reason: "Bash command changed during semantic command guard review.",
+    });
+  });
+
+  test.each([
+    { classifier: { commandGuard: { enabled: false, mode: "confirm" } } },
+    { classifier: { commandGuard: { enabled: true, mode: "shadow" } } },
+  ])("rejects stale approvals after settings change: %j", async (updated) => {
+    let settings: unknown = CONFIRM;
+    const decision = deferred<boolean>();
+    const h = harness(
+      async () => FLAGGED,
+      () => settings,
+      async () => decision.promise,
+    );
+    const call = h.call();
+    await flush();
+    settings = updated;
+    decision.resolve(true);
+    expect(await call).toEqual({
+      block: true,
+      reason: "Semantic command guard settings changed during review.",
+    });
+  });
+
+  test("rejects approval if the working directory changes", async () => {
+    const decision = deferred<boolean>();
+    const h = harness(
+      async () => FLAGGED,
+      () => CONFIRM,
+      async () => decision.promise,
+    );
+    const call = h.call();
+    await flush();
+    expect(h.prompts[0]?.message).toContain('Working directory: "/private-workspace"');
+    h.ctx.cwd = "/different-workspace";
+    decision.resolve(true);
+    expect(await call).toEqual({
+      block: true,
+      reason: "Working directory changed during semantic command guard review.",
+    });
+  });
+
+  test("escapes control characters when presenting the exact local command", async () => {
+    const h = harness(
+      async () => FLAGGED,
+      () => CONFIRM,
+      async () => true,
+    );
+    const command = "rm -rf src\u001b[2J";
+    expect(await h.call(command)).toBeUndefined();
+    expect(h.prompts[0]?.message).toContain(JSON.stringify(command));
+    expect(h.prompts[0]?.message).not.toContain("\u001b");
+  });
+
+  test("a failed dialog does not poison the next approval", async () => {
+    let dialogs = 0;
+    const h = harness(
+      async () => FLAGGED,
+      () => CONFIRM,
+      async () => {
+        dialogs += 1;
+        if (dialogs === 1) throw new Error("Dialog failed");
+        return true;
+      },
+    );
+    expect(await h.call()).toEqual({
+      block: true,
+      reason: "Semantic command guard could not approve this command.",
+    });
+    expect(await h.call()).toBeUndefined();
+    expect(h.prompts).toHaveLength(2);
+  });
+
+  test("switches between modes without reload and keeps shadow non-blocking", async () => {
+    let settings: unknown = ENABLED;
+    const h = harness(
+      async () => FLAGGED,
+      () => settings,
+      async () => false,
+    );
+    expect(h.call()).toBeUndefined();
+    await flush();
+    expect(h.prompts).toHaveLength(0);
+    settings = CONFIRM;
+    expect(await h.call()).toEqual({ block: true, reason: "Bash command was not approved." });
+    expect(h.prompts).toHaveLength(1);
+    settings = ENABLED;
+    expect(h.call()).toBeUndefined();
+    await flush();
+    expect(h.prompts).toHaveLength(1);
+  });
 });

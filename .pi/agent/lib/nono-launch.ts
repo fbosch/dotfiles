@@ -1,5 +1,5 @@
-import { existsSync, realpathSync, statSync } from "node:fs";
-import { homedir } from "node:os";
+import { existsSync, lstatSync, realpathSync, statSync } from "node:fs";
+import { homedir, tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import {
   getAgentDir,
@@ -16,6 +16,31 @@ function existingDirectory(path: string): string | undefined {
   const canonical = realpathSync(path);
   if (!statSync(canonical).isDirectory()) throw new Error(`Not a directory: ${path}`);
   return canonical;
+}
+
+export function nonoProfilePath(
+  systemProfile = "/etc/nono/pi.json",
+  stowProfile = resolve(import.meta.dir, "nono", "pi.json"),
+): string {
+  try {
+    lstatSync(systemProfile);
+  } catch (error) {
+    if (
+      typeof error !== "object" ||
+      error === null ||
+      !("code" in error) ||
+      error.code !== "ENOENT"
+    ) {
+      throw error;
+    }
+    // shortcut: retain old-host support until every development host has the Nix profile;
+    // remove this fallback before selective protection can change the policy.
+    if (!statSync(stowProfile).isFile()) throw new Error(`Not a nono profile file: ${stowProfile}`);
+    return stowProfile;
+  }
+  if (!statSync(systemProfile).isFile())
+    throw new Error(`Not a nono profile file: ${systemProfile}`);
+  return systemProfile;
 }
 
 export function launchArguments(
@@ -61,7 +86,22 @@ export function launchArguments(
   ]) {
     if (existsSync(path) && statSync(path).isFile()) integrationGrants.push("--read-file", path);
   }
-  const profile = resolve(import.meta.dir, "nono", "pi.json");
+  // Direct Podman access is intentional; do not expose container storage or credential directories.
+  const podmanConnections = join(configHome, "containers", "podman-connections.json");
+  if (existsSync(podmanConnections) && statSync(podmanConnections).isFile()) {
+    for (const path of [
+      podmanConnections,
+      join(dataHome, "containers", "podman", "machine", "machine"),
+    ]) {
+      if (existsSync(path) && statSync(path).isFile()) integrationGrants.push("--read-file", path);
+    }
+    const knownHosts = join(home, ".ssh", "known_hosts");
+    if (existsSync(knownHosts) && statSync(knownHosts).isFile()) {
+      // Exempt only public host keys from the default SSH credential protection.
+      integrationGrants.push("--read-file", knownHosts, "--bypass-protection", knownHosts);
+    }
+  }
+  const profile = nonoProfilePath();
   return [
     "run",
     "--profile",
@@ -77,36 +117,39 @@ export function launchArguments(
   ];
 }
 
+export function launchEnvironment(
+  environment: NodeJS.ProcessEnv = process.env,
+  platform: NodeJS.Platform = process.platform,
+): NodeJS.ProcessEnv {
+  if (platform !== "darwin" || environment.XDG_RUNTIME_DIR) return environment;
+  // The remote Podman client otherwise attempts to create /var/run/user on macOS.
+  return { ...environment, XDG_RUNTIME_DIR: environment.TMPDIR || tmpdir() };
+}
+
 export function launchCommand(
   args: string[],
   cwd: string,
   agentDir: string,
   home: string,
-  insideNono: boolean,
+  environment: NodeJS.ProcessEnv = process.env,
 ): string[] {
   const bypassSandbox = args[0] === "--no-sandbox";
   const piArgs = bypassSandbox ? args.slice(1) : args;
-  if (insideNono || bypassSandbox) return [piExecutable, ...piArgs];
-  return [nonoExecutable, ...launchArguments(cwd, agentDir, home), ...piArgs];
+  if (bypassSandbox) return [piExecutable, ...piArgs];
+  return [nonoExecutable, ...launchArguments(cwd, agentDir, home, environment), ...piArgs];
 }
 
 if (import.meta.main) {
   try {
     if (!existsSync(piExecutable)) throw new Error(`Pi executable missing: ${piExecutable}`);
     const agentDir = process.env.PI_CODING_AGENT_DIR ?? getAgentDir();
-    // nono propagates this capability manifest to children; a nested Pi inherits the boundary.
-    const insideNono = Boolean(process.env.NONO_CAP_FILE);
-    const command = launchCommand(
-      process.argv.slice(2),
-      process.cwd(),
-      agentDir,
-      homedir(),
-      insideNono,
-    );
+    // Capability manifests are inherited metadata, not proof of kernel confinement.
+    const command = launchCommand(process.argv.slice(2), process.cwd(), agentDir, homedir());
     if (command[0] === nonoExecutable && !existsSync(nonoExecutable)) {
       throw new Error(`nono executable missing: ${nonoExecutable}`);
     }
     const child = Bun.spawnSync(command, {
+      env: command[0] === nonoExecutable ? launchEnvironment() : process.env,
       stdin: "inherit",
       stdout: "inherit",
       stderr: "inherit",

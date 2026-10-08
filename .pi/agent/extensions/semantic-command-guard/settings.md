@@ -1,46 +1,82 @@
 # Semantic command guard
 
-Set `classifier.commandGuard.enabled` to `false` in
-`~/.pi/agent/settings.json` to disable this guard without disabling other
-classifier features:
+Configure the guard in `~/.pi/agent/settings.json`:
 
 ```json
 {
   "classifier": {
     "commandGuard": {
-      "enabled": false
+      "enabled": true,
+      "mode": "shadow"
     }
   }
 }
 ```
 
-The setting is re-read before each bash call and before a pending verdict is
-reported. No reload is needed after changing it. An omitted switch defaults to
+Set `enabled` to `false` to disable this guard without disabling other classifier
+features. Set `mode` to `"confirm"` to require approval for flagged bash calls.
+
+The default mode is `shadow`. If `commandGuard` is absent, the guard defaults to
 off. Invalid settings disable checks and produce one warning per session.
 The global `classifier.enabled: false` switch also disables this guard.
-The shared classifier policy still respects trusted-project classifier opt-outs.
+The shared classifier policy respects trusted-project classifier opt-outs.
 
-This is a bash-only, non-blocking shadow experiment. It never confirms or blocks
-execution. The existing catastrophic-command guard remains unchanged.
+Run `/reload` once after installing the extension or updating its code. Settings
+changes need no reload. The guard re-reads settings before each bash call and
+before reporting a verdict or accepting approval.
 
-Local lexical filters select deletion, overwriting, destructive Git operations,
-network transfers, and inline code. Simple reads, ordinary Git inspection, and
-single-target deletion of `dist`, `build`, or `.cache` skip classification.
-Nested bash calls from codemode use the same hook; the script itself is not
-classified. At most one check runs at a time; selected calls arriving while it
-is busy are skipped, not queued. Commands longer than 16,000 characters are
-skipped with a warning rather than truncated.
+## Modes
+
+- `shadow` runs checks in the background and reports fixed risk descriptions.
+  It never asks for approval or blocks execution. At most one check runs at a
+  time; selected calls arriving while it is busy are skipped, not queued.
+  Classification failures produce one warning per session, not a safe verdict.
+- `confirm` waits for every selected call's verdict before execution. Unflagged
+  calls proceed without a prompt. Flagged calls require interactive approval;
+  declining, dismissing, or lacking a UI blocks execution. Parallel calls get
+  separate approvals, with dialogs shown one at a time. Classification failures
+  and cancellations block selected calls. Explicit classifier policy opt-outs
+  disable checking rather than count as failures.
+
+TUI approvals use the orange inline permission prompt in `prompt-ui`, with
+`Allow once` and `Reject`. RPC keeps its standard confirmation dialog because
+it does not support custom terminal components.
+
+Confirm mode adds the classifier request duration to selected calls, plus any
+time spent awaiting approval. The earlier isolated replay measured warmed
+requests at 395–478 ms; this is an observation, not a latency guarantee.
+Confirm requests allow 10 seconds overall, with up to 5 seconds for the primary
+provider when a fallback is configured. Shadow requests retain their 2.4-second
+overall budget. Both modes use the shared provider fallback policy.
+
+Approval applies only to the exact command, working directory, session, and
+mode that were reviewed. Changes during review invalidate it. Session switching
+and shutdown cancel pending checks. Disabling the guard drops shadow reports
+and invalidates pending confirmation calls instead of releasing them to execute.
+
+The existing catastrophic-command guard remains unchanged. Confirm mode also
+rejects its known patterns before classification, so there is no approval
+override for those commands.
+
+## Selection and privacy
+
+The guard handles only bash calls, including calls nested inside codemode.
+The codemode script itself is not classified. Local lexical filters select
+deletion, overwriting, destructive Git operations, network transfers, and
+inline code. Simple reads, ordinary Git inspection, and single-target deletion
+of `dist`, `build`, or `.cache` skip classification.
+
+Commands longer than 16,000 characters are not truncated. Shadow mode skips
+them with a warning; confirm mode blocks them.
 
 Only fixed operation labels and booleans go to the configured classifier
-provider. Raw commands, arguments, paths, working directories, user messages,
-inline code, and tool output are not sent or logged by this extension.
-Notifications contain only fixed risk descriptions.
+provider. The extension does not send or log raw commands, arguments, paths,
+working directories, user messages, inline code, or tool output. The confirmation
+dialog shows the command and working directory to the user, with control
+characters escaped.
 
 The summaries omit intent and detailed semantics. Quoting, comments, heredocs,
 aliases, indirect execution, and unusual syntax can produce missed detections
-or false alarms. A quiet guard does not establish safety or permission.
-The initial probability thresholds are 0.9 for destructive changes and 0.7
-for possible uploads; they are not locally calibrated. Requests use the shared
-classifier timeout and fallback policy. Failures produce one warning per
-session, not a safe verdict. Session switching and shutdown cancel pending
-checks.
+or false alarms in either mode. A quiet guard does not establish safety or
+permission. The initial probability thresholds are 0.9 for destructive changes
+and 0.7 for possible uploads; they are not locally calibrated.
