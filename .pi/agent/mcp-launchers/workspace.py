@@ -34,6 +34,7 @@ PI_RUNTIME = {
     "auth-profiles", "sessions", "subagent-sessions", "fff", "npm", "git",
     "tools", "tmp", "web-search-cache", "cache", "tasks", "mcp-cache.json",
     "mcp-onboarding.json", "models-store.json", "trust.json",
+    "mcp.log", "mcp.log.1",
 }
 MAX_FILE_BYTES = 32 * 1024 * 1024
 MAX_SNAPSHOT_BYTES = 512 * 1024 * 1024
@@ -70,15 +71,28 @@ def allowed_path(name):
     return True
 
 
-def tracked_files(cwd):
+def tracked_files(root_fd):
+    # Staging is single-threaded: inherit the pinned cwd instead of resolving it again.
+    previous_fd = os.open(".", os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fchdir(root_fd)
+        return git_sources()
+    finally:
+        os.fchdir(previous_fd)
+        os.close(previous_fd)
+
+
+def git_sources():
     # Ignore inherited Git routing and disable fsmonitor so enumeration runs no repository hook.
     environment = {k: v for k, v in os.environ.items() if not k.startswith("GIT_")}
     environment.update(GIT_CONFIG_NOSYSTEM="1", GIT_CONFIG_GLOBAL=os.devnull, GIT_OPTIONAL_LOCKS="0")
+    command = ["git", "-c", "core.fsmonitor=false"]
+    prefix = subprocess.run(command + ["rev-parse", "--show-prefix"], env=environment, capture_output=True, check=False)
     result = subprocess.run(
-        ["git", "-C", str(cwd), "-c", "core.fsmonitor=false", "ls-files", "--cached", "--stage", "-z", "--", "."],
+        command + ["ls-files", "--cached", "--stage", "-z", "--", "."],
         env=environment, capture_output=True, check=False,
     )
-    if result.returncode:
+    if prefix.returncode or result.returncode:
         raise ValueError("A readable Git working tree is required; refusing an unfiltered directory mount")
     names = set()
     for entry in result.stdout.split(b"\0"):
@@ -90,7 +104,7 @@ def tracked_files(cwd):
             raise ValueError("Resolve Git index conflicts before starting a workspace MCP")
         if mode in (b"100644", b"100755"):
             names.add(os.fsdecode(name))
-    return names
+    return names, os.fsdecode(prefix.stdout).removesuffix("\n")
 
 
 def open_source(root_fd, name):
@@ -140,18 +154,19 @@ def copy_source(root_fd, name, destination, remaining):
 
 def populate_snapshot(cwd, destination, includes=()):
     explicit = set(includes)
-    for name in explicit:
-        if not allowed_path(name):
-            raise ValueError(f"Explicit include is not an allowed relative source file: {name}")
-    candidates = tracked_files(cwd) | explicit
-    if len(candidates) > MAX_FILES:
-        raise ValueError("Snapshot file-count limit exceeded")
     total = 0
     copied = 0
     root_fd = os.open(cwd, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
     try:
+        tracked, prefix = tracked_files(root_fd)
+        for name in explicit:
+            if not allowed_path(name) or not allowed_path(prefix + name):
+                raise ValueError(f"Explicit include is not an allowed relative source file: {name}")
+        candidates = tracked | explicit
+        if len(candidates) > MAX_FILES:
+            raise ValueError("Snapshot file-count limit exceeded")
         for name in sorted(candidates):
-            if not allowed_path(name):
+            if not allowed_path(name) or not allowed_path(prefix + name):
                 continue
             size = copy_source(root_fd, name, destination, MAX_SNAPSHOT_BYTES - total)
             if size is None:
@@ -188,7 +203,8 @@ def snapshot_workspace(cwd, includes=(), cache_root=None):
 
 
 def container_arguments(server, snapshot):
-    common = ["run", "-i", "--rm", "--cap-drop=ALL", "--security-opt=no-new-privileges"]
+    common = ["run", "-i", "--rm", "--cap-drop=ALL", "--security-opt=no-new-privileges",
+              "--cidfile", str(snapshot.parent / "container.cid")]
     if server == "ast-grep":
         return common + [
             "--read-only", "--network=none", "--tmpfs",
@@ -206,7 +222,20 @@ def container_arguments(server, snapshot):
     raise ValueError(f"Unknown MCP server: {server}")
 
 
+def remove_container(cidfile):
+    if not cidfile.is_file():
+        return
+    # Killing the attached Podman client does not necessarily stop its container.
+    result = subprocess.run(
+        ["podman", "rm", "--force", "--ignore", "--cidfile", str(cidfile)],
+        stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, timeout=10, check=False,
+    )
+    if result.returncode:
+        raise ValueError("Could not remove this MCP container; inspect Podman before reconnecting")
+
+
 def run_container(arguments):
+    cidfile = Path(arguments[arguments.index("--cidfile") + 1])
     child = None
     timer = None
     received_signal = None
@@ -233,6 +262,7 @@ def run_container(arguments):
             timer.cancel()
         for sig, handler in previous.items():
             signal.signal(sig, handler)
+        remove_container(cidfile)
 
 
 def main():
@@ -249,7 +279,7 @@ def main():
     try:
         with snapshot_workspace(Path.cwd(), args.include) as snapshot:
             return run_container(container_arguments(args.server, snapshot))
-    except (OSError, ValueError) as error:
+    except (OSError, ValueError, subprocess.SubprocessError) as error:
         print(f"MCP workspace: {error}", file=sys.stderr)
         return 1
     finally:

@@ -2,8 +2,7 @@
 color: "#a8d0e6"
 description: Assesses changed or existing code for correctness, security, performance, and maintainability without making changes. Delivers evidence-backed findings, coverage limits, and severity.
 prompt_mode: replace
-model: openai-codex/gpt-6-astra
-thinking: high
+model: presets/critical-review
 tools: read, grep, find, ls, fffind, ffgrep, codemode, git_diff, lsp, typesafe_question
 permission:
   "*": deny

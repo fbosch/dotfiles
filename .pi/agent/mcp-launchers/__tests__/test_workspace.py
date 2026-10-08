@@ -69,6 +69,7 @@ class WorkspaceTests(unittest.TestCase):
             "nested/.envrc", "keys/private.pem", ".ssh/id_ed25519", "secrets.yaml",
             "node_modules/package/index.js", ".serena/project.yml", ".cache/data.json",
             ".shinit", ".config/fish/config.fish", ".bashrc", ".zshrc",
+            ".pi/agent/mcp.log", ".pi/agent/mcp.log.1",
         ]
         for name in excluded:
             self.put(name, "sensitive sentinel")
@@ -140,6 +141,25 @@ class WorkspaceTests(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "without symlinks"), self.snapshot(["link.py"]):
             self.fail("explicit symlink accepted")
 
+    def test_root_identity_is_pinned_before_git_enumeration(self):
+        parent = self.root / "selected"
+        parent.mkdir()
+        selected = parent / "project"
+        self.project.rename(selected)
+        replacement = self.root / "replacement"
+        (replacement / "project/src").mkdir(parents=True)
+        (replacement / "project/src/main.py").write_text("outside sentinel")
+        original = workspace.tracked_files
+
+        def swap_ancestor(root_fd):
+            candidates = original(root_fd)
+            parent.rename(self.root / "original")
+            parent.symlink_to(replacement, target_is_directory=True)
+            return candidates
+
+        with patch.object(workspace, "tracked_files", side_effect=swap_ancestor), self.snapshot(cwd=selected) as snapshot:
+            self.assertEqual((snapshot / "src/main.py").read_text(), "print('original')\n")
+
     def test_tracked_file_replaced_by_symlink_is_skipped(self):
         target = self.root / "external.py"
         target.write_text("outside sentinel")
@@ -183,12 +203,18 @@ class WorkspaceTests(unittest.TestCase):
         executable = binary_directory / "podman"
         executable.write_text("#!" + sys.executable + "\n" + '''import json, os, pathlib, signal, sys
 args = sys.argv[1:]
+if args[0] == 'rm':
+    cidfile = pathlib.Path(args[args.index('--cidfile') + 1])
+    assert cidfile.read_text() == 'a' * 64
+    pathlib.Path(os.environ['MCP_CAPTURE'] + '.cleanup').write_text(json.dumps(args))
+    sys.exit(0)
+pathlib.Path(args[args.index('--cidfile') + 1]).write_text('a' * 64)
 mount = args[args.index('-v') + 1]
 source = pathlib.Path(mount.rsplit(':', 2)[0])
 record = {'args': args, 'source': str(source), 'files': sorted(str(p.relative_to(source)) for p in source.rglob('*') if p.is_file())}
 pathlib.Path(os.environ['MCP_CAPTURE']).write_text(json.dumps(record))
 if os.environ.get('MCP_WAIT'):
-    signal.signal(signal.SIGTERM, lambda *_: sys.exit(0))
+    signal.signal(signal.SIGTERM, signal.SIG_IGN if os.environ.get('MCP_IGNORE_TERM') else lambda *_: sys.exit(0))
     print('ready', flush=True)
     signal.pause()
 sys.exit(int(os.environ.get('MCP_EXIT', '0')))
@@ -217,6 +243,8 @@ sys.exit(int(os.environ.get('MCP_EXIT', '0')))
                 self.assertIn("--security-opt=no-new-privileges", args)
                 self.assertIn(workspace.IMAGES[server], args)
                 self.assertFalse(Path(record["source"]).exists())
+                cleanup = json.loads(Path(environment["MCP_CAPTURE"] + ".cleanup").read_text())
+                self.assertEqual(cleanup, ["rm", "--force", "--ignore", "--cidfile", args[args.index("--cidfile") + 1]])
                 if server == "ast-grep":
                     self.assertIn("--network=none", args)
                     self.assertIn("--read-only", args)
@@ -241,6 +269,24 @@ sys.exit(int(os.environ.get('MCP_EXIT', '0')))
             child.communicate(timeout=10)
             self.assertEqual(child.returncode, 128 + signal.SIGTERM)
         record = json.loads(Path(environment["MCP_CAPTURE"]).read_text())
+        self.assertFalse(Path(record["source"]).exists())
+
+    def test_escalation_removes_container_not_only_podman_client(self):
+        environment = self.fake_podman()
+        with subprocess.Popen(
+            [str(LAUNCHERS / "ast-grep")], cwd=self.project,
+            env={**environment, "MCP_WAIT": "1", "MCP_IGNORE_TERM": "1"},
+            stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True,
+        ) as child:
+            assert child.stdout is not None
+            self.assertEqual(child.stdout.readline().strip(), "ready")
+            child.send_signal(signal.SIGTERM)
+            _, stderr = child.communicate(timeout=12)
+            self.assertEqual(child.returncode, 128 + signal.SIGTERM, stderr)
+        record = json.loads(Path(environment["MCP_CAPTURE"]).read_text())
+        cleanup = json.loads(Path(environment["MCP_CAPTURE"] + ".cleanup").read_text())
+        self.assertEqual(cleanup, ["rm", "--force", "--ignore", "--cidfile",
+                                  record["args"][record["args"].index("--cidfile") + 1]])
         self.assertFalse(Path(record["source"]).exists())
 
     def test_serena_bootstrap_sets_readonly_before_starting_stdio(self):

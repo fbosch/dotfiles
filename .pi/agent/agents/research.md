@@ -2,8 +2,7 @@
 color: "#ae87ed"
 description: Synthesizes source-backed answers, comparisons, and tradeoffs across references without making changes. Delivers evidence-linked findings, scope limits, and a reasoned conclusion.
 prompt_mode: replace
-model: openai-codex/gpt-6.1-sol
-thinking: high
+model: presets/deliberation
 tools: read, grep, find, ls, fffind, ffgrep, codemode, websearch, webfetch, mcp__context7, mcp__github
 permission:
   "*": deny

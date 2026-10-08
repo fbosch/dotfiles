@@ -2,8 +2,7 @@
 color: "#70b5a1"
 description: Runs bounded, read-only post-change checks including formatting, linting, typechecking, builds, configuration validation, and targeted tests. Delivers evidence and reports validation gaps without editing files.
 prompt_mode: replace
-model: openai-codex/gpt-6-luna-fast
-thinking: medium
+model: presets/verification
 tools: read, grep, find, ls, fffind, ffgrep, codemode, bash
 permission:
   "*": deny

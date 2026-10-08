@@ -25,18 +25,14 @@ describe("fixed model presets", () => {
     const pairs = readdirSync(agentsDir).map((file) => {
       const text = readFileSync(new URL(file, agentsDir), "utf8");
       const model = /^model: (.+)$/m.exec(text)?.[1];
-      expect(model).toBeDefined();
-      if (model?.startsWith("presets/")) {
-        const id = model.slice("presets/".length);
-        const preset = Object.entries(MODEL_PRESETS).find(([name]) => name === id)?.[1];
-        if (!preset) throw new Error(`Unknown preset in ${file}: ${model}`);
-        expect(/^thinking:/m.test(text)).toBe(false);
-        return `${preset.model}:${preset.thinking}`;
+      if (!model?.startsWith("presets/")) {
+        throw new Error(`Agent ${file} must select a virtual preset: ${model}`);
       }
-      const thinking = /^thinking: (.+)$/m.exec(text)?.[1];
-      expect(model?.startsWith("openai-codex/")).toBe(true);
-      expect(thinking).toBeDefined();
-      return `${model?.slice("openai-codex/".length)}:${thinking}`;
+      const id = model.slice("presets/".length);
+      const preset = Object.entries(MODEL_PRESETS).find(([name]) => name === id)?.[1];
+      if (!preset) throw new Error(`Unknown preset in ${file}: ${model}`);
+      expect(/^thinking:/m.test(text)).toBe(false);
+      return `${preset.model}:${preset.thinking}`;
     });
 
     expect(new Set(Object.values(MODEL_PRESETS).map((p) => `${p.model}:${p.thinking}`))).toEqual(

@@ -2,8 +2,7 @@
 color: "#aac6af"
 description: Finds existing implementations, usage examples, and repository conventions. Delivers concrete, descriptive patterns with file-and-line references without prescribing replacements.
 prompt_mode: replace
-model: openai-codex/gpt-6-luna
-thinking: medium
+model: presets/technical-discovery
 tools: read, grep, find, ls, fffind, ffgrep
 permission:
   "*": deny

@@ -2,8 +2,7 @@
 color: "#b7d6f5"
 description: Triages GitHub pull-request review feedback, validates claims against code and tests, applies confirmed fixes after approval, and resolves explicitly approved threads.
 prompt_mode: replace
-model: openai-codex/gpt-6-luna
-thinking: xhigh
+model: presets/implementation
 max_turns: 24
 tools: read, grep, find, ls, fffind, ffgrep, write, edit, git_diff, lsp, mcp__github, typesafe_question
 permission:

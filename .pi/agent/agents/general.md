@@ -1,8 +1,7 @@
 ---
 description: Handles complex, multi-step implementation or mixed tasks. Delivers the assigned change and focused checks within stated ownership, constraints, and handoff requirements.
 prompt_mode: append
-model: openai-codex/gpt-6-luna-fast
-thinking: xhigh
+model: presets/focused-execution
 max_turns: 24
 ---
 

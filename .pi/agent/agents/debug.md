@@ -2,8 +2,7 @@
 color: "#de7681"
 description: Diagnoses concrete bugs, errors, unexpected behavior, and performance regressions using reproductions, logs, and runtime state. Delivers confirmed facts, root-cause hypotheses, verification steps, and focused fixes when authorized.
 prompt_mode: replace
-model: openai-codex/gpt-6.1-sol
-thinking: high
+model: presets/deliberation
 tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash, mcp__chrome_devtools
 permission:
   "*": deny

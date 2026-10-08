@@ -2,8 +2,7 @@
 color: "#61afef"
 description: Collects bounded, read-only sources, renders charts or diagrams, and validates the result visually. Delivers replayable visuals with source bounds, constraints, and validation evidence.
 prompt_mode: replace
-model: openai-codex/gpt-6.1-sol
-thinking: medium
+model: presets/planning
 inherit_context: false
 max_turns: 24
 tools: read, grep, find, ls, fffind, ffgrep, tool_load, bash, chart_pie, chart_donut, chart_bar, chart_line, chart_scatter, chart_histogram, chart_bezier, chart_heatmap, chart_boxplot, chart_waterfall, chart_dumbbell, chart_stacked_bar, chart_gantt, chart_network, chart_tree, chart_treemap

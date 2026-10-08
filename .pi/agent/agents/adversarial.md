@@ -2,8 +2,7 @@
 color: "#e36435"
 description: Tests proposed designs and implementations against concrete attack scenarios, malicious inputs, stress cases, and failure reproducers. Delivers ranked risks, expected-versus-actual behavior, mitigations, and focused test cases.
 prompt_mode: replace
-model: openai-codex/gpt-6-astra
-thinking: xhigh
+model: presets/failure-analysis
 tools: read, grep, find, ls, fffind, ffgrep, bash
 permission:
   "*": deny

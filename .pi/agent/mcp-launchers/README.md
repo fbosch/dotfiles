@@ -22,7 +22,8 @@ are unchanged.
 Git-tracked regular files are candidates, not proof that their contents are
 safe. `workspace.py` excludes known credential names, `.env*`, private-key
 formats, live shell startup files, Git metadata, dependency/cache directories
-and Pi runtime state. Exclusions also apply to explicit includes. Symlinks
+and Pi runtime state. Policy uses repository-relative paths, including when
+Pi starts in a subdirectory. Exclusions also apply to explicit includes. Symlinks
 (including symlinked parent directories) are not followed; hardlinks are
 rejected. The launcher never falls back to mounting the live directory.
 
