@@ -2,9 +2,16 @@ import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 const agentRoot = resolve(import.meta.dir, "..");
+const piCache = `\${HOME}/.cache/pi`;
+// Invoke the native CLI directly so the public launcher does not stack nono sandboxes.
+const nativeCli = resolve(
+  dirname(fileURLToPath(import.meta.resolve("@earendil-works/pi-coding-agent"))),
+  "cli.js",
+);
 const mcpServers = JSON.parse(readFileSync(join(agentRoot, "mcp.json"), "utf8")) as {
   autoEnableCodemode?: boolean;
   mcpServers: Record<
@@ -62,7 +69,7 @@ describe("native MCP configuration", () => {
         "git+https://github.com/ast-grep/ast-grep-mcp@149e20d47bb7125fb0c1451feea2f48a98742034",
         "ast-grep-server",
       ],
-    ]) {
+    ] as const) {
       const server = mcpServers.mcpServers[name];
       expect(server?.command).toBe("uv");
       expect(server?.args?.slice(0, 9)).toEqual([
@@ -77,12 +84,13 @@ describe("native MCP configuration", () => {
         entrypoint,
       ]);
       expect(server?.env).toMatchObject({
-        UV_CACHE_DIR: "${HOME}/.cache/pi/uv",
-        UV_PYTHON_INSTALL_DIR: "${HOME}/.cache/pi/uv-python",
+        UV_CACHE_DIR: `${piCache}/uv`,
+        UV_PYTHON_INSTALL_DIR: `${piCache}/uv-python`,
       });
     }
     expect(mcpServers.mcpServers.serena?.args).toContain("--project-from-cwd");
-    expect(mcpServers.mcpServers.serena?.env?.SERENA_HOME).toBe("${HOME}/.cache/pi/serena");
+    expect(mcpServers.mcpServers.serena?.env?.SERENA_HOME).toBe(`${piCache}/serena`);
+    expect(mcpServers.mcpServers.serena?.env?.UV_TOOL_DIR).toBe(`${piCache}/uv-tools`);
     expect(mcpServers.mcpServers.context7).toMatchObject({
       command: "npx",
       args: ["--yes", "@upstash/context7-mcp@4.2.0"],
@@ -100,7 +108,7 @@ describe("native MCP configuration", () => {
       const chrome = mcpServers.mcpServers["chrome-devtools"];
       expect(chrome?.command).toBe("sh");
       expect(chrome?.env).toEqual({
-        npm_config_cache: "${HOME}/.cache/pi/npm",
+        npm_config_cache: `${piCache}/npm`,
         CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: "true",
         CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: "true",
       });
@@ -161,14 +169,14 @@ describe("native MCP configuration", () => {
     try {
       for (const source of ["export const current = 1;\n", "export const current = 2;\n"]) {
         writeFileSync(join(projectDirectory, "untracked.ts"), source);
-        const result = spawnSync("pi", ["mcp", "list"], {
+        const result = spawnSync(process.execPath, [nativeCli, "mcp", "list"], {
           cwd: projectDirectory,
           encoding: "utf8",
           env: { ...process.env, PI_CODING_AGENT_DIR: agentDirectory },
           timeout: 15_000,
         });
         expect(result.error).toBeUndefined();
-        expect(result.status).toBe(0);
+        expect(result.status, `${result.stdout}\n${result.stderr}`).toBe(0);
         expect(result.stdout).toContain("fake_local");
         expect(result.stdout).toContain("fake_read");
         expect(JSON.parse(readFileSync(reportPath, "utf8"))).toEqual({

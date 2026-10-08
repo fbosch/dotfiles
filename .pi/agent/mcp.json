@@ -48,6 +48,7 @@
       "env": {
         "UV_CACHE_DIR": "${HOME}/.cache/pi/uv",
         "UV_PYTHON_INSTALL_DIR": "${HOME}/.cache/pi/uv-python",
+        "UV_TOOL_DIR": "${HOME}/.cache/pi/uv-tools",
         "SERENA_HOME": "${HOME}/.cache/pi/serena"
       },
       "timeout": 30,
