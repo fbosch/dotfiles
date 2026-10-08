@@ -1,5 +1,3 @@
-import { realpathSync } from "node:fs";
-import { homedir } from "node:os";
 import {
   type ExtensionAPI,
   type ExtensionContext,
@@ -8,10 +6,10 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { type AgentMention, AgentMentionCache, loadAgentMentions } from "../agent-mentions";
 import { createReferenceAutocompleteProvider } from "./autocomplete";
-import { loadConfiguredGlobalReferences, loadConfiguredProjectReferences } from "./configured";
 import { loadDocsCacheReferences } from "./docs-cache";
 import { formatProjectReferences } from "./formatting";
 import { formatAnsiReferenceMentions } from "./reference-mentions";
+import { loadProjectReferences } from "./resolver";
 import { PROJECT_REFERENCES_END, PROJECT_REFERENCES_START, type ProjectReference } from "./types";
 
 const USER_MESSAGE_RENDER_PATCH = Symbol.for("dotfiles:pi-reference-mention-colors");
@@ -76,56 +74,6 @@ function installUserMessageReferenceColors(
   };
 }
 
-function assertNoReferenceCollisions(
-  configuredReferences: readonly ProjectReference[],
-  docsCacheReferences: readonly ProjectReference[],
-): void {
-  const configuredNames = new Map(
-    configuredReferences.map((reference) => [reference.name.toLowerCase(), reference.name]),
-  );
-  for (const reference of docsCacheReferences) {
-    const configuredName = configuredNames.get(reference.name.toLowerCase());
-    if (configuredName !== undefined) {
-      throw new Error(
-        `Docs-cache reference "${reference.name}" conflicts with configured reference "${configuredName}".`,
-      );
-    }
-  }
-}
-
-function mergeConfiguredReferences(
-  globalReferences: readonly ProjectReference[],
-  projectReferences: readonly ProjectReference[],
-): ProjectReference[] {
-  const referencesByName = new Map<string, ProjectReference>();
-  for (const reference of [...globalReferences, ...projectReferences]) {
-    referencesByName.set(reference.name.toLowerCase(), reference);
-  }
-  return [...referencesByName.values()];
-}
-
-export function loadProjectReferences(
-  cwd: string,
-  projectTrusted: boolean,
-  home = homedir(),
-  agentDirectory = getAgentDir(),
-): ProjectReference[] {
-  const globalReferences = loadConfiguredGlobalReferences(agentDirectory, home);
-  const projectReferences = projectTrusted ? loadConfiguredProjectReferences(cwd, home) : [];
-  const canonicalCwd = realpathSync(cwd);
-  const configuredReferences = mergeConfiguredReferences(
-    globalReferences,
-    projectReferences,
-  ).filter((reference) => reference.path !== canonicalCwd);
-  const docsCacheReferences = (projectTrusted ? loadDocsCacheReferences(cwd) : []).filter(
-    (reference) => reference.path !== canonicalCwd,
-  );
-  assertNoReferenceCollisions(configuredReferences, docsCacheReferences);
-  return [...configuredReferences, ...docsCacheReferences].sort((left, right) =>
-    left.name.localeCompare(right.name),
-  );
-}
-
 export function assertNoAgentMentionCollisions(
   references: readonly ProjectReference[],
   agentMentions: readonly AgentMention[],
@@ -143,12 +91,13 @@ export function assertNoAgentMentionCollisions(
   }
 }
 
+export { loadConfiguredProjectReferences } from "./configured";
 export { formatAnsiReferenceMentions, formatReferenceMentions } from "./reference-mentions";
+export { loadProjectReferences } from "./resolver";
 export type { ProjectReference } from "./types";
 export {
   createReferenceAutocompleteProvider,
   formatProjectReferences,
-  loadConfiguredProjectReferences,
   loadDocsCacheReferences,
   PROJECT_REFERENCES_END,
   PROJECT_REFERENCES_START,

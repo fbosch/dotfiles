@@ -36,3 +36,11 @@ fi
 export EDITOR=nvim
 export VISUAL=nvim
 export RIPGREP_CONFIG_PATH="$HOME/.config/ripgrep/ripgreprc"
+
+# The Cursor dash shell resets PATH above; restore Nix tools needed by the Pi launcher.
+if [ -d /run/current-system/sw/bin ]; then
+    export PATH="/run/current-system/sw/bin:$PATH"
+fi
+
+# Use the sandboxed Pi launcher in shells started outside Fish.
+export PATH="$HOME/.pi/agent/bin:$PATH"

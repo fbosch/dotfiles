@@ -12,7 +12,8 @@
 /node_modules/
 /npm/
 /git/
-/bin/
+/bin/*
+!/bin/pi
 /tools/
 /pi-debug.log
 /*.log

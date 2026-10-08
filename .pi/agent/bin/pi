@@ -1,0 +1,4 @@
+#!/bin/sh
+set -eu
+agent_dir="${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
+exec bun --no-install "$agent_dir/lib/nono-launch.ts" "$@"

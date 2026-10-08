@@ -293,6 +293,8 @@ for nix_path in /nix/var/nix/profiles/default/bin $HOME/.nix-profile/bin /etc/pr
     end
 end
 
+fish_add_path --path --prepend --move "$HOME/.pi/agent/bin"
+
 # --- Homebrew paths (ensure they're present for child processes like Neovim) ---
 if test $OS_TYPE = Darwin
     fish_add_path --path /opt/homebrew/bin /opt/homebrew/sbin

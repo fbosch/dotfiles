@@ -340,6 +340,13 @@ in
       bun run typecheck
     '';
 
+    "test:pi-nono".exec = ''
+      set -euo pipefail
+      cd .pi/agent
+      bun test lib/__tests__/nono-launch.test.ts extensions/mentions/__tests__/project-references.test.ts
+      bunx biome check lib/nono-launch.ts lib/__tests__/nono-launch.test.ts extensions/mentions/project-references/index.ts extensions/mentions/project-references/resolver.ts
+    '';
+
     "test:pi-prompt-cache".exec = ''
       set -euo pipefail
       cd .pi/agent
