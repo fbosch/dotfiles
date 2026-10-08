@@ -38,21 +38,34 @@ npm operations pass through. The runner preserves npm's status and `--save-exact
 behavior. Direct npm commands outside Pi bypass it; run `patch:packages`
 afterwards.
 
-The patch directory is the runner's package inventory. It derives each package name
-and exact version from patch-package filenames such as `package+1.2.3.patch` and
-`@scope+package+1.2.3.patch`. Adding or removing a patch does not require a matching
-code change. Malformed filenames, multiple versions of one package, nested-package
-patches, empty patches, and patches without textual changes are rejected.
+The patch directory is the runner's package inventory. Filenames such as
+`package+1.2.3.patch` and `@scope+package+1.2.3.patch` identify the package and retain
+the patch's source-version provenance. That filename version is not a compatibility
+check. The reviewed content gate lives in `targets.tsv`, with one row per patched file:
+package name, original patch filename, package-relative path, preimage SHA-256, and
+postimage SHA-256. Use `-` for a file that must be absent before or after the patch,
+such as a newly created file.
 
-Before invoking patch-package, the runner checks every discovered package against its
-installed manifest. A disposable copy verifies all selected patches before the installed
-packages are modified. Patch application uses `--error-on-fail --error-on-warn` and
-never `--partial`.
+The runner checks that every patch targets exactly the files listed in `targets.tsv`,
+then hashes all selected targets before applying anything. A package must be wholly at
+its reviewed preimages or wholly at its reviewed postimages. Unknown contents and mixed
+preimage/postimage states fail before mutation. Exact postimages make repeated runs
+idempotent. These checks use file contents, so a different dependency version is allowed
+when its patched files still match the reviewed preimages. A same-version package with
+changed target content is rejected.
 
-Automatic install and update commands treat patch failures as recoverable. They
-print a warning and continue with the unpatched package so Pi can start. Run
-`patch:packages` explicitly when maintaining patches; that command remains strict
-and returns a failure for version mismatches or conflicts.
+`patch-package` derives its warning from the version in the patch filename. The runner
+copies selected patches into a disposable directory and substitutes the installed
+version in those temporary filenames. The tracked filename remains unchanged as
+provenance, and `--error-on-fail --error-on-warn` stays enabled. The runner applies the
+selected patches to disposable package copies first and checks their exact postimage
+hashes before it touches installed packages. It checks the installed postimages again
+after application. The runner never uses `--partial`.
+
+Automatic install and update commands treat patch failures as recoverable. They print
+a warning and continue with the unpatched package so Pi can start. Run `patch:packages`
+explicitly when maintaining patches; that command remains strict and fails on unknown
+contents, mixed states, or patch conflicts.
 
 ## Cache behavior
 
@@ -78,15 +91,17 @@ reference generation, parsing, formatting, or the persisted schema.
 1. Review the new upstream package before changing its pin. Retire this patch if
    upstream supplies the cache.
 2. Develop changes in a disposable package copy, then regenerate the affected
-   patch with patch-package. Keep the patch filename and `settings.json` pin aligned.
-   The runner reads the package name and exact version from the filename. Do not
-   weaken version checks to accept an upgrade.
-3. Run the patch and extension regression tests, then `devenv test`. Tests apply
-   the selected patches to disposable package copies before touching an installed
-   package.
+   patch with patch-package. Keep the package identity and original patch filename
+   intact. Recalculate the affected `targets.tsv` rows from the exact pristine
+   preimage and the result of applying the reviewed patch. For a new or deleted file,
+   record `-` on the absent side. Do not infer hashes from a version number or patch
+   context alone.
+3. Run the patch and extension regression tests, then `devenv test`. The runner
+   checks all selected preimages, tests patch application on disposable copies, and
+   verifies their postimage hashes before it modifies an installed package.
 
-To retire one customization, remove its patch and reinstall the upstream package.
-No runner change is needed. Restart Pi after replacing package code.
+To retire one customization, remove its patch and its `targets.tsv` rows, then reinstall
+the upstream package. No runner change is needed. Restart Pi after replacing package code.
 
 To remove patching entirely, delete all patch files, restore the previous npm command
 (`["npm", "--save-exact"]`), and remove the patch runner integration.

@@ -13,6 +13,7 @@ interface ParsedPatchFilename {
 }
 
 const VERSION_PREFIX = /^\d+\.\d+\.\d+.*$/;
+const INSTALLED_VERSION = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
 const PACKAGE_PART = /^[a-z0-9][a-z0-9._~-]*$/;
 const PACKAGE_SCOPE = /^@[a-z0-9][a-z0-9._~-]*$/;
 const SEQUENCE_NUMBER = /^\d+$/;
@@ -56,6 +57,19 @@ function parsePatchFilename(filename: string): ParsedPatchFilename {
   const version = parts[versionIndex];
   if (!name || !version) invalidPatchFilename(filename, "missing package identity");
   return { name, version };
+}
+
+export function filenameForInstalledVersion(filename: string, installedVersion: string): string {
+  const { version } = parsePatchFilename(filename);
+  if (!INSTALLED_VERSION.test(installedVersion)) {
+    throw new Error(
+      `Cannot select patch for invalid installed package version ${installedVersion}`,
+    );
+  }
+  const versionToken = `+${version}`;
+  const versionIndex = filename.indexOf(versionToken);
+  if (versionIndex === -1) invalidPatchFilename(filename, "cannot locate its version segment");
+  return `${filename.slice(0, versionIndex + 1)}${installedVersion}${filename.slice(versionIndex + versionToken.length)}`;
 }
 
 function validatePatchContent(directory: string, filename: string): void {

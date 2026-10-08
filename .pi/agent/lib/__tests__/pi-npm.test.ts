@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from "bun:test";
+import { createHash } from "node:crypto";
 
 setDefaultTimeout(20_000);
 
@@ -39,6 +40,14 @@ index 3367afd..5ea2ed4 100644
 -original
 +patched
 `;
+const newFilePatch = `diff --git a/node_modules/pi-worktrunk/generated.txt b/node_modules/pi-worktrunk/generated.txt
+new file mode 100644
+index 0000000..fa7af8c
+--- /dev/null
++++ b/node_modules/pi-worktrunk/generated.txt
+@@ -0,0 +1 @@
++created
+`;
 let directory: string;
 let agent: string;
 let install: string;
@@ -48,6 +57,35 @@ let fffExample: string;
 let fffManifest: string;
 let lensExample: string;
 let lensManifest: string;
+let targetRows: string[];
+
+function digest(content: string): string {
+  return createHash("sha256").update(content).digest("hex");
+}
+
+function addTargetRow(
+  packageName: string,
+  patchFilename: string,
+  path: string,
+  before: string | null,
+  after: string | null,
+): void {
+  targetRows.push(
+    ["package", packageName, patchFilename, path, before ?? "-", after ?? "-"].join("\t"),
+  );
+  writeFileSync(
+    join(agent, "patches/targets.tsv"),
+    `# test target manifest\n${targetRows.join("\n")}\n`,
+  );
+}
+
+function removeTargetRows(patchFilename: string): void {
+  targetRows = targetRows.filter((row) => row.split("\t")[2] !== patchFilename);
+  writeFileSync(
+    join(agent, "patches/targets.tsv"),
+    `# test target manifest\n${targetRows.join("\n")}\n`,
+  );
+}
 
 function run(args: string[], env: Record<string, string> = {}) {
   return Bun.spawnSync([process.execPath, join(agent, "lib/pi-npm.ts"), ...args], {
@@ -70,6 +108,7 @@ beforeEach(() => {
   lensExample = join(install, "node_modules/pi-lens/example.txt");
   mkdirSync(join(agent, "lib"), { recursive: true });
   mkdirSync(join(agent, "patches"));
+  targetRows = [];
   mkdirSync(join(agent, "node_modules"));
   mkdirSync(join(install, "node_modules/pi-worktrunk"), { recursive: true });
   mkdirSync(join(install, "node_modules/@ff-labs/pi-fff"), { recursive: true });
@@ -77,6 +116,7 @@ beforeEach(() => {
   mkdirSync(join(directory, "bin"));
   cpSync(join(sourceRoot, "lib/pi-npm.ts"), join(agent, "lib/pi-npm.ts"));
   cpSync(join(sourceRoot, "lib/patch-catalog.ts"), join(agent, "lib/patch-catalog.ts"));
+  cpSync(join(sourceRoot, "lib/patch-targets.ts"), join(agent, "lib/patch-targets.ts"));
   symlinkSync(
     join(sourceRoot, "node_modules/patch-package"),
     join(agent, "node_modules/patch-package"),
@@ -91,6 +131,27 @@ beforeEach(() => {
   writeFileSync(fffExample, "original\n");
   writeFileSync(lensManifest, JSON.stringify({ name: "pi-lens", version: "4.3.0" }));
   writeFileSync(lensExample, "original\n");
+  addTargetRow(
+    "pi-worktrunk",
+    "pi-worktrunk+0.8.0.patch",
+    "example.txt",
+    digest("original\n"),
+    digest("patched\n"),
+  );
+  addTargetRow(
+    "@ff-labs/pi-fff",
+    "@ff-labs+pi-fff+0.11.0.patch",
+    "example.txt",
+    digest("original\n"),
+    digest("patched\n"),
+  );
+  addTargetRow(
+    "pi-lens",
+    "pi-lens+4.3.0.patch",
+    "example.txt",
+    digest("original\n"),
+    digest("patched\n"),
+  );
   writeFileSync(
     join(directory, "bin/npm"),
     `#!/usr/bin/env bun
@@ -128,40 +189,57 @@ describe("tracked Pi package patches", () => {
     expect(readFileSync(fffExample, "utf8")).toBe("patched\n");
   });
 
-  test.each(["0.7.0", "0.8.1", "0.8.0-beta", "^0.8.0"])(
-    "rejects %s before writing anything",
-    (version) => {
-      writeFileSync(manifest, JSON.stringify({ name: "pi-worktrunk", version }));
-      const result = run(["--apply-patches", install]);
-      expect(result.exitCode).toBe(1);
-      expect(result.stderr.toString()).toContain("requires exactly 0.8.0");
-      expect(readFileSync(example, "utf8")).toBe("original\n");
-    },
-  );
+  test("accepts reviewed target content across installed package versions", () => {
+    writeFileSync(manifest, JSON.stringify({ name: "pi-worktrunk", version: "0.9.0" }));
+    writeFileSync(fffManifest, JSON.stringify({ name: "@ff-labs/pi-fff", version: "0.12.0" }));
+    writeFileSync(lensManifest, JSON.stringify({ name: "pi-lens", version: "5.0.0" }));
+    expect(run(["--apply-patches", install]).exitCode).toBe(0);
+    expect(readFileSync(example, "utf8")).toBe("patched\n");
+    expect(readFileSync(fffExample, "utf8")).toBe("patched\n");
+    expect(readFileSync(lensExample, "utf8")).toBe("patched\n");
+  });
 
-  test.each(["0.10.9", "0.11.1", "0.11.0-beta", "^0.11.0"])(
-    "rejects pi-fff %s before writing any package",
-    (version) => {
-      writeFileSync(fffManifest, JSON.stringify({ name: "@ff-labs/pi-fff", version }));
-      const result = run(["--apply-patches", install]);
-      expect(result.exitCode).toBe(1);
-      expect(result.stderr.toString()).toContain("requires exactly 0.11.0");
-      expect(readFileSync(fffExample, "utf8")).toBe("original\n");
-      expect(readFileSync(example, "utf8")).toBe("original\n");
-    },
-  );
+  test("rejects a changed patch payload before mutating installed targets", () => {
+    writeFileSync(
+      join(agent, "patches/pi-worktrunk+0.8.0.patch"),
+      patch.replace("+patched", "+different"),
+    );
+    const result = run(["--apply-patches", install]);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr.toString()).toContain("did not produce the reviewed postimage");
+    expect(readFileSync(example, "utf8")).toBe("original\n");
+  });
 
-  test.each(["4.2.9", "4.3.1", "4.3.0-beta", "^4.3.0"])(
-    "rejects pi-lens %s before writing every package",
-    (version) => {
-      writeFileSync(lensManifest, JSON.stringify({ name: "pi-lens", version }));
-      const result = run(["--apply-patches", install]);
-      expect(result.exitCode).toBe(1);
-      expect(result.stderr.toString()).toContain("requires exactly 4.3.0");
-      expect(readFileSync(lensExample, "utf8")).toBe("original\n");
-      expect(readFileSync(example, "utf8")).toBe("original\n");
-    },
-  );
+  test("rejects changed target content at the same dependency version before any mutation", () => {
+    writeFileSync(example, "changed\n");
+    const result = run(["--apply-patches", install]);
+    expect(result.exitCode).toBe(1);
+    expect(result.stderr.toString()).toContain("does not match a reviewed preimage or postimage");
+    expect(readFileSync(example, "utf8")).toBe("changed\n");
+    expect(readFileSync(fffExample, "utf8")).toBe("original\n");
+    expect(readFileSync(lensExample, "utf8")).toBe("original\n");
+  });
+
+  test("requires a new-file target to be absent, then remains idempotent", () => {
+    writeFileSync(join(agent, "patches/pi-worktrunk+0.8.0.patch"), `${patch}${newFilePatch}`);
+    addTargetRow(
+      "pi-worktrunk",
+      "pi-worktrunk+0.8.0.patch",
+      "generated.txt",
+      null,
+      digest("created\n"),
+    );
+    const generated = join(install, "node_modules/pi-worktrunk/generated.txt");
+    writeFileSync(generated, "pre-existing\n");
+    expect(run(["--apply-patches", install]).exitCode).toBe(1);
+    expect(readFileSync(example, "utf8")).toBe("original\n");
+    expect(readFileSync(generated, "utf8")).toBe("pre-existing\n");
+
+    rmSync(generated);
+    expect(run(["--apply-patches", install]).exitCode).toBe(0);
+    expect(readFileSync(generated, "utf8")).toBe("created\n");
+    expect(run(["--apply-patches", install]).exitCode).toBe(0);
+  });
 
   test("fails on a missing package or malformed manifest", () => {
     rmSync(manifest);
@@ -186,8 +264,15 @@ describe("tracked Pi package patches", () => {
     expect(run(["--apply-patches", install]).exitCode).toBe(1);
   });
 
-  test("keeps explicit --apply-patches strict and transactional on conflict", () => {
+  test("keeps explicit --apply-patches strict and transactional on multi-file conflict", () => {
     writeFileSync(join(install, "node_modules/pi-worktrunk/second.txt"), "unexpected\n");
+    addTargetRow(
+      "pi-worktrunk",
+      "pi-worktrunk+0.8.0.patch",
+      "second.txt",
+      digest("original\n"),
+      digest("patched\n"),
+    );
     writeFileSync(
       join(agent, "patches/pi-worktrunk+0.8.0.patch"),
       `${patch}${patch.replaceAll("example.txt", "second.txt")}`,
@@ -200,6 +285,7 @@ describe("tracked Pi package patches", () => {
 
   test("uses the patch directory as the package inventory", () => {
     rmSync(join(agent, "patches/pi-worktrunk+0.8.0.patch"));
+    removeTargetRows("pi-worktrunk+0.8.0.patch");
 
     expect(run(["--apply-patches", install]).exitCode).toBe(0);
     expect(readFileSync(example, "utf8")).toBe("original\n");
@@ -218,6 +304,13 @@ describe("tracked Pi package patches", () => {
     writeFileSync(
       join(agent, "patches/extra-package+1.2.3.patch"),
       patch.replaceAll("pi-worktrunk", "extra-package"),
+    );
+    addTargetRow(
+      "extra-package",
+      "extra-package+1.2.3.patch",
+      "example.txt",
+      digest("original\n"),
+      digest("patched\n"),
     );
 
     expect(run(["--apply-patches", install]).exitCode).toBe(0);
@@ -259,16 +352,13 @@ describe("Pi npmCommand wrapper", () => {
     expect(readFileSync(fffExample, "utf8")).toBe("patched\n");
   });
 
-  test("lets npm handle requested patched-package upgrades and falls back on version mismatch", () => {
+  test("accepts a changed installed version when target content matches the reviewed preimage", () => {
     const result = run(["install", "pi-worktrunk@0.9.0", "--prefix", install], {
       TEST_INSTALLED_VERSION: "0.9.0",
     });
     expect(result.exitCode).toBe(0);
     expect(result.stdout.toString()).toContain("npm stdout");
-    expect(result.stderr.toString()).toContain("Pi will launch with unpatched packages");
-    expect(result.stderr.toString()).toContain(
-      "patches must be reviewed and updated for installed versions",
-    );
+    expect(result.stderr.toString()).not.toContain("Pi will launch with unpatched packages");
     expect(JSON.parse(readFileSync(join(directory, "npm-args.json"), "utf8"))).toEqual([
       "--save-exact",
       "install",
@@ -276,11 +366,18 @@ describe("Pi npmCommand wrapper", () => {
       "--prefix",
       install,
     ]);
-    expect(readFileSync(example, "utf8")).toBe("original\n");
+    expect(readFileSync(example, "utf8")).toBe("patched\n");
   });
 
   test("falls back when a post-install patch conflicts", () => {
     writeFileSync(join(install, "node_modules/pi-worktrunk/second.txt"), "unexpected\n");
+    addTargetRow(
+      "pi-worktrunk",
+      "pi-worktrunk+0.8.0.patch",
+      "second.txt",
+      digest("original\n"),
+      digest("patched\n"),
+    );
     writeFileSync(
       join(agent, "patches/pi-worktrunk+0.8.0.patch"),
       `${patch}${patch.replaceAll("example.txt", "second.txt")}`,
@@ -289,7 +386,7 @@ describe("Pi npmCommand wrapper", () => {
     expect(result.exitCode).toBe(0);
     expect(result.stderr.toString()).toContain("Pi will launch with unpatched packages");
     expect(result.stderr.toString()).toContain(
-      "patches must be reviewed and updated for installed versions",
+      "patches must be reviewed and target hashes updated",
     );
     expect(readFileSync(example, "utf8")).toBe("original\n");
     expect(readFileSync(join(install, "node_modules/pi-worktrunk/second.txt"), "utf8")).toBe(

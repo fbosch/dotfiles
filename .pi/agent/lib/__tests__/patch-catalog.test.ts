@@ -2,7 +2,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { discoverPackagePatches } from "../patch-catalog";
+import { discoverPackagePatches, filenameForInstalledVersion } from "../patch-catalog";
 
 const patch = `diff --git a/node_modules/example/index.js b/node_modules/example/index.js
 index 3367afd..5ea2ed4 100644
@@ -62,6 +62,15 @@ describe("package patch discovery", () => {
         patchFilenames: ["pi-worktrunk+0.8.0+001+follow-up.patch", "pi-worktrunk+0.8.0.patch"],
       },
     ]);
+  });
+
+  test("rewrites only the temporary patch-package filename version", () => {
+    expect(filenameForInstalledVersion("@ff-labs+pi-fff+0.11.0.patch", "0.12.0")).toBe(
+      "@ff-labs+pi-fff+0.12.0.patch",
+    );
+    expect(filenameForInstalledVersion("pi-worktrunk+0.8.0+001+follow-up.patch", "0.9.0")).toBe(
+      "pi-worktrunk+0.9.0+001+follow-up.patch",
+    );
   });
 
   test("allows an empty patch directory", () => {

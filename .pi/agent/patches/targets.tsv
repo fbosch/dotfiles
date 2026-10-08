@@ -1,0 +1,11 @@
+# kind<TAB>package<TAB>patch filename<TAB>package-relative path<TAB>preimage SHA-256 or - if absent<TAB>postimage SHA-256 or - if absent
+package	@ff-labs/pi-fff	@ff-labs+pi-fff+0.11.0.patch	src/file-picker.ts	33bf924dea61e8f6977e1d73691570dd1c6808423780d72d2ab5ab4b31a36fe3	5b42c2bf337dbb3d37284df6c8f20ffa83d05d6bb37f3120ad670852febadd08
+package	@ff-labs/pi-fff	@ff-labs+pi-fff+0.11.0.patch	src/index.ts	cc34d7d15f9887de3e9efe61a8306e64a89d83e2f9099c3d53830cc2ae1257e7	4942d228ab75ddba8d7d7a3e9756b01d56dc9c5b05c397a5a4d196f0d8ae655b
+package	pi-hashline-edit-pro	pi-hashline-edit-pro+6.0.1.patch	src/anchor-registry.ts	4c484e7ca5472353f545e02334d6c8b470ed025696584c6ddc90dcbc6f61e7e9	5e5625b47e2927247301d1e4454d39601b4ab9af4ecccaf4ff97c5d74bb01674
+package	pi-hashline-edit-pro	pi-hashline-edit-pro+6.0.1.patch	src/hashline/apply.ts	769fdde4b34df994be8b8986ad0706a3d2991d758b50251a10d23e9cf7faa030	d96748480bf531d7dbda9e7550d6d0052be5483bf1f5cf368cf049775164175f
+package	pi-hashline-edit-pro	pi-hashline-edit-pro+6.0.1.patch	src/hashline/hash.ts	65154cfcbba6f005b3f084fe4901a1ee2924890a783dc24b43bdb5fe528d2b5d	a78f1f2705a1ee9bba546eec5830e66f0dff3a9f4769ade757f73811c7f551d6
+package	pi-hashline-edit-pro	pi-hashline-edit-pro+6.0.1.patch	src/hashline/resolve.ts	914bcf65ebdc85aa7d9b85c46ce3061e7991cacd80be2e5e29169481269261a3	caa28d2c97489c6c2a59cc4ff80c580628e10a2eab9d23ae315cddec5c69eb75
+package	pi-lens	pi-lens+4.3.0.patch	dist/index.js	c16fd7f3bc7c55691ff7ac37f808568617456385e3a6c7848233e4e1d408994e	bce7dd6c31e672d69c72345611ffb8b1f10d2efde2a821c88c6a3ffdee09a705
+package	pi-worktrunk	pi-worktrunk+0.8.0.patch	reference-cache.ts	-	5543cf671a00b9074345340657ea4279b9256805bded4f940941c348569d77c5
+package	pi-worktrunk	pi-worktrunk+0.8.0.patch	worktrunk.ts	b6773d882a3333c450ff6ee825a023b475dc3cd4542cd3aacf46db335045837d	0c6a7ea37c7e62011f8383be73c019bae61493c95605a996bde5e532e06c86b2
+runtime	proper-lockfile	proper-lockfile-4.1.2.patch	lib/mtime-precision.js	eb5adf91a21715b50f39438cdcda52043d551ccb5fe530681364c474c7206218	69ff3da4c35612d691c4e224d22e4128418be3caeabb682ab1ddf963784fb89d
