@@ -1,3 +1,4 @@
+import { readFileSync, writeFileSync } from "node:fs";
 import { createInterface } from "node:readline";
 
 interface RpcRequest {
@@ -21,6 +22,13 @@ for await (const line of createInterface({ input: process.stdin })) {
 
   switch (request.method) {
     case "initialize": {
+      const reportPath = process.env.MCP_TEST_REPORT;
+      const sourcePath = process.env.MCP_TEST_SOURCE;
+      if (!reportPath || !sourcePath) throw new Error("Missing MCP integration-test report paths");
+      writeFileSync(
+        reportPath,
+        JSON.stringify({ cwd: process.cwd(), source: readFileSync(sourcePath, "utf8") }),
+      );
       const requestedVersion = isRecord(request.params)
         ? request.params.protocolVersion
         : undefined;

@@ -10,62 +10,88 @@
       "exposure": "deferred"
     },
     "context7": {
-      "command": "podman",
+      "command": "npx",
       "args": [
-        "run",
-        "-i",
-        "--rm",
-        "--read-only",
-        "--cap-drop=ALL",
-        "--security-opt=no-new-privileges",
-        "-e",
-        "MCP_TRANSPORT=stdio",
-        "docker.io/mcp/context7@sha256:1174e6a29634a83b2be93ac1fefabf63265f498c02c72201fe3464e687dd8836"
+        "--yes",
+        "@upstash/context7-mcp@4.2.0"
       ],
+      "env": {
+        "MCP_TRANSPORT": "stdio",
+        "npm_config_cache": "${HOME}/.cache/pi/npm"
+      },
       "timeout": 30,
       "exposure": "deferred"
     },
     "serena": {
-      "command": "~/.pi/agent/mcp-launchers/serena",
-      "args": [],
+      "command": "uv",
+      "args": [
+        "run",
+        "--no-config",
+        "--no-project",
+        "--python",
+        "3.12",
+        "--with",
+        "git+https://github.com/oraios/serena@949a27ef1e5fda1a6e7b561e777bcece345c6ffd",
+        "--",
+        "serena",
+        "start-mcp-server",
+        "--project-from-cwd",
+        "--context",
+        "agent",
+        "--transport",
+        "stdio",
+        "--enable-web-dashboard",
+        "False",
+        "--open-web-dashboard",
+        "False"
+      ],
+      "env": {
+        "UV_CACHE_DIR": "${HOME}/.cache/pi/uv",
+        "UV_PYTHON_INSTALL_DIR": "${HOME}/.cache/pi/uv-python",
+        "SERENA_HOME": "${HOME}/.cache/pi/serena"
+      },
       "timeout": 30,
       "exposure": "deferred"
     },
     "ast-grep": {
-      "command": "~/.pi/agent/mcp-launchers/ast-grep",
-      "args": [],
+      "command": "uv",
+      "args": [
+        "run",
+        "--no-config",
+        "--no-project",
+        "--python",
+        "3.13",
+        "--with",
+        "git+https://github.com/ast-grep/ast-grep-mcp@149e20d47bb7125fb0c1451feea2f48a98742034",
+        "--",
+        "ast-grep-server",
+        "--transport",
+        "stdio"
+      ],
+      "env": {
+        "UV_CACHE_DIR": "${HOME}/.cache/pi/uv",
+        "UV_PYTHON_INSTALL_DIR": "${HOME}/.cache/pi/uv-python"
+      },
       "timeout": 30,
       "exposure": "deferred"
     },
     "chrome-devtools": {
-      "command": "podman",
+      "command": "sh",
       "args": [
-        "run",
-        "-i",
-        "--rm",
-        "--init",
-        "--read-only",
-        "--cap-drop=ALL",
-        "--security-opt=no-new-privileges",
-        "--tmpfs",
-        "/tmp:rw,nosuid,nodev,size=1g",
-        "--tmpfs",
-        "/root/.npm:rw,nosuid,nodev,size=256m",
-        "-e",
-        "CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS=true",
-        "-e",
-        "CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS=true",
-        "mcr.microsoft.com/playwright@sha256:eff16c30e6f3f4af0a03fa4b706120d5e9b0891c344a27d64559aff5900a4a27",
-        "npx",
-        "-y",
-        "chrome-devtools-mcp@1.10.1",
+        "-eu",
+        "-c",
+        "browser=$(command -v google-chrome || command -v chromium || command -v chromium-browser || true); if [ -n \"$browser\" ]; then set -- \"--executable-path=$browser\" \"$@\"; fi; exec npx --yes chrome-devtools-mcp@1.10.1 \"$@\"",
+        "chrome-devtools-mcp",
         "--headless",
         "--isolated",
         "--no-usage-statistics",
-        "--no-performance-crux",
-        "--executable-path=/ms-playwright/chromium-1243/chrome-linux64/chrome",
-        "--chrome-arg=--no-sandbox"
+        "--no-performance-crux"
       ],
+      "env": {
+        "npm_config_cache": "${HOME}/.cache/pi/npm",
+        "CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS": "true",
+        "CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS": "true"
+      },
       "timeout": 30,
       "exposure": "deferred"
     },

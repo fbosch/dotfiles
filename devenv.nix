@@ -348,11 +348,11 @@ in
       bun run typecheck
     '';
 
-    "test:pi-mcp-workspace".exec = ''
+    "test:pi-mcp".exec = ''
       set -euo pipefail
-      python3 -B -m unittest discover -s .pi/agent/mcp-launchers/__tests__ -p 'test_workspace.py'
-      sh -n .pi/agent/mcp-launchers/ast-grep .pi/agent/mcp-launchers/serena
-      shellcheck .pi/agent/mcp-launchers/ast-grep .pi/agent/mcp-launchers/serena
+      cd .pi/agent
+      bun test __tests__/mcp.test.ts
+      bunx --no-install biome check mcp.json __tests__
     '';
 
     "test:pi-nono".exec = ''
@@ -519,7 +519,7 @@ in
         "test:herdr-neovim-sessions"
         "test:lua-quality"
         "test:pi-extensions"
-        "test:pi-mcp-workspace"
+        "test:pi-mcp"
         "test:nvim-dekit-terminal"
         "test:nvim-direnv-loader"
         "test:nvim-pi-direnv-launch"

@@ -1,5 +1,0 @@
-#!/bin/sh
-set -eu
-
-launcher_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
-exec python3 -I "$launcher_dir/workspace.py" ast-grep "$@"
