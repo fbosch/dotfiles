@@ -11,6 +11,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { UserMessageComponent } from "@earendil-works/pi-coding-agent";
 import type { AutocompleteProvider } from "@earendil-works/pi-tui";
+import { normalizeBuildSystemPromptOptions } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/core/system-prompt.js";
 import {
   loadThemeFromPath,
   setThemeInstance,
@@ -18,7 +19,6 @@ import {
 } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import { loadAgentMentions } from "../agent-mentions";
 import projectReferences, {
-  appendProjectReferences,
   assertNoAgentMentionCollisions,
   createReferenceAutocompleteProvider,
   formatProjectReferences,
@@ -330,7 +330,7 @@ describe("project references", () => {
     );
   });
 
-  test("formats keyed JSON metadata and appends it once", () => {
+  test("formats keyed JSON metadata with escaped XML delimiters", () => {
     const references = [{ name: "docs", path: "/tmp/a&b", description: "Docs <current>" }];
     const formatted = formatProjectReferences(references);
     const start =
@@ -340,9 +340,8 @@ describe("project references", () => {
     expect(JSON.parse(formatted.slice(start, end))).toEqual({
       docs: { path: "/tmp/a&b", description: "Docs <current>" },
     });
-    const appended = appendProjectReferences("base prompt", references);
-    expect(appended).toContain(PROJECT_REFERENCES_START);
-    expect(appendProjectReferences(appended, references)).toBe(appended);
+    expect(formatted).toContain("\\u0026");
+    expect(formatted).toContain("\\u003c");
   });
 
   test("adds named references ahead of existing at-sign suggestions", async () => {
@@ -469,16 +468,22 @@ describe("project references", () => {
     } as unknown as ExtensionContext;
     await sessionStart?.({} as SessionStartEvent, context);
 
-    const result = await beforeAgentStart?.(
-      {
-        type: "before_agent_start",
-        prompt: "Inspect docs",
-        systemPrompt: "base prompt",
-        systemPromptOptions: {},
-      } as BeforeAgentStartEvent,
-      context,
-    );
-    expect(result?.systemPrompt).toContain('"reference-material":{"path":');
+    const event = {
+      type: "before_agent_start",
+      prompt: "Inspect docs",
+      systemPrompt: "base prompt",
+      systemPromptOptions: normalizeBuildSystemPromptOptions({
+        cwd,
+        sections: { other: "Keep this section." },
+      }),
+    } as BeforeAgentStartEvent;
+    expect(await beforeAgentStart?.(event, context)).toBeUndefined();
+    const sections = event.systemPromptOptions.sections;
+    expect(sections?.project_references).toContain('"reference-material":{"path":');
+    expect(sections?.other).toBe("Keep this section.");
+    expect(event.systemPromptOptions.forceSystemPrompt).toBeUndefined();
+    await beforeAgentStart?.(event, context);
+    expect(event.systemPromptOptions.sections).toEqual(sections);
     const message = new UserMessageComponent("Inspect @reference-material and screenshot.png");
     const updated = new Promise<void>((resolve) => {
       metadataChanged = resolve;

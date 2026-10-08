@@ -10,7 +10,7 @@ import { type AgentMention, AgentMentionCache, loadAgentMentions } from "../agen
 import { createReferenceAutocompleteProvider } from "./autocomplete";
 import { loadConfiguredGlobalReferences, loadConfiguredProjectReferences } from "./configured";
 import { loadDocsCacheReferences } from "./docs-cache";
-import { appendProjectReferences, formatProjectReferences } from "./formatting";
+import { formatProjectReferences } from "./formatting";
 import { formatAnsiReferenceMentions } from "./reference-mentions";
 import { PROJECT_REFERENCES_END, PROJECT_REFERENCES_START, type ProjectReference } from "./types";
 
@@ -146,7 +146,6 @@ export function assertNoAgentMentionCollisions(
 export { formatAnsiReferenceMentions, formatReferenceMentions } from "./reference-mentions";
 export type { ProjectReference } from "./types";
 export {
-  appendProjectReferences,
   createReferenceAutocompleteProvider,
   formatProjectReferences,
   loadConfiguredProjectReferences,
@@ -201,7 +200,9 @@ export default function projectReferences(pi: ExtensionAPI, agentDirectory = get
     disposeUserMessageColors();
   });
 
-  pi.on("before_agent_start", (event) => ({
-    systemPrompt: appendProjectReferences(event.systemPrompt, references),
-  }));
+  pi.on("before_agent_start", (event) => {
+    event.systemPromptOptions.sections ??= {};
+    event.systemPromptOptions.sections.project_references =
+      references.length === 0 ? "" : formatProjectReferences(references);
+  });
 }

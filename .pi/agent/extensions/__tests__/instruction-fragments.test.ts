@@ -8,9 +8,8 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { normalizeBuildSystemPromptOptions } from "../../node_modules/@earendil-works/pi-coding-agent/dist/core/system-prompt.js";
 import instructionFragments, {
-  appendInstructionFragments,
-  INSTRUCTION_FRAGMENTS_END,
   INSTRUCTION_FRAGMENTS_START,
   instructionFragmentsForTools,
   loadGlobalInstructionFragments,
@@ -89,10 +88,10 @@ describe("instruction fragments", () => {
         systemPrompt: "base prompt",
         systemPromptOptions: {},
       } as BeforeAgentStartEvent;
-      const systemPrompt = handler?.(event, {} as ExtensionContext)?.systemPrompt;
-
-      expect(systemPrompt).toContain("First instruction.");
-      expect(systemPrompt).not.toContain("Updated instruction.");
+      expect(handler?.(event, {} as ExtensionContext)).toBeUndefined();
+      const fragments = event.systemPromptOptions.sections?.global_instruction_fragments;
+      expect(fragments).toBe("First instruction.");
+      expect(event.systemPromptOptions.forceSystemPrompt).toBeUndefined();
     } finally {
       if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
       else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
@@ -312,19 +311,6 @@ describe("instruction fragments", () => {
     );
   });
 
-  test("appends and replaces the marked instruction block", () => {
-    const appended = appendInstructionFragments("base prompt", "Routing instructions.");
-    expect(appended).toBe(
-      `base prompt\n\n${INSTRUCTION_FRAGMENTS_START}\nRouting instructions.\n${INSTRUCTION_FRAGMENTS_END}`,
-    );
-    expect(
-      appendInstructionFragments(`${appended}\n\nAfter instructions.`, "Search instructions."),
-    ).toBe(
-      `base prompt\n\n${INSTRUCTION_FRAGMENTS_START}\nSearch instructions.\n${INSTRUCTION_FRAGMENTS_END}\n\nAfter instructions.`,
-    );
-    expect(appendInstructionFragments(appended, "")).toBe("base prompt");
-  });
-
   test("injects fragments for available tools, including inactive deferred tools", () => {
     const agentDirectory = temporaryDirectory();
     const instructionsDirectory = join(agentDirectory, "instructions");
@@ -363,21 +349,34 @@ describe("instruction fragments", () => {
         type: "before_agent_start",
         prompt: "Delegate this",
         systemPrompt: "base prompt",
-        systemPromptOptions: {},
+        systemPromptOptions: normalizeBuildSystemPromptOptions({
+          cwd: agentDirectory,
+          sections: { other: "Keep this section." },
+        }),
       } as BeforeAgentStartEvent;
 
-      const systemPrompt = handler?.(event, {} as ExtensionContext)?.systemPrompt;
-      expect(systemPrompt).toContain(INSTRUCTION_FRAGMENTS_START);
-      expect(systemPrompt).toContain("# Subagent orchestration");
-      expect(systemPrompt).toContain("# Task tracking");
+      expect(handler?.(event, {} as ExtensionContext)).toBeUndefined();
+      expect(event.systemPromptOptions.sections).toEqual({
+        other: "Keep this section.",
+        global_instruction_fragments: "# Subagent orchestration\n\n# Task tracking",
+      });
+      expect(event.systemPromptOptions.forceSystemPrompt).toBeUndefined();
+
+      handler?.(event, {} as ExtensionContext);
+      expect(event.systemPromptOptions.sections?.global_instruction_fragments).toBe(
+        "# Subagent orchestration\n\n# Task tracking",
+      );
 
       availableTools = ["tasks"];
-      const taskSystemPrompt = handler?.(event, {} as ExtensionContext)?.systemPrompt;
-      expect(taskSystemPrompt).toContain("# Task tracking");
-      expect(taskSystemPrompt).not.toContain("# Subagent orchestration");
+      handler?.(event, {} as ExtensionContext);
+      expect(event.systemPromptOptions.sections?.global_instruction_fragments).toBe(
+        "# Task tracking",
+      );
 
       availableTools = ["read"];
       expect(handler?.(event, {} as ExtensionContext)).toBeUndefined();
+      expect(event.systemPromptOptions.sections?.global_instruction_fragments).toBe("");
+      expect(event.systemPromptOptions.sections?.other).toBe("Keep this section.");
     } finally {
       if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
       else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;

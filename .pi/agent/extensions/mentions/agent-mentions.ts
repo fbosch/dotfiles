@@ -515,6 +515,7 @@ export function agentMentionInstruction(mentions: readonly AgentMention[]): stri
   return [
     "<explicit-subagent-invocation>",
     `The user explicitly invoked ${names}.`,
+    "This selection applies only to the current user request, not later requests.",
     "For each invoked agent, use the user message and context to create a focused prompt, then call the subagent tool with that exact subagent_type.",
     "Do not handle the delegated task directly or substitute another agent.",
     "</explicit-subagent-invocation>",
@@ -576,7 +577,12 @@ export default function agentMentions(pi: ExtensionAPI): void {
     if (mentions.length === 0) return;
 
     return {
-      systemPrompt: `${event.systemPrompt}\n\n${agentMentionInstruction(mentions)}`,
+      message: {
+        customType: "explicit-subagent-invocation",
+        content: agentMentionInstruction(mentions),
+        display: false,
+        details: { agents: mentions.map((mention) => mention.name) },
+      },
     };
   });
 }

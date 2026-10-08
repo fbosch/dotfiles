@@ -169,8 +169,20 @@ describe("agent mentions", () => {
     } as BeforeAgentStartEvent;
     const result = await handler?.(event, { cwd: "/tmp" } as ExtensionContext);
 
-    expect(result?.systemPrompt).toStartWith("base prompt\n\n");
-    expect(result?.systemPrompt).toContain("@explore");
+    expect(result?.systemPrompt).toBeUndefined();
+    expect(event.systemPromptOptions.forceSystemPrompt).toBeUndefined();
+    expect(result?.message).toEqual({
+      customType: "explicit-subagent-invocation",
+      content: agentMentionInstruction([{ name: "explore", description: "Explore" }]),
+      display: false,
+      details: { agents: ["explore"] },
+    });
+    expect(result?.message?.content).toContain("only to the current user request");
+    expect(
+      await handler?.({ ...event, prompt: "Continue without delegation" }, {
+        cwd: "/tmp",
+      } as ExtensionContext),
+    ).toBeUndefined();
   });
 
   test("does not route mentions when the subagent tool is unavailable", async () => {

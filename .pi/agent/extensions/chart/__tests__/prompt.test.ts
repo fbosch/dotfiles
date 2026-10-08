@@ -6,12 +6,8 @@ import type {
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { setCapabilities } from "@earendil-works/pi-tui";
-import {
-  appendChartGuidance,
-  CHART_GUIDANCE_END,
-  CHART_GUIDANCE_START,
-  registerChartGuidance,
-} from "../prompt";
+import { normalizeBuildSystemPromptOptions } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/core/system-prompt.js";
+import { registerChartGuidance } from "../prompt";
 
 type BeforeAgentStartHandler = (
   event: BeforeAgentStartEvent,
@@ -31,12 +27,17 @@ function createHandler(toolNames: readonly string[]): BeforeAgentStartHandler {
   return handler;
 }
 
-const event = {
-  type: "before_agent_start",
-  prompt: "Show a chart",
-  systemPrompt: "base prompt",
-  systemPromptOptions: {},
-} as BeforeAgentStartEvent;
+function createEvent(): BeforeAgentStartEvent {
+  return {
+    type: "before_agent_start",
+    prompt: "Show a chart",
+    systemPrompt: "base prompt",
+    systemPromptOptions: normalizeBuildSystemPromptOptions({
+      cwd: "/tmp",
+      sections: { other: "Keep this section." },
+    }),
+  } as BeforeAgentStartEvent;
+}
 
 const tuiContext = { mode: "tui", hasUI: true } as ExtensionContext;
 
@@ -47,17 +48,19 @@ function setImageCapability(images: "kitty" | "iterm2" | null): void {
 describe("chart prompt guidance", () => {
   test("mentions deferred charts when an available chart tool can render in the TUI", () => {
     setImageCapability("kitty");
-    const result = createHandler(["read", "chart_gantt"])(event, tuiContext);
-    expect(result?.systemPrompt).toContain(CHART_GUIDANCE_START);
-    expect(result?.systemPrompt).toContain("timelines");
-    expect(result?.systemPrompt).toContain("tool_search");
-    expect(result?.systemPrompt).toContain("tool_load");
-    expect(result?.systemPrompt).toContain("12 nodes");
-    expect(result?.systemPrompt).toContain("32 nodes");
-    expect(result?.systemPrompt).toContain("balanced values");
-    expect(result?.systemPrompt).toContain("chart_");
-    expect(result?.systemPrompt).not.toContain("chart_gantt");
-    expect(result?.systemPrompt).toContain(CHART_GUIDANCE_END);
+    const event = createEvent();
+    expect(createHandler(["read", "chart_gantt"])(event, tuiContext)).toBeUndefined();
+    const guidance = event.systemPromptOptions.sections?.chart_visuals;
+    expect(guidance).toContain("timelines");
+    expect(guidance).toContain("tool_search");
+    expect(guidance).toContain("tool_load");
+    expect(guidance).toContain("12 nodes");
+    expect(guidance).toContain("32 nodes");
+    expect(guidance).toContain("balanced values");
+    expect(guidance).toContain("chart_");
+    expect(guidance).not.toContain("chart_gantt");
+    expect(event.systemPromptOptions.sections?.other).toBe("Keep this section.");
+    expect(event.systemPromptOptions.forceSystemPrompt).toBeUndefined();
   });
 
   test.each([
@@ -66,7 +69,7 @@ describe("chart prompt guidance", () => {
     { mode: "tui" as const, hasUI: true, images: null },
   ])("does not inject guidance without inline TUI images", (context) => {
     setImageCapability(context.images);
-    const result = createHandler(["chart_gantt"])(event, {
+    const result = createHandler(["chart_gantt"])(createEvent(), {
       ...tuiContext,
       mode: context.mode,
       hasUI: context.hasUI,
@@ -78,15 +81,22 @@ describe("chart prompt guidance", () => {
   test("does not inject guidance when chart tools are unavailable", () => {
     setImageCapability("iterm2");
 
-    expect(createHandler(["read"])(event, tuiContext)).toBeUndefined();
+    expect(createHandler(["read"])(createEvent(), tuiContext)).toBeUndefined();
   });
 
-  test("replaces its own marked block without duplicating it", () => {
-    const first = appendChartGuidance("base prompt");
-    const second = appendChartGuidance(`${first}\n\nAfter prompt.`);
+  test("updates only its own section without duplicating guidance", () => {
+    setImageCapability("kitty");
+    const event = createEvent();
+    const handler = createHandler(["chart_gantt"]);
+    handler(event, tuiContext);
+    const sections = { ...event.systemPromptOptions.sections };
+    handler(event, tuiContext);
+    expect(event.systemPromptOptions.sections).toEqual(sections);
+    expect(event.systemPromptOptions.forceSystemPrompt).toBeUndefined();
 
-    expect(second.match(new RegExp(CHART_GUIDANCE_START, "g"))).toHaveLength(1);
-    expect(second.match(new RegExp(CHART_GUIDANCE_END, "g"))).toHaveLength(1);
-    expect(second).toContain("After prompt.");
+    setImageCapability(null);
+    handler(event, tuiContext);
+    expect(event.systemPromptOptions.sections?.chart_visuals).toBe("");
+    expect(event.systemPromptOptions.sections?.other).toBe("Keep this section.");
   });
 });

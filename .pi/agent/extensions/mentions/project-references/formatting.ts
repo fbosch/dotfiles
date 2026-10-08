@@ -15,13 +15,3 @@ export function formatProjectReferences(references: readonly ProjectReference[])
     PROJECT_REFERENCES_END,
   ].join("\n");
 }
-
-export function appendProjectReferences(
-  systemPrompt: string,
-  references: readonly ProjectReference[],
-): string {
-  if (references.length === 0 || systemPrompt.includes(PROJECT_REFERENCES_START)) {
-    return systemPrompt;
-  }
-  return `${systemPrompt}\n\n${formatProjectReferences(references)}`;
-}

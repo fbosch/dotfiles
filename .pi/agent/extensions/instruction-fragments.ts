@@ -236,26 +236,6 @@ export function instructionFragmentsForTools(
     .join("\n\n");
 }
 
-export function appendInstructionFragments(systemPrompt: string, fragments: string): string {
-  const markedStart = systemPrompt.indexOf(INSTRUCTION_FRAGMENTS_START);
-  const markedEnd = systemPrompt.indexOf(INSTRUCTION_FRAGMENTS_END);
-  const marked = markedStart !== -1 || markedEnd !== -1;
-  const block =
-    fragments.length === 0
-      ? ""
-      : `${INSTRUCTION_FRAGMENTS_START}\n${fragments}\n${INSTRUCTION_FRAGMENTS_END}`;
-
-  if (!marked) {
-    return block.length === 0 ? systemPrompt : `${systemPrompt}\n\n${block}`;
-  }
-  if (markedStart === -1 || markedEnd === -1 || markedEnd < markedStart) {
-    return systemPrompt;
-  }
-  const before = systemPrompt.slice(0, markedStart).trimEnd();
-  const after = systemPrompt.slice(markedEnd + INSTRUCTION_FRAGMENTS_END.length).trimStart();
-  return [before, block, after].filter((part) => part.length > 0).join("\n\n");
-}
-
 export default function instructionFragments(pi: ExtensionAPI): void {
   // Keep one coherent snapshot per extension generation; /reload invokes this again.
   const globalInstructionFragments = loadGlobalInstructionFragments();
@@ -266,11 +246,8 @@ export default function instructionFragments(pi: ExtensionAPI): void {
       globalInstructionFragments,
       pi.getAllTools().map((tool) => tool.name),
     );
-    const systemPrompt = appendInstructionFragments(event.systemPrompt, fragments);
-    if (systemPrompt === event.systemPrompt) return;
-
-    return {
-      systemPrompt,
-    };
+    // Structured sections preserve the leading prompt and deferred-tool load points.
+    event.systemPromptOptions.sections ??= {};
+    event.systemPromptOptions.sections.global_instruction_fragments = fragments;
   });
 }

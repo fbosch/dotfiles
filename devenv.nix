@@ -340,6 +340,16 @@ in
       bun run typecheck
     '';
 
+    "test:pi-prompt-cache".exec = ''
+      set -euo pipefail
+      cd .pi/agent
+      bun test \
+        extensions/__tests__/instruction-fragments.test.ts \
+        extensions/__tests__/prompt-cache.test.ts \
+        extensions/chart/__tests__/prompt.test.ts \
+        extensions/mentions/__tests__
+    '';
+
     "test:pi-tasks".exec = ''
       set -euo pipefail
       cd .pi/agent
