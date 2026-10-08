@@ -336,15 +336,15 @@ in
     "test:pi-extensions".exec = ''
       set -euo pipefail
       cd .pi/agent
-      bun test extensions benchmarks lib
+      bun test extensions benchmarks lib evals/semantic-command-guard
       bun run typecheck
     '';
 
     "test:pi-command-guard".exec = ''
       set -euo pipefail
       cd .pi/agent
-      bun test extensions/semantic-command-guard extensions/__tests__/catastrophic-command-guard.test.ts extensions/classifier-policy/__tests__/index.test.ts
-      bunx --no-install biome check extensions/semantic-command-guard
+      bun test evals/semantic-command-guard extensions/semantic-command-guard extensions/__tests__/catastrophic-command-guard.test.ts extensions/classifier-policy/__tests__/index.test.ts
+      bunx --no-install biome check extensions/semantic-command-guard evals/semantic-command-guard
       bun run typecheck
     '';
 
