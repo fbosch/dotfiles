@@ -155,6 +155,18 @@ test("honors XDG and hashline overrides while omitting missing integration paths
   expect(args).not.toContain(join(home, ".config", "pi-hashline-edit-pro"));
 });
 
+test("grants direnv approval state as read-only", () => {
+  const { cwd, agent, home } = fixture();
+  const allowDirectory = join(home, ".local", "share", "direnv", "allow");
+  mkdirSync(allowDirectory, { recursive: true });
+
+  const args = launchArguments(cwd, agent, home, {});
+  const readIndex = args.indexOf("--read");
+
+  expect(args.slice(readIndex, readIndex + 2)).toEqual(["--read", allowDirectory]);
+  expect(grants(args)).not.toContain(allowDirectory);
+});
+
 test("local profile keeps default protection and platform-specific runtime groups", () => {
   const profile = JSON.parse(
     readFileSync(join(import.meta.dir, "..", "nono", "pi.json"), "utf8"),

@@ -1,4 +1,5 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, describe, expect, test } from "bun:test";
+import { realpathSync } from "node:fs";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -9,8 +10,8 @@ import type {
   ExtensionContext,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import type { AutocompleteItem } from "@earendil-works/pi-tui";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { parseJustCatalog } from "../catalog";
 import {
   executeJustRecipe,
@@ -21,6 +22,9 @@ import {
   registerJustCommand,
   registerJustTools,
 } from "../index";
+
+const repo = realpathSync(await mkdtemp(join(tmpdir(), "pi-just-extension-")));
+afterAll(() => rm(repo, { recursive: true, force: true }));
 
 function parameter(name: string, defaultValue: unknown = null) {
   return {
@@ -41,7 +45,7 @@ function parameter(name: string, defaultValue: unknown = null) {
 
 function dump(parameters: unknown[] = []) {
   return {
-    source: "/repo/justfile",
+    source: join(repo, "justfile"),
     aliases: {},
     modules: {},
     recipes: {
@@ -141,7 +145,7 @@ function context(
   cancelled = false,
 ): ReturnType<typeof withToolExecution> {
   return withToolExecution({
-    cwd: "/repo",
+    cwd: repo,
     hasUI: true,
     mode: "rpc",
     isProjectTrusted: () => true,
@@ -261,7 +265,7 @@ test("registers /just completion and executes the selected public recipe", async
   } as unknown as ExtensionCommandContext;
   await command.handler("shellcheck 'src file'", commandContext);
   expect(executions).toEqual([
-    { cwd: "/repo", args: ["--yes", "--one", "--", "shellcheck", "src file"] },
+    { cwd: repo, args: ["--yes", "--one", "--", "shellcheck", "src file"] },
   ]);
   expect(notifications[0]).toContain("Just recipe `shellcheck` completed");
 });
@@ -436,7 +440,7 @@ describe("Just tools extension", () => {
     expect(confirmations[0]).toContain("Recipe: shellcheck");
     expect(confirmations[0]).toContain('["scripts"]');
     expect(harness.recipeExecutions.at(-1)).toEqual({
-      cwd: "/repo",
+      cwd: repo,
       args: ["--yes", "--one", "--", "shellcheck", "scripts"],
     });
     expect(result.content[0]).toMatchObject({ type: "text", text: "stdout:\nchecked\n" });

@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { realpathSync } from "node:fs";
 import {
   defineTool,
   type ExecResult,
@@ -128,7 +129,8 @@ export async function discoverJustRecipes(
 ): Promise<JustRecipe[]> {
   let result: ExecResult;
   try {
-    result = await pi.exec("just", ["--no-dotenv", "--json"], {
+    // Just compares its canonical cwd to the ceiling; aliases must not escape the boundary.
+    result = await pi.exec("just", ["--no-dotenv", "--ceiling", realpathSync(cwd), "--json"], {
       cwd,
       timeout: DISCOVERY_TIMEOUT_MS,
       ...(signal === undefined ? {} : { signal }),
@@ -216,7 +218,8 @@ export async function executeJustRecipe(
     const stdout = new OutputTail();
     const stderr = new OutputTail();
     const ownsProcessGroup = process.platform !== "win32";
-    const child = spawn("just", arguments_, {
+    // Match catalog discovery instead of searching ancestor projects at execution time.
+    const child = spawn("just", ["--ceiling", realpathSync(cwd), ...arguments_], {
       cwd,
       detached: ownsProcessGroup,
       env: process.env,
