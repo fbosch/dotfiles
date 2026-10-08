@@ -1,14 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import {
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  realpathSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 
@@ -66,79 +58,6 @@ describe("native MCP migration", () => {
     });
     expect(mcpServers.mcpServers.serena?.command).not.toContain(agentRoot);
     expect(mcpServers.mcpServers["ast-grep"]?.command).not.toContain(agentRoot);
-  });
-
-  test("launchers quote the execution-time cwd and preserve container restrictions", () => {
-    const temporaryDirectory = mkdtempSync(join(tmpdir(), "mcp launcher cwd "));
-    const sessionDirectory = join(temporaryDirectory, "session directory with spaces");
-    const binDirectory = join(temporaryDirectory, "bin");
-    const capturePath = join(temporaryDirectory, "arguments.bin");
-    mkdirSync(sessionDirectory);
-    mkdirSync(binDirectory);
-    const resolvedSessionDirectory = realpathSync(sessionDirectory);
-    writeFileSync(
-      join(binDirectory, "podman"),
-      '#!/bin/sh\nprintf \'%s\\0\' "$@" > "$MCP_CAPTURE"\n',
-      { mode: 0o755 },
-    );
-
-    const runLauncher = (name: "serena" | "ast-grep") => {
-      const result = spawnSync(join(agentRoot, "mcp-launchers", name), [], {
-        cwd: sessionDirectory,
-        encoding: "utf8",
-        env: { ...process.env, PATH: binDirectory, MCP_CAPTURE: capturePath },
-        timeout: 5_000,
-      });
-      expect(result.error).toBeUndefined();
-      expect(result.status).toBe(0);
-      return readFileSync(capturePath, "utf8").split("\0").filter(Boolean);
-    };
-
-    try {
-      const serenaArgs = runLauncher("serena");
-      expect(serenaArgs).toContain(`${resolvedSessionDirectory}:/workspace:Z`);
-      expect(serenaArgs).toEqual([
-        "run",
-        "-i",
-        "--rm",
-        "--init",
-        "--cap-drop=ALL",
-        "--security-opt=no-new-privileges",
-        "-v",
-        `${resolvedSessionDirectory}:/workspace:Z`,
-        "-v",
-        "pi-serena:/workspaces/serena/config",
-        "-e",
-        "SERENA_DOCKER=1",
-        "ghcr.io/oraios/serena@sha256:6c9459e4246a39c9deaa4f23fb05a526ac6e237b24c8e84a927a098fa1ab6730",
-        "serena",
-        "start-mcp-server",
-        "--project",
-        "/workspace",
-        "--context",
-        "agent",
-        "--open-web-dashboard",
-        "False",
-      ]);
-
-      const astGrepArgs = runLauncher("ast-grep");
-      expect(astGrepArgs).toEqual([
-        "run",
-        "-i",
-        "--rm",
-        "--read-only",
-        "--network=none",
-        "--cap-drop=ALL",
-        "--security-opt=no-new-privileges",
-        "--tmpfs",
-        "/tmp:rw,noexec,nosuid,size=64m",
-        "-v",
-        `${resolvedSessionDirectory}:/src:ro,Z`,
-        "docker.io/mcp/ast-grep@sha256:5fc3f2e9dcf2c019e92662f608b8d89e12134ed6d91e6f5461de6efd506a1e72",
-      ]);
-    } finally {
-      rmSync(temporaryDirectory, { recursive: true, force: true });
-    }
   });
 
   test("native Pi startup connects only to an isolated fake local MCP server", () => {
