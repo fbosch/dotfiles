@@ -42,5 +42,7 @@ if [ -d /run/current-system/sw/bin ]; then
     export PATH="/run/current-system/sw/bin:$PATH"
 fi
 
-# Use the sandboxed Pi launcher in shells started outside Fish.
-export PATH="$HOME/.pi/agent/bin:$PATH"
+# shortcut: remove this legacy PATH branch once every host has the Nix-owned wrapper.
+if [ ! -e /run/current-system/sw/share/pi/nono-wrapper ]; then
+    export PATH="$HOME/.pi/agent/bin:$PATH"
+fi

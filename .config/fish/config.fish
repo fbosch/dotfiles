@@ -293,7 +293,13 @@ for nix_path in /nix/var/nix/profiles/default/bin $HOME/.nix-profile/bin /etc/pr
     end
 end
 
-fish_add_path --path --prepend --move "$HOME/.pi/agent/bin"
+# Keep existing hosts sandboxed until the Nix wrapper is activated.
+# shortcut: remove the legacy branch once every host has the Nix-owned wrapper.
+if test -e /run/current-system/sw/share/pi/nono-wrapper
+    set -gx PATH (string match -v -- "$HOME/.pi/agent/bin" $PATH)
+else
+    fish_add_path --path --prepend --move "$HOME/.pi/agent/bin"
+end
 
 # --- Homebrew paths (ensure they're present for child processes like Neovim) ---
 if test $OS_TYPE = Darwin
