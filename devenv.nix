@@ -340,6 +340,14 @@ in
       bun run typecheck
     '';
 
+    "test:pi-command-guard".exec = ''
+      set -euo pipefail
+      cd .pi/agent
+      bun test extensions/semantic-command-guard extensions/__tests__/catastrophic-command-guard.test.ts extensions/classifier-policy/__tests__/index.test.ts
+      bunx --no-install biome check extensions/semantic-command-guard
+      bun run typecheck
+    '';
+
     "test:pi-nono".exec = ''
       set -euo pipefail
       cd .pi/agent

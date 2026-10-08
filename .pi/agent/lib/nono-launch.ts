@@ -42,8 +42,9 @@ export function launchArguments(
   const cacheHome = environment.XDG_CACHE_HOME || join(home, ".cache");
   const integrationGrants: string[] = [];
 
-  // direnv checks approved envrc hashes here; keep the grant narrower than XDG_DATA_HOME.
-  const direnvAllowDirectory = existingDirectory(join(dataHome, "direnv", "allow"));
+  // direnv checks approval hashes here; keep the grant narrow and preserve XDG symlink aliases.
+  const direnvAllowPath = join(dataHome, "direnv", "allow");
+  const hasDirenvAllowDirectory = existingDirectory(direnvAllowPath) !== undefined;
   for (const path of [
     join(home, ".pi-lens"),
     environment.PI_HASHLINE_DIR || join(configHome, "pi-hashline-edit-pro"),
@@ -69,7 +70,7 @@ export function launchArguments(
     "--suppress-save-prompt",
     "/",
     ...integrationGrants,
-    ...(direnvAllowDirectory === undefined ? [] : ["--read", direnvAllowDirectory]),
+    ...(hasDirenvAllowDirectory ? ["--read", direnvAllowPath] : []),
     ...[...grants].flatMap((path) => ["--allow", path]),
     "--",
     piExecutable,

@@ -129,6 +129,7 @@ test("honors XDG and hashline overrides while omitting missing integration paths
   const { root, cwd, agent, home } = fixture();
   const config = join(root, "config");
   const data = join(root, "data");
+  const direnvAllow = join(data, "direnv", "allow");
   const hashline = join(root, "hashline");
   const queries = join(data, "nvim", "fff_queries");
   const cache = join(root, "cache");
@@ -136,6 +137,7 @@ test("honors XDG and hashline overrides while omitting missing integration paths
   mkdirSync(frecency, { recursive: true });
   mkdirSync(hashline);
   mkdirSync(queries, { recursive: true });
+  mkdirSync(direnvAllow, { recursive: true });
   const args = launchArguments(cwd, agent, home, {
     XDG_CONFIG_HOME: config,
     XDG_DATA_HOME: data,
@@ -144,6 +146,9 @@ test("honors XDG and hashline overrides while omitting missing integration paths
   });
   expect(grants(args)).toContain(hashline);
   expect(grants(args)).toContain(frecency);
+  const readIndex = args.indexOf("--read");
+  expect(args.slice(readIndex, readIndex + 2)).toEqual(["--read", direnvAllow]);
+  expect(grants(args)).not.toContain(direnvAllow);
   expect(args).not.toContain(cache);
   expect(args).not.toContain(join(cache, "nvim"));
   expect(args.slice(args.indexOf(queries) - 1, args.indexOf(queries) + 1)).toEqual([

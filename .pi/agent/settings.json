@@ -112,6 +112,9 @@
   },
   "classifier": {
     "enabled": true,
+    "commandGuard": {
+      "enabled": true
+    },
     "providers": [
       {
         "provider": "openrouter",
