@@ -118,6 +118,31 @@ describe("subagent widget frame", () => {
     uninstall();
   });
 
+  test("shows the resolved physical model beside preset IDs in agent widgets", () => {
+    const { calls, ui } = createUI();
+    const widget: WidgetComponent = {
+      render: () => [
+        "● Agents",
+        "└─ ⠋ visualizer [presets/planning] Show resolved preset label · 1 turn · 1.0s",
+        "     ⎿  thinking…",
+      ],
+      invalidate: () => {},
+    };
+    const uninstall = installSubagentWidgetFrame(ui, {
+      agentColors: new Map(),
+      resolvedPresetModels: new Map([["presets/planning", "gpt-6.1-sol"]]),
+    });
+
+    ui.setWidget("agents", () => widget, { placement: "aboveEditor" });
+
+    const factory = calls[0]?.content;
+    if (typeof factory !== "function") throw new Error("Expected a widget factory");
+    const rendered = factory(tui, theme).render(80).map(stripTerminalSequences);
+
+    expect(rendered.some((line) => line.includes("[presets/planning (gpt-6.1-sol)]"))).toBe(true);
+    uninstall();
+  });
+
   test("keeps linking rows when the published service is removed after installation", () => {
     const serviceKey = Symbol.for("@gotgenes/pi-subagents:service");
     const globals = globalThis as Record<symbol, unknown>;

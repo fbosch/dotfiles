@@ -1,5 +1,6 @@
 import { type ExtensionAPI, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { getKeybindings, type TUI } from "@earendil-works/pi-tui";
+import { resolvedPresetModelIds } from "../model-presets";
 import { installFloatingDialogs } from "./floating-dialogs";
 import {
   type FooterCustomization,
@@ -140,6 +141,7 @@ export default function promptUi(pi: ExtensionAPI): void {
     installFloatingDialogs(ctx.ui);
     disposeSubagentWidgetFrame();
     disposeSubagentWidgetFrame = installSubagentWidgetFrame(ctx.ui, {
+      resolvedPresetModels: resolvedPresetModelIds(ctx.modelRegistry),
       cwd: ctx.cwd,
       includeProjectAgents: ctx.isProjectTrusted(),
       sessionId: ctx.sessionManager.getSessionId(),

@@ -231,3 +231,54 @@ index f1339dd..85c7392 100644
  			if (endMismatch && endMismatch.kind === "not_found") endMismatch.context = startResolved;
  		}
  		return { resolved: undefined, mismatches };
+diff --git a/node_modules/pi-hashline-edit-pro/src/read.ts b/node_modules/pi-hashline-edit-pro/src/read.ts
+index e16ab2e0..620b506e 100644
+--- a/node_modules/pi-hashline-edit-pro/src/read.ts
++++ b/node_modules/pi-hashline-edit-pro/src/read.ts
+@@ -346,7 +346,21 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
+ 						context: typeof ctx,
+ 					) => ReturnType<typeof builtinRead.execute>;
+ 					const imageResult = await executeBuiltinRead(_toolCallId, params, signal, _onUpdate, ctx);
+-					const imageStructured: ReadResult = { ok: true, kind: "image", path: rawPath, mimeType: file.mimeType };
++					const imageBlock = imageResult.content.find((block) => block.type === "image");
++					const note = imageResult.content.filter((block) => block.type === "text").map((block) => block.text).join("\n");
++					if (!imageBlock || imageBlock.data.length === 0) {
++						throw new Error(`[E_IMAGE_READ] ${note || "Read did not return an image payload."}`);
++					}
++					// Codemode consumes structuredContent; use the processed payload and MIME type, not the source file.
++					const imageStructured: ReadResult = {
++						ok: true,
++						kind: "image",
++						path: rawPath,
++						type: "image",
++						data: imageBlock.data,
++						mimeType: imageBlock.mimeType,
++						note,
++					};
+ 					return { ...imageResult, structuredContent: imageStructured };
+ 				}
+ 	      const { normalized, fileHashes, hadUtf8DecodeErrors, absolutePath: resolvedPath } = await readNormFile(
+diff --git a/node_modules/pi-hashline-edit-pro/src/structured.ts b/node_modules/pi-hashline-edit-pro/src/structured.ts
+index c74c53e7..54caa1db 100644
+--- a/node_modules/pi-hashline-edit-pro/src/structured.ts
++++ b/node_modules/pi-hashline-edit-pro/src/structured.ts
+@@ -50,6 +50,9 @@ export type ReadImageResult = {
+ 	ok: true;
+ 	kind: "image";
+ 	path: string;
++	type: "image";
++	data: string;
++	note: string;
+ 	mimeType: string;
+ };
+ 
+@@ -73,6 +76,9 @@ export const readResultSchema = Type.Union([
+ 		ok: Type.Literal(true),
+ 		kind: Type.Literal("image"),
+ 		path: Type.String(),
++		type: Type.Literal("image"),
++		data: Type.String({ minLength: 1 }),
++		note: Type.String(),
+ 		mimeType: Type.String(),
+ 	}),
+ 	structuredErrorSchema,

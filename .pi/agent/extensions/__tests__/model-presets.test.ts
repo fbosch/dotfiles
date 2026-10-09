@@ -2,7 +2,12 @@ import { describe, expect, test } from "bun:test";
 import { readdirSync, readFileSync } from "node:fs";
 import type { ExtensionVirtualModel, ModelRoute } from "@earendil-works/pi-coding-agent";
 import type { ClassifierRequestResult } from "../../lib/classifier";
-import modelPresets, { createVirtualPreset, MODEL_PRESETS, routingPrompt } from "../model-presets";
+import modelPresets, {
+  createVirtualPreset,
+  MODEL_PRESETS,
+  resolvedPresetModelIds,
+  routingPrompt,
+} from "../model-presets";
 
 type RouteRequest = Parameters<ReturnType<typeof createVirtualPreset>["route"]>[0];
 type Classify = NonNullable<Parameters<typeof createVirtualPreset>[2]>;
@@ -68,13 +73,31 @@ function request(
 describe("model presets", () => {
   test("registers every preset with its existing fallback selection level", () => {
     const registrations: ExtensionVirtualModel[] = [];
-    modelPresets({ registerVirtualModel: (definition) => registrations.push(definition) });
+    modelPresets({
+      registerVirtualModel: (definition) => registrations.push(definition),
+      on: () => () => {},
+    });
     expect(registrations.map(({ provider, id }) => `${provider}/${id}`)).toEqual(
       Object.keys(MODEL_PRESETS).map((id) => `presets/${id}`),
     );
     expect(registrations.map(({ thinkingLevels }) => thinkingLevels)).toEqual(
       Object.values(MODEL_PRESETS).map(({ thinking }) => [thinking]),
     );
+  });
+
+  test("names presets with the resolved physical model", () => {
+    const virtual = createVirtualPreset(
+      "deep-analysis",
+      MODEL_PRESETS["deep-analysis"],
+      unavailable,
+      "gpt-6.1-sol",
+    );
+    expect(virtual.name).toBe("deep-analysis (gpt-6.1-sol)");
+  });
+
+  test("resolves configured presets to catalog model IDs", () => {
+    const { ctx } = context("gpt-6.1-sol");
+    expect(resolvedPresetModelIds(ctx.modelRegistry).get("presets/planning")).toBe("gpt-6.1-sol");
   });
 
   test("all agents select known presets without overriding thinking", () => {

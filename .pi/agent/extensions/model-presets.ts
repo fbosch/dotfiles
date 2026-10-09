@@ -62,6 +62,16 @@ type PresetContext = Pick<ExtensionContext, "cwd" | "isProjectTrusted"> & {
   modelRegistry: Pick<ExtensionContext["modelRegistry"], "find" | "findOfType" | "classify">;
 };
 
+export function resolvedPresetModelIds(
+  modelRegistry: Pick<ExtensionContext["modelRegistry"], "find">,
+): ReadonlyMap<string, string> {
+  const modelIds = new Map<string, string>();
+  for (const [id, preset] of Object.entries(MODEL_PRESETS)) {
+    const model = modelRegistry.find("openai-codex", preset.model);
+    if (model) modelIds.set(`presets/${id}`, model.id);
+  }
+  return modelIds;
+}
 const THINKING_CRITERIA: Record<ThinkingLevel, string> = {
   off: "No reasoning is needed.",
   minimal: "An exact lookup or mechanical transformation with no ambiguity.",
@@ -105,11 +115,16 @@ export function routingPrompt(messages: PresetRequest["messages"]): string {
     .slice(0, MAX_PROMPT_LENGTH);
 }
 
-export function createVirtualPreset(id: string, preset: Preset, classify = requestClassifier) {
+export function createVirtualPreset(
+  id: string,
+  preset: Preset,
+  classify = requestClassifier,
+  resolvedModelId = preset.model,
+) {
   return {
     provider: "presets",
     id,
-    name: `${id} (${preset.model} · ${preset.thinking})`,
+    name: `${id} (${resolvedModelId})`,
     thinkingLevels: [preset.thinking],
     async route(request: PresetRequest, ctx: PresetContext): Promise<ModelRoute<ThinkingState>> {
       request.signal?.throwIfAborted();
@@ -179,8 +194,18 @@ export function createVirtualPreset(id: string, preset: Preset, classify = reque
   };
 }
 
-export default function modelPresets(pi: Pick<ExtensionAPI, "registerVirtualModel">): void {
-  for (const [id, preset] of Object.entries(MODEL_PRESETS)) {
-    pi.registerVirtualModel(createVirtualPreset(id, preset));
-  }
+export default function modelPresets(pi: Pick<ExtensionAPI, "registerVirtualModel" | "on">): void {
+  const register = (ctx?: PresetContext) => {
+    const resolvedModels = ctx ? resolvedPresetModelIds(ctx.modelRegistry) : undefined;
+    for (const [id, preset] of Object.entries(MODEL_PRESETS)) {
+      const resolvedModelId = resolvedModels?.get(`presets/${id}`);
+      pi.registerVirtualModel(
+        createVirtualPreset(id, preset, requestClassifier, resolvedModelId ?? preset.model),
+      );
+    }
+  };
+
+  // Register before model selection, then refresh labels with catalog-resolved IDs at session start.
+  register();
+  pi.on("session_start", (_event, ctx) => register(ctx));
 }
