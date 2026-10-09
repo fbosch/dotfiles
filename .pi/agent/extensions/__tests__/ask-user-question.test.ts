@@ -1,7 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { type Component, visibleWidth } from "@earendil-works/pi-tui";
-import askUserQuestion, { type AskUserQuestionResultDetails } from "../ask-user-question";
+import askUserQuestion, {
+  type AskUserQuestionResultDetails,
+  runAskUserQuestion,
+} from "../ask-user-question";
 
 interface QuestionParams {
   question: string;
@@ -57,13 +60,14 @@ function createContext(options: {
 }
 
 function createInlineContext(
-  interact: (component: Component, rendered: string[]) => void,
+  interact: (component: Component, rendered: string[]) => void | Promise<void>,
 ): ExtensionContext {
   const resolvedBindings = {
     "tui.select.up": ["up", "ctrl+k"],
     "tui.select.down": ["down", "ctrl+j"],
     "tui.select.confirm": ["enter"],
     "tui.select.cancel": ["escape"],
+    "app.clipboard.pasteImage": ["ctrl+v"],
   } as const;
   return {
     hasUI: true,
@@ -79,7 +83,7 @@ function createInlineContext(
         options: { overlay?: boolean },
       ) => {
         expect(options).toEqual({ overlay: false });
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
           const component = factory(
             { requestRender: () => undefined },
             { fg: (_color, text) => text },
@@ -90,7 +94,7 @@ function createInlineContext(
             },
             resolve,
           );
-          interact(component, component.render(80));
+          void Promise.resolve(interact(component, component.render(80))).catch(reject);
         });
       },
     },
@@ -200,7 +204,7 @@ describe("ask_user_question", () => {
       undefined,
       createInlineContext((component, rendered) => {
         expect(rendered).toContain("Answer:");
-        expect(rendered).toContain("enter submit · esc cancel");
+        expect(rendered).toContain("enter submit · ctrl+v paste · esc cancel");
         for (const character of "clear name") component.handleInput?.(character);
         component.handleInput?.("\r");
       }),
@@ -209,6 +213,24 @@ describe("ask_user_question", () => {
     expect(result.details.answers).toEqual([
       { type: "text", label: "clear name", value: "clear name" },
     ]);
+  });
+
+  test("pastes a clipboard image path into the inline answer", async () => {
+    const imagePath = "/tmp/pi-clipboard-image.png";
+    const result = await runAskUserQuestion(
+      { question: "What should I inspect?" },
+      undefined,
+      createInlineContext(async (component, rendered) => {
+        expect(rendered).toContain("Answer:");
+        component.handleInput?.("ctrl+v");
+        await Promise.resolve();
+        expect(component.render(80).join("\n")).toContain(imagePath);
+        component.handleInput?.("\r");
+      }),
+      { clipboardPaste: async () => imagePath },
+    );
+
+    expect(result.details.answers).toEqual([{ type: "text", label: imagePath, value: imagePath }]);
   });
 
   test("toggles and submits multiple choices from the inline prompt", async () => {

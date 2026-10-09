@@ -12,6 +12,7 @@ import {
   visibleWidth,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
+import { readClipboardPaste } from "../lib/ask-user-question-clipboard";
 
 interface AskOption {
   label: string;
@@ -49,6 +50,7 @@ export interface AskUserQuestionInput {
 
 export interface AskUserQuestionRuntimeOptions {
   includeOther?: boolean;
+  clipboardPaste?: () => Promise<string | undefined>;
 }
 
 type AskUserQuestionStatus = "answered" | "cancelled" | "unavailable";
@@ -214,6 +216,7 @@ class QuestionPromptComponent implements Component {
   private input: Input;
   private error: string | undefined;
 
+  private isPasting = false;
   constructor(
     private readonly theme: QuestionPromptTheme,
     private readonly question: string,
@@ -224,6 +227,8 @@ class QuestionPromptComponent implements Component {
     private readonly keybindings: QuestionPromptKeybindings,
     private readonly requestRender: () => void,
     private readonly done: (answers: AskAnswer[] | undefined) => void,
+    private readonly clipboardPaste: () => Promise<string | undefined>,
+    private readonly isActive: () => boolean,
   ) {
     this.step = mode === "text" ? "input" : "choices";
     this.input = this.createInput();
@@ -246,7 +251,9 @@ class QuestionPromptComponent implements Component {
         ...wrapTextWithAnsi(
           this.theme.fg(
             "muted",
-            this.mode === "text" ? "enter submit · esc cancel" : "enter save · esc back",
+            this.mode === "text"
+              ? `${this.keyHint("tui.select.confirm")} submit · ${this.keyHint("app.clipboard.pasteImage")} paste · ${this.keyHint("tui.select.cancel")} cancel`
+              : `${this.keyHint("tui.select.confirm")} save · ${this.keyHint("app.clipboard.pasteImage")} paste · ${this.keyHint("tui.select.cancel")} back`,
           ),
           width,
         ),
@@ -282,6 +289,11 @@ class QuestionPromptComponent implements Component {
   }
 
   handleInput(data: string): void {
+    if (this.step === "input" && this.keybindings.matches(data, "app.clipboard.pasteImage")) {
+      void this.pasteClipboard();
+      return;
+    }
+
     if (this.step === "input") {
       this.input.handleInput(data);
       this.requestRender();
@@ -324,13 +336,36 @@ class QuestionPromptComponent implements Component {
     if (this.keybindings.matches(data, "tui.select.cancel")) this.done(undefined);
   }
 
+  private async pasteClipboard(): Promise<void> {
+    if (this.isPasting) return;
+    this.isPasting = true;
+    this.error = undefined;
+
+    try {
+      const text = await this.clipboardPaste();
+      if (this.isActive() === false) return;
+      if (text === undefined || text.length === 0) {
+        this.error = "Clipboard paste failed.";
+      } else {
+        this.input.handleInput(`\x1b[200~${text}\x1b[201~`);
+      }
+    } catch {
+      if (this.isActive()) this.error = "Clipboard paste failed.";
+    } finally {
+      this.isPasting = false;
+      if (this.isActive()) this.requestRender();
+    }
+  }
+
   private navigationHint(): string {
     const up = this.keybindings.getKeys("tui.select.up").map(displayKey).join("/");
     const down = this.keybindings.getKeys("tui.select.down").map(displayKey).join("/");
     return `${up} ${down} move`;
   }
 
-  private keyHint(binding: "tui.select.cancel" | "tui.select.confirm"): string {
+  private keyHint(
+    binding: "app.clipboard.pasteImage" | "tui.select.cancel" | "tui.select.confirm",
+  ): string {
     return this.keybindings.getKeys(binding).map(displayKey).join("/");
   }
 
@@ -525,6 +560,7 @@ async function askInline(
   options: AskOption[],
   includeOther: boolean,
   signal: AbortSignal | undefined,
+  clipboardPaste: () => Promise<string | undefined>,
 ): Promise<AskAnswer[] | undefined> {
   if (isAborted(signal)) return undefined;
 
@@ -550,6 +586,8 @@ async function askInline(
         keybindings,
         () => tui.requestRender(),
         finish,
+        clipboardPaste,
+        () => !finished,
       );
       if (signal?.aborted === true) queueMicrotask(handleAbort);
       return component;
@@ -803,6 +841,7 @@ export async function runAskUserQuestion(
   const includeOther = runtimeOptions.includeOther ?? true;
   const mode: AskUserQuestionMode =
     options.length === 0 ? "text" : params.multiSelect === true ? "multi-select" : "single-select";
+  const clipboardPaste = runtimeOptions.clipboardPaste ?? readClipboardPaste;
 
   if (isAborted(signal)) return cancelledResult(params.question, mode, context);
   if (ctx.hasUI === false) return unavailableResult(params.question, mode, context);
@@ -817,6 +856,7 @@ export async function runAskUserQuestion(
         options,
         includeOther,
         signal,
+        clipboardPaste,
       );
       if (answers === undefined) return cancelledResult(params.question, mode, context);
       return answeredResult(params.question, mode, answers, context);

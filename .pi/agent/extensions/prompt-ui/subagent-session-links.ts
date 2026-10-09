@@ -256,6 +256,7 @@ export function installSubagentToolLinks(
   };
   state.patchedRender = function renderClickableSubagentTitle(width: number): string[] {
     const lines = state.originalRender.call(this, width);
+    // SAFETY: Pi invokes this patched prototype method with a ToolExecutionComponent instance whose runtime fields are read here.
     const component = this as unknown as PatchableToolExecution;
     const registration = registrationForTui(state.registrations, component.ui);
     const theme = registration?.theme;
@@ -523,7 +524,6 @@ interface SessionNavigatorModule {
     tui: TUI;
     keys: ReturnType<typeof getKeybindings>;
     theme: TranscriptTheme;
-    keys: ReturnType<typeof getKeybindings>;
     source: SubagentTranscriptSource;
     heading: TranscriptHeading;
     done: (result: undefined) => void;

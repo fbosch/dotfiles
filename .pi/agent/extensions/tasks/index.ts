@@ -99,6 +99,10 @@ interface OperationResult extends TaskToolDetails {
   changed: boolean;
 }
 
+function emptyTaskToolView(): Component {
+  return { render: () => [], invalidate() {} };
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -265,12 +269,16 @@ function renderTaskPanel(
   ];
 }
 
-function renderWidget(items: readonly TaskItem[], ctx: ExtensionContext, icons: TaskIcons): void {
-  if (!ctx.hasUI || ctx.mode !== "tui") return;
+function renderWidget(
+  items: readonly TaskItem[],
+  ctx: ExtensionContext,
+  icons: TaskIcons,
+): boolean {
+  if (!ctx.hasUI || ctx.mode !== "tui") return false;
   const progress = formatProgress(items);
   if (progress === "") {
     ctx.ui.setWidget(TASK_WIDGET_KEY, undefined);
-    return;
+    return false;
   }
   ctx.ui.setWidget(
     TASK_WIDGET_KEY,
@@ -280,6 +288,7 @@ function renderWidget(items: readonly TaskItem[], ctx: ExtensionContext, icons: 
     }),
     { placement: "aboveEditor" },
   );
+  return true;
 }
 
 function taskGlyph(status: TaskItem["status"], theme: Theme, icons: TaskIcons): string {
@@ -474,6 +483,7 @@ export default function tasksExtension(
 ): void {
   let items: TaskItem[] = [];
   let icons = DEFAULT_TASK_ICONS;
+  let taskWidgetVisible = false;
   let revision = 0;
   let reminderSent = false;
   let checkingReminder = false;
@@ -508,7 +518,7 @@ export default function tasksExtension(
     invalidateCheck();
     pi.appendEntry(TASKS_STATE_ENTRY, snapshot(next));
     items = next;
-    renderWidget(items, ctx, icons);
+    taskWidgetVisible = renderWidget(items, ctx, icons);
   };
 
   const restore = (ctx: ExtensionContext): void => {
@@ -517,11 +527,11 @@ export default function tasksExtension(
       restored = restoreTasks(ctx);
     } catch (error) {
       items = [];
-      renderWidget(items, ctx, icons);
+      taskWidgetVisible = renderWidget(items, ctx, icons);
       throw error;
     }
     items = restored;
-    renderWidget(items, ctx, icons);
+    taskWidgetVisible = renderWidget(items, ctx, icons);
   };
 
   pi.on("session_start", (_event, ctx) => {
@@ -604,7 +614,7 @@ export default function tasksExtension(
     invalidateCheck();
     reminderSent = false;
     items = [];
-    if (ctx.mode === "tui") ctx.ui.setWidget(TASK_WIDGET_KEY, undefined);
+    taskWidgetVisible = renderWidget(items, ctx, icons);
   });
 
   pi.registerTool(
@@ -624,6 +634,17 @@ export default function tasksExtension(
       ],
       parameters: TasksParameters,
       executionMode: "sequential",
+      // Keep the widget as the only successful task output in the user-facing transcript.
+      renderShell: "self",
+      renderCall: () => emptyTaskToolView(),
+      renderResult(result, _options, theme, context) {
+        const output = result.content
+          .flatMap((block) => (block.type === "text" ? [block.text] : []))
+          .join("\n");
+        if (!context.isError && taskWidgetVisible) return emptyTaskToolView();
+        if (output === "") return emptyTaskToolView();
+        return new Text(theme.fg(context.isError ? "error" : "toolOutput", output), 0, 0);
+      },
       async execute(_toolCallId, params, _signal, _onUpdate, ctx) {
         const result = applyOperation(items, params);
         if (result.changed) persist(result.items, ctx);

@@ -41,6 +41,7 @@ import tasksExtension, {
 type TaskDetails = { action: TasksInput["action"]; items: TaskItem[] };
 type RegisteredTaskTool = ToolDefinition<typeof TasksParameters, TaskDetails>;
 type EventHandler = (event: never, ctx: ExtensionContext) => unknown | Promise<unknown>;
+type TaskRenderContext = Parameters<NonNullable<RegisteredTaskTool["renderCall"]>>[2];
 type CommandHandler = (args: string, ctx: ExtensionCommandContext) => Promise<void> | void;
 type CustomViewFactory = Parameters<ExtensionContext["ui"]["custom"]>[0];
 type CustomViewOptions = Parameters<ExtensionContext["ui"]["custom"]>[1];
@@ -132,6 +133,12 @@ function harness(
   );
 
   return {
+    get toolDefinition() {
+      return tool;
+    },
+    setMode(mode: string) {
+      context.mode = mode;
+    },
     context,
     abortRun: () => runController.abort(),
     widgets,
@@ -799,6 +806,67 @@ describe("standalone tasks checklist", () => {
         items: [{ id: "x", title: "Bad status", status: "blocked" }],
       }),
     ).toBe(false);
+  });
+
+  test("hides successful task tool transcript output in favor of the checklist widget", async () => {
+    const tasks = harness(createSession());
+    await tasks.event("session_start", { reason: "startup" });
+    const tool = tasks.toolDefinition;
+    if (tool?.renderCall === undefined || tool.renderResult === undefined) {
+      throw new Error("Expected task tool renderers");
+    }
+
+    const input: TasksInput = { action: "set", items: plan };
+    const renderContext: TaskRenderContext = {
+      args: input,
+      toolCallId: "render-test",
+      invalidate() {},
+      lastComponent: undefined,
+      state: undefined,
+      cwd,
+      executionStarted: true,
+      argsComplete: true,
+      isPartial: false,
+      expanded: false,
+      showImages: false,
+      isError: false,
+    };
+    const theme = { fg: (_color: string, text: string) => text } as unknown as Theme;
+    expect(tool.renderShell).toBe("self");
+    expect(tool.renderCall(input, theme, renderContext).render(80)).toEqual([]);
+
+    const result = await tasks.call(input);
+    expect(resultText(result)).toContain("#inspect");
+    expect(
+      tool
+        .renderResult(result, { expanded: false, isPartial: false }, theme, renderContext)
+        .render(80),
+    ).toEqual([]);
+
+    const errorView = tool.renderResult(
+      { content: [{ type: "text", text: "Task failed" }], details: { action: "set", items: [] } },
+      { expanded: false, isPartial: false },
+      theme,
+      { ...renderContext, isError: true },
+    );
+    expect(errorView.render(80).join("\n")).toContain("Task failed");
+    const emptyResult = await tasks.call({ action: "set", items: [] });
+    const emptyView = tool.renderResult(emptyResult, { expanded: false, isPartial: false }, theme, {
+      ...renderContext,
+      args: { action: "set", items: [] },
+    });
+    expect(emptyView.render(80).join("\n")).toContain("Set plan with 0 tasks.");
+
+    tasks.setMode("rpc");
+    await tasks.event("session_start", { reason: "reload" });
+    const rpcResult = await tasks.call(input);
+    const rpcView = tool.renderResult(
+      rpcResult,
+      { expanded: false, isPartial: false },
+      theme,
+      renderContext,
+    );
+    expect(rpcView.render(80).join("\n")).toContain("Set plan with 2 tasks.");
   });
 
   test("shows the compact progress widget and /tasks view and clear commands", async () => {
