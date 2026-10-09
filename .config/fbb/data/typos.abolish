@@ -1,3 +1,5 @@
+# Shared with vim-abolish: use flat brace groups, not nested groups.
+# RHS {} copies the matching LHS alternatives; omit braces for one fixed replacement.
 acheive achieve
 machien machine
 nothign nothing
@@ -35,11 +37,12 @@ cahnge change
 chekc check
 sometiems sometimes
 clipbaord{s} clipboard{s}
-compar{ision,isons,isno} comparison{}
+compar{ision,isons,isno} compar{ison,isons,ison}
 cosnt const
 covert convert
 defin{ately,etely,atly,ately} definitely
-depen{d{e,a}nc{ie,ei,y,i}es,edencies} dependencies
+depend{e,a}nc{ie,ei,y,i}es dependencies
+depenedencies dependencies
 dont don't
 cant can't
 wont won't
@@ -60,11 +63,11 @@ noevim neovim
 maintian maintain
 woudl would
 futher further
-f{unct{ino,oin},ucntion} function
+f{unctino,unctoin,ucntion} function
 hieght{s} height{s}
 histroy history
 {hte,teh} the
-ident{ifer,ifers} identifier{}
+ident{ifer,ifers} ident{ifier,ifiers}
 importn{t,at} important
 imput input
 init{al,alize,alized,alization} init{ial,ialize,ialized,ialization}
@@ -92,19 +95,19 @@ desing design
 inteded intended
 youself yourself
 gradeint{s} gradient{s}
-persist{ance,ence} persistence{}
+persistance persistence
 plese please
 mcuh much
 pr{omsie,omse} promise
 pubic public
 recomend recommend
-everythign eveything
+everythign everything
 {qoute,quotete,qoutete} quote
-rec{{ei,ie}ve,ieve,eived,eiving} receive{}
+rec{ieve,ieved,ieving} rec{eive,eived,eiving}
 requ{ier,ieer,iere,rie,re} require
 resutl{s} result{s}
 retrun return
-se{p{e,}rate,{p,e}rate} separate
+se{perate,prate,erate} separate
 satic static
 slef self
 flckier{s} flicker{s}
@@ -150,7 +153,7 @@ wrok{s} work{s}
 and and
 cna can
 optmiz{e,ed,ation,ing} optimiz{e,ed,ation,ing}
-per{fomance,formace,of{mr,rm}ance} performance
+per{fomance,formace,ofmrance,ofrmance} performance
 propely properly
 compatiable compatible
 commmand{s,} command{}
@@ -189,7 +192,7 @@ usally usually
 varaint{s} variant{s}
 wierd weird
 repositry repository
-re{psonse,spos{e,nse}} response
+re{psonse,spose,sposnse} response
 syncron{ous,ize,ized} synchron{ous,ize,ized}
 ffgrp ffgrep
 ripgred ripgrep
@@ -204,7 +207,6 @@ someting something
 suggestsion suggestion
 implementaiton implementation
 ihner inner
-cant' can't
 clikc click
 highligh highlight
 higlighten highlighting

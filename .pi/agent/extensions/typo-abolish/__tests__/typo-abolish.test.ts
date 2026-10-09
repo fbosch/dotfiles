@@ -126,6 +126,124 @@ describe("prompt typo correction", () => {
     expect(editor.getAutocompleteMaxVisible()).toBe(10);
   });
 
+  test.each([
+    [")", ")"],
+    ["/", "/"],
+    ["'", "'"],
+    ["\u001b[49:33;2u", "!"],
+    ["\u001b[59:58;2u", ":"],
+    ["\u001b[27;1;46~", "."],
+  ])("corrects native printable delimiter %j", (data, delimiter) => {
+    const editor = createEditor();
+    editor.setText("teh");
+    editor.handleInput(data);
+    expect(editor.getText()).toBe(`the${delimiter}`);
+    editor.dispose();
+  });
+
+  test.each(["\u001b\r", "\u001b[13;2u"])("corrects before native newline %j", (data) => {
+    const editor = createEditor();
+    editor.setText("teh");
+    editor.handleInput(data);
+    expect(editor.getText()).toBe("the\n");
+    editor.handleInput("\u001f");
+    expect(editor.getText()).toBe("teh");
+    editor.dispose();
+  });
+
+  test("corrects before submitting without adding a delimiter", () => {
+    const editor = createEditor();
+    let submitted = "";
+    editor.onSubmit = (text) => {
+      submitted = text;
+    };
+    editor.setText("teh");
+    editor.handleInput("\r");
+    expect(submitted).toBe("the");
+    expect(editor.getText()).toBe("");
+    editor.dispose();
+  });
+
+  test.each(["ran", "æ", "𐐀"])("submission does not split a word before suffix %s", (suffix) => {
+    const editor = createEditor();
+    let submitted = "";
+    editor.onSubmit = (text) => {
+      submitted = text;
+    };
+    editor.setText(`teh${suffix}`);
+    editor.handleInput("\u0001");
+    for (let i = 0; i < 3; i++) editor.handleInput("\u001b[C");
+    editor.handleInput("\r");
+    expect(submitted).toBe(`teh${suffix}`);
+    editor.dispose();
+  });
+
+  test("preserves the suffix, cursor, and atomic undo when correcting mid-prompt", () => {
+    const editor = createEditor();
+    editor.setText(" suffix\nnext line");
+    for (let i = 0; i < 17; i++) editor.handleInput("\u001b[D");
+    for (const character of "repositry") editor.handleInput(character);
+    editor.handleInput(" ");
+    expect(editor.getText()).toBe("repository  suffix\nnext line");
+    expect(editor.getCursor()).toEqual({ line: 0, col: 11 });
+    editor.handleInput("\u001f");
+    expect(editor.getText()).toBe("repositry suffix\nnext line");
+    expect(editor.getCursor()).toEqual({ line: 0, col: 9 });
+    editor.dispose();
+  });
+
+  test("leaves bracketed paste chunks and extension shortcuts untouched", () => {
+    const editor = createEditor();
+    editor.setText("teh");
+    editor.handleInput("\u001b[200~");
+    editor.handleInput(" ");
+    editor.handleInput("\u001b[201~");
+    expect(editor.getText()).toBe("teh ");
+    editor.setText("teh");
+    editor.onExtensionShortcut = (data) => data === "!";
+    editor.handleInput("!");
+    expect(editor.getText()).toBe("teh");
+    editor.dispose();
+  });
+
+  test("honors remapped newline and submit bindings", () => {
+    const keybindings = getKeybindings();
+    const original = keybindings.getUserBindings();
+    keybindings.setUserBindings({
+      ...original,
+      "tui.input.newLine": "ctrl+n",
+      "tui.input.submit": "ctrl+g",
+    });
+    const editor = createEditor();
+    try {
+      let submitted = "";
+      editor.onSubmit = (text) => {
+        submitted = text;
+      };
+      editor.setText("teh");
+      editor.handleInput("\u000e");
+      expect(editor.getText()).toBe("the\n");
+      editor.setText("teh");
+      editor.handleInput("\u0007");
+      expect(submitted).toBe("the");
+    } finally {
+      editor.dispose();
+      keybindings.setUserBindings(original);
+    }
+  });
+
+  test("does not correct a disabled submission or a cursor-jump target", () => {
+    const editor = createEditor();
+    editor.setText("teh");
+    editor.disableSubmit = true;
+    editor.handleInput("\r");
+    expect(editor.getText()).toBe("teh");
+    editor.handleInput("\u001d");
+    editor.handleInput("!");
+    expect(editor.getText()).toBe("teh");
+    editor.dispose();
+  });
+
   test("corrects the completed word when a delimiter is typed", () => {
     for (const delimiter of [" ", ".", ",", "!", "?", ":", ";"]) {
       expect(correctedPromptForInput("fix teh", delimiter, typoRules)).toBe(`fix the${delimiter}`);
@@ -141,7 +259,7 @@ describe("prompt typo correction", () => {
     expect(correctedPromptForInput("succesfully", ".", typoRules)).toBe("successfully.");
   });
 
-  test("preserves expanded paste content by delegating delimiter input", () => {
+  test("corrects typed words without losing expanded paste content", () => {
     const editor = createEditor();
     const pasted = "x".repeat(1001);
 
@@ -149,7 +267,10 @@ describe("prompt typo correction", () => {
     for (const character of " teh") editor.handleInput(character);
     editor.handleInput(" ");
 
-    expect(editor.getExpandedText()).toBe(`${pasted} teh `);
+    expect(editor.getExpandedText()).toBe(`${pasted} the `);
+    editor.handleInput("\u001f");
+    expect(editor.getExpandedText()).toBe(`${pasted} teh`);
+    editor.dispose();
   });
 
   test("leaves typo-like autocomplete tokens to the native editor", async () => {

@@ -102,6 +102,14 @@ describe("native MCP configuration", () => {
     }
   });
 
+  test("uses a Serena context that exposes initial instructions instead of assuming startup injection", () => {
+    const args = mcpServers.mcpServers.serena?.args;
+    expect(args).toBeDefined();
+    const contextIndex = args?.indexOf("--context") ?? -1;
+    expect(contextIndex).toBeGreaterThanOrEqual(0);
+    expect(args?.[contextIndex + 1]).toBe("ide");
+  });
+
   test.each(["google-chrome", "chromium", "chromium-browser", null])(
     "passes browser paths and isolated-profile flags correctly with %s on PATH",
     (browser) => {

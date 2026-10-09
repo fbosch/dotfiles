@@ -37,7 +37,7 @@
         "start-mcp-server",
         "--project-from-cwd",
         "--context",
-        "agent",
+        "ide",
         "--transport",
         "stdio",
         "--enable-web-dashboard",

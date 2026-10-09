@@ -25,7 +25,8 @@ import {
   loadProjectReferences,
   type ProjectReference,
 } from "../mentions/project-references";
-import { correctedPromptForInput, type TypoCorrectionRules } from "../typo-abolish";
+import type { TypoCorrectionRules } from "../typo-abolish";
+import { installTypoCorrection } from "../typo-abolish/editor-adapter";
 import {
   AutocompleteOverlay,
   createPromptAutocompleteProvider,
@@ -307,6 +308,12 @@ export class PromptEditor extends CustomEditor {
       }
       this.requestRender();
     });
+    installTypoCorrection(
+      this,
+      this.typoRules,
+      (line, column) =>
+        !this.isShowingAutocomplete() && !this.hasAutocompleteTokenAtCursor(line, column),
+    );
   }
   invalidateContextUsage(): void {
     this.contextCache = undefined;
@@ -401,26 +408,6 @@ export class PromptEditor extends CustomEditor {
     ) {
       // Slash-command submission can replace the editor before its next render.
       this.autocompleteOverlay.hide();
-    }
-
-    const lines = this.getLines();
-    const cursor = this.getCursor();
-    const lastLine = lines.at(-1) ?? "";
-    const cursorIsAtEnd = cursor.line === lines.length - 1 && cursor.col === lastLine.length;
-
-    if (
-      cursorIsAtEnd &&
-      this.isShowingAutocomplete() === false &&
-      this.hasAutocompleteTokenAtCursor(lastLine, cursor.col) === false
-    ) {
-      const current = this.getText();
-      const corrected = correctedPromptForInput(current, data, this.typoRules);
-      // setText clears Pi's backing content for collapsed large-paste markers.
-      const hasExpandedPaste = corrected !== undefined && this.getExpandedText() !== current;
-      if (corrected !== undefined && hasExpandedPaste === false) {
-        this.setText(corrected);
-        return;
-      }
     }
 
     super.handleInput(data);

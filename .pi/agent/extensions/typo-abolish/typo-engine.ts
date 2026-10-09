@@ -11,7 +11,7 @@ function camelcase(word: string): string {
 
   return normalized
     .toLowerCase()
-    .replace(/_(.)?/g, (_match, character: string | undefined) => character?.toUpperCase() ?? "");
+    .replace(/_(.)/gu, (_match, character: string) => character.toUpperCase());
 }
 
 function mixedcase(word: string): string {
@@ -88,16 +88,23 @@ function expandBraces(dictionary: ReadonlyMap<string, string>): Map<string, stri
 
 function parseTypoRule(line: string): TypoRule[] {
   const match = /^(\S+)\s+(.+)$/.exec(line);
-  if (!match) return [];
+  if (!match) throw new Error("expected a typo pattern and replacement");
 
-  const fromPattern = match[1];
-  const toPattern = match[2];
-  if (fromPattern === undefined || toPattern === undefined) return [];
-
+  const [, fromPattern, toPattern] = match;
+  if (fromPattern === undefined || toPattern === undefined) throw new Error("missing rule fields");
+  for (const pattern of [fromPattern, toPattern]) {
+    if (!/^(?:[^{}]|\{[^{}]*\})*$/.test(pattern)) {
+      throw new Error("unbalanced or nested braces; use flat Abolish groups");
+    }
+  }
   const rules: TypoRule[] = [];
   const expanded = expandBraces(new Map([[fromPattern, toPattern]]));
 
   for (const [from, to] of expanded) {
+    if (!/^[\p{L}\p{M}\p{Nd}_\u00c0-\u00ff]+$/u.test(from)) {
+      throw new Error(`expanded typo is not a keyword: ${JSON.stringify(from)}`);
+    }
+    if (/[{}]/.test(to)) throw new Error("replacement has an unmatched brace group");
     rules.push({ from: mixedcase(from), to: mixedcase(to) });
     rules.push({ from: from.toLowerCase(), to: to.toLowerCase() });
     rules.push({ from: from.toUpperCase(), to: to.toUpperCase() });
@@ -114,12 +121,17 @@ function isTypoRuleLine(line: string): boolean {
 export function parseTypoRules(text: string): Map<string, string> {
   const rules = new Map<string, string>();
 
-  for (const line of text.split(/\r?\n/)) {
+  for (const [index, line] of text.split(/\r?\n/).entries()) {
     const trimmed = line.trim();
     if (isTypoRuleLine(trimmed) === false) continue;
 
-    for (const rule of parseTypoRule(trimmed)) {
-      rules.set(rule.from, rule.to);
+    try {
+      for (const rule of parseTypoRule(trimmed)) {
+        rules.set(rule.from, rule.to);
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Invalid typo rule on line ${index + 1}: ${message}`, { cause: error });
     }
   }
 
@@ -174,25 +186,14 @@ function replacementForWord(
   return replacement;
 }
 
+// Neovim's default iskeyword: Unicode letters/marks/digits, _, and Latin-1 192–255.
+const KEYWORD_CHARACTER = /^[\p{L}\p{M}\p{Nd}_\u00c0-\u00ff]$/u;
+const COMPLETED_WORD = /[\p{L}\p{M}\p{Nd}_\u00c0-\u00ff]+$/u;
+
+export function isTypoDelimiter(character: string): boolean {
+  return [...character].length === 1 && !KEYWORD_CHARACTER.test(character);
+}
+
 function completedWordStart(input: string, wordEnd: number): number | undefined {
-  let wordStart = wordEnd;
-  while (wordStart > 0 && isWordCharacter(input.charCodeAt(wordStart - 1))) wordStart -= 1;
-
-  if (wordStart === wordEnd || isAsciiLetter(input.charCodeAt(wordStart)) === false) {
-    return undefined;
-  }
-
-  return wordStart;
-}
-
-function isAsciiLetter(code: number): boolean {
-  return (code >= 65 && code <= 90) || (code >= 97 && code <= 122);
-}
-
-function isAsciiDigit(code: number): boolean {
-  return code >= 48 && code <= 57;
-}
-
-function isWordCharacter(code: number): boolean {
-  return isAsciiLetter(code) || isAsciiDigit(code) || code === 95 || code === 39;
+  return COMPLETED_WORD.exec(input.slice(0, wordEnd))?.index;
 }

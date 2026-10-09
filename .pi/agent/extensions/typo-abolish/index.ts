@@ -2,18 +2,12 @@ import { readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { type KeyId, matchesKey } from "@earendil-works/pi-tui";
-import { appendDelimiterAndCorrect, parseTypoRules, typoRuleLengths } from "./typo-engine";
-
-const TYPO_DELIMITERS = [
-  { key: "space", value: " " },
-  { key: ".", value: "." },
-  { key: ",", value: "," },
-  { key: "!", value: "!" },
-  { key: "?", value: "?" },
-  { key: ":", value: ":" },
-  { key: ";", value: ";" },
-] as const satisfies readonly { key: KeyId; value: string }[];
+import {
+  appendDelimiterAndCorrect,
+  isTypoDelimiter,
+  parseTypoRules,
+  typoRuleLengths,
+} from "./typo-engine";
 
 export interface TypoCorrectionRules {
   rules: ReadonlyMap<string, string>;
@@ -36,8 +30,9 @@ export function correctedPromptForInput(
   data: string,
   typoRules: TypoCorrectionRules,
 ): string | undefined {
-  const delimiter = TYPO_DELIMITERS.find(({ key }) => matchesKey(data, key))?.value;
-  if (delimiter === undefined) return undefined;
+  // Input is decoded by Pi's native editor before reaching the correction hook.
+  const delimiter = data;
+  if (delimiter !== "" && !isTypoDelimiter(delimiter)) return undefined;
 
   const corrected = appendDelimiterAndCorrect(input, delimiter, typoRules.rules, typoRules.lengths);
   return corrected === `${input}${delimiter}` ? undefined : corrected;
