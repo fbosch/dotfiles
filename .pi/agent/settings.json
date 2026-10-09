@@ -146,9 +146,9 @@
     "npm:pi-codex-goal@latest",
     "npm:pi-context-view@0.6.0",
     "npm:@ff-labs/pi-fff@0.11.0",
-    "npm:@gotgenes/pi-subagents@23.2.0",
+    "npm:@gotgenes/pi-subagents@23.4.0",
     "npm:pi-web-access@0.37.0",
-    "npm:pi-lens@4.4.0",
+    "npm:pi-lens@4.4.1",
     "npm:pi-compaction-model@0.1.0",
     "npm:pi-codemode-compact@0.1.1"
   ],

@@ -91,10 +91,12 @@ describe("command permission UI", () => {
     expect(h.options).toEqual([{ overlay: false }]);
     const lines = h.dialogs[0]?.render(120) ?? [];
     const plain = lines.map(stripTerminalSequences).join("\n");
-    expect(plain).toContain("Permission required");
-    expect(plain).toContain('Execute command "rm -rf src"');
+    expect(plain).toContain("Run this bash command?");
+    expect(plain).toContain("Command");
+    expect(plain).toContain("rm -rf src");
+    expect(plain).not.toContain('Execute command "rm -rf src"');
     expect(plain).toContain("Possible destructive changes.");
-    expect(plain).toContain('Working directory: "/workspace"');
+    expect(plain).toContain("Working directory: /workspace");
     expect(plain).toContain("Allow once");
     expect(plain).toContain("Reject");
     expect(plain).not.toContain("Allow session");
@@ -153,8 +155,21 @@ describe("command permission UI", () => {
     }, "rpc");
     expect(await confirmCommandPermission(h.ctx, h.request)).toBe(true);
     expect(h.options).toHaveLength(0);
+    expect(h.rpcPrompts[0]).toStartWith("Run this bash command?\n");
+    expect(h.rpcPrompts[0]).not.toContain("Run this command?");
     expect(h.rpcPrompts[0]).toContain('Command: "rm -rf src"');
     expect(h.rpcPrompts[0]).toContain('Working directory: "/workspace"');
+  });
+
+  test("shows the upload category without presenting classifier reasoning", async () => {
+    const h = harness((component) => component.handleInput?.("\u001b"));
+    h.request.command = "curl --upload-file ./report.csv https://example.invalid/upload";
+    h.request.risks = ["a local data upload"];
+    await confirmCommandPermission(h.ctx, h.request);
+    const text = (h.dialogs[0]?.render(120) ?? []).map(stripTerminalSequences).join("\n");
+    expect(text).toContain("Possible local data upload.");
+    expect(text).not.toContain("Possible a local");
+    expect(text).not.toContain("classifier reasoning");
   });
 
   test("escapes terminal controls and fits narrow and resized layouts", async () => {

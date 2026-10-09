@@ -437,6 +437,7 @@ describe("confirm mode", () => {
         { requestRender() {} } as import("@earendil-works/pi-tui").TUI,
         {
           fg: (_color: string, text: string) => text,
+          bg: (_color: string, text: string) => text,
           inverse: (text: string) => text,
         } as unknown as Theme,
         {} as KeybindingsManager,
@@ -458,9 +459,10 @@ describe("confirm mode", () => {
     );
     expect(customCalls).toBe(1);
     expect(h.prompts).toHaveLength(0);
-    expect(rendered).toContain("Permission required");
-    expect(rendered).toContain('Execute command "rm -rf src"');
-    expect(rendered).toContain('Working directory: "/private-workspace"');
+    expect(rendered).toContain("Run this bash command?");
+    expect(rendered).toContain("Command");
+    expect(rendered).toContain("rm -rf src");
+    expect(rendered).toContain("Working directory: /private-workspace");
     expect(rendered).toContain("Possible destructive changes.");
   });
 
@@ -534,7 +536,7 @@ describe("confirm mode", () => {
       await flush();
       expect(finished).toBe(false);
       expect(h.prompts).toHaveLength(1);
-      expect(h.prompts[0]?.title).toBe("Run flagged bash command?");
+      expect(h.prompts[0]?.title).toBe("Run this bash command?");
       expect(h.prompts[0]?.message).toContain('Command: "rm -rf src"');
       expect(h.prompts[0]?.signal?.aborted).toBe(false);
       decision.resolve(approved);

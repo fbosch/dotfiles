@@ -112,17 +112,25 @@ export function renderPermissionPromptLines(
     .map(parseOption)
     .filter((option): option is ParsedOption => option !== undefined)
     .filter((option) => compactOptionLabel(option.label) !== "Allow both");
-  const hint = theme.fg("muted", "←/→/↑/↓ select · enter confirm · esc deny");
-  const optionRows = renderOptionRows(options, width, theme);
-  const actionRows =
-    optionRows.length === 1
-      ? [fitColumns(optionRows[0] ?? "", hint, width)]
-      : [...optionRows, hint];
+  return fitLinesToWidth([...base, ...renderPermissionPromptActions(options, width, theme)], width);
+}
 
-  return fitLinesToWidth(
-    [...base, "", theme.fg("borderMuted", "─".repeat(width)), ...actionRows],
-    width,
-  );
+export function renderPermissionPromptActions(
+  options: readonly ParsedOption[],
+  width: number,
+  theme: PermissionPromptTheme,
+): string[] {
+  if (width <= 0) return [];
+  const hint = theme.fg("muted", "←/→/↑/↓ select · enter confirm · esc reject");
+  const optionRows = renderOptionRows(options, width, theme);
+  const first = optionRows[0] ?? "";
+  const combined = optionRows.length === 1 && visibleWidth(first) + 1 + visibleWidth(hint) <= width;
+  const hints =
+    visibleWidth(hint) <= width
+      ? [hint]
+      : [theme.fg("muted", "←/→/↑/↓ select"), theme.fg("muted", "enter confirm · esc reject")];
+  const actions = combined ? [fitColumns(first, hint, width)] : [...optionRows, ...hints];
+  return fitLinesToWidth(["", theme.fg("borderMuted", "─".repeat(width)), ...actions], width);
 }
 
 export function isPermissionDecisionPromptLines(lines: readonly string[]): boolean {

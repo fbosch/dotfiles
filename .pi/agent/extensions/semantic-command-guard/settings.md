@@ -42,6 +42,13 @@ TUI approvals use the orange inline permission prompt in `prompt-ui`, with
 `Allow once` and `Reject`. RPC keeps its standard confirmation dialog because
 it does not support custom terminal components.
 
+The TUI shows the risk category above a shaded command block. Local lexical
+highlighting distinguishes executables, paths, operators, and warning tokens;
+these colors are reading aids, not classifier explanations or proof of safety.
+Long commands wrap with a continuation marker without omitting arguments.
+Commands containing control or hidden formatting characters use an explicitly
+escaped display. Approval still applies to the unchanged original command.
+
 Confirm mode adds the classifier request duration to selected calls, plus any
 time spent awaiting approval. The earlier isolated replay measured warmed
 requests at 395–478 ms; this is an observation, not a latency guarantee.

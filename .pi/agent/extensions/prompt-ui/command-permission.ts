@@ -1,7 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { matchesKey, SelectList } from "@earendil-works/pi-tui";
+import { renderCommandPermissionLines } from "./command-permission-rendering";
 import { modalSelectListTheme } from "./modal-frame";
-import { renderPermissionPromptLines } from "./permission-prompt-rendering";
 
 interface CommandPermission {
   command: string;
@@ -16,14 +16,14 @@ export async function confirmCommandPermission(
 ): Promise<boolean> {
   const { command, cwd, risks, signal } = request;
   if (!ctx.hasUI || signal.aborted) return false;
-  const concern = `Possible ${risks.join(" and ")}.`;
+  const concern = `Possible ${risks.map((risk) => risk.replace(/^a /, "")).join(" and ")}.`;
   const commandText = JSON.stringify(command);
   const directoryText = JSON.stringify(cwd);
   // RPC supports standard dialogs, but not custom terminal components.
   if (ctx.mode !== "tui")
     return ctx.ui.confirm(
-      "Run flagged bash command?",
-      `${concern}\n\nWorking directory: ${directoryText}\n\nCommand: ${commandText}\n\nRun this command?`,
+      "Run this bash command?",
+      `${concern}\n\nWorking directory: ${directoryText}\n\nCommand: ${commandText}`,
       { signal },
     );
 
@@ -57,17 +57,13 @@ export async function confirmCommandPermission(
 
           return {
             render: (width) =>
-              renderPermissionPromptLines(
-                [
-                  "Permission Required",
-                  "surface : bash",
-                  `command : ${commandText}`,
-                  `concern : ${concern}`,
-                  `directory : ${directoryText}`,
-                  "",
-                  `${choices.getSelectedItem()?.value === "allow" ? "▶" : " "} (o) Allow once`,
-                  `${choices.getSelectedItem()?.value === "reject" ? "▶" : " "} (n) Deny`,
-                ],
+              renderCommandPermissionLines(
+                {
+                  command,
+                  cwd,
+                  concern,
+                  allowSelected: choices.getSelectedItem()?.value === "allow",
+                },
                 width,
                 theme,
               ),
