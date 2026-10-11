@@ -52,6 +52,14 @@ async function exists(path: string): Promise<boolean> {
     throw error;
   }
 }
+const JUSTFILE_NAMES = ["justfile", "Justfile", ".justfile"] as const;
+
+export async function hasScriptCatalog(cwd: string): Promise<boolean> {
+  for (const filename of JUSTFILE_NAMES) {
+    if (await exists(join(cwd, filename))) return true;
+  }
+  return exists(join(cwd, "package.json"));
+}
 
 async function packageManager(cwd: string, declared: string | undefined): Promise<string> {
   if (declared !== undefined) {
@@ -80,7 +88,7 @@ export async function discoverScripts(
   signal?: AbortSignal,
 ): Promise<Script[]> {
   const scripts: Script[] = [];
-  for (const filename of ["justfile", "Justfile", ".justfile"]) {
+  for (const filename of JUSTFILE_NAMES) {
     const path = join(cwd, filename);
     if (!(await exists(path))) continue;
     const result = await pi.exec("just", ["--no-dotenv", "--justfile", path, "--json"], {

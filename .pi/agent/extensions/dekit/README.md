@@ -3,6 +3,8 @@
 The agent uses one `dekit` tool to discover public Just recipes and
 `package.json` scripts, then manage them as persistent project tasks.
 The manual `/just <recipe> [arguments]` command remains unchanged.
+The tool auto-activates when the project root contains `justfile`, `Justfile`, `.justfile`, or
+`package.json`; elsewhere it remains deferred unless explicitly loaded.
 
 Requires dekit 0.10.0 on `PATH`, Just for Just recipes, and the project's
 package manager. Run `/reload` after changing the extension.

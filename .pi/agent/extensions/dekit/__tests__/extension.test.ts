@@ -34,17 +34,22 @@ afterEach(async () => {
     await rm(directory, { recursive: true, force: true });
 });
 const path = `pi/package/${"a".repeat(24)}`;
-async function harness(options?: { modelRegistry?: ExtensionContext["modelRegistry"] }) {
+async function harness(options?: {
+  modelRegistry?: ExtensionContext["modelRegistry"];
+  includePackage?: boolean;
+}) {
   const cwd = await realpath(await mkdtemp(join(tmpdir(), "pi-dekit-test-")));
   directories.push(cwd);
   const packagePath = join(cwd, "package.json");
-  await writeFile(
-    packagePath,
-    JSON.stringify({
-      packageManager: "bun@1.4.0",
-      scripts: { test: "printf hello", serve: "sleep 60" },
-    }),
-  );
+  if (options?.includePackage !== false) {
+    await writeFile(
+      packagePath,
+      JSON.stringify({
+        packageManager: "bun@1.4.0",
+        scripts: { test: "printf hello", serve: "sleep 60" },
+      }),
+    );
+  }
   const calls: Array<{ command: string; args: string[]; options?: ExecOptions }> = [];
   let tool: ToolDefinition | undefined;
   const state = {
@@ -72,7 +77,18 @@ async function harness(options?: { modelRegistry?: ExtensionContext["modelRegist
       } as Record<string, Record<string, unknown>>,
     },
   };
+  const activeTools = ["read", "bash"];
+  const sessionHandlers = new Map<string, (event: unknown, context: ExtensionContext) => unknown>();
   const pi = {
+    on(event: string, handler: (event: unknown, context: ExtensionContext) => unknown) {
+      sessionHandlers.set(event, handler);
+    },
+    getActiveTools() {
+      return [...activeTools];
+    },
+    setActiveTools(names: string[]) {
+      activeTools.splice(0, activeTools.length, ...names);
+    },
     registerTool(value: ToolDefinition) {
       tool = value;
     },
@@ -120,6 +136,13 @@ async function harness(options?: { modelRegistry?: ExtensionContext["modelRegist
     state,
     pi,
     tool: registered,
+
+    activeTools,
+    startSession: async () => {
+      const handler = sessionHandlers.get("session_start");
+      if (handler === undefined) throw new Error("session_start handler was not registered");
+      await handler({ type: "session_start", reason: "startup" }, context);
+    },
     context,
     invoke: (args: object, signal?: AbortSignal) =>
       registered.execute("call", args, signal, undefined, context),
@@ -198,6 +221,22 @@ function resultTask(details: unknown): string {
   return details.task;
 }
 
+for (const filename of ["justfile", "Justfile", ".justfile", "package.json"]) {
+  test(`activates dekit when ${filename} exists at the project root`, async () => {
+    const h = await harness({ includePackage: false });
+    const contents =
+      filename === "package.json" ? JSON.stringify({ scripts: { test: "true" } }) : "";
+    await writeFile(join(h.cwd, filename), contents);
+    await h.startSession();
+    expect(h.activeTools).toEqual(["read", "bash", "dekit"]);
+  });
+}
+
+test("keeps dekit deferred when the project has no supported catalog file", async () => {
+  const h = await harness({ includePackage: false });
+  await h.startSession();
+  expect(h.activeTools).toEqual(["read", "bash"]);
+});
 test("registers one script tool; the manual Just extension registers no agent tools", async () => {
   const h = await harness();
   expect(h.tool.name).toBe("dekit");

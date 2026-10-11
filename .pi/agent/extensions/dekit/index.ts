@@ -20,6 +20,7 @@ import { truncateCommandOutput } from "../just";
 import { resolveClassifierToolDiscoveryConfig } from "../tool-discovery";
 import {
   discoverScripts,
+  hasScriptCatalog,
   inspectScript,
   isManagedTask,
   rankScriptsLocally,
@@ -489,4 +490,10 @@ export default function dekitExtension(pi: ExtensionAPI): void {
       },
     }),
   );
+  // Resolve availability per session because the working directory selects the catalog.
+  pi.on("session_start", async (_event, ctx) => {
+    if (!(await hasScriptCatalog(ctx.cwd))) return;
+    const activeTools = pi.getActiveTools();
+    if (!activeTools.includes("dekit")) pi.setActiveTools([...activeTools, "dekit"]);
+  });
 }
