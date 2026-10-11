@@ -46,7 +46,7 @@
       "src": "https://github.com/jinh0/eyeliner.nvim.git"
     },
     "fff.nvim": {
-      "rev": "c188e7a8f90e4ee4aabe18f93d5869dfb4289f12",
+      "rev": "d978416f77aec3f9928d56e00c9e56ba39ca1fda",
       "src": "https://github.com/dmtrKovalenko/fff.nvim.git"
     },
     "fidget.nvim": {
@@ -110,7 +110,7 @@
       "src": "https://github.com/nvim-lualine/lualine.nvim.git"
     },
     "matchparen.nvim": {
-      "rev": "75398158ea5a4cee4f0cbbeefdbf8fb1c3343e28",
+      "rev": "7a0928f528db7a01807ea32d50d0e4425d629188",
       "src": "https://github.com/monkoose/matchparen.nvim.git"
     },
     "mini.ai": {
@@ -135,7 +135,7 @@
       "src": "https://github.com/nacro90/numb.nvim.git"
     },
     "nvim-autopairs": {
-      "rev": "430522f95fe4fb7c511ec64f8c1a90cc6a66c05c",
+      "rev": "3172f40c16563db871a58f20d205c710ad782311",
       "src": "https://github.com/windwp/nvim-autopairs.git"
     },
     "nvim-coverage": {
@@ -147,11 +147,11 @@
       "src": "https://github.com/gennaro-tedesco/nvim-jqx.git"
     },
     "nvim-lsp-file-operations": {
-      "rev": "d0ea762975070297763758a0f44c03e525d1de2a",
+      "rev": "6f0997687c8dd2e3217a160167078b8bff052c43",
       "src": "https://github.com/antosha417/nvim-lsp-file-operations.git"
     },
     "nvim-lspconfig": {
-      "rev": "910f0c4d46aa186641518395bc7e6fffb4d23baf",
+      "rev": "c59fc922f718fa055f69f5f3bc888f23211571eb",
       "src": "https://github.com/neovim/nvim-lspconfig.git"
     },
     "nvim-nio": {
@@ -184,11 +184,11 @@
       "src": "https://github.com/nguyenvukhang/nvim-toggler.git"
     },
     "nvim-tree.lua": {
-      "rev": "478c69c0fe253caea88de9c5e138bfa77395a59a",
+      "rev": "355bcc85a48f45b3e728219f10b880d569928965",
       "src": "https://github.com/nvim-tree/nvim-tree.lua.git"
     },
     "nvim-treesitter": {
-      "rev": "e289100ff98969e118c702199d88b764ce9e7fdf",
+      "rev": "1a4f47b03dfe92d28de7d5654c67327ef008c9e6",
       "src": "https://github.com/nvim-treesitter/nvim-treesitter.git"
     },
     "nvim-ts-autotag": {
@@ -204,7 +204,7 @@
       "src": "https://github.com/nvim-lua/plenary.nvim.git"
     },
     "smart-splits.nvim": {
-      "rev": "ec76708f1617ef9e2ac353357fe52d2c997a0f06",
+      "rev": "07dbad410256f755e69ffd31cb8d122bcd6b91f7",
       "src": "https://github.com/mrjones2014/smart-splits.nvim.git"
     },
     "snacks.nvim": {
