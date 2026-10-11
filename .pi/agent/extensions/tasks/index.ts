@@ -499,7 +499,7 @@ export default function tasksExtension(
     )
       return;
     const source = data.source === "classifier" ? "classifier decision" : "rule-based check";
-    return new Text(theme.fg("dim", `Task review requested · ${source}`), 0, 0);
+    return new Text(theme.fg("dim", ` Task review requested · ${source}`), 0, 0);
   });
 
   const invalidateCheck = (): void => {

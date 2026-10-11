@@ -92,3 +92,36 @@ export function applyDirenvEnvironment(
   }
   return merged;
 }
+
+export function installDirenvProcessEnvironment(
+  environment: DirenvEnvironment,
+  target: NodeJS.ProcessEnv = process.env,
+): () => void {
+  const ownedValues = new Map<
+    string,
+    { readonly previous: string | undefined; readonly applied: string | undefined }
+  >();
+
+  for (const [name, value] of Object.entries(environment)) {
+    const previous = target[name];
+    const applied = value === null ? undefined : value;
+    if (previous === applied) continue;
+
+    ownedValues.set(name, { previous, applied });
+    if (value === null) delete target[name];
+    else target[name] = value;
+  }
+
+  let restored = false;
+  return () => {
+    if (restored) return;
+    restored = true;
+
+    for (const [name, { previous, applied }] of ownedValues) {
+      // Do not overwrite a value another owner changed after this direnv load.
+      if (target[name] !== applied) continue;
+      if (previous === undefined) delete target[name];
+      else target[name] = previous;
+    }
+  };
+}

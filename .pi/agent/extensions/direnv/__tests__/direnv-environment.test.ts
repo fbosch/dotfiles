@@ -5,6 +5,7 @@ import { join } from "node:path";
 import {
   applyDirenvEnvironment,
   findProjectDirectory,
+  installDirenvProcessEnvironment,
   loadDirenvEnvironment,
 } from "../direnv-environment";
 
@@ -118,4 +119,29 @@ test("applies exports and removals without mutating the process environment", ()
     }),
   ).toEqual({ PATH: "/repo/bin:/usr/bin", PROJECT_VALUE: "available" });
   expect(base).toEqual({ PATH: "/usr/bin", REMOVED_VALUE: "inherited" });
+});
+
+test("restores only values still owned by the direnv installation", () => {
+  const target: NodeJS.ProcessEnv = {
+    OWNED_VALUE: "ambient",
+    REMOVED_VALUE: "inherited",
+    UNRELATED_VALUE: "ambient",
+  };
+  const restore = installDirenvProcessEnvironment(
+    { OWNED_VALUE: "project", REMOVED_VALUE: null },
+    target,
+  );
+
+  expect(target).toEqual({ OWNED_VALUE: "project", UNRELATED_VALUE: "ambient" });
+  target.OWNED_VALUE = "changed-by-another-owner";
+  target.REMOVED_VALUE = "recreated-by-another-owner";
+  target.UNRELATED_VALUE = "changed-elsewhere";
+  restore();
+  restore();
+
+  expect(target).toEqual({
+    OWNED_VALUE: "changed-by-another-owner",
+    REMOVED_VALUE: "recreated-by-another-owner",
+    UNRELATED_VALUE: "changed-elsewhere",
+  });
 });

@@ -5,6 +5,7 @@ import { installStartupOwnerPublisher, type StartupOwnerStatus } from "../startu
 import {
   applyDirenvEnvironment,
   findProjectDirectory,
+  installDirenvProcessEnvironment,
   loadDirenvEnvironment,
 } from "./direnv-environment";
 
@@ -14,26 +15,40 @@ class DirenvExportError extends Error {
   }
 }
 
+function reportsDirenvExportFailure(stderr: string): boolean {
+  return /\b(?:error|failed|failure|cannot|unable)\b|permission denied|no such file or directory/i.test(
+    stderr,
+  );
+}
+
 export default function direnvSessionEnvironment(pi: ExtensionAPI): void {
-  const configuredDirectories = new Set<string>();
   let startupStatus: StartupOwnerStatus<DirenvStartupPayload> = { state: "unavailable" };
+  let restoreProcessEnvironment: (() => void) | undefined;
+  let loadGeneration = 0;
   const startupPublisher = installStartupOwnerPublisher(pi.events, "direnv", () => startupStatus);
   const publishStartupStatus = (status: StartupOwnerStatus<DirenvStartupPayload>) => {
     startupStatus = status;
     startupPublisher.publish(status);
   };
+  const clearProcessEnvironment = () => {
+    loadGeneration += 1;
+    restoreProcessEnvironment?.();
+    restoreProcessEnvironment = undefined;
+  };
 
   pi.on("session_start", async (_event, ctx) => {
-    if (configuredDirectories.has(ctx.cwd)) return;
-    configuredDirectories.add(ctx.cwd);
-
+    clearProcessEnvironment();
+    const generation = loadGeneration;
     publishStartupStatus({ state: "collecting" });
     const projectDirectory = findProjectDirectory(ctx.cwd);
     const result = await loadDirenvEnvironment(ctx.cwd, projectDirectory, async (cwd) => {
       const exported = await pi.exec("direnv", ["export", "json"], { cwd });
-      if (exported.code !== 0) throw new DirenvExportError(exported.stderr);
+      if (exported.code !== 0 || reportsDirenvExportFailure(exported.stderr)) {
+        throw new DirenvExportError(exported.stderr);
+      }
       return exported.stdout;
     });
+    if (generation !== loadGeneration) return;
 
     if (result.status === "blocked") {
       publishStartupStatus({
@@ -68,11 +83,12 @@ export default function direnvSessionEnvironment(pi: ExtensionAPI): void {
     });
 
     pi.registerTool(bashTool);
-    // Only this successful load path applies the environment to the owned Bash tool.
+    restoreProcessEnvironment = installDirenvProcessEnvironment(result.environment);
     publishStartupStatus({ state: "ready", observedAt: Date.now() });
   });
 
   pi.on("session_shutdown", () => {
+    clearProcessEnvironment();
     startupPublisher.dispose();
   });
 }

@@ -712,8 +712,8 @@ describe("standalone tasks checklist", () => {
     expect(component?.render(120)).toHaveLength(1);
     expect(component?.render(120).join("\n").trimEnd()).toBe(
       decision.source === "classifier"
-        ? "Task review requested · classifier decision"
-        : "Task review requested · rule-based check",
+        ? " Task review requested · classifier decision"
+        : " Task review requested · rule-based check",
     );
     for (const width of [1, 24, 80]) {
       expect(component?.render(width).every((line) => visibleWidth(line) <= width)).toBe(true);

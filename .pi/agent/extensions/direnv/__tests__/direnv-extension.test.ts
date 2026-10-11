@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { execFile } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -15,7 +16,7 @@ import {
 } from "../../startup-header/contracts";
 import direnvSessionEnvironment from "../index";
 
-type SessionStartHandler = (event: never, context: ExtensionContext) => Promise<void> | void;
+type LifecycleHandler = (event: never, context: ExtensionContext) => Promise<void> | void;
 
 interface RegisteredTool {
   name: string;
@@ -31,7 +32,7 @@ interface RegisteredTool {
 interface PiHarness {
   pi: ExtensionAPI;
   events: ReturnType<typeof createEventBus>;
-  getHandler(): SessionStartHandler;
+  getHandler(event?: string): LifecycleHandler;
   registeredTools: RegisteredTool[];
   getSettingsCalls(): number;
 }
@@ -41,15 +42,16 @@ function createPiHarness(
   piCommaPrefix?: string,
   settings: Pick<ReturnType<ExtensionAPI["getSettings"]>, "shellPath" | "shellCommandPrefix"> = {},
 ): PiHarness {
-  let handler: SessionStartHandler | undefined;
+  const handlers = new Map<string, LifecycleHandler>();
+  const currentExported = exported;
   let getSettingsCalls = 0;
   const registeredTools: RegisteredTool[] = [];
   const events = createEventBus();
   const pi = {
-    on(event: string, candidate: SessionStartHandler) {
-      if (event === "session_start") handler = candidate;
+    on(event: string, candidate: LifecycleHandler) {
+      handlers.set(event, candidate);
     },
-    exec: async () => ({ ...exported, killed: false }),
+    exec: async () => ({ ...currentExported, killed: false }),
     getSettings() {
       getSettingsCalls += 1;
       return settings;
@@ -75,8 +77,9 @@ function createPiHarness(
     getSettingsCalls() {
       return getSettingsCalls;
     },
-    getHandler() {
-      if (handler === undefined) throw new Error("session_start handler was not registered");
+    getHandler(event = "session_start") {
+      const handler = handlers.get(event);
+      if (handler === undefined) throw new Error(`${event} handler was not registered`);
       return handler;
     },
   };
@@ -94,9 +97,43 @@ function context(cwd: string, notifications: string[]): ExtensionContext {
   } as unknown as ExtensionContext;
 }
 
-test("overrides bash after loading an allowed repository environment", async () => {
+function captureEnvironment(...names: string[]): Record<string, string | undefined> {
+  return Object.fromEntries(names.map((name) => [name, process.env[name]]));
+}
+
+function restoreEnvironment(environment: Record<string, string | undefined>): void {
+  for (const [name, value] of Object.entries(environment)) {
+    if (value === undefined) delete process.env[name];
+    else process.env[name] = value;
+  }
+}
+
+function runChild(script: string): Promise<string> {
+  return new Promise((resolve, reject) => {
+    execFile(process.execPath, ["-e", script], (error, stdout) => {
+      if (error) reject(error);
+      else resolve(stdout);
+    });
+  });
+}
+
+test("publishes project variables to custom tools and child processes while preserving Bash setup", async () => {
   const project = await mkdtemp(join(tmpdir(), "pi-direnv-extension-"));
+  const shellPath = Bun.which("bash");
+  if (shellPath === null) throw new Error("Bash was not found for the integration test");
+  const originalEnvironment = captureEnvironment(
+    "PROJECT_TOOL",
+    "WOW_CASC_LIBRARY",
+    "PATH",
+    "REMOVED_VALUE",
+    "PI_DIRENV_UNRELATED",
+  );
   try {
+    process.env.PROJECT_TOOL = "/ambient/tool";
+    process.env.WOW_CASC_LIBRARY = "/ambient/casc.so";
+    process.env.PATH = "/ambient/bin";
+    process.env.REMOVED_VALUE = "inherited";
+    process.env.PI_DIRENV_UNRELATED = "leave-alone";
     await mkdir(join(project, ".git"));
     await writeFile(join(project, ".envrc"), "");
     const prefixMarker = join(project, "prefix-marker");
@@ -104,14 +141,19 @@ test("overrides bash after loading an allowed repository environment", async () 
     const environmentMarker = join(project, "environment-marker");
     const harness = createPiHarness(
       {
-        stdout: JSON.stringify({ PROJECT_TOOL: "/repo/bin/tool" }),
+        stdout: JSON.stringify({
+          PROJECT_TOOL: "/repo/bin/tool",
+          WOW_CASC_LIBRARY: "/repo/lib/libcasc.so",
+          PATH: "/repo/bin",
+          REMOVED_VALUE: null,
+        }),
         stderr: "",
         code: 0,
       },
       `printf pi-comma > ${JSON.stringify(prefixMarker)}`,
       {
         shellCommandPrefix: `printf settings > ${JSON.stringify(settingsMarker)}`,
-        shellPath: "/bin/bash",
+        shellPath,
       },
     );
     const notifications: string[] = [];
@@ -131,10 +173,24 @@ test("overrides bash after loading an allowed repository environment", async () 
       },
       thinkingLevel: "low",
     } as unknown as ExtensionToolContext;
+
+    const atlasTool = { execute: async () => process.env.WOW_CASC_LIBRARY };
+    expect(await atlasTool.execute()).toBe("/repo/lib/libcasc.so");
+    expect(process.env.REMOVED_VALUE).toBeUndefined();
+    expect(process.env.PI_DIRENV_UNRELATED).toBe("leave-alone");
+    const childEnvironment = await runChild(
+      "process.stdout.write(JSON.stringify({ casc: process.env.WOW_CASC_LIBRARY, path: process.env.PATH, removed: process.env.REMOVED_VALUE ?? null }))",
+    );
+    expect(JSON.parse(childEnvironment)).toEqual({
+      casc: "/repo/lib/libcasc.so",
+      path: "/repo/bin",
+      removed: null,
+    });
+
     await bashTool.execute(
       "direnv-composition",
       {
-        command: `printf '%s|%s' "$PROJECT_TOOL" "$PI_SESSION_ID" > ${JSON.stringify(environmentMarker)}`,
+        command: `printf '%s|%s|%s' "$PROJECT_TOOL" "$PI_SESSION_ID" "\${REMOVED_VALUE-unset}" > ${JSON.stringify(environmentMarker)}`,
         timeout: 1,
       },
       undefined,
@@ -143,21 +199,36 @@ test("overrides bash after loading an allowed repository environment", async () 
     );
     expect(await readFile(settingsMarker, "utf8")).toBe("settings");
     expect(await readFile(prefixMarker, "utf8")).toBe("pi-comma");
-    expect(await readFile(environmentMarker, "utf8")).toBe("/repo/bin/tool|fixture-session");
+    expect(await readFile(environmentMarker, "utf8")).toBe(
+      "/repo/bin/tool|fixture-session|unset",
+    );
     expect(harness.getSettingsCalls()).toBe(1);
     expect(notifications).toEqual([]);
+
+    await harness.getHandler("session_shutdown")(
+      { type: "session_shutdown", reason: "quit" } as never,
+      context(project, notifications),
+    );
+    expect(process.env.PROJECT_TOOL).toBe("/ambient/tool");
+    expect(process.env.WOW_CASC_LIBRARY).toBe("/ambient/casc.so");
+    expect(process.env.PATH).toBe("/ambient/bin");
+    expect(process.env.REMOVED_VALUE).toBe("inherited");
+    expect(process.env.PI_DIRENV_UNRELATED).toBe("leave-alone");
   } finally {
+    restoreEnvironment(originalEnvironment);
     await rm(project, { recursive: true, force: true });
   }
 });
 
-test("warns and keeps the built-in bash tool when the envrc is blocked", async () => {
+test("warns, preserves ambient values, and keeps built-in Bash when the envrc is blocked", async () => {
   const project = await mkdtemp(join(tmpdir(), "pi-direnv-extension-"));
+  const originalEnvironment = captureEnvironment("PI_DIRENV_BLOCKED_TEST");
   try {
+    process.env.PI_DIRENV_BLOCKED_TEST = "ambient";
     await mkdir(join(project, ".git"));
     await writeFile(join(project, ".envrc"), "");
     const harness = createPiHarness({
-      stdout: "",
+      stdout: JSON.stringify({ PI_DIRENV_BLOCKED_TEST: "must-not-load" }),
       stderr: "direnv: error .envrc is blocked",
       code: 1,
     });
@@ -175,10 +246,90 @@ test("warns and keeps the built-in bash tool when the envrc is blocked", async (
     await harness.getHandler()({} as never, context(project, notifications));
 
     expect(harness.registeredTools).toEqual([]);
+    expect(process.env.PI_DIRENV_BLOCKED_TEST).toBe("ambient");
     expect(snapshots.at(-1)).toMatchObject({ state: "degraded", payload: { problem: "blocked" } });
     expect(notifications).toEqual(["direnv: .envrc is blocked. Run `direnv allow` to enable it."]);
   } finally {
+    restoreEnvironment(originalEnvironment);
     await rm(project, { recursive: true, force: true });
+  }
+});
+
+test("cleans project variables on reload and rejects zero-exit direnv diagnostics", async () => {
+  const originalEnvironment = captureEnvironment("PROJECT_TOOL", "WOW_CASC_LIBRARY");
+  const firstProject = await mkdtemp(join(tmpdir(), "pi-direnv-first-project-"));
+  const nextProject = await mkdtemp(join(tmpdir(), "pi-direnv-next-project-"));
+  let firstHarness: PiHarness | undefined;
+  let nextHarness: PiHarness | undefined;
+  try {
+    process.env.PROJECT_TOOL = "/ambient/tool";
+    process.env.WOW_CASC_LIBRARY = "/ambient/casc.so";
+    for (const project of [firstProject, nextProject]) {
+      await mkdir(join(project, ".git"));
+      await writeFile(join(project, ".envrc"), "");
+    }
+
+    firstHarness = createPiHarness({
+      stdout: JSON.stringify({
+        PROJECT_TOOL: "/first-project/bin/tool",
+        WOW_CASC_LIBRARY: "/first-project/lib/libcasc.so",
+      }),
+      stderr: "",
+      code: 0,
+    });
+    direnvSessionEnvironment(firstHarness.pi);
+    await firstHarness.getHandler()({} as never, context(firstProject, []));
+    expect(process.env.PROJECT_TOOL).toBe("/first-project/bin/tool");
+    expect(process.env.WOW_CASC_LIBRARY).toBe("/first-project/lib/libcasc.so");
+
+    await firstHarness.getHandler("session_shutdown")(
+      { type: "session_shutdown", reason: "reload" } as never,
+      context(firstProject, []),
+    );
+    expect(process.env.PROJECT_TOOL).toBe("/ambient/tool");
+    expect(process.env.WOW_CASC_LIBRARY).toBe("/ambient/casc.so");
+
+    nextHarness = createPiHarness({
+      stdout: JSON.stringify({
+        PROJECT_TOOL: "/failed-project/bin/tool",
+        WOW_CASC_LIBRARY: "/failed-project/lib/libcasc.so",
+      }),
+      stderr: "devenv: error: failed to create /run/user/1000/devenv-9d3a18b",
+      code: 0,
+    });
+    const snapshots: StartupOwnerSnapshot[] = [];
+    nextHarness.events.on(STARTUP_OWNER_SNAPSHOT_EVENT, (value) =>
+      snapshots.push(value as StartupOwnerSnapshot),
+    );
+    direnvSessionEnvironment(nextHarness.pi);
+    nextHarness.events.emit(
+      "dotfiles:pi-startup-header/request/v1",
+      createStartupOwnerRequest("session", "generation", "direnv"),
+    );
+    await nextHarness.getHandler()({} as never, context(nextProject, []));
+
+    expect(nextHarness.registeredTools).toEqual([]);
+    expect(process.env.PROJECT_TOOL).toBe("/ambient/tool");
+    expect(process.env.WOW_CASC_LIBRARY).toBe("/ambient/casc.so");
+    expect(snapshots.at(-1)).toMatchObject({
+      state: "unavailable",
+      payload: { problem: "load-failed" },
+    });
+    expect(snapshots.some((snapshot) => snapshot.state === "ready")).toBe(false);
+  } finally {
+    await firstHarness?.getHandler("session_shutdown")(
+      { type: "session_shutdown", reason: "reload" } as never,
+      context(firstProject, []),
+    );
+    await nextHarness?.getHandler("session_shutdown")(
+      { type: "session_shutdown", reason: "quit" } as never,
+      context(nextProject, []),
+    );
+    restoreEnvironment(originalEnvironment);
+    await Promise.all([
+      rm(firstProject, { recursive: true, force: true }),
+      rm(nextProject, { recursive: true, force: true }),
+    ]);
   }
 });
 
