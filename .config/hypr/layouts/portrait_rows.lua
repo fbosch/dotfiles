@@ -138,8 +138,6 @@ function M.recalculate(ctx)
 		return
 	end
 
-	intents.observe_floating_active(state, key, targets)
-
 	local area = ctx.area
 
 	if count == 1 then
@@ -217,9 +215,6 @@ function M.resize(ctx, target, delta, corner)
 	end
 
 	local changed = resize_state.adjust_active(ratios, index, count, amount, min_ratio)
-	if changed and key and role_for_targets(targets) == monitor_role.portrait then
-		state.ratio_change_by_key[key] = true
-	end
 	if ratio_key and changed then
 		save_ratio_state()
 	end
@@ -301,17 +296,11 @@ function M.layout_msg(ctx, msg)
 			min_ratio
 		)
 		if ratio_key and changed then
-			if key and role_for_targets(targets) == monitor_role.portrait then
-				state.ratio_change_by_key[key] = true
-			end
 			resize_dirty = true
 		end
 	elseif command == "reset" then
 		if ratio_key then
 			ratios_by_workspace[ratio_key] = default_ratios(count)
-			if key and role_for_targets(targets) == monitor_role.portrait then
-				state.ratio_change_by_key[key] = true
-			end
 			save_ratio_state()
 		end
 	else

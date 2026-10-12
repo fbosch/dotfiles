@@ -6,13 +6,11 @@ function M.new()
 		targets_by_key = {},
 		target_maps_by_key = {},
 		manual_change_by_key = {},
-		ratio_change_by_key = {},
 		active_by_key = {},
 		position_by_id = {},
 		position_by_scope = {},
 		scope_by_id = {},
 		seen_ids = {},
-		tiled_drag_by_key = {},
 	}
 end
 

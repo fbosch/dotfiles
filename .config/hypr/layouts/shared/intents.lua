@@ -19,6 +19,7 @@ local pending_transfer_by_id = {}
 local pending_transfer_by_destination = {}
 local pending_transfer_destination_id = {}
 local pending_placement_by_id = {}
+local pending_drop_by_id = {}
 local placement_intent_timeout = 2000
 
 local function transfer_destination(monitor_role, axis)
@@ -155,39 +156,68 @@ function M.placement_intent_for_window(window)
 	return pending_placement_by_id[order_state.window_id(window)]
 end
 
-function M.observe_floating_active(state, key, targets)
-	local active = hl and hl.get_active_window and hl.get_active_window() or nil
-	if not active or active.floating ~= true or M.placement_intent_for_window(active) then
-		return
+function M.record_drop_intent(window, intent)
+	local id = order_state.window_id(window)
+	if not id then
+		return false
 	end
 
-	local id = order_state.window_id(active)
-	local order = key and state.order_by_key[key] or nil
-	if not id or not order or not order_state.index_of(order, id) then
-		return
+	pending_drop_by_id[id] = intent
+	if hl and hl.timer then
+		hl.timer(function()
+			if pending_drop_by_id[id] == intent then
+				pending_drop_by_id[id] = nil
+			end
+		end, { timeout = placement_intent_timeout, type = "oneshot" })
 	end
 
-	for index = 1, #targets do
-		if order_state.target_id(targets[index]) == id then
-			return
-		end
-	end
-
-	state.tiled_drag_by_key[key] = id
+	return true
 end
 
-function M.consume_tiled_drag(state, key, targets)
-	local id = key and state.tiled_drag_by_key[key] or nil
-	if not id then
-		return nil
+function M.clear_drop_intent(window)
+	local id = order_state.window_id(window)
+	if id then
+		pending_drop_by_id[id] = nil
+	end
+end
+
+function M.has_drop_intents()
+	return next(pending_drop_by_id) ~= nil
+end
+
+function M.prune_drop_intents(layout_name, workspace_key, targets)
+	local present = {}
+	for _, target in ipairs(targets) do
+		local id = order_state.target_id(target)
+		if id and target.window.floating ~= true then
+			present[id] = true
+		end
 	end
 
-	for index = 1, #targets do
-		local target = targets[index]
-		if order_state.target_id(target) == id then
-			state.tiled_drag_by_key[key] = nil
-			return target
+	-- Only this workspace's snapshot can invalidate its pending drops.
+	for id, intent in pairs(pending_drop_by_id) do
+		if intent.layout_name == layout_name and intent.workspace_key == workspace_key and not present[id] then
+			pending_drop_by_id[id] = nil
 		end
+	end
+end
+
+function M.consume_drop_intent(target, layout_name, workspace_key, monitor_role, axis)
+	local id = order_state.target_id(target)
+	local intent = id and pending_drop_by_id[id] or nil
+	-- A rejected drop must not become eligible on a later recalculation.
+	if id then
+		pending_drop_by_id[id] = nil
+	end
+	if
+		intent
+		and target.window.floating ~= true
+		and intent.layout_name == layout_name
+		and intent.workspace_key == workspace_key
+		and intent.monitor_role == monitor_role
+		and intent.axis == axis
+	then
+		return intent
 	end
 
 	return nil

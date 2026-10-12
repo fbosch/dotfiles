@@ -84,12 +84,7 @@ function M.new(opts)
 			return release_callback(target, dispatcher, picture_in_picture.finish_drag)
 		end
 
-		return release_callback(target, dispatcher, function(current)
-			if current == nil or (state.is_game(current) and current.fullscreen ~= 0) then
-				return
-			end
-			custom_layout.place_custom_layout_at_cursor(current)
-		end)
+		return release_callback(target, dispatcher)
 	end
 
 	function router.start_resize(keep_aspect_ratio)

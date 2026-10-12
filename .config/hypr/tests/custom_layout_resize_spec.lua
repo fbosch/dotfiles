@@ -10,6 +10,7 @@ local plugin_args
 local plugin_stops
 local restored
 local active_workspace
+local drop_intents
 
 local function load_module(with_plugin)
 	dispatched = {}
@@ -18,6 +19,7 @@ local function load_module(with_plugin)
 	plugin_args = nil
 	plugin_stops = 0
 	restored = 0
+	drop_intents = {}
 
 	local plugin = nil
 	if with_plugin then
@@ -73,6 +75,9 @@ local function load_module(with_plugin)
 		for_window = function(window)
 			return window and window.monitor_role
 		end,
+		for_monitor = function(monitor)
+			return monitor and monitor.role
+		end,
 		name_for = function(role)
 			return role == "portrait" and "HDMI-A-2" or "DP-2"
 		end,
@@ -89,11 +94,16 @@ local function load_module(with_plugin)
 	}
 	package.loaded["layouts.shared.order_state"] = {
 		window_id = function(window)
-			return window and window.address
+			return window and "address:" .. window.address
 		end,
 	}
 	package.loaded["layouts.shared.intents"] = {
 		record_placement_intent = function() end,
+		clear_drop_intent = function() end,
+		record_drop_intent = function(window, intent)
+			drop_intents[#drop_intents + 1] = { window = window, intent = intent }
+			return true
+		end,
 	}
 	package.loaded["lib.window_tags"] = { non_resizable = "non-resizable" }
 	package.loaded["lib.profile_state"] = {
@@ -120,6 +130,7 @@ before_each(function()
 		id = 2,
 		name = "2",
 		tiled_layout = "lua:ultrawide_master",
+		monitor = { role = "ultrawide" },
 	}
 	active_window = {
 		address = "0xabc",
@@ -130,49 +141,42 @@ before_each(function()
 end)
 
 describe("custom layout resize adapter", function()
-	it("dispatches placement for the active custom-layout workspace", function()
+	it("queues an addressed drop with captured release coordinates", function()
 		local custom_layout = load_module(false)
-		local target = { workspace = active_workspace }
+		local target = { address = "0xabc", floating = false, workspace = active_workspace }
 
-		custom_layout.place_custom_layout_at_cursor(target)
+		assert.is_true(custom_layout.request_drop(target, active_workspace, 880, 340))
 
-		assert.are.equal(1, #dispatched)
-		assert.are.equal("layout", dispatched[1].op)
-		assert.are.equal("place-at-cursor", dispatched[1].value)
+		assert.are.equal(0, #dispatched)
+		assert.are.equal(target, drop_intents[1].window)
+		assert.are.equal(880, drop_intents[1].intent.position)
 	end)
 
-	it("does not send placement to another workspace's native layout", function()
+	it("queues placement for the requested workspace when focus changes", function()
 		local custom_layout = load_module(false)
-		local target = { workspace = active_workspace }
-		active_workspace = {
+		local target = { address = "0xabc", floating = false, workspace = active_workspace }
+		active_workspace = { id = 3, name = "3", tiled_layout = "dwindle" }
+
+		assert.is_true(custom_layout.request_drop(target, target.workspace, 880, 340))
+
+		assert.are.equal(0, #dispatched)
+		assert.are.equal("2", drop_intents[1].intent.workspace_key)
+	end)
+
+	it("does not queue a native drop for a non-custom destination layout", function()
+		local custom_layout = load_module(false)
+		local target = { address = "0xabc", floating = false, workspace = active_workspace }
+		local destination = {
 			id = 3,
 			name = "3",
 			tiled_layout = "dwindle",
+			monitor = { role = "ultrawide" },
 		}
 
-		custom_layout.place_custom_layout_at_cursor(target)
+		assert.is_false(custom_layout.request_drop(target, destination, 880, 340))
 
 		assert.are.equal(0, #dispatched)
-	end)
-
-	it("does not send placement after the target workspace switches layouts", function()
-		local custom_layout = load_module(false)
-		local target = {
-			workspace = {
-				id = 2,
-				name = "2",
-				tiled_layout = "lua:ultrawide_master",
-			},
-		}
-		active_workspace = {
-			id = 2,
-			name = "2",
-			tiled_layout = "dwindle",
-		}
-
-		custom_layout.place_custom_layout_at_cursor(target)
-
-		assert.are.equal(0, #dispatched)
+		assert.are.equal(0, #drop_intents)
 	end)
 
 	it("delegates resize mechanics to the plugin", function()

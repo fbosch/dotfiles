@@ -182,7 +182,15 @@ run("title-bar drag reorders a tiled row at the release cursor", function()
 
 	bottom.window.floating = false
 	set_geometry(bottom, 20, 200)
-	cursor_position = { x = 20, y = 30 }
+	intents.record_drop_intent(bottom.window, {
+		layout_name = "portrait_rows",
+		workspace_key = "title-bar-drag",
+		monitor_role = monitor_role.portrait,
+		axis = "y",
+		position = 30,
+	})
+	active_window = top.window
+	cursor_position = { x = 20, y = 280 }
 	registered_layout.layout.recalculate(ctx)
 	cursor_position = nil
 
@@ -363,13 +371,22 @@ run("equidistant portrait slot centers choose the earlier slot", function()
 	assert_box(second.placed, { x = 10, y = 220, w = 120, h = 100 }, "second existing target")
 end)
 
-run("same-scope drag geometry reorders active rows", function()
+run("same-scope targeted drop reorders rows but geometry alone does not", function()
 	local first = make_workspace_target(1, "same-scope-drag", true)
 	local second = make_workspace_target(2, "same-scope-drag")
 	local ctx = make_context({ first, second })
 
 	registered_layout.layout.recalculate(ctx)
 	set_geometry(first, 220)
+	registered_layout.layout.recalculate(ctx)
+	assert_box(first.placed, { x = 10, y = 20, w = 120, h = 100 }, "geometry does not reorder")
+	intents.record_drop_intent(first.window, {
+		layout_name = "portrait_rows",
+		workspace_key = "same-scope-drag",
+		monitor_role = monitor_role.portrait,
+		axis = "y",
+		position = 280,
+	})
 	registered_layout.layout.recalculate(ctx)
 
 	assert_box(second.placed, { x = 10, y = 20, w = 120, h = 100 }, "top target")

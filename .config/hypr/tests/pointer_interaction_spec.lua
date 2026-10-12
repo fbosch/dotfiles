@@ -99,7 +99,7 @@ describe("pointer interaction router", function()
 		assert.same({}, calls)
 	end)
 
-	it("owns native drag dispatch and releases the cursor target", function()
+	it("owns native drag dispatch and leaves tiled drop placement to the native hook", function()
 		local target = window("0xcursor")
 		local active = window("0xgame", { content_type = "game", fullscreen = 1 })
 		local current = window("0xcursor")
@@ -113,7 +113,6 @@ describe("pointer interaction router", function()
 			"pip.drag.start:0xcursor",
 			"dispatch:drag",
 			"dispatch:drag",
-			"custom.place:0xcursor",
 		}, calls)
 	end)
 

@@ -7,6 +7,7 @@ local module_names = {
 	"lib.command",
 	"runtime.lib.hypr-ipc",
 	"plugins.window_interaction_hooks",
+	"lib.window.custom_layout",
 }
 
 local original_hl = _G.hl
@@ -20,6 +21,7 @@ describe("window interaction hooks adapter", function()
 	local loaded_plugin
 	local rebind_calls
 	local supports_updates
+	local drop_requests
 
 	before_each(function()
 		saved_modules = {}
@@ -37,6 +39,7 @@ describe("window interaction hooks adapter", function()
 		loaded_plugin = nil
 		rebind_calls = 0
 		supports_updates = true
+		drop_requests = {}
 
 		package.preload["lib.async"] = function()
 			return {
@@ -53,6 +56,14 @@ describe("window interaction hooks adapter", function()
 			return {
 				arg = function(value)
 					return value
+				end,
+			}
+		end
+
+		package.preload["lib.window.custom_layout"] = function()
+			return {
+				request_drop = function(...)
+					table.insert(drop_requests, { ... })
 				end,
 			}
 		end
@@ -119,7 +130,18 @@ describe("window interaction hooks adapter", function()
 		assert.matches("interaction%-updates%-ready", dispatches[1])
 		assert.matches("/runtime/pip%-monitor%.sock", dispatches[1])
 		assert.is_nil(handlers["window_interaction_hooks.finished"])
+		assert.is_function(handlers["window_interaction_hooks.dropped"])
 		assert.is_function(handlers["hyprland.start"])
+	end)
+
+	it("forwards the native target, destination workspace, and release point", function()
+		require("plugins.window_interaction_hooks")
+		local window = { address = "0xdragged" }
+		local workspace = { id = 7 }
+
+		handlers["window_interaction_hooks.dropped"](window, workspace, 120, 340)
+
+		assert.same({ { window, workspace, 120, 340 } }, drop_requests)
 	end)
 
 	it("reannounces readiness after startup", function()

@@ -87,20 +87,39 @@ then
 	end
 end
 
-function M.place_custom_layout_at_cursor(target)
-	local target_workspace_key = workspace_key(target and target.workspace)
-	local active_workspace = hl.get_active_workspace and hl.get_active_workspace()
-	local active_workspace_key = workspace_key(active_workspace)
-
-	-- Layout messages route to the active workspace, which may differ from the dragged window's.
+function M.request_drop(window, workspace, x, y)
+	intents.clear_drop_intent(window)
+	local context = workspace and layout_contexts[workspace.tiled_layout] or nil
+	local role = monitor_role.for_monitor(workspace and workspace.monitor)
+	local key = workspace_key(workspace)
+	local window_key = workspace_key(window and window.workspace)
+	local id = order_state.window_id(window)
 	if
-		target_workspace_key ~= nil
-		and target_workspace_key == active_workspace_key
-		and state.uses_any_custom_layout(target)
-		and state.uses_any_custom_layout({ workspace = active_workspace })
+		not context
+		or role ~= context.monitor_role
+		or not key
+		or key ~= window_key
+		or not id
+		or not window
+		or window.floating ~= false
+		or type(x) ~= "number"
+		or type(y) ~= "number"
 	then
-		dispatch(hl.dsp.layout("place-at-cursor"))
+		return false
 	end
+
+	local intent = {
+		layout_name = context.layout_name,
+		workspace_key = key,
+		monitor_role = role,
+		axis = context.axis,
+		position = context.axis == "x" and x or y,
+	}
+	if not intents.record_drop_intent(window, intent) then
+		return false
+	end
+
+	return true
 end
 
 function M.toggle_float()

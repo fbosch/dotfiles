@@ -330,13 +330,22 @@ run("equidistant ultrawide slot centers choose the earlier slot", function()
 	assert_box(second.placed, { x = 710, y = 20, w = 300, h = 500 }, "second existing target")
 end)
 
-run("same-scope drag geometry reorders active columns", function()
+run("same-scope targeted drop reorders columns but geometry alone does not", function()
 	local first = make_target(1, true)
 	local second = make_target(2)
 	local workspace = "same-scope-drag"
 
 	registered_layout.layout.recalculate(make_context({ first, second }, workspace))
 	set_geometry(first, 800)
+	registered_layout.layout.recalculate(make_context({ first, second }, workspace))
+	assert_box(first.placed, { x = 10, y = 20, w = 670, h = 500 }, "geometry does not reorder")
+	intents.record_drop_intent(first.window, {
+		layout_name = "ultrawide_master",
+		workspace_key = workspace,
+		monitor_role = monitor_role.ultrawide,
+		axis = "x",
+		position = 900,
+	})
 	registered_layout.layout.recalculate(make_context({ first, second }, workspace))
 
 	assert_box(second.placed, { x = 10, y = 20, w = 670, h = 500 }, "left target")
@@ -385,7 +394,15 @@ run("title-bar drag reorders a tiled column at the release cursor", function()
 
 	right.window.floating = false
 	set_geometry(right, 10, 330)
-	cursor_position = { x = 100, y = 30 }
+	intents.record_drop_intent(right.window, {
+		layout_name = "ultrawide_master",
+		workspace_key = "title-bar-drag",
+		monitor_role = monitor_role.ultrawide,
+		axis = "x",
+		position = 100,
+	})
+	active_window = left.window
+	cursor_position = { x = 900, y = 30 }
 	registered_layout.layout.recalculate(ctx)
 	cursor_position = nil
 

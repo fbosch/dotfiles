@@ -70,6 +70,20 @@ function M.move_active_to_position(state, key, targets, active_index, save_state
 	return false
 end
 
+function M.move_target_to_nearest_position(state, key, targets, target, save_state, axis, ratios, start, span, position)
+	local target_index = M.nearest_slot_index(position, ratios, start, span)
+	if not target_index or not order_state.target_id(target) then
+		return false
+	end
+
+	if order_state.move_target_to_visible_index(state, key, target, targets, target_index) then
+		save_state()
+		return true
+	end
+
+	return false
+end
+
 function M.place_weighted(state, targets, ratios, area, axis, scope)
 	local variable_start, variable_span, fixed_start, fixed_span = axis_fields(axis)
 	local next_start = area[variable_start]
@@ -106,6 +120,8 @@ function M.place_even(state, targets, count, area, axis, scope)
 end
 
 function M.remember_single(state, key, targets, layout_name, role, axis, center, active_index)
+	intents.prune_drop_intents(layout_name, key, targets)
+	intents.consume_drop_intent(targets[1], layout_name, key, role, axis)
 	local scope = order_state.scope(layout_name, key, role, axis)
 	order_state.sync(state, key, targets, nil, true)
 	intents.consume_transfer_intent(targets[1], role, axis, true)
@@ -118,34 +134,51 @@ function M.recalculate_ordered(opts)
 	local state = opts.state
 	local key = opts.key
 	local source_targets = opts.targets
+	-- Check globally so a workspace change still discards mismatched pending drops.
+	local has_drop_intents = intents.has_drop_intents()
+	if has_drop_intents then
+		intents.prune_drop_intents(opts.layout_name, key, source_targets)
+	end
 	local axis = opts.axis
 	local role = opts.role
 	local manual_change = state.manual_change_by_key[key]
-	local ratio_change = state.ratio_change_by_key[key]
-	if key then
-		state.ratio_change_by_key[key] = nil
-	end
 	local scope = order_state.scope(opts.layout_name, key, role, axis)
 	local cleared_stale_order = order_state.clear_order_if_stale(state, key, source_targets)
 	local needs_state_save = key and state.order_by_key[key] == nil
-	local active_before_sync = opts.active_index(source_targets)
-	local active_target_before_sync = active_before_sync and source_targets[active_before_sync] or nil
-	local active_id = order_state.target_id(active_target_before_sync)
-	local previous_targets_by_id = key and state.target_maps_by_key[key] or nil
-	local active_was_present = active_id and previous_targets_by_id and previous_targets_by_id[active_id] ~= nil
-
 	order_state.initialize_order_from_geometry(state, key, source_targets, axis, opts.start, opts.span)
 	local order, targets_by_id, _, _, added_id =
 		order_state.sync(state, key, source_targets, opts.insert_after_id, true)
 	needs_state_save = needs_state_save or cleared_stale_order or added_id ~= nil
 	local targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
-	local tiled_drag_target = intents.consume_tiled_drag(state, key, targets)
-	if tiled_drag_target then
-		local position = order_state.cursor_position(axis) or order_state.position(tiled_drag_target, axis)
-		local target_index = M.nearest_slot_index(position, opts.ratios, opts.start, opts.span)
-		if order_state.move_target_to_visible_index(state, key, tiled_drag_target, targets, target_index) then
-			state.manual_change_by_key[key] = nil
-			needs_state_save = true
+	local drop_target = nil
+	local drop_intent = nil
+	if has_drop_intents then
+		for index = 1, #targets do
+			local intent = intents.consume_drop_intent(targets[index], opts.layout_name, key, role, axis)
+			if intent then
+				drop_target = targets[index]
+				drop_intent = intent
+				break
+			end
+		end
+	end
+
+	if drop_target then
+		if
+			M.move_target_to_nearest_position(
+				state,
+				key,
+				targets,
+				drop_target,
+				opts.save_state,
+				axis,
+				opts.ratios,
+				opts.start,
+				opts.span,
+				drop_intent.position
+			)
+		then
+			needs_state_save = false
 			targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
 		end
 	end
@@ -219,30 +252,6 @@ function M.recalculate_ordered(opts)
 	elseif manual_change then
 		state.manual_change_by_key[key] = nil
 		needs_state_save = true
-	-- Ratio changes move window centers during relayout and must not be mistaken for drag reordering.
-	elseif not ratio_change then
-		local active = opts.active_index(targets)
-		local active_target = active and targets[active] or nil
-		if
-			active_was_present
-			and active_target
-			and order_state.same_scope(state, active_target, scope)
-			and order_state.position_changed(state, active_target, scope, axis)
-			and order_state.position_in_area(active_target, axis, opts.start, opts.span)
-			and M.move_active_to_position(
-				state,
-				key,
-				targets,
-				opts.active_index,
-				opts.save_state,
-				axis,
-				opts.ratios,
-				opts.start,
-				opts.span
-			)
-		then
-			targets = order_state.targets_from_order(state, key, order, targets_by_id, source_targets)
-		end
 	end
 
 	order_state.remember_active(state, key, source_targets, opts.active_index)

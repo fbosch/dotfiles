@@ -27,6 +27,10 @@ local ok, err = pcall(function()
 	end)
 	updates_supported = supports_ok and supported == true
 
+	hl.on("window_interaction_hooks.dropped", function(window, workspace, x, y)
+		require("lib.window.custom_layout").request_drop(window, workspace, x, y)
+	end)
+
 	local function announce_ready()
 		if updates_supported then
 			notify(pip_socket, "interaction-updates-ready")
