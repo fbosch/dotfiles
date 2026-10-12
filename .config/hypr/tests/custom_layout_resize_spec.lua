@@ -5,17 +5,15 @@ package.path = config_dir .. "/?.lua;" .. config_dir .. "/?/init.lua;" .. packag
 local active_window
 local dispatched
 local animations
-local command_handler
 local plugin_args
 local plugin_stops
 local restored
 local active_workspace
 local drop_intents
 
-local function load_module(with_plugin)
+local function load_module(with_plugin, supports_direct_updates)
 	dispatched = {}
 	animations = {}
-	command_handler = nil
 	plugin_args = nil
 	plugin_stops = 0
 	restored = 0
@@ -31,6 +29,9 @@ local function load_module(with_plugin)
 			stop = function()
 				plugin_stops = plugin_stops + 1
 				return true
+			end,
+			supports_direct_updates = function()
+				return supports_direct_updates ~= false
 			end,
 		}
 	end
@@ -58,11 +59,6 @@ local function load_module(with_plugin)
 		end,
 		animation = function(value)
 			animations[#animations + 1] = value
-		end,
-		on = function(name, callback)
-			assert.are.equal("custom_layout_resize.command", name)
-			command_handler = callback
-			return { name = name }
 		end,
 		get_active_workspace = function()
 			return active_workspace
@@ -179,20 +175,26 @@ describe("custom layout resize adapter", function()
 		assert.are.equal(0, #drop_intents)
 	end)
 
-	it("delegates resize mechanics to the plugin", function()
+	it("delegates resize mechanics to the plugin without a Lua command relay", function()
 		local custom_layout = load_module(true)
 
 		assert.is_true(custom_layout.start_custom_layout_resize(active_window))
 		assert.are.same({ "lua:ultrawide_master", "lua:portrait_rows", "HDMI-A-2", "non-resizable" }, plugin_args)
 		assert.are.same({ leaf = "windowsMove", enabled = false }, animations[1])
 
-		command_handler("resize-x-at address:0xabc right 420")
-		assert.are.equal("layout", dispatched[#dispatched].op)
-		assert.are.equal("resize-x-at address:0xabc right 420", dispatched[#dispatched].value)
+		assert.are.equal(0, #dispatched)
 
 		custom_layout.stop_custom_layout_resize()
 		assert.are.equal(1, plugin_stops)
 		assert.are.equal(1, restored)
+	end)
+
+	it("requires the native direct-update capability", function()
+		local custom_layout = load_module(true, false)
+
+		assert.is_true(custom_layout.start_custom_layout_resize(active_window))
+		assert.is_nil(plugin_args)
+		assert.are.equal(0, #dispatched)
 	end)
 
 	it("fails closed when the required plugin is unavailable", function()

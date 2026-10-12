@@ -8,7 +8,11 @@ local window_tags = require("lib.window_tags")
 local float_toggle = hl.dsp.window.float()
 local resize_plugin = hl.plugin and hl.plugin.custom_layout_resize or nil
 local native_resize_active = false
-local native_resize_ready = false
+local native_resize_ready = resize_plugin ~= nil
+	and type(resize_plugin.start) == "function"
+	and type(resize_plugin.stop) == "function"
+	and type(resize_plugin.supports_direct_updates) == "function"
+	and resize_plugin.supports_direct_updates() == true
 
 local ultrawide_layout = "lua:ultrawide_master"
 local portrait_layout = "lua:portrait_rows"
@@ -69,21 +73,6 @@ local function restore_resize_animation()
 		require("profiles").apply_current()
 	else
 		require("animations").restore_windows_move()
-	end
-end
-
-if
-	resize_plugin
-	and type(resize_plugin.start) == "function"
-	and type(resize_plugin.stop) == "function"
-	and type(hl.on) == "function"
-then
-	local ok, subscription = pcall(hl.on, "custom_layout_resize.command", function(message)
-		dispatch(hl.dsp.layout(message))
-	end)
-	if ok then
-		native_resize_ready = true
-		M._resize_command_subscription = subscription
 	end
 end
 
