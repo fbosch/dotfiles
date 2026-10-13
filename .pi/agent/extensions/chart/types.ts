@@ -8,6 +8,8 @@ import {
   type Component,
   getCellDimensions,
   Image,
+  type TuiMouseEvent,
+  type TuiMouseEventResult,
   truncateToWidth,
 } from "@earendil-works/pi-tui";
 import type { ResvgRenderOptions } from "@resvg/resvg-js";
@@ -543,6 +545,10 @@ function padSvgToCellGrid(svg: string, targetHeightPx: number): string {
   return `${paddedTag}${svg.slice(openingTagEnd + 1)}`;
 }
 
+type MouseAwareImage = Image & {
+  handleMouse?: (event: TuiMouseEvent) => TuiMouseEventResult | undefined;
+};
+
 /** Renders only from the stored data so resizing never mutates the tool result. */
 export class ChartComponent<TDetails extends ChartDetails, TLayout extends ChartLayout>
   implements Component
@@ -553,6 +559,7 @@ export class ChartComponent<TDetails extends ChartDetails, TLayout extends Chart
 
   // Stable Image identity lets Pi reuse Kitty uploads across unrelated input redraws.
   private readonly cache = new Map<string, Image>();
+  private renderedImage: MouseAwareImage | undefined;
   private readonly errors = new Set<string>();
   private readonly rasterQueueKey = {};
   private pending: { key: string; controller: AbortController; generation: number } | undefined;
@@ -585,6 +592,10 @@ export class ChartComponent<TDetails extends ChartDetails, TLayout extends Chart
     return this.renderer === renderer;
   }
 
+  handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+    return this.renderedImage?.handleMouse?.(event);
+  }
+
   render(width: number): string[] {
     const dimensions = validCellDimensions(getCellDimensions());
     // Image reserves two columns from its input width before applying maxWidthCells.
@@ -596,6 +607,7 @@ export class ChartComponent<TDetails extends ChartDetails, TLayout extends Chart
     };
     const cacheKey = rasterKeyString(key);
     const image = this.cache.get(cacheKey);
+    this.renderedImage = image;
     if (image) return image.render(width);
     if (this.errors.has(cacheKey)) {
       return [truncateToWidth(this.theme.fg("error", this.renderer.unavailableText), width)];
@@ -614,6 +626,7 @@ export class ChartComponent<TDetails extends ChartDetails, TLayout extends Chart
 
   private resetRasters(): void {
     this.cache.clear();
+    this.renderedImage = undefined;
     this.errors.clear();
     this.pending?.controller.abort();
     this.pending = undefined;

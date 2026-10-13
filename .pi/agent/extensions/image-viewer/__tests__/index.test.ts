@@ -3,13 +3,13 @@ import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  Container,
   getCapabilities,
   Image,
   setCapabilities,
   type Terminal,
   TuiAltScreen,
 } from "@earendil-works/pi-tui";
+import { ToolExecutionComponent } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/components/tool-execution.js";
 import { installImageOpenClickHandler } from "../open-image";
 
 class TestTerminal implements Terminal {
@@ -58,7 +58,7 @@ describe("inline image viewer", () => {
     for (const dispose of disposers.splice(0)) dispose();
   });
 
-  test("opens only a clicked image area from tool output via the injected opener", async () => {
+  test("opens only a clicked image block in Pi's tool output via the injected opener", async () => {
     const previousCapabilities = getCapabilities();
     setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
     const root = await mkdtemp(join(tmpdir(), "pi-image-viewer-test-"));
@@ -87,25 +87,43 @@ describe("inline image viewer", () => {
 
     const terminal = new TestTerminal();
     const tui = new TuiAltScreen(terminal, false, undefined, { openUrl: () => {} });
-    const image = new Image(
-      base64,
-      "image/png",
-      { fallbackColor: (text) => text },
-      {
-        maxWidthCells: 10,
-      },
+    const themeKey = Symbol.for("@earendil-works/pi-coding-agent:theme");
+    const hadTheme = Reflect.has(globalThis, themeKey);
+    const previousTheme = Reflect.get(globalThis, themeKey);
+    Reflect.set(globalThis, themeKey, {
+      fg: (_color: string, text: string) => text,
+      bg: (_color: string, text: string) => text,
+      bold: (text: string) => text,
+    });
+    const toolRow = new ToolExecutionComponent(
+      "image",
+      "image-1",
+      {},
+      { imageWidthCells: 10 },
+      undefined,
+      { requestRender: () => undefined } as never,
+      process.cwd(),
     );
-    const content = new Container();
-    content.addChild(image);
-    tui.addChild(content);
+    toolRow.updateResult({
+      content: [{ type: "image", data: base64, mimeType: "image/png" }],
+      isError: false,
+    });
+    tui.addChild(toolRow);
+    const rendered = toolRow.render(80);
+    const imageRow = rendered.findIndex((line) => line.includes("\u001b_G"));
 
     try {
+      expect(imageRow).toBeGreaterThanOrEqual(0);
       tui.start();
       tui.renderNow();
-      sendClick(terminal, 12, 2);
-      sendClick(terminal, 3, 2);
-      await openedOnce;
+      sendClick(terminal, 80, imageRow + 1);
+      sendClick(terminal, 3, imageRow + 1);
+      const didOpen = await Promise.race([
+        openedOnce.then(() => true),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 100)),
+      ]);
 
+      expect(didOpen).toBe(true);
       expect(opened).toHaveLength(1);
       expect(opened[0]?.bytes).toEqual(bytes);
       expect(opened[0]?.path).toEndWith(".png");
@@ -113,6 +131,8 @@ describe("inline image viewer", () => {
       expect(notifications).toEqual([]);
     } finally {
       tui.stop();
+      if (hadTheme) Reflect.set(globalThis, themeKey, previousTheme);
+      else Reflect.deleteProperty(globalThis, themeKey);
       setCapabilities(previousCapabilities);
       await rm(root, { recursive: true, force: true });
     }

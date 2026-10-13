@@ -12,6 +12,8 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
 import {
+  getCapabilities,
+  getCellDimensions,
   getPngDimensions,
   Image,
   setCapabilities,
@@ -847,6 +849,98 @@ describe("pie chart", () => {
     expect(ready.length).toBeGreaterThan(1);
     expect(toolRow.render(66)).toHaveLength(ready.length);
     expect(rasterCalls).toBe(1);
+  });
+
+  test("opens a cached chart image when clicked in its Pi tool row", async () => {
+    const previousCapabilities = getCapabilities();
+    const previousCellDimensions = getCellDimensions();
+    const root = await mkdtemp(join(tmpdir(), "pi-chart-image-click-"));
+    setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+    setCellDimensions({ widthPx: 9, heightPx: 18 });
+    Reflect.set(globalThis, Symbol.for("@earendil-works/pi-coding-agent:theme"), theme);
+
+    let resolveOpened: (() => void) | undefined;
+    const opened = new Promise<boolean>((resolve) => {
+      resolveOpened = () => resolve(true);
+    });
+    const { installImageOpenClickHandler } = await import("../../image-viewer/open-image");
+    const dispose = installImageOpenClickHandler({
+      platform: "linux",
+      tempDirectory: root,
+      notify: () => {},
+      openFile: async () => resolveOpened?.(),
+    });
+
+    try {
+      const renderers = {
+        renderShell: "self" as const,
+        renderCall: () => new Text("", 0, 0),
+        renderResult(
+          result: { details?: unknown },
+          _options: unknown,
+          renderTheme: Theme,
+          context: { lastComponent?: unknown; invalidate: () => void },
+        ) {
+          const previous = context.lastComponent;
+          if (previous instanceof ChartComponent) {
+            previous.update(renderTheme);
+            return previous;
+          }
+          // SAFETY: this test supplies the matching chart details in updateResult below.
+          const details = result.details as { rows: typeof scatterRows; imageWidthCells: number };
+          return new ChartComponent(
+            details,
+            renderTheme,
+            context.invalidate,
+            scatterChartRenderer,
+            async () => pngHeader(),
+          );
+        },
+      };
+      const toolRow = new ToolExecutionComponent(
+        "chart",
+        "chart-click",
+        {},
+        { showImages: false },
+        renderers,
+        { requestRender: () => undefined } as never,
+        process.cwd(),
+      );
+      toolRow.updateResult({
+        content: [{ type: "text", text: "summary" }],
+        details: { rows: scatterRows, imageWidthCells: 60 },
+        isError: false,
+      });
+
+      expect(toolRow.render(66)).toEqual([]);
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      const rendered = toolRow.render(66);
+      expect(rendered.join("\n")).toContain("\u001b_G");
+
+      toolRow.handleMouse({
+        type: "click",
+        button: "left",
+        x: 2,
+        y: 1,
+        screenX: 2,
+        screenY: 1,
+        width: 66,
+        height: rendered.length,
+        shift: false,
+        alt: false,
+        ctrl: false,
+      });
+      const didOpen = await Promise.race([
+        opened,
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 100)),
+      ]);
+      expect(didOpen).toBe(true);
+    } finally {
+      dispose();
+      setCapabilities(previousCapabilities);
+      setCellDimensions(previousCellDimensions);
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   test("keeps raster errors visible after hiding the pending tool row", async () => {
