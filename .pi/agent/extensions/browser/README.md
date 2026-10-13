@@ -58,8 +58,11 @@ devenv test --option enterTest:string 'devenv tasks run test:pi-browser'
 
 The scoped task runs browser tests and the Pi TypeScript check.
 
-Live native MCP checks passed for Chrome open/snapshot/fill/click and Firefox
-open/snapshot/metadata/fill/click in one chain. This environment still loses the
-created Firefox tab binding between chains: a later `select_page` cannot find
-the index returned by `new_page`. Cross-call Firefox validation remains blocked.
-Do not replay a failed action automatically.
+Live native MCP checks passed for opening, snapshots, filling, and clicking in
+Chrome. Firefox passed snapshots and DOM metadata reads, and a separate native
+chain passed opening, snapshots, filling, and clicking.
+
+Firefox still loses created-tab bindings between chains in this environment.
+A later `select_page` cannot find the index returned by `new_page`.
+Cross-call Firefox validation remains blocked. Do not replay a failed action
+automatically.

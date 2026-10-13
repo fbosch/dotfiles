@@ -157,6 +157,22 @@ for (const backend of ["chrome", "firefox"] as const) {
       );
     });
 
+    test("rejects mistyped field actions before a focus click or another native effect", async () => {
+      const f = browserFixture(backend);
+      const browser = createBrowserBackends()(f.pi, f.ctx, { backend, pageId: 3 });
+      await browser.snapshot();
+      await expect(
+        browser.act({ action: "type", target: "@e2", value: "supplied" }),
+      ).rejects.toThrow("require a text field");
+      await expect(
+        browser.act({ action: "fill", target: "@e2", value: "supplied" }),
+      ).rejects.toThrow("require a text field");
+      await expect(
+        browser.act({ action: "select", target: "@e1", value: "supplied" }),
+      ).rejects.toThrow("requires a combobox");
+      expect(f.actions).toHaveLength(0);
+    });
+
     test("checks checkboxes idempotently and rejects missing values before native execution", async () => {
       const f = browserFixture(backend);
       const browser = createBrowserBackends()(f.pi, f.ctx, { backend, pageId: 3 });

@@ -336,7 +336,7 @@ in
     "test:pi-browser".exec = ''
       set -euo pipefail
       cd .pi/agent
-      bun test extensions/agent-browser
+      bun test extensions/browser
       bun run typecheck
     '';
 

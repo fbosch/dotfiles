@@ -434,10 +434,7 @@ function completionKey(candidate: RunCandidate): string {
   ]);
 }
 
-export default function agentBrowserExtension(
-  pi: ExtensionAPI,
-  classify = requestClassifier,
-): void {
+export default function browserExtension(pi: ExtensionAPI, classify = requestClassifier): void {
   const getBrowser = createBrowserBackends();
   pi.registerTool({
     ...INACTIVE_SPECIALIST_TOOL,

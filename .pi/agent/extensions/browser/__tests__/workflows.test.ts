@@ -7,7 +7,7 @@ import type { ModelRegistry } from "@earendil-works/pi-coding-agent";
 import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-classifier-registry";
 import { type ClassifierRegistry, createClassifierRequester } from "../../../lib/classifier";
 import type { BrowserBackend } from "../backends";
-import agentBrowserExtension from "../index";
+import browserExtension from "../index";
 import { browserFixture } from "./browser-fixture";
 
 let registry: ModelRegistry;
@@ -62,7 +62,7 @@ function workflow(
     classify,
   } as ModelRegistry;
   const ctx = { ...f.ctx, modelRegistry };
-  agentBrowserExtension(f.pi, createClassifierRequester(Date.now, agentDirectory));
+  browserExtension(f.pi, createClassifierRequester(Date.now, agentDirectory));
   const target = backend === "agent-browser" ? {} : { backend, pageId: 3 };
   const execute = (name: string, params: Record<string, unknown>) =>
     f.getTool(name).execute("workflow", { ...target, ...params }, undefined, undefined, ctx);

@@ -347,6 +347,16 @@ function mcpDriver(
       const control = state.refs.get(ref);
       if (!control)
         throw new Error("Unknown or stale browser ref; use the latest browser_snapshot refs");
+      // Chrome typing needs a focus click; do not turn a mistaken text target into a button click.
+      if (
+        (action === "fill" || action === "type") &&
+        !["textbox", "searchbox", "combobox"].includes(control.role)
+      ) {
+        throw new Error("Fill and type require a text field or combobox");
+      }
+      if (action === "select" && control.role !== "combobox") {
+        throw new Error("Select requires a combobox");
+      }
       if ((action === "check" || action === "uncheck") && control.role !== "checkbox") {
         throw new Error("Check and uncheck require a checkbox");
       }

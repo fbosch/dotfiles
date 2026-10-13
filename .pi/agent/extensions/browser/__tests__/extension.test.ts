@@ -6,7 +6,7 @@ import type { ClassifierAnswer, ClassifierContext, ClassifierResult } from "@ear
 import type { ExtensionAPI, ModelRegistry, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-classifier-registry";
 import { type ClassifierRegistry, createClassifierRequester } from "../../../lib/classifier";
-import agentBrowserExtension from "..";
+import browserExtension from "..";
 import { browserArgs } from "../backends";
 import {
   createDecisionRequest,
@@ -22,7 +22,7 @@ beforeAll(async () => {
   registry = await createNativeClassifierRegistry();
 });
 beforeEach(() => {
-  agentDirectory = mkdtempSync(join(tmpdir(), "agent-browser-classifier-test-"));
+  agentDirectory = mkdtempSync(join(tmpdir(), "browser-classifier-test-"));
 });
 afterEach(() => rmSync(agentDirectory, { recursive: true, force: true }));
 
@@ -41,10 +41,10 @@ function registryWithClassifier(classify: ClassifierRegistry["classify"]): Class
   return { findOfType: registry.findOfType.bind(registry), classify };
 }
 
-describe("agent-browser extension", () => {
+describe("browser extension", () => {
   test("registers browser operations as native deferred specialists", () => {
     const tools: ToolDefinition[] = [];
-    agentBrowserExtension({
+    browserExtension({
       registerTool: (tool: ToolDefinition) => tools.push(tool),
     } as unknown as ExtensionAPI);
     expect(tools.map((tool) => tool.name)).toEqual([
