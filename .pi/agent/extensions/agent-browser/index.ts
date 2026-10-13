@@ -1,16 +1,10 @@
 import { type ClassifierAnswer, type ClassifierContext, StringEnum } from "@earendil-works/pi-ai";
-import {
-  DEFAULT_MAX_BYTES,
-  DEFAULT_MAX_LINES,
-  type ExtensionAPI,
-  truncateHead,
-} from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { type Static, Type } from "typebox";
 import { requestClassifier } from "../../lib/classifier";
 import { INACTIVE_SPECIALIST_TOOL } from "../../lib/tool-exposure";
+import { type BrowserInteraction, createBrowserBackends } from "./backends";
 
-const ENGINE = "lightpanda";
-const COMMAND_TIMEOUT_MS = 30_000;
 const DECISION_TIMEOUT_MS = 2_000;
 const MAX_PAGE_STATE_CHARS = 24_000;
 const MAX_ACTIONS = 20;
@@ -20,17 +14,35 @@ const DEFAULT_STEP_CONFIDENCE = 0.75;
 const DEFAULT_RUN_STEPS = 5;
 const MAX_RUN_STEPS = 10;
 const INTERACTIVE_SNAPSHOT_LINE =
-  /^- (button|link|textbox|searchbox|checkbox|radio|combobox) "([^"]*)" \[([^\]]*\bref=(e\d+)[^\]]*)\](?::.*)?$/u;
+  /^- (button|link|textbox|searchbox|checkbox|radio|combobox) "((?:\\.|[^"\\])*)" \[([^\]]*\bref=(e\d+)[^\]]*)\](?::.*)?$/u;
 const DEFAULT_STEP_SAFETY_CONFIDENCE = 0.9;
-const CLICKABLE_SNAPSHOT_LINE = /^- (?:button|link) "([^"]+)" \[ref=(e\d+)(?:,[^\]]*)?\]$/u;
+const CLICKABLE_SNAPSHOT_LINE =
+  /^- (?:button|link) "((?:\\.|[^"\\])+)" \[ref=(e\d+)(?:,[^\]]*)?\]$/u;
 
+const BackendParameter = Type.Optional(
+  StringEnum(["agent-browser", "chrome", "firefox"] as const, {
+    description:
+      "Browser backend. Defaults to the session-owned agent-browser CLI using Lightpanda. MCP backends use existing native server connections.",
+  }),
+);
+const TargetParameters = {
+  backend: BackendParameter,
+  pageId: Type.Optional(
+    Type.Integer({
+      minimum: 0,
+      description:
+        "MCP page ID, or Firefox tab index. Omit to use the last page opened by browser_open on this backend.",
+    }),
+  ),
+};
 const OpenParameters = Type.Object(
-  { url: Type.String({ minLength: 1, maxLength: 4_096 }) },
+  { backend: BackendParameter, url: Type.String({ minLength: 1, maxLength: 4_096 }) },
   { additionalProperties: false },
 );
 
 const SnapshotParameters = Type.Object(
   {
+    ...TargetParameters,
     interactiveOnly: Type.Optional(Type.Boolean()),
     includeUrls: Type.Optional(Type.Boolean()),
     selector: Type.Optional(Type.String({ minLength: 1, maxLength: 1_000 })),
@@ -40,6 +52,7 @@ const SnapshotParameters = Type.Object(
 
 const ActParameters = Type.Object(
   {
+    ...TargetParameters,
     action: StringEnum([
       "click",
       "fill",
@@ -75,6 +88,7 @@ const DecideParameters = Type.Object(
 
 const StepParameters = Type.Object(
   {
+    ...TargetParameters,
     objective: Type.String({ minLength: 1, maxLength: 2_000 }),
     confidenceThreshold: Type.Optional(Type.Number({ minimum: 0.5, maximum: 1 })),
   },
@@ -92,6 +106,7 @@ const RunInputValue = Type.Object(
 
 const RunParameters = Type.Object(
   {
+    ...TargetParameters,
     objective: Type.String({ minLength: 1, maxLength: 2_000 }),
     inputs: Type.Optional(Type.Array(RunInputValue, { maxItems: 10 })),
     maxSteps: Type.Optional(Type.Integer({ minimum: 1, maximum: MAX_RUN_STEPS })),
@@ -119,7 +134,7 @@ export interface ClickCandidate {
 export interface RunCandidate {
   readonly id: string;
   readonly description: string;
-  readonly command: readonly string[];
+  readonly interaction: BrowserInteraction;
   readonly authorization: "choice" | "independent";
   readonly trace: {
     readonly action: "click" | "fill" | "check" | "uncheck" | "select";
@@ -147,66 +162,9 @@ export interface StepDecision {
   readonly safetyProbability?: number;
 }
 
-interface CommandResult {
-  readonly stdout: string;
-  readonly stderr: string;
-  readonly code: number | null;
-  readonly killed: boolean;
-}
-
 export interface BrowserDecision {
   readonly choice: string;
   readonly probabilities: Readonly<Record<string, number>>;
-}
-
-function sessionName(sessionId: string): string {
-  const safe = sessionId.replace(/[^a-zA-Z0-9_-]/gu, "-").slice(0, 48);
-  return `pi-${safe || "browser"}`;
-}
-
-export function browserArgs(sessionId: string, command: readonly string[]): string[] {
-  return ["--engine", ENGINE, "--session", sessionName(sessionId), ...command];
-}
-
-function commandOutput(result: CommandResult): string {
-  const output = [result.stdout.trimEnd(), result.stderr.trimEnd()].filter(Boolean).join("\n");
-  return output || `(agent-browser exited with code ${result.code ?? "unknown"})`;
-}
-
-function boundedOutput(output: string): string {
-  const truncated = truncateHead(output, {
-    maxBytes: DEFAULT_MAX_BYTES,
-    maxLines: DEFAULT_MAX_LINES,
-  });
-  return truncated.truncated
-    ? `${truncated.content}\n\n[agent-browser output truncated]`
-    : truncated.content;
-}
-
-async function runBrowser(
-  pi: ExtensionAPI,
-  sessionId: string,
-  command: readonly string[],
-  signal?: AbortSignal,
-): Promise<CommandResult> {
-  const result = await pi.exec("agent-browser", browserArgs(sessionId, command), {
-    ...(signal === undefined ? {} : { signal }),
-    timeout: COMMAND_TIMEOUT_MS,
-  });
-  if (result.code !== 0) throw new Error(commandOutput(result));
-  return result;
-}
-
-async function settleAfterAction(
-  pi: ExtensionAPI,
-  sessionId: string,
-  action: RunCandidate["trace"]["action"],
-  signal?: AbortSignal,
-): Promise<void> {
-  if (action !== "click") return;
-  // A separate CLI click can resolve before Lightpanda announces the navigation it initiated.
-  await runBrowser(pi, sessionId, ["wait", "150"], signal);
-  await runBrowser(pi, sessionId, ["wait", "--load", "domcontentloaded"], signal);
 }
 
 export function createDecisionRequest(input: DecideInput): ClassifierContext {
@@ -238,11 +196,21 @@ function browserDecision(answer: ClassifierAnswer | undefined): BrowserDecision 
     : undefined;
 }
 
+function decodedLabel(label: string): string {
+  try {
+    const value: unknown = JSON.parse(`"${label}"`);
+    if (typeof value === "string") return value;
+  } catch {
+    throw new Error("Browser snapshot contains an invalid quoted label");
+  }
+  throw new Error("Browser snapshot contains a non-string label");
+}
+
 export function parseClickCandidates(snapshot: string): ClickCandidate[] {
   const candidates: ClickCandidate[] = [];
   for (const line of snapshot.split(/\r?\n/u)) {
     const match = CLICKABLE_SNAPSHOT_LINE.exec(line.trim());
-    const label = match?.[1];
+    const label = match?.[1] === undefined ? undefined : decodedLabel(match[1]);
     const ref = match?.[2];
     if (label === undefined || ref === undefined) continue;
     candidates.push({
@@ -285,7 +253,7 @@ export function parseRunCandidates(
   const hasNamedMatches = snapshot.split(/\r?\n/u).some((line) => {
     const match = INTERACTIVE_SNAPSHOT_LINE.exec(line.trim());
     const role = match?.[1];
-    const label = match?.[2];
+    const label = match?.[2] === undefined ? undefined : decodedLabel(match[2]);
     return (
       (role === "textbox" || role === "searchbox" || role === "combobox") &&
       label !== undefined &&
@@ -299,7 +267,7 @@ export function parseRunCandidates(
   for (const line of snapshot.split(/\r?\n/u)) {
     const match = INTERACTIVE_SNAPSHOT_LINE.exec(line.trim());
     const role = match?.[1];
-    const label = match?.[2];
+    const label = match?.[2] === undefined ? undefined : decodedLabel(match[2]);
     const rawRef = match?.[4];
     const attributes = match?.[3];
     if (
@@ -317,7 +285,7 @@ export function parseRunCandidates(
       add({
         id: `click:${rawRef}`,
         description: `Click ${JSON.stringify(displayLabel)} at ${ref}.`,
-        command: ["click", ref],
+        interaction: { action: "click", target: ref },
         authorization: "independent",
         trace: { action: "click", ref, label: displayLabel },
       });
@@ -328,7 +296,7 @@ export function parseRunCandidates(
       add({
         id: `${action}:${rawRef}`,
         description: `${action === "click" ? "Click" : action === "check" ? "Check" : "Uncheck"} ${JSON.stringify(displayLabel)} at ${ref}.`,
-        command: [action, ref],
+        interaction: { action, target: ref },
         authorization: "choice",
         trace: { action, ref, label: displayLabel },
       });
@@ -341,7 +309,7 @@ export function parseRunCandidates(
         add({
           id: `${action}:${rawRef}:${inputIndex}`,
           description: `${action === "select" ? "Select" : "Fill"} ${summarizedInput(input)} in ${JSON.stringify(displayLabel)} at ${ref}.`,
-          command: [action, ref, input.value],
+          interaction: { action, target: ref, value: input.value },
           authorization: "choice",
           trace: { action, ref, label: displayLabel, input: input.name },
         });
@@ -369,13 +337,19 @@ export function findDeterministicInputCandidate(
 }
 
 export function redactSensitiveInputs(snapshot: string, inputs: readonly RunValue[] = []): string {
-  return inputs.reduce(
-    (redacted, input) =>
-      input.sensitive === true && input.value.length > 0
-        ? redacted.replaceAll(input.value, `[redacted:${input.name}]`)
-        : redacted,
-    snapshot,
-  );
+  return inputs.reduce((redacted, input) => {
+    if (input.sensitive !== true || input.value.length === 0) return redacted;
+    // Native snapshots and page URLs can escape the same supplied value differently.
+    const representations = new Set([
+      input.value,
+      JSON.stringify(input.value).slice(1, -1),
+      encodeURIComponent(input.value),
+      new URLSearchParams({ value: input.value }).toString().slice("value=".length),
+    ]);
+    return [...representations]
+      .sort((left, right) => right.length - left.length)
+      .reduce((text, value) => text.replaceAll(value, `[redacted:${input.name}]`), redacted);
+  }, snapshot);
 }
 
 export function createRunAuthorizationRequest(
@@ -450,22 +424,33 @@ export function applyStepSafety(
     : { ...decision, executed: false, reason: "unsafe_or_uncertain", safetyProbability };
 }
 
-export default function agentBrowserExtension(pi: ExtensionAPI): void {
+function completionKey(candidate: RunCandidate): string {
+  // shortcut: MCP refs are snapshot-local, so completion uses labels and input names.
+  // Same-labelled controls share completion; replace this when adapters expose stable control identities.
+  return JSON.stringify([
+    candidate.trace.action,
+    candidate.trace.label,
+    candidate.trace.input ?? null,
+  ]);
+}
+
+export default function agentBrowserExtension(
+  pi: ExtensionAPI,
+  classify = requestClassifier,
+): void {
+  const getBrowser = createBrowserBackends();
   pi.registerTool({
     ...INACTIVE_SPECIALIST_TOOL,
     name: "browser_open",
+    executionMode: "sequential",
     label: "Open browser page",
-    description: "Open a URL in the session-owned agent-browser Lightpanda instance.",
+    description:
+      "Open a URL on agent-browser, Chrome MCP, or Firefox MCP. Returns the MCP pageId and binds subsequent calls on that backend to the opened page.",
     parameters: OpenParameters,
     async execute(_toolCallId, params: OpenInput, signal, _onUpdate, ctx) {
-      const result = await runBrowser(
-        pi,
-        ctx.sessionManager.getSessionId(),
-        ["open", params.url],
-        signal,
-      );
+      const result = await getBrowser(pi, ctx, params, signal).open(params.url);
       return {
-        content: [{ type: "text", text: boundedOutput(commandOutput(result)) }],
+        content: [{ type: "text", text: result }],
         details: {},
       };
     },
@@ -474,18 +459,15 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     ...INACTIVE_SPECIALIST_TOOL,
     name: "browser_snapshot",
+    executionMode: "sequential",
     label: "Snapshot browser page",
     description:
-      "Read the current page accessibility snapshot and stable element refs from agent-browser. Output is bounded to 50KB or 2000 lines.",
+      "Read a bounded browser snapshot with common control refs from agent-browser, Chrome MCP, or Firefox MCP. MCP actions require these refs, not native UIDs.",
     parameters: SnapshotParameters,
     async execute(_toolCallId, params: SnapshotInput, signal, _onUpdate, ctx) {
-      const command = ["snapshot"];
-      if (params.interactiveOnly !== false) command.push("-i");
-      if (params.includeUrls === true) command.push("-u");
-      if (params.selector !== undefined) command.push("-s", params.selector);
-      const result = await runBrowser(pi, ctx.sessionManager.getSessionId(), command, signal);
+      const result = await getBrowser(pi, ctx, params, signal).snapshot(params);
       return {
-        content: [{ type: "text", text: boundedOutput(commandOutput(result)) }],
+        content: [{ type: "text", text: result }],
         details: {},
       };
     },
@@ -494,9 +476,10 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
   pi.registerTool({
     ...INACTIVE_SPECIALIST_TOOL,
     name: "browser_act",
+    executionMode: "sequential",
     label: "Act in browser",
     description:
-      "Perform one bounded interaction in the current agent-browser page. Use refs from a fresh browser_snapshot.",
+      "Perform one explicit browser interaction on the selected backend. Use current browser_snapshot refs; for press, target is a key combination.",
     parameters: ActParameters,
     async execute(_toolCallId, params: ActInput, signal, _onUpdate, ctx) {
       const needsValue =
@@ -507,11 +490,9 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
       if (!needsValue && params.value !== undefined) {
         throw new Error(`${params.action} does not accept value`);
       }
-      const command = [params.action, params.target];
-      if (params.value !== undefined) command.push(params.value);
-      const result = await runBrowser(pi, ctx.sessionManager.getSessionId(), command, signal);
+      const result = await getBrowser(pi, ctx, params, signal).act(params);
       return {
-        content: [{ type: "text", text: boundedOutput(commandOutput(result)) }],
+        content: [{ type: "text", text: result }],
         details: {},
       };
     },
@@ -526,9 +507,8 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
     parameters: StepParameters,
     executionMode: "sequential",
     async execute(_toolCallId, params: StepInput, signal, _onUpdate, ctx) {
-      const sessionId = ctx.sessionManager.getSessionId();
-      const beforeResult = await runBrowser(pi, sessionId, ["snapshot", "-i", "-u"], signal);
-      const before = boundedOutput(commandOutput(beforeResult));
+      const browser = getBrowser(pi, ctx, params, signal);
+      const before = await browser.snapshot({ interactiveOnly: false, includeUrls: true });
       const candidates = parseClickCandidates(before);
       if (candidates.length === 0) {
         return {
@@ -537,7 +517,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
         };
       }
 
-      const choiceResult = await requestClassifier(
+      const choiceResult = await classify(
         ctx.modelRegistry,
         createDecisionRequest({
           objective: params.objective,
@@ -561,7 +541,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
         params.confidenceThreshold ?? DEFAULT_STEP_CONFIDENCE,
       );
       if (step.executed && step.candidate !== undefined) {
-        const safetyResult = await requestClassifier(
+        const safetyResult = await classify(
           ctx.modelRegistry,
           createStepSafetyRequest(params.objective, before, step.candidate),
           {
@@ -591,10 +571,9 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
         };
       }
 
-      await runBrowser(pi, sessionId, ["click", step.candidate.ref], signal);
-      await settleAfterAction(pi, sessionId, "click", signal);
-      const afterResult = await runBrowser(pi, sessionId, ["snapshot", "-i", "-u"], signal);
-      const after = boundedOutput(commandOutput(afterResult));
+      await browser.act({ action: "click", target: step.candidate.ref });
+      await browser.settle("click");
+      const after = await browser.snapshot({ interactiveOnly: false, includeUrls: true });
       return {
         content: [
           {
@@ -616,7 +595,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
     parameters: RunParameters,
     executionMode: "sequential",
     async execute(_toolCallId, params: RunInput, signal, _onUpdate, ctx) {
-      const sessionId = ctx.sessionManager.getSessionId();
+      const browser = getBrowser(pi, ctx, params, signal);
       const trace: RunTraceEntry[] = [];
       const seen = new Set<string>();
       const completed = new Set<string>();
@@ -629,20 +608,20 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
       let stopReason = "max_steps";
 
       for (let stepNumber = 1; stepNumber <= maxSteps; stepNumber += 1) {
-        const snapshotResult = await runBrowser(pi, sessionId, ["snapshot", "-i", "-u"], signal);
-        const redactedSnapshot = redactSensitiveInputs(
-          boundedOutput(commandOutput(snapshotResult)),
-          params.inputs,
-        );
+        const snapshotResult = await browser.snapshot({
+          interactiveOnly: false,
+          includeUrls: true,
+        });
+        const redactedSnapshot = redactSensitiveInputs(snapshotResult, params.inputs);
         const snapshot = redactedSnapshot;
-        pageUrl ??= commandOutput(await runBrowser(pi, sessionId, ["get", "url"], signal)).trim();
+        pageUrl ??= await browser.url();
         const completedOnPage = completedDescriptions.get(pageUrl) ?? [];
         const decisionPageState =
           completedOnPage.length > 0
             ? `${snapshot}\n\nActions already completed on this page:\n${completedOnPage.map((description) => `- ${description}`).join("\n")}`
             : snapshot;
         const candidates = parseRunCandidates(snapshot, params.inputs).filter(
-          ({ id }) => !completed.has(`${pageUrl}\u0000${id}`),
+          (candidate) => !completed.has(`${pageUrl}\u0000${completionKey(candidate)}`),
         );
         if (candidates.length === 0) {
           stopReason = "no_candidates";
@@ -659,7 +638,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
           probability = 1;
           selectionMode = "deterministic";
         } else {
-          const choiceResult = await requestClassifier(
+          const choiceResult = await classify(
             ctx.modelRegistry,
             createDecisionRequest({
               objective: params.objective,
@@ -704,7 +683,7 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
 
         let authorizationProbability: number | undefined;
         if (candidate.authorization === "independent") {
-          const authorizationResult = await requestClassifier(
+          const authorizationResult = await classify(
             ctx.modelRegistry,
             createRunAuthorizationRequest(params.objective, decisionPageState, candidate),
             { ...(signal === undefined ? {} : { signal }), timeoutMs: DECISION_TIMEOUT_MS },
@@ -726,10 +705,19 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
           }
         }
 
-        await runBrowser(pi, sessionId, candidate.command, signal);
-        completed.add(`${pageUrl}\u0000${candidate.id}`);
+        try {
+          await browser.act(candidate.interaction);
+        } catch (error) {
+          throw new Error(
+            redactSensitiveInputs(
+              error instanceof Error ? error.message : String(error),
+              params.inputs,
+            ),
+          );
+        }
+        completed.add(`${pageUrl}\u0000${completionKey(candidate)}`);
         completedDescriptions.set(pageUrl, [...completedOnPage, candidate.description]);
-        await settleAfterAction(pi, sessionId, candidate.trace.action, signal);
+        await browser.settle(candidate.trace.action);
         if (candidate.trace.action === "click") pageUrl = undefined;
         trace.push({
           step: stepNumber,
@@ -743,18 +731,14 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
       }
 
       let finalSnapshot = redactSensitiveInputs(
-        boundedOutput(
-          commandOutput(await runBrowser(pi, sessionId, ["snapshot", "-i", "-u"], signal)),
-        ),
+        await browser.snapshot({ interactiveOnly: false, includeUrls: true }),
         params.inputs,
       );
       const lastTrace = trace.at(-1);
       if (lastTrace?.action.action === "click" && finalSnapshot === lastTrace.snapshot) {
-        await runBrowser(pi, sessionId, ["wait", "1000"], signal);
+        await browser.settle("click", true);
         finalSnapshot = redactSensitiveInputs(
-          boundedOutput(
-            commandOutput(await runBrowser(pi, sessionId, ["snapshot", "-i", "-u"], signal)),
-          ),
+          await browser.snapshot({ interactiveOnly: false, includeUrls: true }),
           params.inputs,
         );
       }
@@ -803,14 +787,10 @@ export default function agentBrowserExtension(pi: ExtensionAPI): void {
         throw new Error(`Action ids must be unique and must not use reserved id ${NO_ACTION}`);
       }
 
-      const decisionResult = await requestClassifier(
-        ctx.modelRegistry,
-        createDecisionRequest(params),
-        {
-          ...(signal === undefined ? {} : { signal }),
-          timeoutMs: DECISION_TIMEOUT_MS,
-        },
-      );
+      const decisionResult = await classify(ctx.modelRegistry, createDecisionRequest(params), {
+        ...(signal === undefined ? {} : { signal }),
+        timeoutMs: DECISION_TIMEOUT_MS,
+      });
       if (!decisionResult.ok) {
         throw new Error(`Classifier browser decision failed: ${decisionResult.reason}`);
       }

@@ -7,6 +7,7 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { Key, visibleWidth } from "@earendil-works/pi-tui";
+import { getSandboxLaunchMode } from "../../lib/sandbox-mode";
 import { loadStartupHeaderArt, type StartupHeaderArt } from "./ascii-art";
 import {
   discoverRepositoryFiles,
@@ -76,6 +77,7 @@ export default function startupHeader(
     runCurrentUpdateAll = async () => false;
     if (ctx.mode !== "tui") return;
 
+    const sandbox = getSandboxLaunchMode();
     const sessionId = ctx.sessionManager.getSessionId();
     const generationId = randomUUID();
     const owners = new StartupOwnerStore(sessionId, generationId, readHeaderOwnerSnapshot);
@@ -240,6 +242,7 @@ export default function startupHeader(
               direnv: owners.get("direnv"),
               lsp: owners.get("lsp"),
               classifier,
+              sandbox,
             },
             candidates,
             owners.get("auth"),

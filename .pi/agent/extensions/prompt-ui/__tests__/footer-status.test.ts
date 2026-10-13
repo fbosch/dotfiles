@@ -1,5 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
+import { renderSandboxFooterStatus } from "../footer-config";
 import {
   type PromptEditorState,
   renderFooterStatus,
@@ -123,5 +124,28 @@ describe("prompt footer statuses", () => {
 
   test("preserves unrelated status text", () => {
     expect(renderFooterStatus(theme, "other", "status")).toBe("status");
+  });
+
+  test("keeps the lock beside MCP and drops file counts when space is tight", () => {
+    const primaryStatus = [
+      renderMcpFooterStatus(ansiTheme, 2),
+      renderSandboxFooterStatus(ansiTheme, "nono"),
+    ].join(" · ");
+    const fileStatus = renderFooterStatus(ansiTheme, "file-changes", "2 files +40 -25");
+    for (const width of [25, 60]) {
+      const line = renderPromptHints(
+        ansiTheme,
+        keybindings,
+        promptState,
+        "~/dotfiles",
+        width,
+        primaryStatus,
+        fileStatus,
+      );
+      const plainLine = stripTerminalSequences(line);
+      expect(plainLine.endsWith(" 2 MCP ·  ")).toBe(true);
+      expect(plainLine.includes("2 files")).toBe(width === 60);
+      expect(visibleWidth(line)).toBe(width);
+    }
   });
 });

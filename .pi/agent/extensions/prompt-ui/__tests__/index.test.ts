@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -20,6 +20,11 @@ import promptUi from "../index";
 const REPO_ROOT = fileURLToPath(new URL("../../../../../", import.meta.url));
 const PROMPT_UI_EXTENSION_PATH = new URL("../index.ts", import.meta.url).pathname;
 
+const initialNonoCapFile = process.env.NONO_CAP_FILE;
+afterEach(() => {
+  if (initialNonoCapFile === undefined) delete process.env.NONO_CAP_FILE;
+  else process.env.NONO_CAP_FILE = initialNonoCapFile;
+});
 test("headless startup does not load prompt UI rules", async () => {
   const configHome = await mkdtemp(join(tmpdir(), "pi-prompt-ui-headless-"));
   try {
@@ -163,6 +168,7 @@ test("uses MCP extension status in the footer and refreshes the editor after com
     hasUI: true,
     mode: "tui",
     isProjectTrusted: () => false,
+    modelRegistry: { find: () => undefined },
     sessionManager: { getSessionId: () => "test-session" },
     getContextUsage: () => usage,
     ui,
@@ -175,8 +181,21 @@ test("uses MCP extension status in the footer and refreshes the editor after com
   expect(footer).toBeDefined();
   expect(editor?.render(100).join("\n")).not.toMatch(/\b(?:Plan|Build)\b/);
   extensionStatuses.set("mcp", "MCP 2/6!");
-  const footerText = stripTerminalSequences(footer?.render(120).join("\n") ?? "");
-  expect(footerText.endsWith(" 2 MCP ")).toBe(true);
+  for (const [capFile, icon] of [
+    ["/native/nono/capabilities.json", ""],
+    [undefined, ""],
+    ["", ""],
+  ] as const) {
+    if (capFile === undefined) delete process.env.NONO_CAP_FILE;
+    else process.env.NONO_CAP_FILE = capFile;
+    const footerText = stripTerminalSequences(footer?.render(120).join("\n") ?? "");
+    expect(footerText.endsWith(` 2 MCP · ${icon} `)).toBe(true);
+    extensionStatuses.delete("mcp");
+    const withoutMcp = stripTerminalSequences(footer?.render(120).join("\n") ?? "");
+    expect(withoutMcp.endsWith(`${icon} `)).toBe(true);
+    expect(withoutMcp).not.toContain("MCP");
+    extensionStatuses.set("mcp", "MCP 2/6!");
+  }
   extensionStatuses.set("pi-lens-lsp", "LSP Inactive");
   expect(editor?.render(100).join("\n")).not.toContain("LSP Inactive");
   extensionStatuses.set("startup-time", "Startup: 1.18s (startup)");
@@ -191,4 +210,5 @@ test("uses MCP extension status in the footer and refreshes the editor after com
 
   expect(renderRequests).toBe(requestsBeforeCompaction + 1);
   expect(editor?.render(100).join("\n")).toContain("20K (10%)");
+  await handlers.get("session_shutdown")?.({}, ctx);
 });

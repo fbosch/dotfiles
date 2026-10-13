@@ -2,6 +2,7 @@ import { join } from "node:path";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { CONFIG_DIR_NAME, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { readJsonConfig } from "../../lib/extension-config";
+import { type SandboxLaunchMode, sandboxLaunchIndicator } from "../../lib/sandbox-mode";
 
 export const FOOTER_SETTINGS_KEY = "footer";
 export const HIDDEN_FOOTER_STATUS_KEYS: ReadonlySet<string> = new Set(["pi-lens-lsp"]);
@@ -22,6 +23,14 @@ const FOOTER_NAMED_COLORS: Readonly<Record<string, number>> = {
 export interface FooterCustomization {
   readonly icon?: string;
   readonly color?: string;
+}
+
+export function renderSandboxFooterStatus(
+  theme: Pick<Theme, "fg">,
+  mode: SandboxLaunchMode,
+): string {
+  const indicator = sandboxLaunchIndicator(mode);
+  return theme.fg(indicator.color, indicator.icon);
 }
 
 export function loadFooterCustomization(

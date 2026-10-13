@@ -7,8 +7,8 @@ import type { ExtensionAPI, ModelRegistry, ToolDefinition } from "@earendil-work
 import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-classifier-registry";
 import { type ClassifierRegistry, createClassifierRequester } from "../../../lib/classifier";
 import agentBrowserExtension from "..";
+import { browserArgs } from "../backends";
 import {
-  browserArgs,
   createDecisionRequest,
   createRunAuthorizationRequest,
   createStepSafetyRequest,
