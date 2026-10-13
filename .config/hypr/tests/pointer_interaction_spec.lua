@@ -17,7 +17,18 @@ end
 local function setup(opts)
 	opts = opts or {}
 	local calls = {}
-	local current_windows = opts.windows or {}
+	local resolved_target = opts.windows and opts.windows[1] or opts.cursor_target or opts.active_target
+	local function capture(target)
+		if target == nil then
+			return nil
+		end
+		return {
+			window = target,
+			resolve = function()
+				return resolved_target
+			end,
+		}
+	end
 	local function record(value)
 		calls[#calls + 1] = value
 	end
@@ -26,6 +37,15 @@ local function setup(opts)
 	end
 
 	local router = pointer.new({
+		target_adapter = {
+			enabled = opts.native_available ~= false,
+			capture_at_cursor = function()
+				return capture(opts.cursor_target)
+			end,
+			capture_window = function(target)
+				return capture(target)
+			end,
+		},
 		picture_in_picture = {
 			start_drag = function(target)
 				record("pip.drag.start:" .. address(target))
@@ -55,9 +75,6 @@ local function setup(opts)
 			end,
 		},
 		state = {
-			at_cursor = function()
-				return opts.cursor_target
-			end,
 			active = function()
 				return opts.active_target
 			end,
@@ -65,9 +82,6 @@ local function setup(opts)
 				return target ~= nil and target.content_type == "game"
 			end,
 		},
-		get_windows = function()
-			return current_windows
-		end,
 		dispatch = function(value)
 			record("dispatch:" .. value)
 		end,
@@ -81,15 +95,14 @@ local function setup(opts)
 		},
 	})
 
-	return router, calls, function(windows)
-		current_windows = windows
+	return router, calls, function(target)
+		resolved_target = target
 	end
 end
 
 describe("pointer interaction router", function()
-	it("rejects targets without stable identity and fullscreen games", function()
-		local unidentified = { content_type = "none", fullscreen = 0 }
-		local router, calls = setup({ cursor_target = unidentified })
+	it("rejects absent native targets and fullscreen games", function()
+		local router, calls = setup({})
 		assert.is_nil(router.start_drag())
 		assert.same({}, calls)
 
@@ -116,12 +129,12 @@ describe("pointer interaction router", function()
 		}, calls)
 	end)
 
-	it("revalidates a PiP drag by stable identity instead of reused address", function()
+	it("uses native lifetime resolution instead of a reused address", function()
 		local target = window("0x1", { stable_id = 7 })
 		local router, calls, set_windows = setup({ cursor_target = target, pip_drag = true })
 		local release = router.start_drag()
 
-		set_windows({ window("0x1", { stable_id = 8 }) })
+		set_windows(nil)
 		release()
 		assert.same({
 			"pip.drag.start:0x1",
@@ -189,5 +202,22 @@ describe("pointer interaction router", function()
 		assert.same({ "pip.resize.start:0x1", "custom.resize.start:0x1", "dispatch:resize" }, calls)
 		release()
 		assert.equal("dispatch:resize", calls[#calls])
+	end)
+	it("uses the explicit active-window fallback when the native hit is empty", function()
+		local active = window("0xfallback")
+		local router, calls = setup({ active_target = active, pip_drag = true })
+		local release = router.start_drag()
+		release()
+		assert.same(
+			{ "pip.drag.start:0xfallback", "dispatch:drag", "dispatch:drag", "pip.drag.finish:0xfallback" },
+			calls
+		)
+	end)
+
+	it("disables both pointer actions when the native adapter is unavailable", function()
+		local router, calls = setup({ cursor_target = window("0x1"), native_available = false })
+		assert.is_nil(router.start_drag())
+		assert.is_nil(router.start_resize(false))
+		assert.same({}, calls)
 	end)
 end)

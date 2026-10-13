@@ -480,26 +480,6 @@ run("picture-in-picture focus retains its tiled-only override", function()
 	assert_equal(dispatched[1].args.window, tiled, "PiP focus target")
 end)
 
-run("cursor lookup selects an unfocused normal window beside a game", function()
-	reset("DP-2")
-	active_window = {
-		content_type = "game",
-		visible = true,
-		at = { x = 1440, y = 0 },
-		size = { x = 3440, y = 1440 },
-	}
-	local normal_window = {
-		content_type = "none",
-		visible = true,
-		at = { x = 0, y = 0 },
-		size = { x = 1428, y = 830 },
-	}
-	windows = { active_window, normal_window }
-	cursor_position = { x = 700, y = 400 }
-
-	assert_equal(state.at_cursor(), normal_window, "window under cursor")
-end)
-
 run("active-window tag predicate skips tagged windows", function()
 	reset("DP-2")
 	active_window.tags = { "passthrough-exempt*" }
@@ -507,25 +487,6 @@ run("active-window tag predicate skips tagged windows", function()
 	assert_equal(state.active_is_not_tagged("passthrough-exempt")(), false, "tagged window")
 	active_window.tags = nil
 	assert_equal(state.active_is_not_tagged("passthrough-exempt")(), true, "untagged window")
-end)
-
-run("cursor lookup ignores games on inactive workspaces", function()
-	reset("DP-2")
-	active_window.content_type = "none"
-	active_window.visible = true
-	active_window.at = { x = 0, y = 0 }
-	active_window.size = { x = 1428, y = 830 }
-	local game_window = {
-		content_type = "game",
-		visible = true,
-		workspace = { name = "10" },
-		at = { x = 0, y = 0 },
-		size = { x = 3440, y = 1440 },
-	}
-	windows = { game_window, active_window }
-	cursor_position = { x = 700, y = 400 }
-
-	assert_equal(state.at_cursor(), active_window, "window on active workspace")
 end)
 
 run("float toggle records ultrawide window center before tiling", function()

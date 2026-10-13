@@ -86,6 +86,7 @@
         "--headless",
         "--isolated",
         "--no-usage-statistics",
+        "--chrome-arg=--no-sandbox",
         "--no-performance-crux"
       ],
       "env": {
