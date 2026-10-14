@@ -5,7 +5,7 @@ prompt_mode: replace
 model: presets/planning
 inherit_context: false
 max_turns: 24
-tools: read, grep, find, ls, fffind, ffgrep, tool_load, write, bash, chart_pie, chart_donut, chart_bar, chart_line, chart_scatter, chart_histogram, chart_bezier, chart_heatmap, chart_boxplot, chart_waterfall, chart_dumbbell, chart_stacked_bar, chart_gantt, chart_network, chart_tree, chart_treemap
+tools: read, grep, find, ls, fffind, ffgrep, tool_load, write, bash, websearch, webfetch, chart_pie, chart_donut, chart_bar, chart_line, chart_scatter, chart_histogram, chart_bezier, chart_heatmap, chart_boxplot, chart_waterfall, chart_dumbbell, chart_stacked_bar, chart_gantt, chart_network, chart_tree, chart_treemap
 permission:
   "*": deny
   read: allow
@@ -14,6 +14,8 @@ permission:
   ls: allow
   fffind: allow
   ffgrep: allow
+  websearch: allow
+  webfetch: allow
   tool_load: allow
   "chart_*": allow
   write: ask
