@@ -189,13 +189,14 @@ export default function typesafeQuestionExtension(pi: ExtensionAPI): void {
       name: "typesafe_question",
       label: "TypeSafe question",
       description:
-        "Ask the classifier up to 16 narrow bool, choice, or score questions about shared JSON state and optional images. Routes to configured native classifier models that support the supplied input. Instructions and criteria must be strings; bool criteria require true and false descriptions. Returns bool probability, choice probabilities/confidence, or score/confidence. Sends all supplied data to the selected provider; do not send secrets or sensitive data. Use includeAttachedImages for images in the latest user message, or supply base64 image blocks explicitly. Unrelated attachments are not included automatically. Returns validated judgments, not actions.",
+        "Ask the classifier up to 16 narrow bool, choice, or score questions about shared JSON state and optional images. Routes to configured native classifier models that support the supplied input. Instructions and criteria must be strings; bool criteria require true and false descriptions. Returns bool probability, choice probabilities/confidence, or score/confidence. Sends all supplied data to the selected provider; do not send secrets or sensitive data. Use includeAttachedImages for images in the latest user message, or supply base64 image blocks explicitly. Unrelated attachments are not included automatically. Returns schema-validated judgments, not verified facts or actions.",
       promptSnippet: "Get typed classifier judgments for narrow semantic decisions",
       promptGuidelines: [
         "Use typesafe_question for routing, classification, scoring, or checking a claim against supplied state when probabilities help; keep exact lookups and calculations in code.",
         "Batch independent questions over the same object state. Use string instructions and criteria; bool is a yes/no probability, while score measures an ordered level. Do not use the classifier for prose generation or workflow actions, and do not send secrets or sensitive data.",
-        "Treat classifier answers as uncertain judgments, not permission to act; verify consequential decisions against evidence and policy.",
+        "Treat classifier answers as uncertain judgments, not permission to act; confidence is not proof of accuracy. Verify consequential decisions against independent evidence and policy.",
         "When a judgment needs images attached to the latest user message, set includeAttachedImages: true. Alternatively pass explicit base64 image blocks in images. Do not include attachments for unrelated text-only judgments. Missing images or image-capable models are errors, never permission to drop image input.",
+        "For image judgments, use explicit criteria and validate reliability for the intended task before relying on the result. Keep exact measurements and rule-based compliance checks in code; image judgments alone do not establish compliance.",
       ],
       parameters: QuestionParameters,
       async execute(_id, params, signal, _update, ctx) {
