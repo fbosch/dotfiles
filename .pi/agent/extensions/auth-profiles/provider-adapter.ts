@@ -21,6 +21,8 @@ export type ProviderUsageWindow = {
   remaining: number;
   resetsIn?: string;
   allowanceResetAt?: number;
+  /** Short display text such as "$2.78 of $500.00"; never an account identifier. */
+  detail?: string;
 };
 
 export type ProviderUsageSnapshot = {
@@ -37,7 +39,12 @@ export type ProviderCreditSnapshot = {
 export type ProfileCredentialRefreshRequest = {
   expectedIdentity: string;
   profileLabel: string;
+  /** Refresh even when the stored expiry looks valid, e.g. after the server rejected the token. */
+  force?: boolean;
 };
+
+/** The provider rejected the credential; a forced refresh may recover it. */
+export class ProviderAuthError extends Error {}
 
 /** Provider-specific operations required by automatic profile selection. */
 export interface ProfileProviderAdapter {

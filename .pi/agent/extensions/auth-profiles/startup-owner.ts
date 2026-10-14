@@ -18,8 +18,14 @@ export interface AuthUsageWindowObservation {
   readonly windowId: string;
   readonly remaining: number;
   readonly allowanceResetAt?: number;
+  readonly detail?: string;
 }
 
+export interface AuthProviderObservation {
+  readonly provider: string;
+  readonly borrowedFrom?: string;
+  readonly windows: readonly AuthUsageWindowObservation[];
+}
 export interface AuthProfileObservation {
   readonly profileLabel: string;
   readonly method?: string;
@@ -27,6 +33,7 @@ export interface AuthProfileObservation {
   readonly windows: readonly AuthUsageWindowObservation[];
   readonly bankedResetCount?: number;
   readonly bankedExpiryAt?: number;
+  readonly providers?: readonly AuthProviderObservation[];
   readonly observedAt: number;
   readonly staleAt: number;
   readonly error?: "credential" | "usage" | "credits";
@@ -38,10 +45,13 @@ export interface AuthStartupState {
   readonly observations: readonly AuthProfileObservation[];
 }
 
+/** Timer id from Node's `setTimeout` or a numeric fake clock. */
+export type AuthStartupTimer = ReturnType<typeof setTimeout> | number;
+
 export interface AuthStartupClock {
   now(): number;
-  setTimeout(callback: () => void, delay: number): unknown;
-  clearTimeout(timer: unknown): void;
+  setTimeout(callback: () => void, delay: number): AuthStartupTimer;
+  clearTimeout(timer: AuthStartupTimer): void;
 }
 
 // Node clamps larger delays to 1 ms, so long deadlines must advance through safe one-shot checkpoints.
@@ -50,14 +60,14 @@ const MAX_TIMER_DELAY_MS = 2_147_483_647;
 const systemClock: AuthStartupClock = {
   now: Date.now,
   setTimeout,
-  clearTimeout: (timer) => clearTimeout(timer as ReturnType<typeof setTimeout>),
+  clearTimeout: (timer) => clearTimeout(timer),
 };
 
 /** Owns only already-observed auth state; it never reads credentials or starts collection. */
 export class AuthStartupOwner {
   private activeRequest: ReturnType<typeof readStartupOwnerRequest>;
   private revision = 0;
-  private timer: unknown;
+  private timer: AuthStartupTimer | undefined;
   private disposed = false;
 
   public constructor(
@@ -136,6 +146,9 @@ export class AuthStartupOwner {
       ...status.payload.profiles.flatMap((profile) => [
         ...profile.windows.map((window) => window.allowanceResetAt),
         profile.bankedExpiryAt,
+        ...(profile.providers ?? []).flatMap((provider) =>
+          provider.windows.map((window) => window.allowanceResetAt),
+        ),
       ]),
     ].filter((value): value is number => value !== undefined && value > this.clock.now());
     const deadline = Math.min(...deadlines);

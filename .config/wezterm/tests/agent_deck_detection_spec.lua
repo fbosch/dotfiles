@@ -1,6 +1,4 @@
-package.path = package.path
-	.. ";./.config/wezterm/?.lua"
-	.. ";./.config/wezterm/?/init.lua"
+package.path = package.path .. ";./.config/wezterm/?.lua" .. ";./.config/wezterm/?/init.lua"
 
 local detection = require("agent.detection")
 
@@ -96,7 +94,11 @@ package.preload.wezterm = function()
 		log_warn = function() end,
 		time = {
 			now = function()
-				return { format = function() return "1" end }
+				return {
+					format = function()
+						return "1"
+					end,
+				}
 			end,
 		},
 	}
@@ -107,8 +109,8 @@ package.preload.theme = function()
 			attention = "yellow",
 			muted = "gray",
 			agent = {
-			working = "green",
-			idle = "blue",
+				working = "green",
+				idle = "blue",
 			},
 		},
 	}
@@ -117,7 +119,9 @@ end
 local deck = require("agent.deck")
 deck.apply({})
 local pane = {
-	pane_id = function() return 1 end,
+	pane_id = function()
+		return 1
+	end,
 	get_foreground_process_info = function()
 		return { name = "opencode" }
 	end,

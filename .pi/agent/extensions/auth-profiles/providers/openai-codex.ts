@@ -10,14 +10,15 @@ import { isRecord } from "../../shared/is-record";
 import { readBoundedJson } from "../../shared/read-bounded-json";
 import { consumeCredentialLogin } from "../credential-login";
 import { authPathFor, normalizeName } from "../profile-store";
-import type {
-  ProfileCredentialReadResult,
-  ProfileProviderAdapter,
-  ProfileProviderCredential,
-  ProviderCreditSnapshot,
-  ProviderFetch,
-  ProviderUsageSnapshot,
-  UsageUrgency,
+import {
+  type ProfileCredentialReadResult,
+  type ProfileProviderAdapter,
+  type ProfileProviderCredential,
+  ProviderAuthError,
+  type ProviderCreditSnapshot,
+  type ProviderFetch,
+  type ProviderUsageSnapshot,
+  type UsageUrgency,
 } from "../provider-adapter";
 
 const PROVIDER_ID = "openai-codex";
@@ -26,6 +27,7 @@ const RESET_CREDITS_URL = "https://chatgpt.com/backend-api/wham/rate-limit-reset
 const REQUEST_TIMEOUT_MS = 10_000;
 const REFRESH_TIMEOUT_MS = 20_000;
 const UNKNOWN_USAGE_COOLDOWN_MS = 60_000;
+const FORCE_REFRESH_VALIDITY_MS = 10 * 365 * 86_400_000;
 // shortcut: AuthStorage is not publicly exported, so use Pi's pinned implementation
 // until coding-agent exposes a supported file-backed CredentialStore constructor.
 const AUTH_STORAGE_MODULE_URL = new URL(
@@ -185,12 +187,12 @@ export function guardOpenAiCodexCredential(
   };
 }
 
-async function createCredentialStore(path: string): Promise<CredentialStore> {
+export async function createCredentialStore(path: string): Promise<CredentialStore> {
   const module = (await import(AUTH_STORAGE_MODULE_URL)) as AuthStorageModule;
   return module.AuthStorage.create(path);
 }
 
-async function createRuntime(credentials: CredentialStore): Promise<AuthRuntime> {
+export async function createRuntime(credentials: CredentialStore): Promise<AuthRuntime> {
   return ModelRuntime.create({ credentials, modelsPath: null, refreshOnCreate: false });
 }
 
@@ -207,11 +209,14 @@ async function fetchPayload(
     redirect: "error",
     signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
   });
+  if (response.status === 401 || response.status === 403) {
+    throw new ProviderAuthError(`request rejected with ${response.status}`);
+  }
   if (!response.ok) throw new Error(`request failed with ${response.status}`);
   return readBoundedJson(response);
 }
 
-function formatReset(seconds: number | undefined): string | undefined {
+export function formatReset(seconds: number | undefined): string | undefined {
   if (seconds === undefined) return undefined;
   if (seconds <= 0) return "now";
   if (seconds < 60) return `${Math.ceil(seconds)}s`;
@@ -374,6 +379,7 @@ export function createOpenAiCodexProfileAdapter(
   const resolveStoredCredential = async (
     profileLabel: string,
     expectedIdentity?: string,
+    force = false,
   ): Promise<ProfileProviderCredential> => {
     const profile = normalizeName(profileLabel);
     const unguardedStore = await loadStore(pathFor(profile));
@@ -393,7 +399,8 @@ export function createOpenAiCodexProfileAdapter(
     const store = guardOpenAiCodexCredential(unguardedStore, identity);
     const runtime = await loadRuntime(store);
     const auth = await runtime.getAuth(PROVIDER_ID, {
-      minOAuthValidityMs: 1,
+      // An effectively infinite validity window makes the runtime refresh now.
+      minOAuthValidityMs: force ? FORCE_REFRESH_VALIDITY_MS : 1,
       signal: AbortSignal.timeout(REFRESH_TIMEOUT_MS),
     });
     if (auth === undefined) {
@@ -440,8 +447,8 @@ export function createOpenAiCodexProfileAdapter(
     resolveCredential(profileLabel) {
       return resolveStoredCredential(profileLabel);
     },
-    refreshCredential({ expectedIdentity, profileLabel }) {
-      return resolveStoredCredential(profileLabel, expectedIdentity);
+    refreshCredential({ expectedIdentity, profileLabel, force }) {
+      return resolveStoredCredential(profileLabel, expectedIdentity, force === true);
     },
     fetchUsage(credential, fetchFn) {
       return fetchPayload(USAGE_URL, credential, fetchFn).then((payload) =>

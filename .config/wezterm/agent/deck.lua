@@ -245,14 +245,17 @@ local function notify_attention(window, pane, agent_type, reason)
 	log_notification_debug("toast unavailable: " .. tostring(toast_err) .. ", reason=" .. tostring(reason))
 
 	if is_linux then
-		local ok = select(1, try_background_child_process({
-			"notify-send",
-			"--urgency=normal",
-			"--app-name=WezTerm",
-			"--expire-time=" .. tostring(attention_notification_timeout_ms),
-			subtitle,
-			message,
-		}))
+		local ok = select(
+			1,
+			try_background_child_process({
+				"notify-send",
+				"--urgency=normal",
+				"--app-name=WezTerm",
+				"--expire-time=" .. tostring(attention_notification_timeout_ms),
+				subtitle,
+				message,
+			})
+		)
 		if ok then
 			log_notification_debug("spawned linux notify-send fallback")
 			return

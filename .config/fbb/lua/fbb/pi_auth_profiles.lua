@@ -52,6 +52,7 @@ function M.read_accounts(content, decode_json)
 				availableCount = tonumber(profile.availableCount),
 				urgency = profile.urgency,
 				usage = type(profile.usage) == "table" and profile.usage or {},
+				anthropicUsage = type(profile.anthropicUsage) == "table" and profile.anthropicUsage or {},
 				active = profile.active == true,
 			})
 		end

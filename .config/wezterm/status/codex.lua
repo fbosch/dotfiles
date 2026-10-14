@@ -6,6 +6,8 @@ local pi_auth_profiles = require("fbb.pi_auth_profiles")
 
 local unpack_args = table.unpack or unpack
 local refresh_interval_seconds = 10
+-- ChatGPT brand green; not part of the shared palette.
+local openai_color = "#74AA9C"
 local profile_status = { checked_at = 0, cwd = nil, accounts = {} }
 local command_search_path = table.concat({
 	-- Home Manager exposes user packages here on macOS and NixOS.
@@ -137,7 +139,7 @@ local function get_accounts(cwd)
 	return profile_status.accounts
 end
 
-local function append_usage(items, windows)
+local function append_usage(items, windows, label, label_color)
 	local rendered = 0
 	for _, window in ipairs(type(windows) == "table" and windows or {}) do
 		local remaining = type(window) == "table" and tonumber(window.remaining) or nil
@@ -145,6 +147,10 @@ local function append_usage(items, windows)
 			table.insert(items, { Foreground = { Color = palette.semantic.muted } })
 			if rendered == 0 then
 				table.insert(items, { Text = " " })
+				if label then
+					table.insert(items, { Foreground = { Color = label_color } })
+					table.insert(items, { Text = label .. " " })
+				end
 			else
 				table.insert(items, { Text = " · " })
 			end
@@ -184,7 +190,12 @@ local function append(items, pane)
 			table.insert(items, { Foreground = { Color = reset_credit_color(account.urgency) } })
 			table.insert(items, { Text = superscript_number(tonumber(account.availableCount)) })
 		end
-		append_usage(items, account.usage)
+		-- Name the provider only when a profile carries more than one.
+		local has_anthropic = type(account.anthropicUsage) == "table" and #account.anthropicUsage > 0
+		local has_codex = type(account.usage) == "table" and #account.usage > 0
+		local labelled = has_anthropic and has_codex
+		append_usage(items, account.usage, labelled and "" or nil, openai_color)
+		append_usage(items, account.anthropicUsage, labelled and "" or nil, palette.ansi.yellow)
 	end
 
 	table.insert(items, { Text = " " })

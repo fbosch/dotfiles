@@ -18,6 +18,16 @@ export type AuthStartupWindow = {
   readonly windowId: string;
   readonly remaining: number;
   readonly allowanceResetAt?: number;
+  /** Short spend text such as "$2.78 of $500.00" for credit-based usage. */
+  readonly detail?: string;
+};
+
+/** A provider the profile can use besides its selection provider (`provider`). */
+export type AuthStartupProviderStatus = {
+  readonly provider: string;
+  /** Profile whose credential is used when the profile has none of its own. */
+  readonly borrowedFrom?: string;
+  readonly windows: readonly AuthStartupWindow[];
 };
 
 export type AuthStartupProfile = {
@@ -28,6 +38,7 @@ export type AuthStartupProfile = {
   readonly windows: readonly AuthStartupWindow[];
   readonly bankedResetCount?: number;
   readonly bankedExpiryAt?: number;
+  readonly providers?: readonly AuthStartupProviderStatus[];
   readonly observedAt?: number;
   readonly staleAt?: number;
 };
@@ -149,6 +160,9 @@ function readUnknownAuthProfile(value: unknown): AuthStartupProfile | undefined 
         ? { bankedResetCount: value.bankedResetCount }
         : {}),
       ...(typeof value.bankedExpiryAt === "number" ? { bankedExpiryAt: value.bankedExpiryAt } : {}),
+      ...(Array.isArray(value.providers)
+        ? { providers: value.providers as AuthStartupProviderStatus[] }
+        : {}),
       observedAt: value.observedAt,
       staleAt: value.staleAt,
     },
@@ -169,25 +183,10 @@ function readAuthProfile(
   ) {
     return undefined;
   }
-  const windows: AuthStartupWindow[] = [];
-  const seen = new Set<string>();
-  for (const window of value.windows) {
-    const windowId = sanitizeLabel(window.windowId);
-    if (windowId === undefined || seen.has(windowId) || !isPercent(window.remaining))
-      return undefined;
-    if (window.allowanceResetAt !== undefined && !isTimestamp(window.allowanceResetAt))
-      return undefined;
-    seen.add(windowId);
-    windows.push(
-      Object.freeze({
-        windowId,
-        remaining: window.remaining,
-        ...(window.allowanceResetAt === undefined
-          ? {}
-          : { allowanceResetAt: window.allowanceResetAt }),
-      }),
-    );
-  }
+  const windows = readAuthWindows(value.windows);
+  if (windows === undefined) return undefined;
+  const providers = value.providers === undefined ? undefined : readAuthProviders(value.providers);
+  if (value.providers !== undefined && providers === undefined) return undefined;
   if (value.bankedResetCount !== undefined && !isCount(value.bankedResetCount)) return undefined;
   if (value.bankedExpiryAt !== undefined && !isTimestamp(value.bankedExpiryAt)) return undefined;
   const bankedExpiryAt = value.bankedResetCount === 0 ? undefined : value.bankedExpiryAt;
@@ -210,11 +209,63 @@ function readAuthProfile(
     windows: Object.freeze(windows),
     ...(value.bankedResetCount === undefined ? {} : { bankedResetCount: value.bankedResetCount }),
     ...(bankedExpiryAt === undefined ? {} : { bankedExpiryAt }),
+    ...(providers === undefined || providers.length === 0 ? {} : { providers }),
     observedAt: value.observedAt,
     staleAt: value.staleAt,
   });
 }
 
+function readAuthWindows(values: readonly unknown[]): AuthStartupWindow[] | undefined {
+  const windows: AuthStartupWindow[] = [];
+  const seen = new Set<string>();
+  for (const window of values) {
+    if (!isRecord(window) || typeof window.windowId !== "string") return undefined;
+    const windowId = sanitizeLabel(window.windowId);
+    if (windowId === undefined || seen.has(windowId) || !isPercent(window.remaining))
+      return undefined;
+    if (window.allowanceResetAt !== undefined && !isTimestamp(window.allowanceResetAt))
+      return undefined;
+    seen.add(windowId);
+    const detail = typeof window.detail === "string" ? sanitizeHeaderField(window.detail, 32) : "";
+    windows.push(
+      Object.freeze({
+        windowId,
+        remaining: window.remaining,
+        ...(window.allowanceResetAt === undefined
+          ? {}
+          : { allowanceResetAt: window.allowanceResetAt }),
+        ...(detail === "" ? {} : { detail }),
+      }),
+    );
+  }
+  return windows;
+}
+
+function readAuthProviders(values: unknown): AuthStartupProviderStatus[] | undefined {
+  if (!Array.isArray(values)) return undefined;
+  const providers: AuthStartupProviderStatus[] = [];
+  const seen = new Set<string>();
+  for (const value of values) {
+    if (!isRecord(value) || typeof value.provider !== "string" || !Array.isArray(value.windows))
+      return undefined;
+    const provider = sanitizeLabel(value.provider);
+    if (provider === undefined || seen.has(provider)) return undefined;
+    const borrowedFrom =
+      typeof value.borrowedFrom === "string" ? sanitizeLabel(value.borrowedFrom) : undefined;
+    if (value.borrowedFrom !== undefined && borrowedFrom === undefined) return undefined;
+    const windows = readAuthWindows(value.windows);
+    if (windows === undefined) return undefined;
+    seen.add(provider);
+    providers.push(
+      Object.freeze({
+        provider,
+        ...(borrowedFrom === undefined ? {} : { borrowedFrom }),
+        windows: Object.freeze(windows),
+      }),
+    );
+  }
+  return providers;
+}
 function sanitizeLabel(value: string): string | undefined {
   const sanitized = sanitizeHeaderField(value, 64);
   return sanitized === "" ? undefined : sanitized;

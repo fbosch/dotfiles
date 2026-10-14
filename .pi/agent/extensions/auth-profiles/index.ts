@@ -8,7 +8,9 @@
  */
 
 import type { CredentialStore } from "@earendil-works/pi-ai";
-import { installCredentialLoginBoundary } from "./credential-login";
+import { brandColor, PROVIDER_BRANDS, type ProviderBrand } from "../shared/provider-brand";
+import { installCredentialLoginBoundary, PROFILE_FALLBACK_PROVIDERS } from "./credential-login";
+import { fallbackCredentialOwner, openProfileCredentials } from "./profile-credentials";
 import type { GitRunner } from "./profile-resolver";
 import { type ProfileSelection, selectProfile } from "./profile-selector";
 import {
@@ -28,6 +30,7 @@ import { registerResetCreditCommand } from "./reset-credit";
 import { persistSessionProfile, restoreSessionProfile } from "./session-profile";
 import {
   type AuthProfileObservation,
+  type AuthProviderObservation,
   AuthStartupOwner,
   type AuthStartupState,
 } from "./startup-owner";
@@ -38,6 +41,7 @@ import {
   type UsageStatusPayload,
 } from "./usage-status-service";
 
+export { createProfileCredentialStore } from "./profile-credentials";
 export { resolveProfile } from "./profile-resolver";
 export { authPathFor } from "./profile-store";
 
@@ -63,6 +67,12 @@ export { authPathFor } from "./profile-store";
  * availability is checked, then rebinds it at session_start and on /profile
  * changes. The built-in /login, /logout, and OAuth token refresh therefore
  * all read and write the active profile's file — no restart required.
+ *
+ * Codex credentials are isolated per profile. Anthropic /login also saves to the
+ * active profile; a profile without its own Anthropic credential falls back to the
+ * other profiles in effective order (repository, host, global), then auth.json.
+ * Refresh and logout write back to whichever file holds the credential. Other
+ * providers are shared through auth.json.
  *
  * Commands:
  *   /profile                 show the active profile
@@ -122,60 +132,18 @@ function credentialStoreBinding(ctx: Pick<ExtensionContext, "modelRegistry">): {
   }
   return { credentials, store, runtime };
 }
-export function createProfileCredentialStore(
-  selected: CredentialStore,
-  shared: CredentialStore,
-  profileProviderId: string,
-): CredentialStore & { readonly path?: string } {
-  const target = (providerId: string) => (providerId === profileProviderId ? selected : shared);
-  const selectedPath =
-    "path" in selected && typeof selected.path === "string" ? selected.path : undefined;
-
-  return {
-    // Preserve file-backed store diagnostics used by profile status and tests.
-    ...(selectedPath === undefined ? {} : { path: selectedPath }),
-    async read(providerId, options) {
-      return (
-        (await selected.read(providerId, options)) ??
-        (providerId === profileProviderId ? undefined : await shared.read(providerId, options))
-      );
-    },
-    async list(options) {
-      const [selectedEntries, sharedEntries] = await Promise.all([
-        selected.list(options),
-        shared.list(options),
-      ]);
-      const merged = new Map(sharedEntries.map((entry) => [entry.providerId, entry]));
-      for (const entry of selectedEntries) merged.set(entry.providerId, entry);
-      return [...merged.values()];
-    },
-    modify(providerId, fn, options) {
-      return target(providerId).modify(providerId, fn, options);
-    },
-    delete(providerId, options) {
-      return target(providerId).delete(providerId, options);
-    },
-  };
-}
 
 /** Point the session's live credential store at the profile's file. */
 async function bindProfile(
   ctx: Pick<ExtensionContext, "modelRegistry">,
-  profile: string,
+  selection: Pick<ProfileSelection, "profile" | "profileOrder">,
   adapter: ProfileProviderAdapter,
   options: BindProfileOptions = {},
 ): Promise<string> {
+  const { profile } = selection;
   const path = authPathFor(profile);
   const { credentials, store } = credentialStoreBinding(ctx);
-  const selectedStore = await adapter.createCredentialStore(profile);
-  credentials.store =
-    profile === DEFAULT_PROFILE
-      ? selectedStore
-      : createProfileCredentialStore(
-          selectedStore,
-          await adapter.createCredentialStore(DEFAULT_PROFILE),
-          adapter.providerId,
-        );
+  credentials.store = await openProfileCredentials(adapter, profile, selection.profileOrder);
   if (options.refresh === false) return path;
 
   const refresh = async (): Promise<void> => {
@@ -287,6 +255,8 @@ function formatDiagnosticCode(code: string): string {
   return code.replaceAll("-", " ");
 }
 
+const OPENAI_BRAND = PROVIDER_BRANDS["openai-codex"];
+const ANTHROPIC_BRAND = PROVIDER_BRANDS.anthropic;
 function formatUsageStatus(status: UsageStatusPayload, theme: Theme, currentTime: number): string {
   const profiles = [...status.profiles].sort(
     (left, right) =>
@@ -305,12 +275,33 @@ function formatUsageStatus(status: UsageStatusPayload, theme: Theme, currentTime
     ];
     const usageLines = windows.map((window, index) => {
       const label = index === 0 ? "primary" : index === 1 ? "secondary" : `window ${index + 1}`;
-      return `  ${label.padEnd(13)}${formatUsageWindow(theme, window)}`;
+      return `    ${label.padEnd(14)}${formatUsageWindow(theme, window)}`;
     });
+    const anthropicLines = (profile.anthropicUsage ?? []).map((window) => {
+      const label =
+        window.windowId === "primary" ? "5h" : window.windowId === "secondary" ? "7d" : "credit";
+      const detail = window.detail ? theme.fg("dim", `  ${window.detail}`) : "";
+      return `    ${label.padEnd(14)}${formatUsageWindow(theme, window)}${detail}`;
+    });
+    // Profiles without Codex credentials only carry Anthropic usage.
+    const hasCodex =
+      profile.usage.length > 0 ||
+      profile.availableCount !== undefined ||
+      anthropicLines.length === 0;
+    const providerHeader = (brand: ProviderBrand | undefined, name: string) =>
+      `  ${brand === undefined ? name : brandColor(brand.rgb, `${brand.icon} ${name}`)}`;
     return [
       `${marker} ${name} ${state}`,
-      ...usageLines,
-      `  ${"banked resets".padEnd(14)}${formatResetTokens(theme, profile, currentTime)}`,
+      ...(hasCodex
+        ? [
+            providerHeader(OPENAI_BRAND, "OpenAI Codex"),
+            ...usageLines,
+            `    ${"banked resets".padEnd(14)}${formatResetTokens(theme, profile, currentTime)}`,
+          ]
+        : []),
+      ...(anthropicLines.length > 0
+        ? [providerHeader(ANTHROPIC_BRAND, "Anthropic"), ...anthropicLines]
+        : []),
     ].join("\n");
   });
 
@@ -331,14 +322,62 @@ function formatUsageStatus(status: UsageStatusPayload, theme: Theme, currentTime
   return sections.join("\n\n");
 }
 
+export type AuthObservationOptions = {
+  /** Effective profile order used for fallback-provider lookup. */
+  profileOrder?: readonly string[];
+  /** Whether a profile's own auth file holds a credential for the provider. */
+  hasCredential?: (profile: string, providerId: string) => boolean;
+};
+
+function fallbackProviderObservations(
+  status: UsageStatusPayload,
+  profileLabel: string,
+  options: AuthObservationOptions,
+): AuthProviderObservation[] {
+  const hasCredential =
+    options.hasCredential ?? ((profile, provider) => providersIn(profile).includes(provider));
+  const byLabel = new Map(status.profiles.map((profile) => [profile.profileLabel, profile]));
+  return [...PROFILE_FALLBACK_PROVIDERS].flatMap((provider) => {
+    const owner = fallbackCredentialOwner(profileLabel, options.profileOrder ?? [], (profile) =>
+      hasCredential(profile, provider),
+    );
+    if (owner === undefined) return [];
+    // shortcut: only Anthropic reports fallback-provider usage today; add a per-provider
+    // usage field on ProfileUsageStatus when a second fallback provider gains usage.
+    const usage = provider === "anthropic" ? (byLabel.get(owner)?.anthropicUsage ?? []) : [];
+    return [
+      {
+        provider,
+        ...(owner === profileLabel ? {} : { borrowedFrom: owner }),
+        windows: usage.flatMap((window) =>
+          window.windowId === undefined
+            ? []
+            : [
+                {
+                  windowId: window.windowId,
+                  remaining: window.remaining,
+                  ...(window.allowanceResetAt === undefined
+                    ? {}
+                    : { allowanceResetAt: window.allowanceResetAt }),
+                  ...(window.detail === undefined ? {} : { detail: window.detail }),
+                },
+              ],
+        ),
+      },
+    ];
+  });
+}
+
 export function authObservations(
   status: UsageStatusPayload,
   providerId: string,
+  options: AuthObservationOptions = {},
 ): AuthProfileObservation[] {
   const failures = new Set(status.diagnostics.map(({ profileLabel }) => profileLabel));
   return status.profiles.flatMap((profile) => {
     const observation = profile[AUTH_USAGE_OBSERVATION];
     if (observation === undefined) return [];
+    const providers = fallbackProviderObservations(status, profile.profileLabel, options);
     const observedWindows =
       observation.windows.length > 0
         ? observation.windows
@@ -372,6 +411,7 @@ export function authObservations(
           : { bankedExpiryAt: observation.bankedExpiryAt }),
         observedAt: observation.observedAt,
         staleAt: observation.staleAt,
+        ...(providers.length === 0 ? {} : { providers }),
         ...(failures.has(profile.profileLabel) ? { error: "usage" as const } : {}),
       },
     ];
@@ -396,6 +436,16 @@ export default function authProfiles(
   let lastProviderResponseProfile: string | undefined;
   let profileOperationTail: Promise<void> = Promise.resolve();
   let authStartupState: AuthStartupState = { profileOrder: [], observations: [] };
+  let lastUsageStatus: UsageStatusPayload | undefined;
+  // Fallback-provider rows depend on the effective order, so observations are rebuilt
+  // whenever either the usage status or the active selection changes.
+  const observeUsage = (
+    status: UsageStatusPayload,
+    profileOrder: readonly string[] = authStartupState.profileOrder,
+  ) => {
+    lastUsageStatus = status;
+    return authObservations(status, providerAdapter.providerId, { profileOrder });
+  };
   const authStartupOwner = pi.events
     ? new AuthStartupOwner(pi.events, () => authStartupState)
     : undefined;
@@ -425,7 +475,7 @@ export default function authProfiles(
       onUsageStatus(status) {
         authStartupState = {
           ...authStartupState,
-          observations: authObservations(status, providerAdapter.providerId),
+          observations: observeUsage(status),
         };
       },
     });
@@ -440,7 +490,7 @@ export default function authProfiles(
     authStartupState = {
       ...authStartupState,
       activeProfile,
-      observations: authObservations(status, providerAdapter.providerId),
+      observations: observeUsage(status),
     };
     authStartupOwner?.update();
     return status;
@@ -455,13 +505,16 @@ export default function authProfiles(
     if (!loginBoundaries.has(runtime)) {
       loginBoundaries.set(runtime, installCredentialLoginBoundary(runtime));
     }
-    const path = await bindProfile(ctx, selection.profile, providerAdapter, options);
+    const path = await bindProfile(ctx, selection, providerAdapter, options);
     activeProfile = selection.profile;
     activeSelection = selection;
     authStartupState = {
       ...authStartupState,
       activeProfile,
       profileOrder: selection.profileOrder,
+      ...(lastUsageStatus === undefined
+        ? {}
+        : { observations: observeUsage(lastUsageStatus, selection.profileOrder) }),
     };
     authStartupOwner?.update();
     ctx.ui.setStatus(PROFILE_STATUS_KEY, selection.profile);

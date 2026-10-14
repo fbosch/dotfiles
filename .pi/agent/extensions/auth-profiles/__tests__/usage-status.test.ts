@@ -160,6 +160,84 @@ describe("auth profile usage status", () => {
     );
   });
 
+  test("lists a profile that holds only non-Codex credentials", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-auth-profile-usage-"));
+    temporaryDirectories.push(root);
+    const agentDir = join(root, "agent");
+    const profilesDir = join(agentDir, "auth-profiles");
+    await mkdir(profilesDir, { recursive: true });
+    await writeFile(
+      join(profilesDir, "claude.json"),
+      `${JSON.stringify({ anthropic: { type: "oauth", access: "a", refresh: "r", expires: now + 1_000 } })}\n`,
+      { mode: 0o600 },
+    );
+    await writeFile(join(profilesDir, "empty.json"), "{}\n", { mode: 0o600 });
+
+    const status = await collectUsageStatus({
+      activeProfile: "claude",
+      agentDir,
+      cachePath: join(root, "cache.json"),
+      fetchFn: async () => {
+        throw new Error("no request expected");
+      },
+      now: () => now,
+    });
+
+    expect(status.profiles).toEqual([
+      { profileLabel: "claude", active: true, usage: [], urgency: "unknown" },
+    ]);
+  });
+
+  test("reports Anthropic plan windows and backs off after a failure", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-auth-profile-usage-"));
+    temporaryDirectories.push(root);
+    const agentDir = join(root, "agent");
+    const profilesDir = join(agentDir, "auth-profiles");
+    await mkdir(profilesDir, { recursive: true });
+    await writeFile(
+      join(profilesDir, "claude.json"),
+      `${JSON.stringify({ anthropic: { type: "oauth", access: "a", refresh: "r", expires: now + 3_600_000 } })}\n`,
+      { mode: 0o600 },
+    );
+    const cachePath = join(root, "cache.json");
+    let status = 200;
+    let requests = 0;
+    const fetchFn = async (): Promise<Response> => {
+      requests += 1;
+      if (status !== 200) return new Response("{}", { status });
+      return Response.json({
+        five_hour: { utilization: 58.4, resets_at: new Date(now + 2 * 3_600_000).toISOString() },
+        seven_day: null,
+        spend: {
+          enabled: true,
+          percent: 1,
+          used: { amount_minor: 278, currency: "USD", exponent: 2 },
+          limit: { amount_minor: 50000, currency: "USD", exponent: 2 },
+        },
+      });
+    };
+    const collect = (at: number) =>
+      collectUsageStatus({ agentDir, cachePath, fetchFn, now: () => at });
+
+    expect((await collect(now)).profiles[0]?.anthropicUsage).toEqual([
+      {
+        windowId: "primary",
+        remaining: 42,
+        resetsIn: "2h",
+        allowanceResetAt: now + 2 * 3_600_000,
+      },
+      { windowId: "credit", remaining: 99, detail: "$2.78 of $500.00" },
+    ]);
+    await collect(now + 60_000);
+    expect(requests).toBe(1);
+
+    status = 429;
+    const later = now + 6 * 60_000;
+    expect((await collect(later)).profiles[0]?.anthropicUsage?.[0]?.remaining).toBe(42);
+    await collect(later + 60_000);
+    expect(requests).toBe(2);
+  });
+
   test("preserves reset deadlines when publishing a cached snapshot in a fresh process", async () => {
     const root = await mkdtemp(join(tmpdir(), "pi-auth-profile-cached-deadline-"));
     temporaryDirectories.push(root);

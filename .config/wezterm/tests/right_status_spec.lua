@@ -61,6 +61,10 @@ package.loaded.wezterm = {
 						usage = {
 							{ remaining = 100 - math.floor(mock_used_percent), resetsIn = "3h" },
 						},
+						anthropicUsage = {
+							{ windowId = "primary", remaining = 42, resetsIn = "2h" },
+							{ windowId = "credit", remaining = 88 },
+						},
 					},
 					{
 						profileLabel = "kk",
@@ -72,6 +76,8 @@ package.loaded.wezterm = {
 							{ remaining = 94, resetsIn = "5d" },
 						},
 					},
+					-- Profile with only non-Codex credentials: no usage or credits.
+					{ profileLabel = "cl", active = false, usage = {}, urgency = "unknown" },
 				},
 			}
 		end
@@ -97,6 +103,7 @@ package.loaded.wezterm = {
 					},
 					ansi = {
 						green = "#819B69",
+						cyan = "#66A5AD",
 						magenta = "#B279A7",
 						yellow = "#B77E64",
 						brightRed = "#E8838F",
@@ -236,6 +243,11 @@ assert_eq(
 	"session Codex profile change activates the selected profile"
 )
 assert_eq(find_text(captured_status, "kk"), true, "inactive Codex profile alias rendered")
+assert_eq(find_text(captured_status, "42%"), true, "Anthropic usage rendered")
+assert_eq(find_text(captured_status, " "), true, "Anthropic usage labelled when a profile has both providers")
+assert_eq(color_before_text(captured_status, " "), "#74AA9C", "OpenAI icon is ChatGPT green")
+assert_eq(color_before_text(captured_status, " "), "#B77E64", "Anthropic icon is orange")
+assert_eq(color_before_text(captured_status, "cl"), "#636363", "non-Codex profile rendered muted")
 assert_eq(find_text(captured_status, "²"), true, "Codex reset credits rendered")
 assert_eq(find_text(captured_status, "43%"), true, "ChatGPT remaining allowance rendered")
 assert_eq(find_text(captured_status, "³ʰ"), true, "ChatGPT usage reset countdown rendered")

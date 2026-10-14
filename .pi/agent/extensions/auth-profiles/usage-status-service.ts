@@ -4,16 +4,24 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import { isRecord } from "../shared/is-record";
-import { DEFAULT_PROFILE, listProfiles, normalizeName } from "./profile-store";
-import type {
-  ProfileCredentialReadResult,
-  ProfileProviderAdapter,
-  ProfileProviderCredential,
-  ProviderFetch,
-  ProviderUsageSnapshot,
-  ProviderUsageWindow,
-  UsageUrgency,
+import { DEFAULT_PROFILE, listProfiles, normalizeName, providersIn } from "./profile-store";
+import {
+  type ProfileCredentialReadResult,
+  type ProfileProviderAdapter,
+  type ProfileProviderCredential,
+  ProviderAuthError,
+  type ProviderFetch,
+  type ProviderUsageSnapshot,
+  type ProviderUsageWindow,
+  type UsageUrgency,
 } from "./provider-adapter";
+import {
+  ANTHROPIC_PROVIDER_ID,
+  type AnthropicCredential,
+  fetchAnthropicUsage,
+  readAnthropicCredential,
+  refreshAnthropicCredential,
+} from "./providers/anthropic-usage";
 import {
   createOpenAiCodexProfileAdapter,
   openAiCodexCreditsFromPayload,
@@ -61,6 +69,8 @@ export type ProfileUsageStatus = {
   nextExpiresAt?: string;
   urgency: Urgency;
   usage: UsageWindowStatus[];
+  /** Anthropic plan windows (5h, 7d) for profiles that can use Anthropic OAuth. */
+  anthropicUsage?: UsageWindowStatus[];
   readonly [AUTH_USAGE_OBSERVATION]?: AuthUsageObservation;
 };
 
@@ -89,6 +99,8 @@ type CachedAccount = {
   credentialKey: string;
   usage?: UsageSnapshot;
   usageCheckedAt?: number;
+  /** Last Anthropic request attempt, including failures, so rate limits are not hammered. */
+  attemptedAt?: number;
   resetCredits?: ResetCreditsSnapshot;
   resetCreditsCheckedAt?: number;
 };
@@ -172,7 +184,7 @@ function parseUsageWindowStatus(value: unknown): UsageWindowStatus | undefined {
     return undefined;
   }
   const windowId =
-    typeof value.windowId === "string" && /^(?:primary|secondary)$/.test(value.windowId)
+    typeof value.windowId === "string" && /^(?:primary|secondary|credit)$/.test(value.windowId)
       ? value.windowId
       : undefined;
   const allowanceResetAt = finiteNumber(value.allowanceResetAt);
@@ -182,8 +194,11 @@ function parseUsageWindowStatus(value: unknown): UsageWindowStatus | undefined {
   ) {
     return undefined;
   }
+  const detail =
+    typeof value.detail === "string" && value.detail.length <= 80 ? value.detail : undefined;
   // Legacy persisted windows lack stable IDs and absolute reset times; preserve that limitation.
   return {
+    ...(detail === undefined ? {} : { detail }),
     ...(windowId === undefined ? {} : { windowId }),
     remaining,
     ...(typeof resetsIn === "string" ? { resetsIn } : {}),
@@ -235,8 +250,10 @@ function parseCachedAccount(value: unknown): CachedAccount | undefined {
   const usageCheckedAt = usage === undefined ? undefined : finiteNumber(value.usageCheckedAt);
   const resetCredits = parseResetCreditsSnapshot(value.resetCredits);
   const resetCreditsCheckedAt = finiteNumber(value.resetCreditsCheckedAt);
+  const attemptedAt = finiteNumber(value.attemptedAt);
   return {
     credentialKey: value.credentialKey,
+    ...(attemptedAt !== undefined ? { attemptedAt } : {}),
     ...(usage ? { usage } : {}),
     ...(usageCheckedAt !== undefined ? { usageCheckedAt } : {}),
     ...(resetCredits ? { resetCredits } : {}),
@@ -306,6 +323,19 @@ function observedUsageWindows(
   }));
 }
 
+function anthropicDisplayWindows(
+  windows: readonly ProviderUsageWindow[] | undefined,
+): UsageWindowStatus[] {
+  return (windows ?? []).map(({ windowId, remaining, resetsIn, detail, allowanceResetAt }) => ({
+    ...(windowId === undefined ? {} : { windowId }),
+    ...(detail === undefined ? {} : { detail }),
+    remaining,
+    ...(resetsIn === undefined ? {} : { resetsIn }),
+    // The startup header schedules re-renders at absolute reset times.
+    ...(allowanceResetAt === undefined ? {} : { allowanceResetAt }),
+  }));
+}
+
 function displayUsageWindows(
   windows: readonly ProviderUsageWindow[] | undefined,
 ): UsageWindowStatus[] {
@@ -318,7 +348,8 @@ function displayUsageWindows(
 async function refreshAccount(
   adapter: ProfileProviderAdapter,
   credentialKey: string,
-  credential: ProfileProviderCredential,
+  profileLabel: string,
+  initialCredential: ProfileProviderCredential,
   cached: CachedAccount | undefined,
   now: number,
   fetchFn: FetchFn,
@@ -330,6 +361,7 @@ async function refreshAccount(
     cached?.credentialKey === credentialKey ? { ...cached } : { credentialKey };
   const errors: DiagnosticCode[] = [];
   let liveUsage = liveUsageByCredential.get(credentialKey);
+  let credential = initialCredential;
 
   if (credential.expiresAt <= now) {
     errors.push("credential-expired");
@@ -338,7 +370,20 @@ async function refreshAccount(
     (forceUsageRefresh || !next.usageCheckedAt || now - next.usageCheckedAt >= USAGE_CACHE_MS)
   ) {
     try {
-      const usage = await adapter.fetchUsage(credential, fetchFn);
+      let usage: ProviderUsageSnapshot;
+      try {
+        usage = await adapter.fetchUsage(credential, fetchFn);
+      } catch (error) {
+        if (!(error instanceof ProviderAuthError)) throw error;
+        // The server can revoke a token that still looks valid locally, e.g. after another
+        // profile on the same account rotated the refresh token. Refresh once and retry.
+        credential = await adapter.refreshCredential({
+          expectedIdentity: credential.identity,
+          profileLabel,
+          force: true,
+        });
+        usage = await adapter.fetchUsage(credential, fetchFn);
+      }
       liveUsage = usage;
       liveUsageByCredential.set(credentialKey, usage);
       next.usage = {
@@ -408,6 +453,53 @@ async function refreshAccount(
   return { cached: next, profile, errors };
 }
 
+const ANTHROPIC_CACHE_MS = 5 * 60_000;
+
+// Anthropic's usage endpoint is rate limited and the CLI runs in a fresh process every few
+// seconds, so persist per credential holder and keep the last good windows on failure.
+async function anthropicUsageFor(
+  profileLabel: string,
+  agentDir: string,
+  fetchFn: FetchFn,
+  now: number,
+  cacheOnly: boolean,
+  previous: Record<string, CachedAccount>,
+  cache: Record<string, CachedAccount>,
+): Promise<UsageWindowStatus[] | undefined> {
+  let credential: AnthropicCredential | undefined = readAnthropicCredential(profileLabel, agentDir);
+  if (credential === undefined) return undefined;
+  const key = accountCredentialKey(ANTHROPIC_PROVIDER_ID, credential.identity);
+  const cached = previous[key];
+  if (cached) cache[key] = cached;
+  const cachedWindows = cached?.usage ? anthropicDisplayWindows(cached.usage.windows) : undefined;
+  const attemptedAt = cached?.attemptedAt ?? cached?.usageCheckedAt;
+  const fresh = attemptedAt !== undefined && now - attemptedAt < ANTHROPIC_CACHE_MS;
+  if (cacheOnly || fresh) return cachedWindows;
+  try {
+    if (credential.expiresAt <= now) {
+      credential = await refreshAnthropicCredential(credential, agentDir, false);
+    }
+    let windows: UsageWindowStatus[];
+    try {
+      windows = await fetchAnthropicUsage(credential, fetchFn, now);
+    } catch (error) {
+      if (!(error instanceof ProviderAuthError)) throw error;
+      credential = await refreshAnthropicCredential(credential, agentDir, true);
+      windows = await fetchAnthropicUsage(credential, fetchFn, now);
+    }
+    if (windows.length === 0) {
+      cache[key] = { credentialKey: key, attemptedAt: now };
+      return undefined;
+    }
+    cache[key] = { credentialKey: key, usage: { windows }, usageCheckedAt: now, attemptedAt: now };
+    return anthropicDisplayWindows(windows);
+  } catch {
+    // Back off for a full interval so a failing endpoint is not retried on every render.
+    cache[key] = { ...(cached ?? { credentialKey: key }), attemptedAt: now };
+    return cachedWindows;
+  }
+}
+
 async function mapWithConcurrency<T, R>(
   values: T[],
   concurrency: number,
@@ -438,6 +530,8 @@ export async function collectUsageStatus(
     ? new Set(options.profileLabels.map(normalizeName))
     : undefined;
   const candidateProfiles: string[] = [];
+  // Profiles holding only non-Codex credentials still need an indicator entry.
+  const codexlessProfiles: string[] = [];
 
   for (const rawName of listProfiles(agentDir)) {
     if (rawName === DEFAULT_PROFILE && options.includeDefault !== true) continue;
@@ -492,7 +586,10 @@ export async function collectUsageStatus(
         };
       }
 
-      if (result.kind === "missing") return undefined;
+      if (result.kind === "missing") {
+        if (providersIn(profileLabel, agentDir).length > 0) codexlessProfiles.push(profileLabel);
+        return undefined;
+      }
       if (result.kind !== "valid") {
         diagnostics.push({ profileLabel, code: result.kind });
         return undefined;
@@ -511,11 +608,11 @@ export async function collectUsageStatus(
   const activeProfile = options.activeProfile ?? DEFAULT_PROFILE;
   const cachePath = options.cachePath ?? defaultCachePath();
   const cache = readUsageCache(cachePath);
-  const credentialsByKey = new Map<string, ProfileProviderCredential>();
+  const credentialsByKey = new Map<string, ProfileCredential>();
   for (const profile of profileCredentials) {
     const existing = credentialsByKey.get(profile.credentialKey);
-    if (!existing || profile.credential.expiresAt > existing.expiresAt) {
-      credentialsByKey.set(profile.credentialKey, profile.credential);
+    if (!existing || profile.credential.expiresAt > existing.credential.expiresAt) {
+      credentialsByKey.set(profile.credentialKey, profile);
     }
   }
 
@@ -523,10 +620,11 @@ export async function collectUsageStatus(
   const accountResults = await mapWithConcurrency(
     accountEntries,
     MAX_CONCURRENT_REQUESTS,
-    ([credentialKey, credential]) =>
+    ([credentialKey, { profileLabel, credential }]) =>
       refreshAccount(
         adapter,
         credentialKey,
+        profileLabel,
         credential,
         cache.accounts[credentialKey],
         now,
@@ -548,14 +646,6 @@ export async function collectUsageStatus(
   for (const [credentialKey, result] of resultsByKey) {
     nextCache.accounts[credentialKey] = result.cached;
   }
-  if (options.cacheOnly !== true) {
-    try {
-      writeUsageCache(cachePath, nextCache);
-    } catch {
-      diagnostics.push({ profileLabel: "cache", code: "usage-cache-write-failed" });
-    }
-  }
-
   const profiles = profileCredentials
     .map(({ profileLabel, credentialKey }) => {
       const result = resultsByKey.get(credentialKey);
@@ -573,9 +663,41 @@ export async function collectUsageStatus(
       return profile;
     })
     .filter((profile): profile is ProfileUsageStatus => profile !== undefined)
+    .concat(
+      codexlessProfiles.map((profileLabel) => ({
+        profileLabel,
+        active: profileLabel === activeProfile,
+        usage: [],
+        urgency: "unknown" as const,
+      })),
+    )
     .sort((left, right) =>
       left.profileLabel < right.profileLabel ? -1 : left.profileLabel > right.profileLabel ? 1 : 0,
     );
+
+  const anthropicUsage = await mapWithConcurrency(profiles, MAX_CONCURRENT_REQUESTS, (profile) =>
+    anthropicUsageFor(
+      profile.profileLabel,
+      agentDir,
+      fetchFn,
+      now,
+      options.cacheOnly === true,
+      cache.accounts,
+      nextCache.accounts,
+    ),
+  );
+  profiles.forEach((profile, index) => {
+    const windows = anthropicUsage[index];
+    if (windows) profile.anthropicUsage = windows;
+  });
+
+  if (options.cacheOnly !== true) {
+    try {
+      writeUsageCache(cachePath, nextCache);
+    } catch {
+      diagnostics.push({ profileLabel: "cache", code: "usage-cache-write-failed" });
+    }
+  }
 
   return { schema: OUTPUT_SCHEMA, profiles, diagnostics };
 }

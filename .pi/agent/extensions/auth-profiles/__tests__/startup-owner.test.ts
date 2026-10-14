@@ -105,11 +105,80 @@ describe("auth startup owner", () => {
       authObservations(
         { schema: "fbb.pi-auth-profiles-usage/v1", profiles: [profile], diagnostics: [] },
         "openai-codex",
+        { hasCredential: () => false },
       )[0]?.windows,
     ).toEqual([
       { windowId: "primary", remaining: 74 },
       { windowId: "secondary", remaining: 88 },
     ]);
+  });
+
+  test("attaches fallback providers from the profile that owns the credential", () => {
+    const profile = (
+      profileLabel: string,
+      anthropicUsage?: UsageStatusPayload["profiles"][number]["anthropicUsage"],
+    ): UsageStatusPayload["profiles"][number] => {
+      const value: UsageStatusPayload["profiles"][number] = {
+        profileLabel,
+        active: profileLabel === "kk",
+        urgency: "unknown",
+        usage: [{ windowId: "primary", remaining: 70 }],
+        ...(anthropicUsage === undefined ? {} : { anthropicUsage }),
+      };
+      Object.defineProperty(value, AUTH_USAGE_OBSERVATION, {
+        value: { windows: [], observedAt: 100, staleAt: 200 },
+      });
+      return value;
+    };
+    const status: UsageStatusPayload = {
+      schema: "fbb.pi-auth-profiles-usage/v1",
+      profiles: [
+        profile("kk"),
+        profile("ct", [
+          { windowId: "primary", remaining: 64, resetsIn: "1h", allowanceResetAt: 3_700 },
+          { windowId: "secondary", remaining: 91 },
+        ]),
+        profile("fbb"),
+      ],
+      diagnostics: [],
+    };
+    const observations = authObservations(status, "openai-codex", {
+      profileOrder: ["kk", "ct", "default"],
+      hasCredential: (label, provider) => provider === "anthropic" && label === "ct",
+    });
+    const byLabel = new Map(observations.map((entry) => [entry.profileLabel, entry]));
+
+    expect(byLabel.get("kk")?.providers).toEqual([
+      {
+        provider: "anthropic",
+        borrowedFrom: "ct",
+        windows: [
+          { windowId: "primary", remaining: 64, allowanceResetAt: 3_700 },
+          { windowId: "secondary", remaining: 91 },
+        ],
+      },
+    ]);
+    expect(byLabel.get("ct")?.providers?.[0]?.borrowedFrom).toBeUndefined();
+    // fbb's own order would reach ct too, since the effective order is shared.
+    expect(byLabel.get("fbb")?.providers?.[0]?.borrowedFrom).toBe("ct");
+  });
+
+  test("omits fallback providers no profile in the chain holds", () => {
+    const value: UsageStatusPayload["profiles"][number] = {
+      profileLabel: "kk",
+      active: true,
+      urgency: "unknown",
+      usage: [],
+    };
+    Object.defineProperty(value, AUTH_USAGE_OBSERVATION, {
+      value: { windows: [], observedAt: 100, staleAt: 200 },
+    });
+    const [observation] = authObservations(
+      { schema: "fbb.pi-auth-profiles-usage/v1", profiles: [value], diagnostics: [] },
+      "openai-codex",
+      { profileOrder: ["kk"], hasCredential: () => false },
+    );
+    expect(observation?.providers).toBeUndefined();
   });
   test("publishes only sanitized observed state in resolver and provider-window order", () => {
     const events = createEventBus();

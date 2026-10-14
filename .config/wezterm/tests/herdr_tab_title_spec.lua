@@ -1,6 +1,4 @@
-package.path = package.path
-	.. ";./.config/wezterm/?.lua"
-	.. ";./.config/wezterm/?/init.lua"
+package.path = package.path .. ";./.config/wezterm/?.lua" .. ";./.config/wezterm/?/init.lua"
 
 local registered_events = {}
 

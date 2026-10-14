@@ -1,6 +1,18 @@
 import type { AuthOperationOptions } from "@earendil-works/pi-ai";
 import type { ModelRuntime } from "@earendil-works/pi-coding-agent";
 
+/**
+ * Providers saved per profile that fall back to the default auth.json when the
+ * profile has no credential of its own. The adapter provider stays isolated.
+ */
+export const PROFILE_FALLBACK_PROVIDERS: ReadonlySet<string> = new Set(["anthropic"]);
+
+/** OAuth providers whose explicit /login must be saved to the active profile. */
+export const PROFILE_LOGIN_PROVIDERS: ReadonlySet<string> = new Set([
+  "openai-codex",
+  ...PROFILE_FALLBACK_PROVIDERS,
+]);
+
 const loginSignals = new WeakSet<AbortSignal>();
 
 export function consumeCredentialLogin(options: AuthOperationOptions | undefined): boolean {
@@ -10,10 +22,13 @@ export function consumeCredentialLogin(options: AuthOperationOptions | undefined
   return true;
 }
 
-export function installCredentialLoginBoundary(runtime: Pick<ModelRuntime, "login">): () => void {
+export function installCredentialLoginBoundary(
+  runtime: Pick<ModelRuntime, "login">,
+  providers: ReadonlySet<string> = PROFILE_LOGIN_PROVIDERS,
+): () => void {
   const original = runtime.login;
   const wrapped: ModelRuntime["login"] = async (providerId, type, interaction, options) => {
-    if (providerId !== "openai-codex" || type !== "oauth") {
+    if (!providers.has(providerId) || type !== "oauth") {
       return original.call(runtime, providerId, type, interaction, options);
     }
     // Pi forwards this exact signal to the login write. A one-use capability

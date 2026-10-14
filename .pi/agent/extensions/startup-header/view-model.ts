@@ -1,12 +1,14 @@
 import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
 import { type SandboxLaunchMode, sandboxLaunchIndicator } from "../../lib/sandbox-mode";
+import { brandColor, type ProviderBrand, providerBrand } from "../shared/provider-brand";
 import { renderStartupHeaderArt, type StartupHeaderArt } from "./ascii-art";
 import { type CandidateInspection, formatCandidateView } from "./candidates";
 import type { ClassifierStartupStatus } from "./classifier-status";
 import type { StartupOwnerSnapshot } from "./contracts";
 import {
   type AuthStartupProfile,
+  type AuthStartupProviderStatus,
   readAuthStartupPayload,
   readLspStartupPayload,
 } from "./owner-payloads";
@@ -81,10 +83,11 @@ export function startupHeaderTimeKey(
     auth?.staleAt !== undefined && auth.staleAt <= now,
     profiles.map((profile) => [
       bankedResetDisplay(profile, now),
-      profile.windows.map((window) =>
-        window.allowanceResetAt === undefined
-          ? undefined
-          : formatDeadline(window.allowanceResetAt, now),
+      [...profile.windows, ...(profile.providers ?? []).flatMap(({ windows }) => windows)].map(
+        (window) =>
+          window.allowanceResetAt === undefined
+            ? undefined
+            : formatDeadline(window.allowanceResetAt, now),
       ),
     ]),
     [updates?.staleAt ?? coverage?.staleAt, updates?.expiresAt ?? coverage?.expiresAt].map(
@@ -167,7 +170,7 @@ function renderAuthStatus(
   if (width < 76)
     return renderCompactAuth(theme, profiles, payload.activeProfile, nextProfile, stale, now);
 
-  const columns = [17, 14, 12, 16] as const;
+  const columns = [13, 11, 10, 10, 16] as const;
   const border = (left: string, join: string, right: string) =>
     theme.fg(
       "border",
@@ -175,63 +178,66 @@ function renderAuthStatus(
     );
   const lines = [
     border("┌", "┬", "┐"),
-    tableRow(theme, columns, [
-      { text: "Profile", color: "muted" },
-      { text: "Window", color: "muted" },
-      { text: "Week", color: "muted" },
-      { text: "Banked resets", color: "muted" },
-    ]),
+    tableRow(
+      theme,
+      columns,
+      ["Profile", "Provider", "Window", "Week", "Extra"].map((text) => ({
+        text,
+        color: "muted" as const,
+      })),
+    ),
     border("├", "┼", "┤"),
   ];
+  const blank: TableCell = { text: "", color: "muted" };
+  const visibleProfiles = new Set(profiles.map(({ profileLabel }) => profileLabel));
 
   for (const [profileIndex, profile] of profiles.entries()) {
     if (profileIndex > 0) lines.push(border("├", "┼", "┤"));
     const active = profile.profileLabel === payload.activeProfile;
     const next = profile.profileLabel === nextProfile;
-    const profileLabel = `${profile.profileLabel}${active ? " [active]" : next ? " [next]" : ""}${profile.status === "errored" ? " !" : ""}`;
-    const profileColor: ThemeColor = active
-      ? "success"
-      : next
-        ? "accent"
-        : profile.status === "errored"
-          ? "warning"
-          : "text";
-    const method = displayAuthMethod(profile);
-    const [window, week] = profile.windows;
-    const banked = bankedResetDisplay(profile, now);
+    const profileCell: TableCell = {
+      text: `${profile.profileLabel}${active ? " [active]" : next ? " [next]" : ""}${profile.status === "errored" ? " !" : ""}`,
+      color: active
+        ? "success"
+        : next
+          ? "accent"
+          : profile.status === "errored"
+            ? "warning"
+            : "text",
+    };
 
     if (profile.status === "not-reported") {
       lines.push(
         tableRow(theme, columns, [
-          { text: profileLabel, color: profileColor },
-          { text: "", color: "muted" },
-          { text: "", color: "muted" },
-          { text: "", color: "muted" },
-        ]),
-        tableRow(theme, columns, [
-          { text: method, color: "muted" },
-          { text: "", color: "muted" },
-          { text: "", color: "muted" },
-          { text: "", color: "muted" },
+          profileCell,
+          { text: displayAuthMethod(profile), color: "muted" },
+          blank,
+          blank,
+          blank,
         ]),
       );
       continue;
     }
 
+    const [window, week] = profile.windows;
+    const banked = bankedResetDisplay(profile, now);
     lines.push(
       tableRow(theme, columns, [
-        { text: profileLabel, color: profileColor },
-        { text: allowanceDisplay(window), color: allowanceColor(window) },
-        { text: allowanceDisplay(week), color: allowanceColor(week) },
-        { text: banked.count, color: banked.color },
-      ]),
-      tableRow(theme, columns, [
-        { text: method, color: "muted" },
-        { text: resetDisplay(window, now), color: "muted" },
-        { text: resetDisplay(week, now), color: "muted" },
-        { text: banked.expiry, color: banked.color },
+        profileCell,
+        providerCell(profile.provider),
+        usageCell(window, now),
+        usageCell(week, now),
+        {
+          text: [banked.count, banked.expiry].filter((part) => part !== "").join(" · "),
+          color: banked.color,
+        },
       ]),
     );
+    for (const provider of profile.providers ?? []) {
+      lines.push(
+        tableRow(theme, columns, [blank, ...providerCells(provider, now, visibleProfiles)]),
+      );
+    }
   }
 
   lines.push(border("└", "┴", "┘"));
@@ -241,15 +247,85 @@ function renderAuthStatus(
 interface TableCell {
   readonly text: string;
   readonly color: ThemeColor;
+  /** Brand color that overrides the theme color. */
+  readonly rgb?: ProviderBrand["rgb"];
 }
 
 function tableRow(theme: Theme, columns: readonly number[], cells: readonly TableCell[]): string {
   const rendered = cells.map((cell, index) => {
     const padded = fit(cell.text, columns[index] ?? 1);
-    const styled = theme.fg(cell.color, padded);
+    const styled =
+      cell.rgb === undefined ? theme.fg(cell.color, padded) : brandColor(cell.rgb, padded);
     return ` ${styled} `;
   });
   return `${theme.fg("border", "│")}${rendered.join(theme.fg("border", "│"))}${theme.fg("border", "│")}`;
+}
+
+/** Icon and name in the provider's brand color; unknown providers fall back to their id. */
+function providerCell(provider: string | undefined): TableCell {
+  const brand = providerBrand(provider ?? "openai-codex");
+  if (brand === undefined) return { text: provider ?? "", color: "muted" };
+  return { text: `${brand.icon} ${brand.name}`, color: "muted", rgb: brand.rgb };
+}
+
+function styleProviderCell(theme: Theme, cell: TableCell): string {
+  return cell.rgb === undefined ? theme.fg(cell.color, cell.text) : brandColor(cell.rgb, cell.text);
+}
+
+/** Remaining allowance and reset on one line, e.g. "63% · 6d". */
+function usageCell(
+  window: AuthStartupProfile["windows"][number] | undefined,
+  now: number,
+): TableCell {
+  if (window === undefined) return { text: "", color: "muted" };
+  const reset =
+    window.allowanceResetAt === undefined
+      ? ""
+      : ` · ${formatDeadline(window.allowanceResetAt, now)}`;
+  return { text: `${window.remaining}%${reset}`, color: allowanceColor(window) };
+}
+
+/**
+ * Cells after the profile column for a fallback provider. A credential borrowed from a
+ * profile that has its own table row points there instead of repeating its numbers.
+ */
+function providerCells(
+  provider: AuthStartupProviderStatus,
+  now: number,
+  visibleProfiles: ReadonlySet<string>,
+): TableCell[] {
+  const name = providerCell(provider.provider);
+  if (provider.borrowedFrom !== undefined && visibleProfiles.has(provider.borrowedFrom)) {
+    return [
+      name,
+      { text: `via ${provider.borrowedFrom}`, color: "dim" },
+      { text: "", color: "muted" },
+      { text: "", color: "muted" },
+    ];
+  }
+  const find = (windowId: string) =>
+    provider.windows.find((window) => window.windowId === windowId);
+  const credit = find("credit");
+  const window = find("primary");
+  const week = find("secondary");
+  const creditCell: TableCell =
+    credit === undefined
+      ? { text: "", color: "muted" }
+      : { text: `${credit.remaining}% credit`, color: allowanceColor(credit) };
+  // Credit-based logins have no plan windows: the credit share takes the window column and
+  // the spend takes the extra column, so every value stays inside its own cell.
+  if (window === undefined && week === undefined && credit !== undefined) {
+    return [
+      name,
+      creditCell,
+      { text: "", color: "muted" },
+      {
+        text: credit.detail === undefined ? "" : credit.detail.replace(" of ", " / "),
+        color: spendColor(credit),
+      },
+    ];
+  }
+  return [name, usageCell(window, now), usageCell(week, now), creditCell];
 }
 
 function displayAuthMethod(profile: AuthStartupProfile): string {
@@ -258,24 +334,18 @@ function displayAuthMethod(profile: AuthStartupProfile): string {
   return profile.method ?? profile.provider ?? "";
 }
 
-function allowanceDisplay(window: AuthStartupProfile["windows"][number] | undefined): string {
-  return window === undefined ? "" : `${window.remaining}% left`;
+/** Spend stays quiet until 70% of the credit limit is used, then warns, then alarms at 90%. */
+function spendColor(credit: AuthStartupProfile["windows"][number]): ThemeColor {
+  const used = 100 - credit.remaining;
+  if (used >= 90) return "error";
+  if (used >= 70) return "warning";
+  return "muted";
 }
-
 function allowanceColor(window: AuthStartupProfile["windows"][number] | undefined): ThemeColor {
   if (window === undefined) return "muted";
   if (window.remaining <= 20) return "error";
   if (window.remaining <= 50) return "warning";
   return "success";
-}
-
-function resetDisplay(
-  window: AuthStartupProfile["windows"][number] | undefined,
-  now: number,
-): string {
-  return window?.allowanceResetAt === undefined
-    ? ""
-    : `resets ${formatDeadline(window.allowanceResetAt, now)}`;
 }
 
 function bankedResetDisplay(
@@ -294,11 +364,8 @@ function bankedResetDisplay(
           ? "warning"
           : "success";
   return {
-    count: `${profile.bankedResetCount} available`,
-    expiry:
-      profile.bankedExpiryAt === undefined
-        ? ""
-        : `expires in ${formatDeadline(profile.bankedExpiryAt, now)}`,
+    count: `${profile.bankedResetCount} banked`,
+    expiry: profile.bankedExpiryAt === undefined ? "" : formatDeadline(profile.bankedExpiryAt, now),
     color,
   };
 }
@@ -323,14 +390,27 @@ function renderCompactAuth(
       ),
     );
     if (profile.status === "not-reported") continue;
-    for (const window of profile.windows) {
+    const windowLine = (window: AuthStartupProfile["windows"][number], indent: string) => {
       const reset =
         window.allowanceResetAt === undefined
           ? ""
           : ` · reset ${formatDeadline(window.allowanceResetAt, now)}`;
-      lines.push(
-        theme.fg(allowanceColor(window), `  ${window.windowId}: ${window.remaining}%${reset}`),
+      return theme.fg(
+        allowanceColor(window),
+        `${indent}${window.windowId}: ${window.remaining}%${reset}${window.detail === undefined ? "" : ` · ${window.detail}`}`,
       );
+    };
+    const indent = profile.providers === undefined ? "  " : "    ";
+    if (profile.providers !== undefined) {
+      lines.push(`  ${styleProviderCell(theme, providerCell(profile.provider))}`);
+    }
+    for (const window of profile.windows) lines.push(windowLine(window, indent));
+    for (const provider of profile.providers ?? []) {
+      const source = provider.borrowedFrom === undefined ? "" : ` (${provider.borrowedFrom})`;
+      lines.push(
+        `  ${styleProviderCell(theme, providerCell(provider.provider))}${theme.fg("muted", source)}`,
+      );
+      for (const window of provider.windows) lines.push(windowLine(window, "    "));
     }
   }
   return lines;

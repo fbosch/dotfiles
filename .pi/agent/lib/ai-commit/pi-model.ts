@@ -5,6 +5,7 @@ import {
   resolveCliModel,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
+import { openProfileCredentials } from "../../extensions/auth-profiles/profile-credentials";
 import { selectProfile } from "../../extensions/auth-profiles/profile-selector";
 import { projectIsTrusted } from "../../extensions/auth-profiles/project-trust";
 import { createOpenAiCodexProfileAdapter } from "../../extensions/auth-profiles/providers/openai-codex";
@@ -45,7 +46,7 @@ async function createConfiguredRuntime(cwd: string): Promise<{
   const trusted = projectIsTrusted(cwd, agentDir);
   const settings = SettingsManager.create(cwd, agentDir, { projectTrusted: trusted });
   const providerAdapter = createOpenAiCodexProfileAdapter(agentDir);
-  const { profile } = await selectProfile(
+  const { profile, profileOrder } = await selectProfile(
     {
       cwd,
       isProjectTrusted: () => trusted,
@@ -57,7 +58,7 @@ async function createConfiguredRuntime(cwd: string): Promise<{
     },
   );
   const runtime = await ModelRuntime.create({
-    credentials: await providerAdapter.createCredentialStore(profile),
+    credentials: await openProfileCredentials(providerAdapter, profile, profileOrder),
     modelsPath: join(agentDir, "models.json"),
   });
   return { runtime, settings, profile };

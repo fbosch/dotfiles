@@ -363,6 +363,16 @@ describe("auth profile prompt status", () => {
           usage: [],
         },
         {
+          profileLabel: "claude",
+          active: false,
+          urgency: "unknown",
+          usage: [],
+          anthropicUsage: [
+            { windowId: "primary", remaining: 42, resetsIn: "2h" },
+            { windowId: "credit", remaining: 99, detail: "$2.78 of $500.00" },
+          ],
+        },
+        {
           profileLabel: "default",
           active: true,
           urgency: "urgent",
@@ -372,6 +382,7 @@ describe("auth profile prompt status", () => {
             { remaining: 75, resetsIn: "3h" },
             { remaining: 0, resetsIn: "now" },
           ],
+          anthropicUsage: [{ windowId: "primary", remaining: 60, resetsIn: "1h" }],
         },
       ],
       diagnostics: [{ profileLabel: "work", code: "usage-request-failed" }],
@@ -408,13 +419,21 @@ describe("auth profile prompt status", () => {
         level: "warning",
         message:
           "<success>*</success> <accent><b>default</b></accent> <success>active</success>\n" +
-          "  primary      <success>━━━━━━━━━━╸</success><dim>───</dim> <success>75% remaining</success><dim>  resets 3h</dim>\n" +
-          "  secondary    <dim>──────────────</dim> <error>0% remaining</error><dim>  resets now</dim>\n" +
-          "  banked resets <error>2 available</error><dim>  expires in 6h</dim>\n\n" +
+          "  \x1b[38;2;116;170;156m\uec81 OpenAI Codex\x1b[39m\n" +
+          "    primary       <success>━━━━━━━━━━╸</success><dim>───</dim> <success>75% remaining</success><dim>  resets 3h</dim>\n" +
+          "    secondary     <dim>──────────────</dim> <error>0% remaining</error><dim>  resets now</dim>\n" +
+          "    banked resets <error>2 available</error><dim>  expires in 6h</dim>\n" +
+          "  \x1b[38;2;183;126;100m\uec82 Anthropic\x1b[39m\n" +
+          "    5h            <warning>━━━━━━━━</warning><dim>──────</dim> <warning>60% remaining</warning><dim>  resets 1h</dim>\n\n" +
+          "<muted>-</muted> <accent><b>claude</b></accent> <muted>inactive</muted>\n" +
+          "  \x1b[38;2;183;126;100m\uec82 Anthropic\x1b[39m\n" +
+          "    5h            <b><warning>━━━━━╸</warning></b><dim>────────</dim> <b><warning>42% remaining</warning></b><dim>  resets 2h</dim>\n" +
+          "    credit        <success>━━━━━━━━━━━━━╸</success><dim></dim> <success>99% remaining</success><dim>  $2.78 of $500.00</dim>\n\n" +
           "<muted>-</muted> <accent><b>work</b></accent> <muted>inactive</muted>\n" +
-          "  primary      <muted>unavailable</muted>\n" +
-          "  secondary    <muted>unavailable</muted>\n" +
-          "  banked resets <muted>unavailable</muted>\n\n" +
+          "  \x1b[38;2;116;170;156m\uec81 OpenAI Codex\x1b[39m\n" +
+          "    primary       <muted>unavailable</muted>\n" +
+          "    secondary     <muted>unavailable</muted>\n" +
+          "    banked resets <muted>unavailable</muted>\n\n" +
           "<warning><b>Diagnostics</b></warning>\n" +
           "  <muted>work:</muted> usage request failed",
       },
