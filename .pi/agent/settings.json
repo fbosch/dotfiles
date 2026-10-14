@@ -147,7 +147,7 @@
     }
   },
   "packages": [
-    "npm:pi-hashline-edit-pro@6.4.3",
+    "npm:pi-hashline-edit-pro@6.4.5",
     "npm:pi-codex-goal@latest",
     "npm:pi-context-view@0.7.1",
     "npm:@ff-labs/pi-fff@0.11.0",
