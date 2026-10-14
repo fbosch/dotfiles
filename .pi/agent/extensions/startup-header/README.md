@@ -44,3 +44,8 @@ The markers follow the active Pi theme:
 | `$9`   | tool title |
 
 Lines wider than the terminal are clipped without an ellipsis. Run `/reload` after changing the file.
+
+The integration status line shows green `sandbox ` when `NONO_CAP_FILE` is
+non-empty, and yellow `sandbox ` otherwise. This is display-only nono metadata,
+not independent verification of kernel confinement. Run `/reload` after updating
+the extension.

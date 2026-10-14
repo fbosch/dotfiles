@@ -183,6 +183,27 @@ function publishUpdateSnapshot(
 }
 
 describe("startup header registration", () => {
+  test.each([
+    ["/native/nono/capabilities.json", "sandbox "],
+    [undefined, "sandbox "],
+    ["", "sandbox "],
+  ] as const)("reads %s nono metadata when starting the header", (capFile, expected) => {
+    const originalCapFile = process.env.NONO_CAP_FILE;
+    const harness = createHarness();
+    try {
+      if (capFile === undefined) delete process.env.NONO_CAP_FILE;
+      else process.env.NONO_CAP_FILE = capFile;
+      startupHeader(harness.pi, dependencies);
+      harness.emit("session_start");
+      const lines = harness.render();
+      expect(lines).toContain(expected);
+      expect(harness.renderAgain()).toBe(lines);
+    } finally {
+      harness.emit("session_shutdown");
+      if (originalCapFile === undefined) delete process.env.NONO_CAP_FILE;
+      else process.env.NONO_CAP_FILE = originalCapFile;
+    }
+  });
   test("cached headers still become stale and expire at exact deadlines", () => {
     const harness = createHarness();
     startupHeader(harness.pi, dependencies);

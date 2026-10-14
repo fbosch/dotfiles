@@ -13,6 +13,30 @@ test("renders startup timing without context visualization", () => {
   expect(renderStartupHeader(theme, 160, 42.5)).toEqual(["pi", "Startup: 42.5ms"]);
 });
 
+test.each([
+  ["nono", "success", ""],
+  ["direct", "warning", ""],
+] as const)("renders %s sandbox state beside other integrations", (mode, color, icon) => {
+  const lines = renderStartupHeader(markedTheme, 1000, undefined, undefined, undefined, {
+    neovim: undefined,
+    direnv: undefined,
+    lsp: undefined,
+    classifier: { state: "ready" },
+    sandbox: mode,
+  });
+  expect(lines).toContain(`<success>classifier 󰸞</success>  <${color}>sandbox ${icon}</${color}>`);
+});
+
+test("omits unspecified sandbox state without adding an empty integration row", () => {
+  expect(
+    renderStartupHeader(theme, 80, undefined, undefined, undefined, {
+      neovim: undefined,
+      direnv: undefined,
+      lsp: undefined,
+    }),
+  ).toEqual(["pi"]);
+});
+
 test("renders update status with its stale marker and unsupported Git coverage", () => {
   const snapshot = {
     type: "reply" as const,

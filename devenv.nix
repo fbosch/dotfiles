@@ -333,6 +333,13 @@ in
 
     "test:herdr-neovim-sessions".exec = "bash .config/herdr/plugins/neovim-sessions/tests/restore.sh";
 
+    "test:pi-browser".exec = ''
+      set -euo pipefail
+      cd .pi/agent
+      bun test extensions/browser
+      bun run typecheck
+    '';
+
     "test:pi-extensions".exec = ''
       set -euo pipefail
       cd .pi/agent

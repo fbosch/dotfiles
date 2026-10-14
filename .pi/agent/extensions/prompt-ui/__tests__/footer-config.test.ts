@@ -2,7 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { loadFooterCustomization } from "../footer-config";
+import { loadFooterCustomization, renderSandboxFooterStatus } from "../footer-config";
 
 const SETTINGS_FILE = "settings.json";
 const temporaryDirectories: string[] = [];
@@ -27,6 +27,14 @@ async function writeConfig(path: string, value: unknown): Promise<void> {
   await writeFile(path, `${JSON.stringify(value)}\n`);
 }
 
+describe("sandbox footer indicator", () => {
+  const theme = { fg: (color: string, text: string) => `${color}:${text}` };
+
+  test("shows locked and unlocked nono metadata states", () => {
+    expect(renderSandboxFooterStatus(theme, "nono")).toBe("success:");
+    expect(renderSandboxFooterStatus(theme, "direct")).toBe("warning:");
+  });
+});
 describe("footer customization", () => {
   test("prefers trusted project config over the global fallback", async () => {
     const { project, global } = await fixture();

@@ -1,5 +1,6 @@
 import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { visibleWidth, wrapTextWithAnsi } from "@earendil-works/pi-tui";
+import { type SandboxLaunchMode, sandboxLaunchIndicator } from "../../lib/sandbox-mode";
 import { renderStartupHeaderArt, type StartupHeaderArt } from "./ascii-art";
 import { type CandidateInspection, formatCandidateView } from "./candidates";
 import type { ClassifierStartupStatus } from "./classifier-status";
@@ -22,6 +23,7 @@ export interface StartupIntegrationSnapshots {
   readonly direnv: StartupOwnerSnapshot | undefined;
   readonly lsp: StartupOwnerSnapshot | undefined;
   readonly classifier?: ClassifierStartupStatus | undefined;
+  readonly sandbox?: SandboxLaunchMode | undefined;
 }
 
 export function renderStartupHeader(
@@ -96,11 +98,14 @@ function renderIntegrationStatus(
   snapshots: StartupIntegrationSnapshots | undefined,
 ): string {
   if (snapshots === undefined) return "";
+  const sandbox =
+    snapshots.sandbox === undefined ? undefined : sandboxLaunchIndicator(snapshots.sandbox);
   return [
     renderIntegration(theme, "nvim", snapshots.neovim),
     renderIntegration(theme, "direnv", snapshots.direnv),
     renderIntegration(theme, "lsp", snapshots.lsp),
     renderIntegration(theme, "classifier", snapshots.classifier),
+    sandbox === undefined ? "" : theme.fg(sandbox.color, `sandbox ${sandbox.icon}`),
   ]
     .filter((status) => status !== "")
     .join("  ");
@@ -122,7 +127,7 @@ function renderIntegration(
       return theme.fg("warning", "lsp ?");
     }
   }
-  const marker = snapshot.state === "ready" ? "✓" : snapshot.state === "degraded" ? "!" : "?";
+  const marker = snapshot.state === "ready" ? "󰸞" : snapshot.state === "degraded" ? "!" : "?";
   const color: ThemeColor =
     snapshot.state === "ready" ? "success" : snapshot.state === "degraded" ? "warning" : "muted";
   return theme.fg(color, `${label} ${marker}`);

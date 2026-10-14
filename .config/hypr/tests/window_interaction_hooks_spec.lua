@@ -22,6 +22,9 @@ describe("window interaction hooks adapter", function()
 	local rebind_calls
 	local supports_updates
 	local drop_requests
+	local captured_window
+	local current_window
+	local epoch
 
 	before_each(function()
 		saved_modules = {}
@@ -40,6 +43,9 @@ describe("window interaction hooks adapter", function()
 		rebind_calls = 0
 		supports_updates = true
 		drop_requests = {}
+		captured_window = { address = "0xcaptured" }
+		current_window = captured_window
+		epoch = "generation-1"
 
 		package.preload["lib.async"] = function()
 			return {
@@ -93,6 +99,20 @@ describe("window interaction hooks adapter", function()
 					loaded_plugin = path
 				end,
 				window_interaction_hooks = {
+					supports_target_handles = function()
+						return true
+					end,
+					capture_at_cursor = function()
+						return captured_window, epoch
+					end,
+					capture_window = function(window)
+						return window, epoch
+					end,
+					resolve_target = function(window, generation)
+						if window == captured_window and generation == epoch then
+							return current_window
+						end
+					end,
 					rebind = function()
 						rebind_calls = rebind_calls + 1
 						return true
@@ -188,5 +208,52 @@ describe("window interaction hooks adapter", function()
 
 		assert.matches("polling fallback", adapter.error)
 		assert.is_nil(handlers["window_interaction_hooks.finished"])
+	end)
+	it("captures native identity and resolves the current window at release", function()
+		local adapter = require("plugins.window_interaction_hooks")
+		assert.is_true(adapter.enabled)
+		local target = adapter.capture_at_cursor()
+		assert.equal(captured_window, target.window)
+		current_window = { address = "0xcaptured", title = "latest" }
+		assert.equal(current_window, target:resolve())
+		current_window = nil
+		assert.is_nil(target:resolve())
+	end)
+
+	it("captures an explicitly supplied fallback and preserves an empty hit", function()
+		local adapter = require("plugins.window_interaction_hooks")
+		assert.equal(captured_window, adapter.capture_window(captured_window):resolve())
+		captured_window = nil
+		assert.is_nil(adapter.capture_at_cursor())
+		assert.is_nil(adapter.capture_window(nil))
+	end)
+
+	it("rejects retained handles after unload and a new generation", function()
+		local adapter = require("plugins.window_interaction_hooks")
+		local target = adapter.capture_at_cursor()
+		local api = hl.plugin.window_interaction_hooks
+		hl.plugin.window_interaction_hooks = nil
+		assert.is_nil(target:resolve())
+		hl.plugin.window_interaction_hooks = api
+		epoch = "generation-2"
+		assert.is_nil(target:resolve())
+		assert.equal(current_window, adapter.capture_at_cursor():resolve())
+	end)
+
+	it("disables pointer actions when target support is missing or rejected", function()
+		hl.plugin.window_interaction_hooks.capture_at_cursor = nil
+		local adapter = require("plugins.window_interaction_hooks")
+		assert.is_false(adapter.enabled)
+		assert.is_nil(adapter.capture_at_cursor())
+		assert.matches("target%-handle API", adapter.error)
+	end)
+
+	it("disables pointer actions when capability probing fails", function()
+		hl.plugin.window_interaction_hooks.supports_target_handles = function()
+			error("unavailable")
+		end
+		local adapter = require("plugins.window_interaction_hooks")
+		assert.is_false(adapter.enabled)
+		assert.is_nil(adapter.capture_window(captured_window))
 	end)
 end)

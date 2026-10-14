@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 import {
   createRunAuthorizationRequest,
   findDeterministicInputCandidate,
+  parseClickCandidates,
   parseRunCandidates,
   redactSensitiveInputs,
 } from "../index";
@@ -24,35 +25,35 @@ describe("browser run", () => {
       {
         id: "fill:e1:0",
         description: 'Fill "email" ("person@example.com") in "Email" at @e1.',
-        command: ["fill", "@e1", "person@example.com"],
+        interaction: { action: "fill", target: "@e1", value: "person@example.com" },
         authorization: "choice",
         trace: { action: "fill", ref: "@e1", label: "Email", input: "email" },
       },
       {
         id: "check:e2",
         description: 'Check "Updates" at @e2.',
-        command: ["check", "@e2"],
+        interaction: { action: "check", target: "@e2" },
         authorization: "choice",
         trace: { action: "check", ref: "@e2", label: "Updates" },
       },
       {
         id: "uncheck:e3",
         description: 'Uncheck "Terms" at @e3.',
-        command: ["uncheck", "@e3"],
+        interaction: { action: "uncheck", target: "@e3" },
         trace: { action: "uncheck", ref: "@e3", label: "Terms" },
         authorization: "choice",
       },
       {
         id: "click:e6",
         description: 'Click "Medium" at @e6.',
-        command: ["click", "@e6"],
+        interaction: { action: "click", target: "@e6" },
         authorization: "choice",
         trace: { action: "click", ref: "@e6", label: "Medium" },
       },
       {
         id: "click:e5",
         description: 'Click "Submit" at @e5.',
-        command: ["click", "@e5"],
+        interaction: { action: "click", target: "@e5" },
         authorization: "independent",
         trace: { action: "click", ref: "@e5", label: "Submit" },
       },
@@ -122,5 +123,31 @@ describe("browser run", () => {
         },
       },
     });
+  });
+  test("decodes escaped labels and preserves Danish letters across shared parsers", () => {
+    const label = 'Åbn "konto" med æ, ø og å';
+    const candidates = parseClickCandidates(`- button ${JSON.stringify(label)} [ref=e1]`);
+    expect(candidates[0]?.label).toBe(label);
+    const fields = parseRunCandidates(`- textbox ${JSON.stringify('E-mail "privat"')} [ref=e2]`, [
+      { name: "email", value: "supplied" },
+    ]);
+    expect(fields[0]?.trace.label).toBe('E-mail "privat"');
+    expect(fields[0]?.interaction).toEqual({ action: "fill", target: "@e2", value: "supplied" });
+  });
+  test("redacts JSON and URL encodings of supplied secrets from native snapshot context", () => {
+    const secret = 'private "quoted" value æøå';
+    const inputs = [{ name: "secret", value: secret, sensitive: true }];
+    expect(redactSensitiveInputs(JSON.stringify({ value: secret }), inputs)).toBe(
+      '{"value":"[redacted:secret]"}',
+    );
+    expect(
+      redactSensitiveInputs(
+        `URL: https://example.com/?value=${encodeURIComponent(secret)}`,
+        inputs,
+      ),
+    ).toBe("URL: https://example.com/?value=[redacted:secret]");
+    expect(redactSensitiveInputs(new URLSearchParams({ value: secret }).toString(), inputs)).toBe(
+      "value=[redacted:secret]",
+    );
   });
 });

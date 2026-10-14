@@ -1,11 +1,13 @@
 import { type ExtensionAPI, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { getKeybindings, type TUI } from "@earendil-works/pi-tui";
+import { getSandboxLaunchMode } from "../../lib/sandbox-mode";
 import { resolvedPresetModelIds } from "../model-presets";
 import { installFloatingDialogs } from "./floating-dialogs";
 import {
   type FooterCustomization,
   HIDDEN_FOOTER_STATUS_KEYS,
   loadFooterCustomization,
+  renderSandboxFooterStatus,
 } from "./footer-config";
 import { installSubagentWidgetFrame } from "./subagent-widget-frame";
 
@@ -28,7 +30,7 @@ export default function promptUi(pi: ExtensionAPI): void {
   let getBranch = (): string | null => null;
   let getProfileName = (): string | undefined => undefined;
   let getStatuses = (): readonly string[] => [];
-  let getMcpStatus = (): string => "";
+  let getPrimaryStatus = (): string => "";
   let getFileChangesStatus = (): string => "";
   const state = {
     isWorking: () => isWorking,
@@ -162,9 +164,14 @@ export default function promptUi(pi: ExtensionAPI): void {
               key !== STARTUP_TIME_STATUS_KEY,
           )
           .map(([key, status]) => renderFooterStatus(theme, key, status));
-      getMcpStatus = () => {
+      getPrimaryStatus = () => {
         const status = footerData.getExtensionStatuses().get(MCP_STATUS_KEY);
-        return status === undefined ? "" : renderFooterStatus(theme, MCP_STATUS_KEY, status);
+        return [
+          status === undefined ? "" : renderFooterStatus(theme, MCP_STATUS_KEY, status),
+          renderSandboxFooterStatus(theme, getSandboxLaunchMode()),
+        ]
+          .filter(Boolean)
+          .join(" · ");
       };
       getFileChangesStatus = () => {
         const status = footerData.getExtensionStatuses().get(FILE_CHANGES_STATUS_KEY);
@@ -182,7 +189,7 @@ export default function promptUi(pi: ExtensionAPI): void {
             state,
             ctx.cwd,
             width,
-            getMcpStatus(),
+            getPrimaryStatus(),
             getFileChangesStatus(),
             footerCustomization,
           ),
@@ -193,7 +200,7 @@ export default function promptUi(pi: ExtensionAPI): void {
           getBranch = () => null;
           getProfileName = () => undefined;
           getStatuses = () => [];
-          getMcpStatus = () => "";
+          getPrimaryStatus = () => "";
           getFileChangesStatus = () => "";
         },
       };

@@ -33,57 +33,6 @@ function M.active()
 	end
 end
 
-function M.at_cursor()
-	if hl.get_cursor_pos == nil then
-		return nil
-	end
-
-	local cursor = hl.get_cursor_pos()
-	if cursor == nil then
-		return nil
-	end
-
-	local active_workspace = hl.get_active_workspace and workspace_name(hl.get_active_workspace()) or nil
-	local matches = {}
-	for _, client in ipairs(hl.get_windows()) do
-		local at = client.at
-		local size = client.size
-		if
-			client.visible ~= false
-			and (active_workspace == nil or workspace_name(client.workspace) == active_workspace)
-			and at
-			and size
-			and at.x
-			and at.y
-			and size.x
-			and size.y
-			and cursor.x >= at.x
-			and cursor.x < at.x + size.x
-			and cursor.y >= at.y
-			and cursor.y < at.y + size.y
-		then
-			matches[#matches + 1] = client
-		end
-	end
-
-	-- Hyprland exposes windows bottom-to-top, while hit testing prioritizes
-	-- pinned floating, then floating, before tiled windows.
-	for index = #matches, 1, -1 do
-		local client = matches[index]
-		if client.floating == true and client.pinned == true then
-			return client
-		end
-	end
-	for index = #matches, 1, -1 do
-		local client = matches[index]
-		if client.floating == true then
-			return client
-		end
-	end
-
-	return matches[1]
-end
-
 function M.is_game(window)
 	return window ~= nil and window.content_type == "game"
 end
