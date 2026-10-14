@@ -1,8 +1,11 @@
 import { join } from "node:path";
 import type {
   ClassifierAnswer,
+  ClassifierApi,
   ClassifierContext,
+  ClassifierModel,
   ClassifierResult,
+  ImageContent,
   JsonValue,
   Usage,
 } from "@earendil-works/pi-ai";
@@ -14,15 +17,25 @@ import { readJsonConfig } from "./extension-config";
 
 export const OPENROUTER_PROVIDER_ID = "openrouter" as const;
 export const VERCEL_GATEWAY_PROVIDER_ID = "vercel-ai-gateway" as const;
-export const CLASSIFIER_PROVIDER_IDS = [
-  OPENROUTER_PROVIDER_ID,
-  VERCEL_GATEWAY_PROVIDER_ID,
-] as const;
 export const DEFAULT_CLASSIFIER_TIMEOUT_MS = 2_400;
 export const INTERACTIVE_CLASSIFIER_TIMEOUT_MS = 10_000;
-export type ClassifierRegistry = Pick<ModelRegistry, "findOfType" | "classify">;
+export interface ClassifierRegistry {
+  findOfType(
+    type: "classifier",
+    provider: string,
+    id: string,
+  ): ClassifierModel<ClassifierApi> | undefined;
+  classify(
+    model: ClassifierModel<ClassifierApi>,
+    input: ClassifierRequestContext,
+    options?: Parameters<ModelRegistry["classify"]>[2],
+  ): Promise<ClassifierResult>;
+}
 export type ClassifierFetch = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-export type ClassifierProviderId = (typeof CLASSIFIER_PROVIDER_IDS)[number];
+export type ClassifierProviderId = string;
+export interface ClassifierRequestContext extends ClassifierContext {
+  images?: ImageContent[];
+}
 export type ClassifierFailure = {
   readonly ok: false;
   readonly provider?: ClassifierProviderId;
@@ -66,36 +79,55 @@ const DEFAULT_PROVIDERS = [
   { provider: OPENROUTER_PROVIDER_ID, model: "typesafe/jev-1.13" },
   { provider: VERCEL_GATEWAY_PROVIDER_ID, model: "typesafe-ai/jev" },
 ] as const;
+const DEFAULT_IMAGE_PROVIDERS = [
+  { provider: OPENROUTER_PROVIDER_ID, model: "openai/gpt-6-luna-decisions" },
+] as const;
 type Preference = { provider: ClassifierProviderId; model: string };
+type ClassifierInputType = "text" | "image";
 const RecordPattern = P.record(P.string, P.unknown);
 
-function parseClassifierPreferences(settings: unknown): Preference[] | undefined {
-  if (settings === undefined) return [...DEFAULT_PROVIDERS];
-  if (!isMatching(RecordPattern, settings)) return undefined;
-  if (settings.classifier === undefined) return [...DEFAULT_PROVIDERS];
-  if (!isMatching(RecordPattern, settings.classifier)) return undefined;
-  if (settings.classifier.providers === undefined) return [...DEFAULT_PROVIDERS];
-  const entries = settings.classifier.providers;
-  if (!Array.isArray(entries) || entries.length < 1 || entries.length > 2) return undefined;
+function parsePreferences(entries: unknown): Preference[] | undefined {
+  if (!Array.isArray(entries) || entries.length < 1 || entries.length > 8) return undefined;
   const preferences: Preference[] = [];
   for (const entry of entries) {
-    if (!isMatching({ provider: P.union(...CLASSIFIER_PROVIDER_IDS), model: P.string }, entry))
+    if (!isMatching({ provider: P.string, model: P.string }, entry)) return undefined;
+    if (
+      !entry.provider.trim() ||
+      entry.provider !== entry.provider.trim() ||
+      !entry.model.trim() ||
+      entry.model !== entry.model.trim() ||
+      preferences.some(
+        ({ provider, model }) => provider === entry.provider && model === entry.model,
+      )
+    )
       return undefined;
-    if (preferences.some(({ provider }) => provider === entry.provider)) return undefined;
-    if (entry.provider === OPENROUTER_PROVIDER_ID) {
-      if (!/^~?typesafe\/jev-(?:latest|preview|\d+\.\d+(?:\.\d+)?)$/u.test(entry.model))
-        return undefined;
-    } else if (entry.model !== "typesafe-ai/jev") return undefined;
     preferences.push({ provider: entry.provider, model: entry.model });
   }
   return preferences;
+}
+
+export function resolveClassifierPreferences(
+  settings: unknown,
+  inputType: ClassifierInputType = "text",
+): Preference[] | undefined {
+  if (settings !== undefined && !isMatching(RecordPattern, settings)) return undefined;
+  const classifier = settings?.classifier;
+  if (classifier !== undefined && !isMatching(RecordPattern, classifier)) return undefined;
+  const providers = parsePreferences(
+    classifier?.providers === undefined ? DEFAULT_PROVIDERS : classifier.providers,
+  );
+  const imageProviders = parsePreferences(
+    classifier?.imageProviders === undefined ? DEFAULT_IMAGE_PROVIDERS : classifier.imageProviders,
+  );
+  if (!providers || !imageProviders) return undefined;
+  return inputType === "image" ? imageProviders : providers;
 }
 
 export function loadClassifierPreferences(
   agentDirectory = getAgentDir(),
 ): Preference[] | undefined {
   try {
-    return parseClassifierPreferences(readJsonConfig(join(agentDirectory, "settings.json")));
+    return resolveClassifierPreferences(readJsonConfig(join(agentDirectory, "settings.json")));
   } catch {
     return undefined;
   }
@@ -140,7 +172,7 @@ function loadClassifierSettings(
     const projectSettings = settings.getProjectSettings();
     if (settings.drainErrors().length > 0) return undefined;
     const enabled = resolveClassifierEnabled(globalSettings, projectSettings);
-    if (enabled && !parseClassifierPreferences(globalSettings)) return undefined;
+    if (enabled && !resolveClassifierPreferences(globalSettings)) return undefined;
     return enabled === undefined ? undefined : { enabled, globalSettings };
   } catch {
     return undefined;
@@ -170,7 +202,7 @@ export function installClassifierGate(
         timestamp: Date.now(),
       };
     }
-    return original.call(registry, model, input, options);
+    return classifyWithInput(original.bind(registry), model, input, options);
   };
   registry.classify = guarded;
   return () => {
@@ -179,9 +211,31 @@ export function installClassifierGate(
   };
 }
 
+export const MAX_CLASSIFIER_STATE_BYTES = 64_000;
+export const ClassifierImages = Type.Array(
+  Type.Object(
+    {
+      type: Type.Literal("image"),
+      data: Type.String({
+        minLength: 4,
+        maxLength: 5 * 1024 * 1024,
+        pattern: "^[A-Za-z0-9+/]+={0,2}$",
+      }),
+      mimeType: Type.Union([
+        Type.Literal("image/png"),
+        Type.Literal("image/jpeg"),
+        Type.Literal("image/webp"),
+      ]),
+    },
+    { additionalProperties: false },
+  ),
+  { maxItems: 4 },
+);
+
 const ClassifierInput = Type.Object(
   {
     state: Type.Record(Type.String(), Type.Unknown()),
+    images: Type.Optional(ClassifierImages),
     questions: Type.Record(
       Type.String(),
       Type.Union([
@@ -243,6 +297,85 @@ export function assertClassifierJson(
   } finally {
     ancestors.delete(value);
   }
+}
+export function assertClassifierInput(value: unknown): asserts value is ClassifierRequestContext {
+  assertClassifierJson(value);
+  if (!Value.Check(ClassifierInput, value)) throw new Error("Invalid classifier input");
+  if (value.images?.some(({ data }) => data.length % 4 !== 0))
+    throw new Error("Invalid classifier image encoding");
+  // Image payloads have separate bounds so screenshots do not exhaust the JSON-state budget.
+  if (
+    Buffer.byteLength(JSON.stringify({ state: value.state, questions: value.questions }), "utf8") >
+    MAX_CLASSIFIER_STATE_BYTES
+  )
+    throw new Error("Classifier state and questions exceed 64 KB");
+}
+
+async function classifyWithInput(
+  classify: ClassifierRegistry["classify"],
+  model: ClassifierModel<ClassifierApi>,
+  input: ClassifierRequestContext,
+  options?: Parameters<ModelRegistry["classify"]>[2],
+): Promise<ClassifierResult> {
+  const images = input.images;
+  if (
+    !images?.length ||
+    model.provider !== OPENROUTER_PROVIDER_ID ||
+    model.api !== "typesafe-system-one"
+  )
+    return classify(model, input, options);
+  try {
+    assertClassifierInput(input);
+    if (!model.input.includes("image")) throw new Error("Unsupported classifier input");
+  } catch {
+    return {
+      api: model.api,
+      provider: model.provider,
+      model: model.id,
+      answers: {},
+      stopReason: "error",
+      errorMessage: "Invalid classifier image input",
+      timestamp: Date.now(),
+    };
+  }
+  const transport = options?.fetch ?? globalThis.fetch;
+  // shortcut: bridge OpenRouter images until Pi's System One adapter supports them natively.
+  const fetch = Object.assign(
+    async (url: RequestInfo | URL, init?: RequestInit) => {
+      const endpoint = new URL(
+        typeof url === "string" ? url : url instanceof URL ? url.href : url.url,
+      );
+      if (
+        !endpoint.pathname.endsWith("/v1/systemone") ||
+        endpoint.search ||
+        init?.method !== "POST" ||
+        typeof init.body !== "string"
+      )
+        throw new Error("Unexpected classifier image transport");
+      const payload: unknown = JSON.parse(init.body);
+      if (
+        !isMatching({ model: model.id, state: RecordPattern, questions: RecordPattern }, payload) ||
+        JSON.stringify(payload.state) !== JSON.stringify(input.state)
+      )
+        throw new Error("Unexpected classifier image payload");
+      endpoint.pathname = `${endpoint.pathname.slice(0, -"/v1/systemone".length)}/alpha/decisions`;
+      return transport(endpoint, {
+        ...init,
+        body: JSON.stringify({
+          ...payload,
+          state: [
+            JSON.stringify(payload.state),
+            ...images.map(({ data, mimeType }) => ({
+              type: "image_url",
+              image_url: { url: `data:${mimeType};base64,${data}` },
+            })),
+          ],
+        }),
+      });
+    },
+    { preconnect: globalThis.fetch.preconnect },
+  );
+  return classify(model, { state: input.state, questions: input.questions }, { ...options, fetch });
 }
 
 const Probability = P.number.finite().between(0, 1);
@@ -365,7 +498,7 @@ export function createClassifierRequester(now: () => number = Date.now, agentDir
   const cooldowns = new Map<ClassifierProviderId, { until: number; failure: ClassifierFailure }>();
   return async function requestClassifier(
     registry: ClassifierRegistry,
-    input: ClassifierContext,
+    input: ClassifierRequestContext,
     options: ClassifierOptions = {},
   ): Promise<ClassifierRequestResult> {
     let usage: Usage | undefined;
@@ -391,18 +524,17 @@ export function createClassifierRequester(now: () => number = Date.now, agentDir
     );
     if (!settings) return fail("invalid-config", "config");
     if (!settings.enabled) return fail("disabled", "config");
-    const preferences = parseClassifierPreferences(settings.globalSettings);
-    if (!preferences) return fail("invalid-config", "config");
     try {
-      assertClassifierJson(input);
-      if (
-        !Value.Check(ClassifierInput, input) ||
-        Buffer.byteLength(JSON.stringify(input), "utf8") > 64_000
-      )
-        return fail("invalid-input", "config");
+      assertClassifierInput(input);
     } catch {
       return fail("invalid-input", "config");
     }
+    const requiresImages = (input.images?.length ?? 0) > 0;
+    const preferences = resolveClassifierPreferences(
+      settings.globalSettings,
+      requiresImages ? "image" : "text",
+    );
+    if (!preferences) return fail("invalid-config", "config");
     const timeoutMs = options.timeoutMs ?? DEFAULT_CLASSIFIER_TIMEOUT_MS;
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return fail("invalid-config", "config");
     const overall = new AbortController();
@@ -412,40 +544,53 @@ export function createClassifierRequester(now: () => number = Date.now, agentDir
     let lastFailure: ClassifierFailure | undefined;
     let usefulFailure: ClassifierFailure | undefined;
     try {
-      for (const [index, preference] of preferences.entries()) {
+      const candidates = preferences.flatMap((preference) => {
+        const cooldown = cooldowns.get(preference.provider);
+        if (cooldown && now() < cooldown.until) {
+          lastFailure = { ...cooldown.failure, retryAfterMs: cooldown.until - now() };
+          usefulFailure ??= lastFailure;
+          return [];
+        }
+        cooldowns.delete(preference.provider);
+        // Existing saved settings used the unprefixed latest alias; the native catalog prefixes it.
+        const id =
+          preference.provider === OPENROUTER_PROVIDER_ID &&
+          preference.model === "typesafe/jev-latest"
+            ? "~typesafe/jev-latest"
+            : preference.model;
+        const model = registry.findOfType("classifier", preference.provider, id);
+        if (!model?.input.includes("text") || (requiresImages && !model.input.includes("image"))) {
+          lastFailure = fail("model-unavailable", "config", preference.provider);
+          return [];
+        }
+        return [{ preference, model }];
+      });
+      for (const [index, { preference, model }] of candidates.entries()) {
         if (overall.signal.aborted)
           return fail(
             options.signal?.aborted ? "caller-cancellation" : "timeout",
             "request",
             preference.provider,
           );
+        // A previous attempt may have rate-limited another candidate on the same provider.
         const cooldown = cooldowns.get(preference.provider);
         if (cooldown && now() < cooldown.until) {
           lastFailure = { ...cooldown.failure, retryAfterMs: cooldown.until - now() };
           usefulFailure ??= lastFailure;
           continue;
         }
-        cooldowns.delete(preference.provider);
-        // Existing saved settings used the unprefixed latest alias; the native catalog prefixes it.
-        const id =
-          preference.model === "typesafe/jev-latest" ? "~typesafe/jev-latest" : preference.model;
-        const model = registry.findOfType("classifier", preference.provider, id);
-        if (!model) {
-          lastFailure = fail("model-unavailable", "config", preference.provider);
-          continue;
-        }
         const attempt = new AbortController();
         const onOverallAbort = () => attempt.abort();
         overall.signal.addEventListener("abort", onOverallAbort, { once: true });
         const attemptTimer =
-          index === 0 && preferences.length > 1
+          index === 0 && candidates.length > 1
             ? setTimeout(() => attempt.abort(), Math.max(1, Math.floor(timeoutMs / 2)))
             : undefined;
         let attemptedFetch = false;
         let httpStatus: number | undefined;
         let retryAfterMs: number | undefined;
         const transport = options.fetch ?? globalThis.fetch;
-        // Observe only bounded status metadata; Pi owns request payloads, credentials, and parsing.
+        // Observe only bounded status metadata; keep credentials and response parsing in Pi.
         const fetch = Object.assign(
           async (url: RequestInfo | URL, init?: RequestInit) => {
             attempt.signal.throwIfAborted();
@@ -462,7 +607,12 @@ export function createClassifierRequester(now: () => number = Date.now, agentDir
         try {
           // Our shared cooldown and fallback policy owns retries; avoid retrying the same primary first.
           result = await withinDeadline(
-            () => registry.classify(model, input, { signal: attempt.signal, maxRetries: 0, fetch }),
+            () =>
+              classifyWithInput(registry.classify.bind(registry), model, input, {
+                signal: attempt.signal,
+                maxRetries: 0,
+                fetch,
+              }),
             attempt.signal,
           );
         } finally {

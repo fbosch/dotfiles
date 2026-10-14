@@ -1,17 +1,20 @@
 import {
   type ClassifierAnswer,
   type ClassifierContext,
-  type JsonObject,
+  type ImageContent,
   StringEnum,
   type Usage,
 } from "@earendil-works/pi-ai";
-import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { defineTool, type ExtensionAPI, type SessionEntry } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 import {
+  assertClassifierInput,
   assertClassifierJson,
   type ClassifierFetch,
+  ClassifierImages,
   type ClassifierRegistry,
+  type ClassifierRequestContext,
   createClassifierRequester,
   INTERACTIVE_CLASSIFIER_TIMEOUT_MS,
   normalizeClassifierAnswers,
@@ -20,7 +23,6 @@ import {
 
 export type { ClassifierRegistry } from "../../lib/classifier";
 
-const MAX_REQUEST_BYTES = 64_000;
 const MAX_RESULT_BYTES = 50_000;
 const ID = "^[a-zA-Z][a-zA-Z0-9_-]{0,63}$";
 
@@ -61,6 +63,12 @@ const Question = Type.Union([
 export const QuestionParameters = Type.Object(
   {
     state: Type.Record(Type.String(), Type.Unknown()),
+    images: Type.Optional(ClassifierImages),
+    includeAttachedImages: Type.Optional(
+      Type.Boolean({
+        description: "Include images from the latest user message for this judgment.",
+      }),
+    ),
     questions: Type.Record(Type.String({ pattern: ID }), Question, {
       minProperties: 1,
       maxProperties: 16,
@@ -75,6 +83,7 @@ interface ClassifyOptions {
   fetch?: ClassifierFetch;
   timeoutMs?: number;
   agentDirectory?: string;
+  attachedImages?: readonly ImageContent[];
 }
 
 class ClassifierQuestionError extends Error {
@@ -86,18 +95,30 @@ class ClassifierQuestionError extends Error {
   }
 }
 
-export function normalizeQuestionInput(value: unknown): ClassifierContext {
+export function latestUserImages(branch: readonly SessionEntry[]): ImageContent[] {
+  for (const entry of [...branch].reverse()) {
+    if (entry.type !== "message" || entry.message.role !== "user") continue;
+    const content = entry.message.content;
+    return typeof content === "string" ? [] : content.filter((part) => part.type === "image");
+  }
+  return [];
+}
+
+export function normalizeQuestionInput(
+  value: unknown,
+  attachedImages: readonly ImageContent[] = [],
+): ClassifierRequestContext {
   assertClassifierJson(value);
   if (!Value.Check(QuestionParameters, value)) throw new Error("Invalid classifier input");
-  const state: JsonObject = Object.fromEntries(
-    Object.entries(value.state).map(([key, child]) => {
-      assertClassifierJson(child);
-      return [key, child];
-    }),
-  );
-  const input = { state, questions: value.questions };
-  if (Buffer.byteLength(JSON.stringify(input), "utf8") > MAX_REQUEST_BYTES)
-    throw new Error("Classifier request exceeds 64 KB");
+  if (value.includeAttachedImages && attachedImages.length === 0)
+    throw new Error("No images attached to the latest user message");
+  const images = [...(value.images ?? []), ...(value.includeAttachedImages ? attachedImages : [])];
+  const input = {
+    state: value.state,
+    questions: value.questions,
+    ...(value.images !== undefined || images.length > 0 ? { images } : {}),
+  };
+  assertClassifierInput(input);
   return input;
 }
 
@@ -116,7 +137,7 @@ export async function classifyQuestion(
   registry: ClassifierRegistry,
   options: ClassifyOptions = {},
 ): Promise<{ answers: Record<string, ClassifierAnswer>; usage?: Usage }> {
-  const normalized = normalizeQuestionInput(input);
+  const normalized = normalizeQuestionInput(input, options.attachedImages);
   const timeoutMs = options.timeoutMs ?? INTERACTIVE_CLASSIFIER_TIMEOUT_MS;
   if (!Number.isInteger(timeoutMs) || timeoutMs <= 0) throw new Error("Invalid Classifier timeout");
   const request =
@@ -168,18 +189,22 @@ export default function typesafeQuestionExtension(pi: ExtensionAPI): void {
       name: "typesafe_question",
       label: "TypeSafe question",
       description:
-        "Ask the classifier up to 16 narrow bool, choice, or score questions about shared JSON object state through Pi's native classifier API. Instructions and criteria must be strings; bool criteria require true and false descriptions. Returns bool probability, choice probabilities/confidence, or score/confidence. Sends all supplied data to the configured Vercel AI Gateway or OpenRouter; do not send secrets or sensitive data. Returns validated judgments, not actions.",
+        "Ask the classifier up to 16 narrow bool, choice, or score questions about shared JSON state and optional images. Routes to configured native classifier models that support the supplied input. Instructions and criteria must be strings; bool criteria require true and false descriptions. Returns bool probability, choice probabilities/confidence, or score/confidence. Sends all supplied data to the selected provider; do not send secrets or sensitive data. Use includeAttachedImages for images in the latest user message, or supply base64 image blocks explicitly. Unrelated attachments are not included automatically. Returns validated judgments, not actions.",
       promptSnippet: "Get typed classifier judgments for narrow semantic decisions",
       promptGuidelines: [
         "Use typesafe_question for routing, classification, scoring, or checking a claim against supplied state when probabilities help; keep exact lookups and calculations in code.",
         "Batch independent questions over the same object state. Use string instructions and criteria; bool is a yes/no probability, while score measures an ordered level. Do not use the classifier for prose generation or workflow actions, and do not send secrets or sensitive data.",
         "Treat classifier answers as uncertain judgments, not permission to act; verify consequential decisions against evidence and policy.",
+        "When a judgment needs images attached to the latest user message, set includeAttachedImages: true. Alternatively pass explicit base64 image blocks in images. Do not include attachments for unrelated text-only judgments. Missing images or image-capable models are errors, never permission to drop image input.",
       ],
       parameters: QuestionParameters,
       async execute(_id, params, signal, _update, ctx) {
         try {
           const result = await classifyQuestion(params, ctx.modelRegistry, {
             ...(signal ? { signal } : {}),
+            ...(params.includeAttachedImages
+              ? { attachedImages: latestUserImages(ctx.sessionManager.getBranch()) }
+              : {}),
           });
           return {
             content: [{ type: "text" as const, text: JSON.stringify({ answers: result.answers }) }],

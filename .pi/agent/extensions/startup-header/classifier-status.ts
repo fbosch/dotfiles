@@ -1,4 +1,4 @@
-import { CLASSIFIER_PROVIDER_IDS, resolveClassifierEnabled } from "../../lib/classifier";
+import { resolveClassifierEnabled, resolveClassifierPreferences } from "../../lib/classifier";
 import { resolveRecommendAgentConfig } from "../recommend-agent/settings";
 import { resolveSkillSelectionConfig } from "../skill-discovery/selection-config";
 import { resolveClassifierToolDiscoveryConfig } from "../tool-discovery";
@@ -38,7 +38,9 @@ export function resolveClassifierStartupStatus(
   let hasKnownStatus = false;
   let hasUnknownStatus = false;
   let hasConfiguredProvider = false;
-  for (const providerId of CLASSIFIER_PROVIDER_IDS) {
+  const preferences = resolveClassifierPreferences(globalSettings);
+  if (!preferences) return { state: "unavailable" };
+  for (const providerId of new Set(preferences.map(({ provider }) => provider))) {
     let auth: ProviderAuthStatus | undefined;
     try {
       auth = reader.getProviderAuthStatus(providerId);

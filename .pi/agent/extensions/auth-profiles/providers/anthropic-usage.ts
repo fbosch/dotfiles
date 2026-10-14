@@ -163,3 +163,51 @@ export async function fetchAnthropicUsage(
   if (!response.ok) throw new Error(`request failed with ${response.status}`);
   return anthropicUsageFromPayload(await readBoundedJson(response), now);
 }
+
+// The 429 carries no reset time, so an owner without exhausted usage windows is retried
+// after one usage-cache interval instead of on the very next request.
+const UNKNOWN_USAGE_COOLDOWN_MS = 5 * 60_000;
+const RETRY_DELAY_PATTERN = /Server requested (\d+)s retry delay/;
+
+/**
+ * Detect an Anthropic usage limit from an assistant error message.
+ *
+ * The SDK throws on HTTP 429 before Pi's `after_provider_response` hook runs, so the
+ * error text (`429 {"type":"error","error":{"type":"rate_limit_error",...}}`) is the
+ * only signal. Pi's retry wrapper prefixes `Server requested Ns retry delay` when the
+ * server's Retry-After exceeds its retry limit; that delay is the best reset estimate.
+ */
+export function anthropicUsageLimitFromMessage(
+  errorMessage: string | undefined,
+  now = Date.now(),
+): { resetAt?: number } | undefined {
+  if (errorMessage === undefined) return undefined;
+  if (!/\b429\b/.test(errorMessage) || !errorMessage.includes("rate_limit_error")) return undefined;
+  const seconds = Number(RETRY_DELAY_PATTERN.exec(errorMessage)?.[1]);
+  return Number.isFinite(seconds) && seconds > 0 ? { resetAt: now + seconds * 1000 } : {};
+}
+
+/**
+ * When an exhausted owner's usage resets: the latest reset among exhausted windows,
+ * else the 5-hour window reset (cached usage can lag the 429), else a short cooldown.
+ */
+export function anthropicExhaustionResetAt(
+  windows: readonly ProviderUsageWindow[] | undefined,
+  now = Date.now(),
+): number {
+  const future = (window: ProviderUsageWindow) =>
+    window.allowanceResetAt !== undefined && window.allowanceResetAt > now;
+  const exhausted = (windows ?? []).filter((window) => window.remaining <= 0 && future(window));
+  if (exhausted.length > 0) {
+    return Math.max(...exhausted.map((window) => window.allowanceResetAt ?? now));
+  }
+  const primary = windows?.find((window) => window.windowId === "primary" && future(window));
+  return primary?.allowanceResetAt ?? now + UNKNOWN_USAGE_COOLDOWN_MS;
+}
+
+/** Whether every reported Anthropic window still has usage, confirming the owner can serve. */
+export function hasConfirmedAnthropicUsage(
+  windows: readonly ProviderUsageWindow[] | undefined,
+): boolean {
+  return windows !== undefined && windows.length > 0 && windows.every((w) => w.remaining > 0);
+}

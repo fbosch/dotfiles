@@ -125,6 +125,12 @@
         "model": "typesafe-ai/jev"
       }
     ],
+    "imageProviders": [
+      {
+        "provider": "openrouter",
+        "model": "openai/gpt-6-luna-decisions"
+      }
+    ],
     "toolDiscovery": {
       "enabled": true,
       "timeoutMs": 2400

@@ -14,7 +14,7 @@ import authProfiles from "../index";
 import type { ProfileSelection } from "../profile-selector";
 import { accountIdFor, authPathFor } from "../profile-store";
 import type { ProfileProviderAdapter } from "../provider-adapter";
-import { createOpenAiCodexProfileAdapter } from "../providers/openai-codex";
+import { createCredentialStore, createOpenAiCodexProfileAdapter } from "../providers/openai-codex";
 import type { UsageStatusPayload } from "../usage-status-service";
 
 type SessionStartHandler = (event: unknown, ctx: ExtensionContext) => Promise<void>;
@@ -440,12 +440,18 @@ describe("auth profile prompt status", () => {
     ]);
   });
 
-  test("switches a session-preferred profile after confirmed Codex exhaustion", async () => {
+  test("moves only the Codex login after confirmed Codex exhaustion", async () => {
     const root = await mkdtemp(join(tmpdir(), "pi-auth-fallback-"));
     temporaryDirectories.push(root);
     const agentDir = join(root, "agent");
     const projectDir = join(root, "project");
-    await mkdir(agentDir);
+    await mkdir(join(agentDir, "auth-profiles"), { recursive: true });
+    for (const profile of ["fbb", "jpb", "ct"]) {
+      await writeFile(
+        authPathFor(profile, agentDir),
+        JSON.stringify({ "openai-codex": { type: "api_key", key: `codex-${profile}` } }),
+      );
+    }
     await mkdir(projectDir);
     process.env.PI_CODING_AGENT_DIR = agentDir;
 
@@ -509,7 +515,10 @@ describe("auth profile prompt status", () => {
     } as unknown as ExtensionAPI;
     authProfiles(pi, {
       now: () => 1_000_000,
-      providerAdapter: testProviderAdapter(agentDir),
+      providerAdapter: {
+        ...testProviderAdapter(agentDir),
+        createCredentialStore: (label) => createCredentialStore(authPathFor(label, agentDir)),
+      },
       selectProfile: chooseProfile,
     });
 
@@ -519,7 +528,7 @@ describe("auth profile prompt status", () => {
       login: async () => {
         throw new Error("Login not used in this fixture");
       },
-      credentials: { store: new FakeAuthStore() },
+      credentials: { store: new FakeAuthStore() as CredentialStore },
     };
     const ctx = {
       cwd: projectDir,
@@ -564,13 +573,17 @@ describe("auth profile prompt status", () => {
     releaseRotation?.();
     await nextRequest;
 
+    const codexKey = async () => {
+      const credential = await runtime.credentials.store.read("openai-codex");
+      return credential?.type === "api_key" ? credential.key : undefined;
+    };
     expect(statuses).toEqual([
       ["auth-profile", "fbb"],
-      ["auth-profile", "jpb"],
+      ["auth-profile", "fbb · Codex via jpb"],
     ]);
-    expect(runtime.credentials.store.path).toBe(join(agentDir, "auth-profiles", "jpb.json"));
+    expect(await codexKey()).toBe("codex-jpb");
     expect(notifications.at(-1)).toBe(
-      "fbb reached its usage limit; switched to jpb. Retry the request.",
+      "fbb reached its Codex usage limit; switched Codex to jpb. Retry the request.",
     );
 
     await providerResponse?.(
@@ -583,11 +596,13 @@ describe("auth profile prompt status", () => {
       },
       ctx,
     );
-    expect(statuses.at(-1)).toEqual(["auth-profile", "ct"]);
-    expect(runtime.credentials.store.path).toBe(join(agentDir, "auth-profiles", "ct.json"));
+    expect(statuses.at(-1)).toEqual(["auth-profile", "fbb · Codex via ct"]);
+    expect(await codexKey()).toBe("codex-ct");
     expect(notifications.at(-1)).toBe(
-      "jpb reached its usage limit; switched to ct. Retry the request.",
+      "jpb reached its Codex usage limit; switched Codex to ct. Retry the request.",
     );
+    // The bound profile keeps serving fallback providers and /login.
+    expect(statuses.every(([, value]) => value?.startsWith("fbb") === true)).toBe(true);
   });
 
   test("reset-credit resolves a named profile without changing the active store", async () => {
@@ -745,5 +760,272 @@ describe("auth profile prompt status", () => {
           request.accountId === "personal-account" || request.accountId === "work-account",
       ),
     ).toBe(true);
+  });
+});
+
+describe("anthropic usage-limit rotation", () => {
+  type MessageEndHandler = (
+    event: { message: { role: string; stopReason: string; errorMessage?: string } },
+    ctx: ExtensionContext,
+  ) => Promise<void>;
+  const RATE_LIMIT =
+    '429 {"type":"error","error":{"type":"rate_limit_error","message":"This request would exceed your account\'s rate limit."}}';
+  const anthropicOAuth = (access: string) => ({
+    anthropic: { type: "oauth", access, refresh: `refresh-${access}`, expires: 9_999_999_999_999 },
+  });
+
+  async function setup(usage: Record<string, Array<{ remaining: number; resetAt?: number }>>) {
+    const root = await mkdtemp(join(tmpdir(), "pi-auth-anthropic-rotation-"));
+    temporaryDirectories.push(root);
+    const agentDir = join(root, "agent");
+    const projectDir = join(root, "project");
+    await mkdir(join(agentDir, "auth-profiles"), { recursive: true });
+    await mkdir(projectDir);
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    for (const profile of ["fbb", "jpb"]) {
+      await writeFile(
+        authPathFor(profile, agentDir),
+        JSON.stringify({
+          ...anthropicOAuth(profile),
+          "openai-codex": { type: "api_key", key: `codex-${profile}` },
+        }),
+      );
+    }
+    await writeFile(authPathFor("default", agentDir), JSON.stringify(anthropicOAuth("default")));
+
+    let currentTime = 1_000_000;
+    const selection: ProfileSelection = {
+      profile: "fbb",
+      profileOrder: ["fbb", "jpb", "default"],
+      source: "host default",
+      host: { name: "rvn-pc", source: "system hostname" },
+      hostPreferences: ["fbb", "jpb"],
+      repositoryPreferences: [],
+    };
+    const usageRequests: Array<readonly string[] | undefined> = [];
+    const handlers: {
+      sessionStart?: SessionStartHandler;
+      providerHeaders?: ProviderHeadersHandler;
+      messageEnd?: MessageEndHandler;
+    } = {};
+    const pi = {
+      exec: async () => ({ code: 1, killed: false, stderr: "", stdout: "" }),
+      on(event: string, handler: unknown) {
+        if (event === "session_start") handlers.sessionStart = handler as SessionStartHandler;
+        if (event === "before_provider_headers") {
+          handlers.providerHeaders = handler as ProviderHeadersHandler;
+        }
+        if (event === "message_end") handlers.messageEnd = handler as MessageEndHandler;
+      },
+      registerCommand: () => undefined,
+    } as unknown as ExtensionAPI;
+    authProfiles(pi, {
+      now: () => currentTime,
+      providerAdapter: {
+        ...testProviderAdapter(agentDir),
+        createCredentialStore: (label) => createCredentialStore(authPathFor(label, agentDir)),
+      },
+      selectProfile: async () => selection,
+      usageCollector: async (options) => {
+        usageRequests.push(options?.profileLabels);
+        return {
+          schema: "fbb.pi-auth-profiles-usage/v1",
+          diagnostics: [],
+          profiles: Object.entries(usage).map(([profileLabel, windows]) => ({
+            profileLabel,
+            active: profileLabel === "fbb",
+            usage: [],
+            urgency: "unknown" as const,
+            anthropicUsage: windows.map(({ remaining, resetAt }, index) => ({
+              windowId: index === 0 ? "primary" : "secondary",
+              remaining,
+              ...(resetAt === undefined ? {} : { allowanceResetAt: resetAt }),
+            })),
+          })),
+        };
+      },
+    });
+
+    const statuses: Array<[string, string | undefined]> = [];
+    const notifications: string[] = [];
+    const runtime = {
+      login: async () => {
+        throw new Error("Login not used in this fixture");
+      },
+      credentials: { store: new FakeAuthStore() as CredentialStore },
+    };
+    const ctx = {
+      cwd: projectDir,
+      isProjectTrusted: () => false,
+      mode: "tui",
+      model: { provider: "anthropic" },
+      modelRegistry: { runtime, refresh: async () => undefined },
+      sessionManager: { getEntries: () => [], getHeader: () => ({ id: "rotation-session" }) },
+      ui: {
+        notify: (message: string) => notifications.push(message),
+        setStatus: (key: string, value: string | undefined) => statuses.push([key, value]),
+      },
+    } as unknown as ExtensionContext;
+    await handlers.sessionStart?.({}, ctx);
+
+    const anthropicAccess = async () => {
+      const credential = await runtime.credentials.store.read("anthropic");
+      return credential?.type === "oauth" ? credential.access : undefined;
+    };
+    const fail = async (errorMessage: string) => {
+      await handlers.providerHeaders?.({}, ctx);
+      await handlers.messageEnd?.(
+        { message: { role: "assistant", stopReason: "error", errorMessage } },
+        ctx,
+      );
+    };
+    return {
+      agentDir,
+      anthropicAccess,
+      fail,
+      notifications,
+      runtime,
+      statuses,
+      usageRequests,
+      advance: (ms: number) => {
+        currentTime += ms;
+      },
+    };
+  }
+
+  test("moves Anthropic to the next owner with confirmed usage and keeps the profile", async () => {
+    const fixture = await setup({
+      fbb: [{ remaining: 0, resetAt: 1_000_000 + 3_600_000 }],
+      jpb: [{ remaining: 60 }],
+      default: [{ remaining: 90 }],
+    });
+    expect(await fixture.anthropicAccess()).toBe("fbb");
+
+    await fixture.fail(RATE_LIMIT);
+
+    expect(await fixture.anthropicAccess()).toBe("jpb");
+    expect(fixture.notifications.at(-1)).toBe(
+      "fbb reached its Anthropic usage limit; switched Anthropic to jpb. Retry the request.",
+    );
+    expect(fixture.statuses).toEqual([["auth-profile", "fbb"]]);
+    const codex = await fixture.runtime.credentials.store.read("openai-codex");
+    expect(codex?.type === "api_key" ? codex.key : undefined).toBe("codex-fbb");
+    expect(fixture.usageRequests.at(-1)).toEqual(["fbb", "jpb", "default"]);
+
+    fixture.advance(3_600_001);
+    expect(await fixture.anthropicAccess()).toBe("fbb");
+  });
+
+  test("skips an unconfirmed owner and returns to the profile order after the reset", async () => {
+    const fixture = await setup({
+      fbb: [{ remaining: 0, resetAt: 1_000_000 + 60_000 }],
+      jpb: [],
+      default: [{ remaining: 40 }],
+    });
+
+    await fixture.fail(RATE_LIMIT);
+    expect(await fixture.anthropicAccess()).toBe("default");
+
+    fixture.advance(60_001);
+    expect(await fixture.anthropicAccess()).toBe("fbb");
+  });
+
+  test("keeps the owner when no alternate has confirmed usage", async () => {
+    const fixture = await setup({
+      fbb: [{ remaining: 0 }],
+      jpb: [{ remaining: 0 }],
+      default: [],
+    });
+
+    await fixture.fail(RATE_LIMIT);
+
+    expect(await fixture.anthropicAccess()).toBe("fbb");
+    expect(fixture.notifications.at(-1)).toBe(
+      "fbb reached its Anthropic usage limit; no alternate profile has confirmed available Anthropic usage.",
+    );
+  });
+
+  test("ignores Anthropic errors that are not usage limits", async () => {
+    const fixture = await setup({ fbb: [{ remaining: 0 }], jpb: [{ remaining: 60 }] });
+
+    await fixture.fail('529 {"type":"error","error":{"type":"overloaded_error"}}');
+
+    expect(await fixture.anthropicAccess()).toBe("fbb");
+    expect(fixture.usageRequests).toEqual([]);
+    expect(fixture.notifications).toEqual([]);
+  });
+});
+
+describe("per-provider binding", () => {
+  test("a usage fallback at startup moves only Codex and keeps Anthropic on the bound profile", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-auth-startup-fallback-"));
+    temporaryDirectories.push(root);
+    const agentDir = join(root, "agent");
+    await mkdir(join(agentDir, "auth-profiles"), { recursive: true });
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    for (const profile of ["fbb", "jpb"]) {
+      await writeFile(
+        authPathFor(profile, agentDir),
+        JSON.stringify({
+          anthropic: { type: "oauth", access: profile, refresh: "r", expires: 9_999_999_999_999 },
+          "openai-codex": { type: "api_key", key: `codex-${profile}` },
+        }),
+      );
+    }
+    let sessionStart: SessionStartHandler | undefined;
+    const pi = {
+      exec: async () => ({ code: 1, killed: false, stderr: "", stdout: "" }),
+      on(event: string, handler: SessionStartHandler) {
+        if (event === "session_start") sessionStart = handler;
+      },
+      registerCommand: () => undefined,
+    } as unknown as ExtensionAPI;
+    authProfiles(pi, {
+      providerAdapter: {
+        ...testProviderAdapter(agentDir),
+        createCredentialStore: (label) => createCredentialStore(authPathFor(label, agentDir)),
+      },
+      selectProfile: async () => ({
+        profile: "jpb",
+        fallbackFrom: "fbb",
+        fallbackReason: "confirmed usage",
+        profileOrder: ["fbb", "jpb", "default"],
+        source: "host default",
+        host: { name: "rvn-pc", source: "system hostname" },
+        hostPreferences: ["fbb", "jpb"],
+        repositoryPreferences: [],
+      }),
+      usageCollector: async () => ({
+        schema: "fbb.pi-auth-profiles-usage/v1",
+        profiles: [],
+        diagnostics: [],
+      }),
+    });
+    const statuses: Array<[string, string | undefined]> = [];
+    const runtime = {
+      login: async () => {
+        throw new Error("Login not used in this fixture");
+      },
+      credentials: { store: new FakeAuthStore() as CredentialStore },
+    };
+    const ctx = {
+      cwd: root,
+      isProjectTrusted: () => false,
+      mode: "tui",
+      modelRegistry: { runtime, refresh: async () => undefined },
+      sessionManager: { getEntries: () => [], getHeader: () => ({ id: "s" }) },
+      ui: {
+        notify: () => undefined,
+        setStatus: (key: string, value: string | undefined) => statuses.push([key, value]),
+      },
+    } as unknown as ExtensionContext;
+
+    await sessionStart?.({}, ctx);
+
+    const codex = await runtime.credentials.store.read("openai-codex");
+    const anthropic = await runtime.credentials.store.read("anthropic");
+    expect(codex?.type === "api_key" ? codex.key : undefined).toBe("codex-jpb");
+    expect(anthropic?.type === "oauth" ? anthropic.access : undefined).toBe("fbb");
+    expect(statuses.at(-1)).toEqual(["auth-profile", "fbb · Codex via jpb"]);
   });
 });

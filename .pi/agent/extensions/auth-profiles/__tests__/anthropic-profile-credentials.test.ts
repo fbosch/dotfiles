@@ -195,3 +195,59 @@ describe("anthropic fallback along the profile order", () => {
     expect(await store.read("openai-codex")).toBeUndefined();
   });
 });
+
+describe("anthropic owner routing", () => {
+  const withProvider = (access?: string) =>
+    new MemoryCredentialStore(new Map(access === undefined ? [] : [[PROVIDER, oauth(access)]]));
+
+  function routed() {
+    const kk = withProvider("kk");
+    const ct = withProvider("ct");
+    const later = withProvider("later");
+    const shared = withProvider("shared");
+    const exhausted = new Set<CredentialStore>();
+    let pinned: CredentialStore | undefined;
+    const store = createProfileCredentialStore(kk, shared, "openai-codex", {
+      fallbacks: [ct, later],
+      route: {
+        pinned: () => pinned,
+        isExhausted: (_providerId, candidate) => exhausted.has(candidate),
+      },
+    });
+    return {
+      kk,
+      ct,
+      later,
+      shared,
+      store,
+      exhaust: (candidate: CredentialStore) => exhausted.add(candidate),
+      pin: (candidate: CredentialStore | undefined) => {
+        pinned = candidate;
+      },
+    };
+  }
+
+  test("an exhausted owner is skipped for reads and refresh", async () => {
+    const { kk, ct, store, exhaust } = routed();
+    exhaust(kk);
+    expect(accessOf(await store.read(PROVIDER))).toBe("ct");
+    await store.modify(PROVIDER, async () => oauth("ct-refreshed"));
+    expect(accessOf(await ct.read(PROVIDER))).toBe("ct-refreshed");
+    expect(accessOf(await kk.read(PROVIDER))).toBe("kk");
+  });
+
+  test("a pin bypasses earlier owners until it is exhausted", async () => {
+    const { kk, later, store, exhaust, pin } = routed();
+    exhaust(kk);
+    pin(later);
+    expect(accessOf(await store.read(PROVIDER))).toBe("later");
+    exhaust(later);
+    expect(accessOf(await store.read(PROVIDER))).toBe("ct");
+  });
+
+  test("an all-exhausted chain falls back to the first owner", async () => {
+    const { kk, ct, later, shared, store, exhaust } = routed();
+    for (const candidate of [kk, ct, later, shared]) exhaust(candidate);
+    expect(accessOf(await store.read(PROVIDER))).toBe("kk");
+  });
+});

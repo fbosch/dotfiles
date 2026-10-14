@@ -10,7 +10,12 @@
 import type { CredentialStore } from "@earendil-works/pi-ai";
 import { brandColor, PROVIDER_BRANDS, type ProviderBrand } from "../shared/provider-brand";
 import { installCredentialLoginBoundary, PROFILE_FALLBACK_PROVIDERS } from "./credential-login";
-import { fallbackCredentialOwner, openProfileCredentials } from "./profile-credentials";
+import {
+  type FallbackOwnerRoute,
+  fallbackCredentialOwner,
+  fallbackOwnerChain,
+  openProfileCredentials,
+} from "./profile-credentials";
 import type { GitRunner } from "./profile-resolver";
 import { type ProfileSelection, selectProfile } from "./profile-selector";
 import {
@@ -22,9 +27,16 @@ import {
   PROFILE_STATUS_KEY,
   providersIn,
   publishWezTermChange,
+  readJsonFile,
   updateJsonFile,
 } from "./profile-store";
 import type { ProfileProviderAdapter } from "./provider-adapter";
+import {
+  ANTHROPIC_PROVIDER_ID,
+  anthropicExhaustionResetAt,
+  anthropicUsageLimitFromMessage,
+  hasConfirmedAnthropicUsage,
+} from "./providers/anthropic-usage";
 import { createOpenAiCodexProfileAdapter } from "./providers/openai-codex";
 import { registerResetCreditCommand } from "./reset-credit";
 import { persistSessionProfile, restoreSessionProfile } from "./session-profile";
@@ -60,19 +72,24 @@ export { authPathFor } from "./profile-store";
  *   5. "default"
  *
  * A session override changes the starting point without disabling usage checks.
- * New sessions start from automatic routing, and exhausted profiles rotate to the
- * next account with confirmed Codex usage without redeeming reset credits.
+ * New sessions bind the preferred profile; when it has no confirmed Codex usage, only
+ * the Codex credential comes from the next profile with confirmed usage, without
+ * redeeming reset credits.
  *
  * The extension resolves and binds the live AuthStorage backend before model
  * availability is checked, then rebinds it at session_start and on /profile
  * changes. The built-in /login, /logout, and OAuth token refresh therefore
  * all read and write the active profile's file — no restart required.
  *
- * Codex credentials are isolated per profile. Anthropic /login also saves to the
- * active profile; a profile without its own Anthropic credential falls back to the
- * other profiles in effective order (repository, host, global), then auth.json.
- * Refresh and logout write back to whichever file holds the credential. Other
- * providers are shared through auth.json.
+ * Codex and Anthropic credentials resolve per provider: a pinned owner first, then
+ * the bound profile and the other profiles in effective order (repository, host,
+ * global), then auth.json, skipping owners exhausted until their usage resets.
+ * /login saves to the bound profile; refresh and logout write back to whichever
+ * file holds the credential in use. Other providers are shared through auth.json.
+ *
+ * A usage limit moves only that provider's credential to the next owner with
+ * confirmed usage: Codex from x-codex-* headers or its limit message, Anthropic OAuth
+ * from HTTP 429 rate_limit_error. The bound profile never changes on a limit.
  *
  * Commands:
  *   /profile                 show the active profile
@@ -94,6 +111,7 @@ type InternalRuntime = {
 
 type BindProfileOptions = {
   refresh?: boolean;
+  route?: FallbackOwnerRoute;
 };
 
 type StartupSelection = {
@@ -143,7 +161,12 @@ async function bindProfile(
   const { profile } = selection;
   const path = authPathFor(profile);
   const { credentials, store } = credentialStoreBinding(ctx);
-  credentials.store = await openProfileCredentials(adapter, profile, selection.profileOrder);
+  credentials.store = await openProfileCredentials(
+    adapter,
+    profile,
+    selection.profileOrder,
+    options.route,
+  );
   if (options.refresh === false) return path;
 
   const refresh = async (): Promise<void> => {
@@ -187,7 +210,8 @@ function describeSelection(selection: ProfileSelection): string {
       : selection.source === "host default"
         ? `host ${selection.host.name}`
         : selection.source;
-  return selection.fallbackFrom ? `${source}; ${selection.fallbackFrom} unavailable` : source;
+  // A usage-based fallback chooses only the Codex owner; `fallbackFrom` stays bound.
+  return selection.fallbackFrom ? `${source}; Codex via ${selection.profile}` : source;
 }
 
 const USAGE_BAR_WIDTH = 14;
@@ -327,6 +351,10 @@ export type AuthObservationOptions = {
   profileOrder?: readonly string[];
   /** Whether a profile's own auth file holds a credential for the provider. */
   hasCredential?: (profile: string, providerId: string) => boolean;
+  /** Live fallback-provider routing, so status shows the owner requests actually use. */
+  route?: FallbackOwnerRoute;
+  /** The bound profile and the profile whose adapter-provider login serves it. */
+  profileProviderOwner?: { profile: string; owner: string };
 };
 
 function fallbackProviderObservations(
@@ -338,8 +366,11 @@ function fallbackProviderObservations(
     options.hasCredential ?? ((profile, provider) => providersIn(profile).includes(provider));
   const byLabel = new Map(status.profiles.map((profile) => [profile.profileLabel, profile]));
   return [...PROFILE_FALLBACK_PROVIDERS].flatMap((provider) => {
-    const owner = fallbackCredentialOwner(profileLabel, options.profileOrder ?? [], (profile) =>
-      hasCredential(profile, provider),
+    const owner = fallbackCredentialOwner(
+      profileLabel,
+      options.profileOrder ?? [],
+      (profile) => hasCredential(profile, provider),
+      options.route === undefined ? undefined : { providerId: provider, route: options.route },
     );
     if (owner === undefined) return [];
     // shortcut: only Anthropic reports fallback-provider usage today; add a per-provider
@@ -368,41 +399,66 @@ function fallbackProviderObservations(
   });
 }
 
+function observedProfileWindows(profile: ProfileUsageStatus) {
+  const observation = profile[AUTH_USAGE_OBSERVATION];
+  if (observation === undefined) return [];
+  const observedWindows =
+    observation.windows.length > 0
+      ? observation.windows
+      : profile.usage.map((window, index) => ({
+          ...window,
+          windowId: index === 0 ? "primary" : index === 1 ? "secondary" : `window-${index + 1}`,
+        }));
+  return observedWindows.flatMap((window) =>
+    window.windowId === undefined
+      ? []
+      : [
+          {
+            windowId: window.windowId,
+            remaining: window.remaining,
+            ...(window.allowanceResetAt === undefined
+              ? {}
+              : { allowanceResetAt: window.allowanceResetAt }),
+          },
+        ],
+  );
+}
+
 export function authObservations(
   status: UsageStatusPayload,
   providerId: string,
   options: AuthObservationOptions = {},
 ): AuthProfileObservation[] {
   const failures = new Set(status.diagnostics.map(({ profileLabel }) => profileLabel));
+  const byLabel = new Map(status.profiles.map((profile) => [profile.profileLabel, profile]));
+  const borrowed = options.profileProviderOwner;
   return status.profiles.flatMap((profile) => {
     const observation = profile[AUTH_USAGE_OBSERVATION];
     if (observation === undefined) return [];
-    const providers = fallbackProviderObservations(status, profile.profileLabel, options);
-    const observedWindows =
-      observation.windows.length > 0
-        ? observation.windows
-        : profile.usage.map((window, index) => ({
-            ...window,
-            windowId: index === 0 ? "primary" : index === 1 ? "secondary" : `window-${index + 1}`,
-          }));
-    const windows = observedWindows.flatMap((window) =>
-      window.windowId === undefined
+    const ownerProfile =
+      borrowed !== undefined &&
+      borrowed.profile === profile.profileLabel &&
+      borrowed.owner !== profile.profileLabel
+        ? byLabel.get(borrowed.owner)
+        : undefined;
+    const providers: AuthProviderObservation[] = [
+      // The bound profile's Codex requests use another profile's login after a rotation.
+      ...(ownerProfile === undefined
         ? []
         : [
             {
-              windowId: window.windowId,
-              remaining: window.remaining,
-              ...(window.allowanceResetAt === undefined
-                ? {}
-                : { allowanceResetAt: window.allowanceResetAt }),
+              provider: providerId,
+              borrowedFrom: ownerProfile.profileLabel,
+              windows: observedProfileWindows(ownerProfile),
             },
-          ],
-    );
+          ]),
+      ...fallbackProviderObservations(status, profile.profileLabel, options),
+    ];
     return [
       {
         profileLabel: profile.profileLabel,
         provider: providerId,
-        windows,
+        windows: observedProfileWindows(profile),
         ...(observation.bankedResetCount === undefined
           ? {}
           : { bankedResetCount: observation.bankedResetCount }),
@@ -431,9 +487,78 @@ export default function authProfiles(
   let sessionProfile: string | undefined;
   let startupSelection: StartupSelection | undefined;
   let activeSelection: ProfileSelection | undefined;
-  const exhaustedUntil = new Map<string, number>();
+  // Each provider rotates its own credential owner; the bound profile never moves on a
+  // usage limit. The live store reads this route on every request.
+  const codexProviderId = providerAdapter.providerId;
+  const fallbackExhaustedUntil = new Map<string, number>();
+  // Limits already handled, including ones with no confirmed alternate, so repeated
+  // responses from an exhausted owner do not refetch usage until it resets.
+  const limitSeenUntil = new Map<string, number>();
+  const fallbackPins = new Map<string, { owner: string; until: number }>();
+  const fallbackRequestOwners = new Map<string, string>();
+  const fallbackKey = (providerId: string, owner: string) => `${providerId}\0${owner}`;
+  const fallbackRoute: FallbackOwnerRoute = {
+    pinned(providerId) {
+      const pin = fallbackPins.get(providerId);
+      return pin !== undefined && pin.until > now() ? pin.owner : undefined;
+    },
+    isExhausted(providerId, owner) {
+      return (fallbackExhaustedUntil.get(fallbackKey(providerId, owner)) ?? 0) > now();
+    },
+  };
+  const holdsFallbackCredential = (profile: string, providerId: string) =>
+    providersIn(profile).includes(providerId);
+  /** The profile whose credential the live store currently uses for `providerId`. */
+  const currentFallbackOwner = (providerId: string) =>
+    fallbackCredentialOwner(
+      activeProfile,
+      activeSelection?.profileOrder ?? [],
+      (profile) => holdsFallbackCredential(profile, providerId),
+      { providerId, route: fallbackRoute },
+    );
+  // Without any Codex credential on file the bound profile still serves requests.
+  const codexServingOwner = () => currentFallbackOwner(codexProviderId) ?? activeProfile;
+
+  const seenOwners = (providerId: string): Set<string> => {
+    const currentTime = now();
+    const prefix = fallbackKey(providerId, "");
+    return new Set(
+      [...limitSeenUntil]
+        .filter(([key, until]) => key.startsWith(prefix) && until > currentTime)
+        .map(([key]) => key.slice(prefix.length)),
+    );
+  };
+  const pruneExpiredLimits = (currentTime: number) => {
+    for (const map of [fallbackExhaustedUntil, limitSeenUntil]) {
+      for (const [key, expiry] of map) if (expiry <= currentTime) map.delete(key);
+    }
+  };
+  /**
+   * Move `providerId` from an exhausted owner to `next` until the exhausted owner resets.
+   * The pin skips unconfirmed owners ahead of `next` only until an earlier exhausted
+   * owner resets; the profile order then applies again.
+   */
+  const switchOwner = (
+    providerId: string,
+    exhaustedOwner: string,
+    next: string,
+    resetAt: number,
+  ) => {
+    const currentTime = now();
+    pruneExpiredLimits(currentTime);
+    fallbackExhaustedUntil.set(fallbackKey(providerId, exhaustedOwner), resetAt);
+    const chain = fallbackOwnerChain(activeProfile, activeSelection?.profileOrder ?? []);
+    const earlierResets = chain.slice(0, Math.max(0, chain.indexOf(next))).flatMap((owner) => {
+      const expiry = fallbackExhaustedUntil.get(fallbackKey(providerId, owner));
+      return expiry !== undefined && expiry > currentTime ? [expiry] : [];
+    });
+    fallbackPins.set(providerId, {
+      owner: next,
+      until: earlierResets.length > 0 ? Math.min(...earlierResets) : resetAt,
+    });
+  };
   let fallbackPromise: Promise<void> | undefined;
-  let lastProviderResponseProfile: string | undefined;
+  let publishedProfileStatus: string | undefined;
   let profileOperationTail: Promise<void> = Promise.resolve();
   let authStartupState: AuthStartupState = { profileOrder: [], observations: [] };
   let lastUsageStatus: UsageStatusPayload | undefined;
@@ -444,7 +569,11 @@ export default function authProfiles(
     profileOrder: readonly string[] = authStartupState.profileOrder,
   ) => {
     lastUsageStatus = status;
-    return authObservations(status, providerAdapter.providerId, { profileOrder });
+    return authObservations(status, providerAdapter.providerId, {
+      profileOrder,
+      route: fallbackRoute,
+      profileProviderOwner: { profile: activeProfile, owner: codexServingOwner() },
+    });
   };
   const authStartupOwner = pi.events
     ? new AuthStartupOwner(pi.events, () => authStartupState)
@@ -496,6 +625,39 @@ export default function authProfiles(
     return status;
   };
 
+  const publishProfileStatus = (
+    ctx: Pick<ExtensionContext, "mode" | "ui">,
+    options: { onlyIfChanged?: boolean } = {},
+  ) => {
+    const codexOwner = currentFallbackOwner(codexProviderId);
+    const label =
+      codexOwner === undefined || codexOwner === activeProfile
+        ? activeProfile
+        : `${activeProfile} · Codex via ${codexOwner}`;
+    if (options.onlyIfChanged === true && label === publishedProfileStatus) return;
+    publishedProfileStatus = label;
+    ctx.ui.setStatus(PROFILE_STATUS_KEY, label);
+    // WezTerm's status shows Codex usage for this value, so it follows the Codex owner.
+    publishWezTermChange(ctx, "profile", codexOwner ?? activeProfile);
+  };
+
+  const describeActive = (selection: ProfileSelection): string => {
+    if (selection.fallbackFrom !== undefined || selection !== activeSelection) {
+      return describeSelection(selection);
+    }
+    const codexOwner = codexServingOwner();
+    const source = describeSelection(selection);
+    return codexOwner === selection.profile ? source : `${source}; Codex via ${codexOwner}`;
+  };
+
+  const credentialsInUse = (): string => {
+    if (activeSelection === undefined) return "";
+    const owners = [...routedProviders].flatMap((providerId) => {
+      const owner = currentFallbackOwner(providerId);
+      return owner === undefined ? [] : [`${providerId} → ${owner}`];
+    });
+    return owners.length === 0 ? "" : `Credentials in use: ${owners.join(", ")}\n`;
+  };
   const activateUnlocked = async (
     ctx: Pick<ExtensionContext, "modelRegistry" | "mode" | "ui">,
     selection: ProfileSelection,
@@ -505,21 +667,39 @@ export default function authProfiles(
     if (!loginBoundaries.has(runtime)) {
       loginBoundaries.set(runtime, installCredentialLoginBoundary(runtime));
     }
-    const path = await bindProfile(ctx, selection, providerAdapter, options);
-    activeProfile = selection.profile;
-    activeSelection = selection;
+    // Usage-based selection chooses the Codex owner; the profile it fell back from stays
+    // bound, so Anthropic and /login keep following the preferred profile.
+    const { fallbackFrom, ...rest } = selection;
+    const bound: ProfileSelection = { ...rest, profile: fallbackFrom ?? selection.profile };
+    const previousPin = fallbackPins.get(codexProviderId);
+    if (selection.profile === bound.profile) fallbackPins.delete(codexProviderId);
+    else {
+      fallbackPins.set(codexProviderId, {
+        owner: selection.profile,
+        until: Number.POSITIVE_INFINITY,
+      });
+    }
+    let path: string;
+    try {
+      path = await bindProfile(ctx, bound, providerAdapter, { ...options, route: fallbackRoute });
+    } catch (error) {
+      if (previousPin === undefined) fallbackPins.delete(codexProviderId);
+      else fallbackPins.set(codexProviderId, previousPin);
+      throw error;
+    }
+    activeProfile = bound.profile;
+    activeSelection = bound;
     authStartupState = {
       ...authStartupState,
       activeProfile,
-      profileOrder: selection.profileOrder,
+      profileOrder: bound.profileOrder,
       ...(lastUsageStatus === undefined
         ? {}
-        : { observations: observeUsage(lastUsageStatus, selection.profileOrder) }),
+        : { observations: observeUsage(lastUsageStatus, bound.profileOrder) }),
     };
     authStartupOwner?.update();
-    ctx.ui.setStatus(PROFILE_STATUS_KEY, selection.profile);
-    publishWezTermChange(ctx, "profile", selection.profile);
-    return { ...selection, path };
+    publishProfileStatus(ctx);
+    return { ...bound, path };
   };
 
   const rebind = (
@@ -611,57 +791,63 @@ export default function authProfiles(
     }
   });
 
-  const rotateAfterExhaustion = async (
-    ctx: Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry" | "mode" | "ui">,
+  const rotateCodexOwner = async (
+    ctx: Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "mode" | "ui">,
     resetAt: number,
-    exhaustedProfile = activeProfile,
+    exhaustedOwner: string,
   ): Promise<void> => {
     const currentTime = now();
-    if ((exhaustedUntil.get(exhaustedProfile) ?? 0) > currentTime) {
+    const key = fallbackKey(codexProviderId, exhaustedOwner);
+    if ((limitSeenUntil.get(key) ?? 0) > currentTime) {
       await fallbackPromise;
       return;
     }
-    exhaustedUntil.set(exhaustedProfile, resetAt);
-    for (const [profile, expiry] of exhaustedUntil) {
-      if (expiry <= currentTime) exhaustedUntil.delete(profile);
-    }
-    if (activeProfile !== exhaustedProfile) return;
+    pruneExpiredLimits(currentTime);
+    limitSeenUntil.set(key, resetAt);
+    if (codexServingOwner() !== exhaustedOwner) return;
 
     if (fallbackPromise === undefined) {
       let operation: Promise<void>;
       operation = serializeProfileOperation(async () => {
         try {
-          if (activeProfile !== exhaustedProfile) return;
+          if (codexServingOwner() !== exhaustedOwner) return;
+          const excludedProfiles = seenOwners(codexProviderId);
           const next = await chooseProfile(ctx, {
             allowUnconfirmedFallback: false,
-            excludedProfiles: new Set(exhaustedUntil.keys()),
+            excludedProfiles,
             forceUsageRefresh: true,
             ...(sessionProfile === undefined ? {} : { preferredProfile: sessionProfile }),
             providerAdapter,
             runGit,
           });
+          const stillServing = codexServingOwner() === exhaustedOwner;
           if (
             next.fallbackReason !== "confirmed usage" ||
-            exhaustedUntil.has(next.profile) ||
-            activeProfile !== exhaustedProfile
+            excludedProfiles.has(next.profile) ||
+            !stillServing
           ) {
-            if (activeProfile === exhaustedProfile) {
+            if (stillServing) {
               ctx.ui.notify(
-                `${exhaustedProfile} reached its usage limit; no alternate profile has confirmed available usage.`,
+                `${exhaustedOwner} reached its Codex usage limit; no alternate profile has confirmed available Codex usage.`,
                 "warning",
               );
             }
             return;
           }
 
-          await activateUnlocked(ctx, next);
+          switchOwner(codexProviderId, exhaustedOwner, next.profile, resetAt);
+          if (lastUsageStatus !== undefined) {
+            authStartupState = { ...authStartupState, observations: observeUsage(lastUsageStatus) };
+            authStartupOwner?.update();
+          }
+          publishProfileStatus(ctx);
           ctx.ui.notify(
-            `${exhaustedProfile} reached its usage limit; switched to ${next.profile}. Retry the request.`,
+            `${exhaustedOwner} reached its Codex usage limit; switched Codex to ${next.profile}. Retry the request.`,
             "warning",
           );
         } catch (error) {
           ctx.ui.notify(
-            `Could not switch profiles after ${exhaustedProfile} reached its usage limit: ${error instanceof Error ? error.message : String(error)}`,
+            `Could not switch Codex after ${exhaustedOwner} reached its usage limit: ${error instanceof Error ? error.message : String(error)}`,
             "error",
           );
         }
@@ -673,42 +859,116 @@ export default function authProfiles(
     await fallbackPromise;
   };
 
-  pi.on("turn_start", () => {
-    lastProviderResponseProfile = undefined;
-  });
+  const rotateAnthropicOwner = (
+    ctx: Pick<ExtensionContext, "ui">,
+    exhaustedOwner: string,
+    limit: { resetAt?: number },
+  ): Promise<void> =>
+    serializeProfileOperation(async () => {
+      const providerId = ANTHROPIC_PROVIDER_ID;
+      const key = fallbackKey(providerId, exhaustedOwner);
+      // A concurrent failure from the same owner was already handled.
+      if ((limitSeenUntil.get(key) ?? 0) > now()) return;
+      // API-key 429s are per-minute rate limits, not plan usage limits.
+      const entry = readJsonFile(authPathFor(exhaustedOwner))?.[providerId];
+      if (typeof entry !== "object" || entry === null || !("type" in entry)) return;
+      if (entry.type !== "oauth") return;
+      const chain = fallbackOwnerChain(activeProfile, activeSelection?.profileOrder ?? []).filter(
+        (profile) => holdsFallbackCredential(profile, providerId),
+      );
+      if (!chain.some((owner) => owner !== exhaustedOwner)) return;
 
-  pi.on("before_provider_headers", async () => {
+      let status: UsageStatusPayload;
+      try {
+        status = await usageCollector({
+          activeProfile,
+          includeDefault: true,
+          profileLabels: chain,
+          providerAdapter,
+        });
+      } catch (error) {
+        ctx.ui.notify(
+          `Could not check Anthropic usage after ${exhaustedOwner} reached its limit: ${error instanceof Error ? error.message : String(error)}`,
+          "error",
+        );
+        return;
+      }
+      const usageOf = (owner: string) =>
+        status.profiles.find((profile) => profile.profileLabel === owner)?.anthropicUsage;
+      const currentTime = now();
+      const resetAt =
+        limit.resetAt ?? anthropicExhaustionResetAt(usageOf(exhaustedOwner), currentTime);
+      pruneExpiredLimits(currentTime);
+      limitSeenUntil.set(key, resetAt);
+      const next = chain.find(
+        (owner) =>
+          owner !== exhaustedOwner &&
+          !fallbackRoute.isExhausted(providerId, owner) &&
+          hasConfirmedAnthropicUsage(usageOf(owner)),
+      );
+      if (next === undefined) {
+        ctx.ui.notify(
+          `${exhaustedOwner} reached its Anthropic usage limit; no alternate profile has confirmed available Anthropic usage.`,
+          "warning",
+        );
+        return;
+      }
+
+      switchOwner(providerId, exhaustedOwner, next, resetAt);
+      authStartupState = { ...authStartupState, observations: observeUsage(status) };
+      authStartupOwner?.update();
+      ctx.ui.notify(
+        `${exhaustedOwner} reached its Anthropic usage limit; switched Anthropic to ${next}. Retry the request.`,
+        "warning",
+      );
+    });
+
+  const routedProviders = new Set([codexProviderId, ...PROFILE_FALLBACK_PROVIDERS]);
+
+  pi.on("before_provider_headers", async (_event, ctx) => {
     await fallbackPromise;
     await profileOperationTail;
+    const provider = ctx.model?.provider;
+    // Record the serving owner now: a rotation can finish before this request's error ends.
+    if (provider !== undefined && routedProviders.has(provider)) {
+      const owner = currentFallbackOwner(provider);
+      if (owner === undefined) fallbackRequestOwners.delete(provider);
+      else fallbackRequestOwners.set(provider, owner);
+    }
+    // Pins and exhaustion expire by time, so refresh the label when routing moved back.
+    publishProfileStatus(ctx, { onlyIfChanged: true });
   });
 
-  pi.on("after_provider_response", async (event, ctx) => {
-    if (ctx.model?.provider !== providerAdapter.providerId) return;
+  const requestOwner = (providerId: string) =>
+    fallbackRequestOwners.get(providerId) ?? currentFallbackOwner(providerId) ?? activeProfile;
 
-    const responseProfile = activeProfile;
-    lastProviderResponseProfile = responseProfile;
+  pi.on("after_provider_response", async (event, ctx) => {
+    if (ctx.model?.provider !== codexProviderId) return;
     const resetAt = providerAdapter.usageLimitResetAt(event.headers, now());
     if (resetAt === undefined) return;
 
-    const rotation = rotateAfterExhaustion(ctx, resetAt, responseProfile);
+    const rotation = rotateCodexOwner(ctx, resetAt, requestOwner(codexProviderId));
     // Successful responses must remain consumable while selection runs.
     if (event.status >= 400) await rotation;
   });
 
   pi.on("message_end", async (event, ctx) => {
-    if (
-      ctx.model?.provider !== providerAdapter.providerId ||
-      event.message.role !== "assistant" ||
-      event.message.stopReason !== "error"
-    ) {
+    if (event.message.role !== "assistant" || event.message.stopReason !== "error") return;
+    if (ctx.model?.provider === ANTHROPIC_PROVIDER_ID) {
+      const limit = anthropicUsageLimitFromMessage(event.message.errorMessage, now());
+      if (limit === undefined) return;
+      const owner =
+        fallbackRequestOwners.get(ANTHROPIC_PROVIDER_ID) ??
+        currentFallbackOwner(ANTHROPIC_PROVIDER_ID);
+      fallbackRequestOwners.delete(ANTHROPIC_PROVIDER_ID);
+      if (owner !== undefined) await rotateAnthropicOwner(ctx, owner, limit);
       return;
     }
+    if (ctx.model?.provider !== codexProviderId) return;
 
     const resetAt = providerAdapter.usageLimitResetAtFromMessage(event.message.errorMessage, now());
     if (resetAt === undefined) return;
-    const responseProfile = lastProviderResponseProfile ?? activeProfile;
-    lastProviderResponseProfile = undefined;
-    await rotateAfterExhaustion(ctx, resetAt, responseProfile);
+    await rotateCodexOwner(ctx, resetAt, requestOwner(codexProviderId));
   });
 
   pi.registerCommand("profiles", {
@@ -758,7 +1018,7 @@ export default function authProfiles(
           case "show": {
             const resolution =
               activeSelection ?? (await chooseProfile(ctx, { providerAdapter, runGit }));
-            const providers = providersIn(resolution.profile);
+            const providers = providersIn(resolution.fallbackFrom ?? resolution.profile);
             const repository = resolution.repository
               ? `${resolution.repository.name} (${resolution.repository.source})`
               : "not resolved";
@@ -772,13 +1032,14 @@ export default function authProfiles(
               ? `\nSelection warning: ${resolution.selectionWarning}`
               : "";
             ctx.ui.notify(
-              `Auth profile: ${resolution.profile} (${describeSelection(resolution)})\n` +
+              `Auth profile: ${resolution.fallbackFrom ?? resolution.profile} (${describeActive(resolution)})\n` +
                 `Host: ${resolution.host.name} (${resolution.host.source})\n` +
                 `Repository: ${repository}\n` +
                 `Repository order: ${repositoryPreferences}\n` +
                 `Host order: ${hostPreferences}\n` +
                 `Effective order: ${resolution.profileOrder.join(", ")}\n` +
-                `File: ${authPathFor(resolution.profile)}\n` +
+                `File: ${authPathFor(resolution.fallbackFrom ?? resolution.profile)}\n` +
+                credentialsInUse() +
                 `Providers: ${providers.length ? providers.join(", ") : "none — run /login"}` +
                 warning,
               "info",
@@ -812,7 +1073,7 @@ export default function authProfiles(
             });
             const resolution = await rebind(ctx);
             ctx.ui.notify(
-              `Global default auth profile set to ${profile}. Active profile: ${resolution.profile} (${describeSelection(resolution)})`,
+              `Global default auth profile set to ${profile}. Active profile: ${resolution.profile} (${describeActive(resolution)})`,
               "info",
             );
             return;
@@ -820,7 +1081,7 @@ export default function authProfiles(
           case "clear": {
             const resolution = await changeSessionProfile(ctx, undefined);
             ctx.ui.notify(
-              `Session auth profile cleared. Active profile: ${resolution.profile} (${describeSelection(resolution)})`,
+              `Session auth profile cleared. Active profile: ${resolution.profile} (${describeActive(resolution)})`,
               "info",
             );
             return;

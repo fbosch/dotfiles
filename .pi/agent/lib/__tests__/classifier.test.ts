@@ -168,6 +168,7 @@ describe("requestClassifier", () => {
       VERCEL_GATEWAY_PROVIDER_ID,
       VERCEL_GATEWAY_PROVIDER_ID,
       OPENROUTER_PROVIDER_ID,
+      VERCEL_GATEWAY_PROVIDER_ID,
     ]);
     expect(fetchCalls).toBe(4);
   });

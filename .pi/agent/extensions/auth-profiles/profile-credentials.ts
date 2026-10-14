@@ -3,16 +3,62 @@ import { consumeCredentialLogin, PROFILE_FALLBACK_PROVIDERS } from "./credential
 import { DEFAULT_PROFILE } from "./profile-store";
 import type { ProfileProviderAdapter } from "./provider-adapter";
 
+/**
+ * Live routing state for fallback providers, keyed by the profile label that owns a
+ * credential. Implementations read the current time so expired entries stop applying
+ * without rebinding the store.
+ */
+export type FallbackOwnerRoute = {
+  /** Owner to use ahead of the profile order while the pin is valid. */
+  pinned(providerId: string): string | undefined;
+  /** Whether the owner's credential is skipped until its usage resets. */
+  isExhausted(providerId: string, owner: string): boolean;
+};
+
+/** Store-level form of {@link FallbackOwnerRoute}, used by the composed store. */
+export type FallbackStoreRoute = {
+  pinned(providerId: string): CredentialStore | undefined;
+  isExhausted(providerId: string, store: CredentialStore): boolean;
+};
+
 export type ProfileCredentialStoreOptions = {
   /** Other profiles' stores, in effective profile order, consulted before `shared`. */
   fallbacks?: readonly CredentialStore[];
   fallbackProviderIds?: ReadonlySet<string>;
+  route?: FallbackStoreRoute;
+  /**
+   * Resolve the adapter provider through `route` along the profile chain instead of
+   * isolating it to the selected profile. /login still saves to the selected profile.
+   */
+  routeProfileProvider?: boolean;
 };
+
+/**
+ * Owner lookup order shared by the live store and status observations: a valid pin
+ * first, then owners that are not exhausted, then exhausted owners, so an
+ * all-exhausted chain still sends requests instead of failing authentication.
+ */
+function ownerPreference<T>(
+  chain: readonly T[],
+  pinned: T | undefined,
+  isExhausted: (owner: T) => boolean,
+): T[] {
+  const pin =
+    pinned !== undefined && chain.includes(pinned) && !isExhausted(pinned) ? [pinned] : [];
+  return [
+    ...new Set([
+      ...pin,
+      ...chain.filter((owner) => !isExhausted(owner)),
+      ...chain.filter((owner) => isExhausted(owner)),
+    ]),
+  ];
+}
 
 /**
  * Compose the active profile's store with the default auth.json.
  *
- * - The adapter provider is isolated to the selected profile.
+ * - The adapter provider is isolated to the selected profile unless
+ *   `routeProfileProvider` routes it like a fallback provider.
  * - Fallback providers (Anthropic) resolve from the selected profile, then the
  *   other profiles in effective order, then the default file. /login saves to the
  *   selected profile; refresh and logout go to the file that holds the credential.
@@ -26,8 +72,10 @@ export function createProfileCredentialStore(
 ): CredentialStore & { readonly path?: string } {
   const fallbackProviderIds = options.fallbackProviderIds ?? PROFILE_FALLBACK_PROVIDERS;
   const fallbacks = options.fallbacks ?? [];
+  const route = options.route;
+  const routesProfileProvider = options.routeProfileProvider === true && route !== undefined;
   const isFallbackProvider = (providerId: string) =>
-    providerId !== profileProviderId && fallbackProviderIds.has(providerId);
+    providerId === profileProviderId ? routesProfileProvider : fallbackProviderIds.has(providerId);
   const target = (providerId: string) => (providerId === profileProviderId ? selected : shared);
 
   // An unreadable alternate profile must not hide credentials from the rest of the chain.
@@ -53,7 +101,15 @@ export function createProfileCredentialStore(
     store: CredentialStore;
     credential: Awaited<ReturnType<CredentialStore["read"]>>;
   }> => {
-    for (const store of chain) {
+    // Refresh and logout follow the same route as reads, so a rotated request never
+    // refreshes or deletes the exhausted owner's credential instead of the one in use.
+    const order =
+      route === undefined
+        ? chain
+        : ownerPreference(chain, route.pinned(providerId), (store) =>
+            route.isExhausted(providerId, store),
+          );
+    for (const store of order) {
       const credential = await readFallback(store, providerId, options);
       if (credential !== undefined) return { store, credential };
     }
@@ -113,6 +169,11 @@ function alternateProfiles(profile: string, profileOrder: readonly string[]): st
   );
 }
 
+/** Profiles that can own a fallback-provider credential for `profile`, in lookup order. */
+export function fallbackOwnerChain(profile: string, profileOrder: readonly string[]): string[] {
+  return [...new Set([profile, ...alternateProfiles(profile, profileOrder), DEFAULT_PROFILE])];
+}
+
 /**
  * The profile whose credential a fallback provider resolves to, matching the live store's
  * lookup order, or undefined when no profile in the chain holds one.
@@ -121,10 +182,16 @@ export function fallbackCredentialOwner(
   profile: string,
   profileOrder: readonly string[],
   hasCredential: (profile: string) => boolean,
+  routing?: { providerId: string; route: FallbackOwnerRoute },
 ): string | undefined {
-  return [profile, ...alternateProfiles(profile, profileOrder), DEFAULT_PROFILE].find(
-    hasCredential,
-  );
+  const chain = fallbackOwnerChain(profile, profileOrder);
+  const order =
+    routing === undefined
+      ? chain
+      : ownerPreference(chain, routing.route.pinned(routing.providerId), (owner) =>
+          routing.route.isExhausted(routing.providerId, owner),
+        );
+  return order.find(hasCredential);
 }
 
 /** Open the live credential store for `profile`, falling back along `profileOrder`. */
@@ -132,17 +199,48 @@ export async function openProfileCredentials(
   adapter: ProfileProviderAdapter,
   profile: string,
   profileOrder: readonly string[],
+  route?: FallbackOwnerRoute,
 ): Promise<CredentialStore> {
   const selected = await adapter.createCredentialStore(profile);
   const alternates = alternateProfiles(profile, profileOrder);
-  // Alternates only serve fallback providers, so a profile whose adapter
-  // credential is invalid must not block binding the selected profile.
+  // A profile whose adapter credential is invalid drops out of the routing chain
+  // instead of blocking the selected profile from binding.
   const opened = await Promise.all(
-    alternates.map((candidate) => adapter.createCredentialStore(candidate).catch(() => undefined)),
+    alternates.map(async (candidate) => {
+      try {
+        return { label: candidate, store: await adapter.createCredentialStore(candidate) };
+      } catch {
+        return undefined;
+      }
+    }),
   );
-  const fallbacks = opened.filter((store): store is CredentialStore => store !== undefined);
-  if (profile === DEFAULT_PROFILE && fallbacks.length === 0) return selected;
+  const alternateStores = opened.filter((entry) => entry !== undefined);
+  if (profile === DEFAULT_PROFILE && alternateStores.length === 0) return selected;
   const shared =
     profile === DEFAULT_PROFILE ? selected : await adapter.createCredentialStore(DEFAULT_PROFILE);
-  return createProfileCredentialStore(selected, shared, adapter.providerId, { fallbacks });
+  const labelled = [
+    { label: profile, store: selected },
+    ...alternateStores,
+    { label: DEFAULT_PROFILE, store: shared },
+  ];
+  const storeFor = new Map(labelled.map(({ label, store }) => [label, store]));
+  const labelFor = new Map(labelled.map(({ label, store }) => [store, label]));
+  return createProfileCredentialStore(selected, shared, adapter.providerId, {
+    fallbacks: alternateStores.map(({ store }) => store),
+    ...(route === undefined
+      ? {}
+      : {
+          routeProfileProvider: true,
+          route: {
+            pinned: (providerId) => {
+              const owner = route.pinned(providerId);
+              return owner === undefined ? undefined : storeFor.get(owner);
+            },
+            isExhausted: (providerId, store) => {
+              const owner = labelFor.get(store);
+              return owner !== undefined && route.isExhausted(providerId, owner);
+            },
+          },
+        }),
+  });
 }

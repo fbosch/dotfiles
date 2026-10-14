@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { CLASSIFIER_PROVIDER_IDS } from "../../../lib/classifier";
 import { resolveClassifierStartupStatus } from "../classifier-status";
 
 const disabledSettings = {
@@ -62,7 +61,28 @@ describe("startup header Classifier status", () => {
     );
 
     expect(status).toEqual({ state: "ready" });
-    expect(calls).toEqual([...CLASSIFIER_PROVIDER_IDS]);
+    expect(calls).toEqual(["openrouter", "vercel-ai-gateway"]);
+  });
+
+  test("checks configured text-route providers rather than image-route credentials", () => {
+    const calls: string[] = [];
+    const status = resolveClassifierStartupStatus(
+      {
+        classifier: {
+          providers: [{ provider: "custom-text", model: "classifier-v2" }],
+          imageProviders: [{ provider: "openai", model: "gpt-6-luna" }],
+        },
+      },
+      undefined,
+      {
+        getProviderAuthStatus(providerId: string) {
+          calls.push(providerId);
+          return { configured: providerId === "custom-text" };
+        },
+      },
+    );
+    expect(status).toEqual({ state: "ready" });
+    expect(calls).toEqual(["custom-text"]);
   });
 
   test("degrades an enabled feature when Gateway credentials are missing", () => {
