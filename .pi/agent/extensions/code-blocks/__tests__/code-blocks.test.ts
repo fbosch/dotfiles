@@ -182,6 +182,24 @@ describe("code block rendering", () => {
     }
   });
 
+  test("omits line numbers from shell code blocks", () => {
+    for (const lang of ["bash", "sh", "zsh", "shell", "fish"]) {
+      const lines = renderCodeBlock(
+        component,
+        { type: "code", lang, text: "echo first\necho second" },
+        24,
+        undefined,
+        blockTheme,
+      );
+
+      expect(
+        plain(lines)
+          .slice(4, -1)
+          .map((line) => line.trimEnd()),
+      ).toEqual(["echo first", "echo second"]);
+    }
+  });
+
   test("wraps long code without repeating the line number on continuation rows", () => {
     const lines = renderCodeBlock(
       component,

@@ -94,8 +94,7 @@
         "CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS": "true",
         "CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS": "true"
       },
-      "timeout": 30,
-      "exposure": "deferred"
+      "timeout": 30
     },
     "firefox-devtools": {
       "command": "npx",

@@ -10,7 +10,7 @@ import {
   TuiAltScreen,
 } from "@earendil-works/pi-tui";
 import { ToolExecutionComponent } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/components/tool-execution.js";
-import { installImageOpenClickHandler } from "../open-image";
+import { getOpenCommand, installImageOpenClickHandler } from "../open-image";
 
 class TestTerminal implements Terminal {
   readonly columns = 80;
@@ -58,7 +58,7 @@ describe("inline image viewer", () => {
     for (const dispose of disposers.splice(0)) dispose();
   });
 
-  test("opens only a clicked image block in Pi's tool output via the injected opener", async () => {
+  test("opens a clicked image block in Pi's tool output on macOS via the injected opener", async () => {
     const previousCapabilities = getCapabilities();
     setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
     const root = await mkdtemp(join(tmpdir(), "pi-image-viewer-test-"));
@@ -71,7 +71,7 @@ describe("inline image viewer", () => {
     });
 
     const dispose = installImageOpenClickHandler({
-      platform: "linux",
+      platform: "darwin",
       tempDirectory: root,
       notify: (message) => notifications.push(message),
       openFile: async (path) => {
@@ -138,14 +138,18 @@ describe("inline image viewer", () => {
     }
   });
 
-  test("does not install on non-Linux systems", () => {
+  test("does not install on unsupported platforms", () => {
     const image = Image.prototype as unknown as { handleMouse?: unknown };
     const previous = image.handleMouse;
     const dispose = installImageOpenClickHandler({
-      platform: "darwin",
+      platform: "win32",
       notify: () => {},
     });
     dispose();
     expect(image.handleMouse).toBe(previous);
+  });
+  test("uses the native opener for each supported platform", () => {
+    expect(getOpenCommand("darwin")).toBe("open");
+    expect(getOpenCommand("linux")).toBe("xdg-open");
   });
 });

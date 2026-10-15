@@ -561,7 +561,9 @@ function renderCodePanel(
   const highlightedRows = highlightRows(component, rows, descriptor.language);
   const maxLineNumber = Math.max(...rows.map((row) => row.lineNumber));
   const numberWidth = Math.max(3, String(maxLineNumber).length);
-  const gutterWidth = width > numberWidth + 2 ? numberWidth + 2 : 0;
+  const showLineNumbers =
+    descriptor.isDiff || (descriptor.language !== "bash" && descriptor.language !== "fish");
+  const gutterWidth = showLineNumbers && width > numberWidth + 2 ? numberWidth + 2 : 0;
   const contentWidth = Math.max(1, width - gutterWidth);
   const headerBackground = activeTheme?.getBgAnsi("customMessageBg") ?? "";
   const lines = [

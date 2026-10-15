@@ -155,9 +155,23 @@ function imageBytes(image: Image): { bytes: Buffer; extension: string } {
   return { bytes, extension };
 }
 
-function startXdgOpen(path: string, onError: (error: Error) => void): Promise<void> {
+type SupportedPlatform = "linux" | "darwin";
+
+export function getOpenCommand(platform: SupportedPlatform): "open" | "xdg-open" {
+  return platform === "darwin" ? "open" : "xdg-open";
+}
+
+function isSupportedPlatform(platform: string): platform is SupportedPlatform {
+  return platform === "linux" || platform === "darwin";
+}
+
+function startExternalOpen(
+  command: "open" | "xdg-open",
+  path: string,
+  onError: (error: Error) => void,
+): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn("xdg-open", [path], { detached: true, stdio: "ignore" });
+    const child = spawn(command, [path], { detached: true, stdio: "ignore" });
     let started = false;
     let reported = false;
     const reportOnce = (error: Error) => {
@@ -180,8 +194,8 @@ function startXdgOpen(path: string, onError: (error: Error) => void): Promise<vo
         reportOnce(
           new Error(
             code === null
-              ? `xdg-open was terminated by ${signal ?? "an unknown signal"}.`
-              : `xdg-open exited with status ${code}.`,
+              ? `${command} was terminated by ${signal ?? "an unknown signal"}.`
+              : `${command} exited with status ${code}.`,
           ),
         );
       }
@@ -260,7 +274,8 @@ function patchState(value: unknown): value is ImageMousePatch {
 }
 
 export function installImageOpenClickHandler(options: ImageOpenOptions): () => void {
-  if ((options.platform ?? process.platform) !== "linux") return () => {};
+  const platform = options.platform ?? process.platform;
+  if (!isSupportedPlatform(platform)) return () => {};
 
   // SAFETY: the Symbol.for key is reserved for this extension; Image.prototype accepts this click-handler state.
   const prototype = Image.prototype as unknown as PatchableImagePrototype;
@@ -269,11 +284,12 @@ export function installImageOpenClickHandler(options: ImageOpenOptions): () => v
 
   const original = prototype.handleMouse;
   const store = createImageFileStore(options.tempDirectory ?? tmpdir());
+  const command = getOpenCommand(platform);
   const openFile =
     options.openFile ??
     ((path: string) =>
-      startXdgOpen(path, (error) =>
-        options.notify(`Could not open image with xdg-open: ${error.message}`),
+      startExternalOpen(command, path, (error) =>
+        options.notify(`Could not open image with ${command}: ${error.message}`),
       ));
   let disposed = false;
   let state: ImageMousePatch;
