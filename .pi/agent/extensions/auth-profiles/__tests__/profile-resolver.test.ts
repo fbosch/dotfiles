@@ -88,6 +88,110 @@ describe("auth profile precedence", () => {
     expect(ranGit).toBe(false);
   });
 
+  test("selects GitHub source preferences and honors exact repository preferences", async () => {
+    const { agentDir, projectDir } = await temporaryFixture({
+      repositoryPreferences: { pinned: ["ct"] },
+      repositorySources: [
+        {
+          host: "github.com",
+          owner: "fbosch",
+          repository: ["new-repo", "pinned"],
+          profiles: ["fbb", "jpb"],
+        },
+        {
+          host: "github.com",
+          owner: "charlietango",
+          repository: "*",
+          profiles: ["ct", "fbb", "jpb"],
+        },
+      ],
+    });
+    const context = { cwd: projectDir, isProjectTrusted: () => true };
+    const resolveOrigin = (origin: string) =>
+      resolveProfile(context, {
+        agentDir,
+        env: {},
+        runGit: gitRepository(projectDir, origin),
+      });
+
+    expect(await resolveOrigin("git@github.com:fbosch/new-repo.git")).toMatchObject({
+      profile: "fbb",
+      source: "repository",
+      repositoryPreferences: ["fbb", "jpb"],
+      repository: {
+        sourceIdentity: {
+          host: "github.com",
+          owner: "fbosch",
+          repository: "new-repo",
+        },
+      },
+    });
+    expect(await resolveOrigin("https://github.com/fbosch/unlisted.git")).toMatchObject({
+      source: "built-in default",
+      repositoryPreferences: [],
+    });
+    expect(await resolveOrigin("https://github.com/charlietango/another-repo.git")).toMatchObject({
+      profile: "ct",
+      repositoryPreferences: ["ct", "fbb", "jpb"],
+    });
+    expect(await resolveOrigin("https://github.com/fbosch/pinned.git")).toMatchObject({
+      profile: "ct",
+      repositoryPreferences: ["ct"],
+    });
+    expect(await resolveOrigin("https://example.com/fbosch/new-repo.git")).toMatchObject({
+      source: "built-in default",
+      repositoryPreferences: [],
+    });
+  });
+
+  test("matches Azure organization rules from HTTPS and SSH origins", async () => {
+    const { agentDir, projectDir } = await temporaryFixture({
+      repositorySources: [
+        {
+          host: "dev.azure.com",
+          organization: "KommuneKredit",
+          repository: "*",
+          profiles: ["kk", "ct"],
+        },
+      ],
+    });
+    const context = { cwd: projectDir, isProjectTrusted: () => true };
+    const resolveOrigin = (origin: string) =>
+      resolveProfile(context, {
+        agentDir,
+        env: {},
+        runGit: gitRepository(projectDir, origin),
+      });
+
+    expect(
+      await resolveOrigin(
+        "https://KommuneKredit@dev.azure.com/KommuneKredit/Frontend/_git/ui.git",
+      ),
+    ).toMatchObject({
+      profile: "kk",
+      repository: {
+        sourceIdentity: {
+          host: "dev.azure.com",
+          organization: "kommunekredit",
+          repository: "ui",
+        },
+      },
+    });
+    expect(
+      await resolveOrigin("git@ssh.dev.azure.com:v3/KommuneKredit/Frontend/cli"),
+    ).toMatchObject({
+      profile: "kk",
+      repository: {
+        sourceIdentity: {
+          host: "dev.azure.com",
+          organization: "kommunekredit",
+          repository: "cli",
+        },
+      },
+    });
+  });
+
+
   test("falls back from an unknown host to the global and built-in defaults", async () => {
     const configured = await temporaryFixture({ defaultProfile: "ct" });
     const context = { cwd: configured.projectDir, isProjectTrusted: () => false };
@@ -144,12 +248,28 @@ describe("auth profile configuration", () => {
       defaultProfile: "ct",
       hostDefaults: { "RVN-PC": ["fbb", "jpb", "ct"] },
       repositoryPreferences: { dotfiles: ["fbb", "jpb"] },
+      repositorySources: [
+        {
+          host: "GITHUB.COM",
+          owner: "FBosch",
+          repository: ["DotFiles", "NIXOS"],
+          profiles: ["fbb", "jpb"],
+        },
+      ],
     });
 
     expect(readAuthProfilesConfig(agentDir)).toEqual({
       defaultProfile: "ct",
       hostDefaults: { "rvn-pc": ["fbb", "jpb", "ct"] },
       repositoryPreferences: { dotfiles: ["fbb", "jpb"] },
+      repositorySources: [
+        {
+          host: "github.com",
+          owner: "fbosch",
+          repository: ["dotfiles", "nixos"],
+          profiles: ["fbb", "jpb"],
+        },
+      ],
     });
   });
 
@@ -177,6 +297,16 @@ describe("auth profile configuration", () => {
 
     expect(() => readAuthProfilesConfig(agentDir)).toThrow(
       "repositoryPreferences.dotfiles contains duplicate profiles",
+    );
+  });
+
+  test("rejects repository source rules without exactly one namespace", async () => {
+    const { agentDir } = await temporaryFixture({
+      repositorySources: [{ host: "github.com", repository: "*", profiles: ["fbb"] }],
+    });
+
+    expect(() => readAuthProfilesConfig(agentDir)).toThrow(
+      "repositorySources[0] must specify exactly one of owner or organization",
     );
   });
 });

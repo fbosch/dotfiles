@@ -15,22 +15,35 @@
       "ct"
     ]
   },
-  "repositoryPreferences": {
-    "dotfiles": [
-      "fbb",
-      "jpb"
-    ],
-    "nixos": [
-      "fbb",
-      "jpb"
-    ],
-    "KommuneKredit.Frontend": [
-      "kk",
-      "ct"
-    ],
-    "infinite-fusion-nuzlocke": [
-      "fbb",
-      "jpb"
-    ]
-  }
+  "repositoryPreferences": {},
+  "repositorySources": [
+    {
+      "host": "github.com",
+      "owner": "fbosch",
+      "repository": "*",
+      "profiles": [
+        "fbb",
+        "jpb"
+      ]
+    },
+    {
+      "host": "dev.azure.com",
+      "organization": "KommuneKredit",
+      "repository": "*",
+      "profiles": [
+        "kk",
+        "ct"
+      ]
+    },
+    {
+      "host": "github.com",
+      "owner": "charlietango",
+      "repository": "*",
+      "profiles": [
+        "ct",
+        "fbb",
+        "jpb"
+      ]
+    }
+  ]
 }

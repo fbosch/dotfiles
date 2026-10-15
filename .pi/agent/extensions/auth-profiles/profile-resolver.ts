@@ -22,16 +22,33 @@ export type HostIdentity = {
   source: "NH_DARWIN_HOST" | "system hostname";
 };
 
+export type RepositorySourceIdentity = {
+  host: string;
+  owner?: string;
+  organization?: string;
+  repository: string;
+};
+
 export type RepositoryIdentity = {
   name: string;
   root: string;
   source: "origin" | "worktree" | "cwd";
+  sourceIdentity?: RepositorySourceIdentity;
+};
+
+export type RepositorySourcePreference = {
+  host: string;
+  owner?: string;
+  organization?: string;
+  repository: string[];
+  profiles: string[];
 };
 
 export type AuthProfilesConfig = {
   defaultProfile?: string;
   hostDefaults: Record<string, string[]>;
   repositoryPreferences: Record<string, string[]>;
+  repositorySources: RepositorySourcePreference[];
 };
 
 export type ProfileResolution = {
@@ -84,6 +101,43 @@ function repositoryName(value: string, label: string): string {
     throw new Error(`${label} is not a valid repository name.`);
   }
   return value;
+}
+
+function repositoryNamespace(value: unknown, label: string): string {
+  if (typeof value !== "string") {
+    throw new Error(`${label} must be a non-empty repository namespace.`);
+  }
+  const namespace = repositoryName(value, label);
+  if (namespace.includes("/")) {
+    throw new Error(`${label} must not contain a slash.`);
+  }
+  return namespace.toLowerCase();
+}
+
+function sourceRepositoryName(value: unknown, label: string): string {
+  if (value === "*") return "*";
+  return repositoryNamespace(value, label);
+}
+
+function sourceRepositoryNames(value: unknown, label: string): string[] {
+  const values = typeof value === "string" ? [value] : value;
+  if (Array.isArray(values) === false || values.length === 0) {
+    throw new Error(`${label} must be a repository name or non-empty array.`);
+  }
+  if (values.length > MAX_MAPPING_ENTRIES) {
+    throw new Error(`${label} cannot contain more than ${MAX_MAPPING_ENTRIES} repositories.`);
+  }
+
+  const repositories = values.map((repository, index) =>
+    sourceRepositoryName(repository, `${label}[${index}]`),
+  );
+  if (new Set(repositories).size !== repositories.length) {
+    throw new Error(`${label} contains duplicate repositories.`);
+  }
+  if (repositories.includes("*") && repositories.length > 1) {
+    throw new Error(`${label} cannot combine the wildcard with named repositories.`);
+  }
+  return repositories;
 }
 
 function profilePreferenceList(
@@ -158,10 +212,64 @@ function parseRepositoryPreferences(value: unknown): Record<string, string[]> {
   return preferences;
 }
 
+function parseRepositorySources(value: unknown): RepositorySourcePreference[] {
+  if (value === undefined) return [];
+  if (Array.isArray(value) === false) {
+    throw new Error("repositorySources must be a JSON array.");
+  }
+  if (value.length > MAX_MAPPING_ENTRIES) {
+    throw new Error(
+      `repositorySources cannot contain more than ${MAX_MAPPING_ENTRIES} sources.`,
+    );
+  }
+
+  const seenSelectors = new Set<string>();
+  return value.map((rawSource, index) => {
+    const label = `repositorySources[${index}]`;
+    if (isRecord(rawSource) === false) {
+      throw new Error(`${label} must be a JSON object.`);
+    }
+    if (typeof rawSource.host !== "string") {
+      throw new Error(`${label}.host must be a valid host name.`);
+    }
+    const host = normalizedHostName(rawSource.host, `${label}.host`);
+    const hasOwner = rawSource.owner !== undefined;
+    const hasOrganization = rawSource.organization !== undefined;
+    if (hasOwner === hasOrganization) {
+      throw new Error(`${label} must specify exactly one of owner or organization.`);
+    }
+
+    const namespace = repositoryNamespace(
+      hasOwner ? rawSource.owner : rawSource.organization,
+      hasOwner ? `${label}.owner` : `${label}.organization`,
+    );
+    const repository = sourceRepositoryNames(rawSource.repository, `${label}.repository`);
+    const selector = JSON.stringify([
+      host,
+      hasOwner ? "owner" : "organization",
+      namespace,
+      [...repository].sort(),
+    ]);
+    if (seenSelectors.has(selector)) {
+      throw new Error(`repositorySources contains duplicate selector ${JSON.stringify(selector)}.`);
+    }
+    seenSelectors.add(selector);
+
+    return {
+      host,
+      ...(hasOwner ? { owner: namespace } : { organization: namespace }),
+      repository,
+      profiles: profilePreferenceList(rawSource.profiles, `${label}.profiles`, {
+        allowScalar: false,
+      }),
+    };
+  });
+}
+
 export function readAuthProfilesConfig(agentDir = getAgentDir()): AuthProfilesConfig {
   const path = globalConfigPath(agentDir);
   if (existsSync(path) === false) {
-    return { hostDefaults: {}, repositoryPreferences: {} };
+    return { hostDefaults: {}, repositoryPreferences: {}, repositorySources: [] };
   }
 
   let value: unknown;
@@ -186,6 +294,7 @@ export function readAuthProfilesConfig(agentDir = getAgentDir()): AuthProfilesCo
     ...(defaultProfile === undefined ? {} : { defaultProfile }),
     hostDefaults: parseHostDefaults(value.hostDefaults),
     repositoryPreferences: parseRepositoryPreferences(value.repositoryPreferences),
+    repositorySources: parseRepositorySources(value.repositorySources),
   };
 }
 
@@ -220,6 +329,128 @@ export function repositoryNameFromOrigin(origin: string): string | undefined {
   } catch {
     return component;
   }
+}
+
+function repositorySourceIdentityFromOrigin(origin: string): RepositorySourceIdentity | undefined {
+  const normalizedOrigin = origin.trim();
+  if (normalizedOrigin === "") return undefined;
+
+  let rawHost: string;
+  let path: string;
+  try {
+    const url = new URL(normalizedOrigin);
+    if (!["http:", "https:", "ssh:", "git:"].includes(url.protocol)) return undefined;
+    rawHost = url.hostname.toLowerCase();
+    path = url.pathname;
+  } catch {
+    const scpOrigin = /^(?:[^@/:]+@)?([^:/]+):(.+)$/.exec(normalizedOrigin);
+    const sourceHost = scpOrigin?.[1];
+    const sourcePath = scpOrigin?.[2];
+    if (!sourceHost || !sourcePath) return undefined;
+    rawHost = sourceHost.toLowerCase();
+    path = sourcePath;
+  }
+
+  const segments = path.split("/").filter(Boolean).map((segment) => {
+    try {
+      return decodeURIComponent(segment);
+    } catch {
+      return segment;
+    }
+  });
+  if (segments.some((segment) => segment.includes("/"))) return undefined;
+
+  const gitSegment = segments.findIndex((segment) => segment.toLowerCase() === "_git");
+  const repositorySegment = segments[gitSegment === -1 ? segments.length - 1 : gitSegment + 1];
+  if (repositorySegment === undefined) return undefined;
+
+  let repository: string | undefined;
+  try {
+    repository = repositoryNamespace(
+      repositorySegment.replace(/\.git$/i, ""),
+      "Git origin repository",
+    );
+  } catch {
+    return undefined;
+  }
+
+  const azureHost = "dev.azure.com";
+  if (rawHost === azureHost) {
+    if (gitSegment === -1) return undefined;
+    const organization = segments[0];
+    if (!organization) return undefined;
+    try {
+      return {
+        host: azureHost,
+        organization: repositoryNamespace(organization, "Git origin organization"),
+        repository,
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  if (rawHost === "ssh.dev.azure.com" || rawHost === "vs-ssh.visualstudio.com") {
+    const organization = segments[0]?.toLowerCase() === "v3" ? segments[1] : undefined;
+    if (!organization) return undefined;
+    try {
+      return {
+        host: azureHost,
+        organization: repositoryNamespace(organization, "Git origin organization"),
+        repository,
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  if (rawHost.endsWith(".visualstudio.com")) {
+    if (gitSegment === -1) return undefined;
+    const organization = rawHost.slice(0, -".visualstudio.com".length);
+    try {
+      return {
+        host: azureHost,
+        organization: repositoryNamespace(organization, "Git origin organization"),
+        repository,
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  if (segments.length !== 2) return undefined;
+  const owner = segments[0];
+  if (!owner) return undefined;
+  try {
+    return {
+      host: rawHost,
+      owner: repositoryNamespace(owner, "Git origin owner"),
+      repository,
+    };
+  } catch {
+    return undefined;
+  }
+}
+
+function repositorySourcePreferences(
+  identity: RepositorySourceIdentity | undefined,
+  sources: readonly RepositorySourcePreference[],
+): string[] | undefined {
+  if (identity === undefined) return undefined;
+
+  // Declaration order lets a narrower repository rule precede an owner-wide wildcard.
+  const source = sources.find((candidate) => {
+    if (candidate.host !== identity.host) return false;
+    const namespaceMatches =
+      candidate.owner !== undefined
+        ? candidate.owner === identity.owner
+        : candidate.organization === identity.organization;
+    return (
+      namespaceMatches &&
+      (candidate.repository.includes("*") || candidate.repository.includes(identity.repository))
+    );
+  });
+  return source?.profiles;
 }
 
 export const runGitCommand: GitRunner = async (cwd, args) =>
@@ -267,9 +498,16 @@ export async function resolveRepositoryIdentity(
     ? await safeRunGit(runGit, root, ["remote", "get-url", "origin"])
     : undefined;
   const originName = origin ? repositoryNameFromOrigin(origin) : undefined;
-  if (originName) {
+  if (origin && originName) {
     try {
-      return { name: repositoryName(originName, "Git origin repository"), root, source: "origin" };
+      const name = repositoryName(originName, "Git origin repository");
+      const sourceIdentity = repositorySourceIdentityFromOrigin(origin);
+      return {
+        name,
+        root,
+        source: "origin",
+        ...(sourceIdentity === undefined ? {} : { sourceIdentity }),
+      };
     } catch {
       // An invalid remote-derived label cannot participate in profile selection.
     }
@@ -297,7 +535,10 @@ export async function resolveProfile(
   let repositoryPreferences: string[] = [];
   if (projectTrusted) {
     repository = await resolveRepositoryIdentity(ctx.cwd, options.runGit ?? runGitCommand);
-    repositoryPreferences = config.repositoryPreferences[repository.name] ?? [];
+    repositoryPreferences =
+      config.repositoryPreferences[repository.name] ??
+      repositorySourcePreferences(repository.sourceIdentity, config.repositorySources) ??
+      [];
     const profile = repositoryPreferences[0];
     if (profile !== undefined) {
       return {
