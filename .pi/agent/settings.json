@@ -118,7 +118,7 @@
     "providers": [
       {
         "provider": "openrouter",
-        "model": "typesafe/jev-latest"
+        "model": "typesafe/jev-1.13"
       },
       {
         "provider": "vercel-ai-gateway",
