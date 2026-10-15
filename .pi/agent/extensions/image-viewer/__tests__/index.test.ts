@@ -10,7 +10,11 @@ import {
   TuiAltScreen,
 } from "@earendil-works/pi-tui";
 import { ToolExecutionComponent } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/components/tool-execution.js";
-import { getOpenCommand, installImageOpenClickHandler } from "../open-image";
+import {
+  getOpenCommand,
+  installImageOpenClickHandler,
+  isImageViewerPlatformSupported,
+} from "../open-image";
 
 class TestTerminal implements Terminal {
   readonly columns = 80;
@@ -151,5 +155,10 @@ describe("inline image viewer", () => {
   test("uses the native opener for each supported platform", () => {
     expect(getOpenCommand("darwin")).toBe("open");
     expect(getOpenCommand("linux")).toBe("xdg-open");
+  });
+  test("supports macOS and Linux only", () => {
+    expect(isImageViewerPlatformSupported("darwin")).toBe(true);
+    expect(isImageViewerPlatformSupported("linux")).toBe(true);
+    expect(isImageViewerPlatformSupported("win32")).toBe(false);
   });
 });

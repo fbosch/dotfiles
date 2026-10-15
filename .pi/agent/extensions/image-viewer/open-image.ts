@@ -161,7 +161,7 @@ export function getOpenCommand(platform: SupportedPlatform): "open" | "xdg-open"
   return platform === "darwin" ? "open" : "xdg-open";
 }
 
-function isSupportedPlatform(platform: string): platform is SupportedPlatform {
+export function isImageViewerPlatformSupported(platform: string): platform is SupportedPlatform {
   return platform === "linux" || platform === "darwin";
 }
 
@@ -275,7 +275,7 @@ function patchState(value: unknown): value is ImageMousePatch {
 
 export function installImageOpenClickHandler(options: ImageOpenOptions): () => void {
   const platform = options.platform ?? process.platform;
-  if (!isSupportedPlatform(platform)) return () => {};
+  if (!isImageViewerPlatformSupported(platform)) return () => {};
 
   // SAFETY: the Symbol.for key is reserved for this extension; Image.prototype accepts this click-handler state.
   const prototype = Image.prototype as unknown as PatchableImagePrototype;

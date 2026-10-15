@@ -1,8 +1,8 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { installImageOpenClickHandler } from "./open-image";
+import { installImageOpenClickHandler, isImageViewerPlatformSupported } from "./open-image";
 
 export default function imageViewerExtension(pi: ExtensionAPI): void {
-  if (process.platform !== "linux" && process.platform !== "darwin") return;
+  if (!isImageViewerPlatformSupported(process.platform)) return;
 
   let dispose: (() => void) | undefined;
   pi.on("session_start", (_event, context) => {
