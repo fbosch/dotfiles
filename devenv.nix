@@ -240,6 +240,8 @@ in
 
     "test:fish-corporate-opencode".exec = "fish tests/fish_corporate_opencode.fish";
 
+    "test:fish-greeting".exec = "fish --no-config tests/fish_greeting.fish";
+
     "test:fish-starship-cache".exec = ''
       set -euo pipefail
       test_dir="$(mktemp -d)"
@@ -522,6 +524,7 @@ in
         "test:stow"
         "test:fish"
         "test:git-pull-system-repos"
+        "test:fish-greeting"
         "test:fish-starship-cache"
         "test:herdr-neovim-sessions"
         "test:lua-quality"
