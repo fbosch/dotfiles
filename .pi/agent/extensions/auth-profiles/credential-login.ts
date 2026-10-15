@@ -25,6 +25,7 @@ export function consumeCredentialLogin(options: AuthOperationOptions | undefined
 export function installCredentialLoginBoundary(
   runtime: Pick<ModelRuntime, "login">,
   providers: ReadonlySet<string> = PROFILE_LOGIN_PROVIDERS,
+  onLogin?: (providerId: string) => void,
 ): () => void {
   const original = runtime.login;
   const wrapped: ModelRuntime["login"] = async (providerId, type, interaction, options) => {
@@ -39,7 +40,15 @@ export function installCredentialLoginBoundary(
         : AbortSignal.any([interaction.signal]);
     loginSignals.add(signal);
     try {
-      return await original.call(runtime, providerId, type, { ...interaction, signal }, options);
+      const result = await original.call(
+        runtime,
+        providerId,
+        type,
+        { ...interaction, signal },
+        options,
+      );
+      onLogin?.(providerId);
+      return result;
     } finally {
       loginSignals.delete(signal);
     }

@@ -771,7 +771,12 @@ describe("anthropic usage-limit rotation", () => {
   const RATE_LIMIT =
     '429 {"type":"error","error":{"type":"rate_limit_error","message":"This request would exceed your account\'s rate limit."}}';
   const anthropicOAuth = (access: string) => ({
-    anthropic: { type: "oauth", access, refresh: `refresh-${access}`, expires: 9_999_999_999_999 },
+    anthropic: {
+      type: "oauth" as const,
+      access,
+      refresh: `refresh-${access}`,
+      expires: 9_999_999_999_999,
+    },
   });
 
   async function setup(usage: Record<string, Array<{ remaining: number; resetAt?: number }>>) {
@@ -848,11 +853,15 @@ describe("anthropic usage-limit rotation", () => {
 
     const statuses: Array<[string, string | undefined]> = [];
     const notifications: string[] = [];
+    const credentials = { store: new FakeAuthStore() as CredentialStore };
     const runtime = {
-      login: async () => {
-        throw new Error("Login not used in this fixture");
-      },
-      credentials: { store: new FakeAuthStore() as CredentialStore },
+      login: async (providerId: string, _type: string, interaction: { signal?: AbortSignal }) =>
+        credentials.store.modify(
+          providerId,
+          async () => anthropicOAuth("reauthed").anthropic,
+          interaction.signal === undefined ? undefined : { signal: interaction.signal },
+        ),
+      credentials,
     };
     const ctx = {
       cwd: projectDir,
@@ -943,6 +952,30 @@ describe("anthropic usage-limit rotation", () => {
     expect(fixture.notifications.at(-1)).toBe(
       "fbb reached its Anthropic usage limit; no alternate profile has confirmed available Anthropic usage.",
     );
+  });
+  test("skips a rejected Anthropic OAuth owner on subsequent requests", async () => {
+    const fixture = await setup({ fbb: [{ remaining: 50 }], jpb: [{ remaining: 50 }] });
+    const store = fixture.runtime.credentials.store;
+    let rejectedRefreshes = 0;
+    const refresh = async (current: Awaited<ReturnType<CredentialStore["read"]>>) => {
+      if (current?.type === "oauth" && current.access === "fbb") {
+        rejectedRefreshes += 1;
+        throw new Error('HTTP 400 {"error":"invalid_grant"}');
+      }
+      return undefined;
+    };
+
+    const first = await store.modify("anthropic", refresh);
+    expect(first?.type === "oauth" ? first.access : undefined).toBe("jpb");
+    expect(await fixture.anthropicAccess()).toBe("jpb");
+    expect((await store.modify("anthropic", refresh))?.type).toBe("oauth");
+    expect(rejectedRefreshes).toBe(1);
+    expect(fixture.notifications.at(-1)).toBe(
+      "fbb Anthropic OAuth refresh was rejected; switched Anthropic to jpb.",
+    );
+    expect(fixture.statuses).toEqual([["auth-profile", "fbb"]]);
+    await fixture.runtime.login("anthropic", "oauth", {});
+    expect(await fixture.anthropicAccess()).toBe("reauthed");
   });
 
   test("ignores Anthropic errors that are not usage limits", async () => {

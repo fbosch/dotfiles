@@ -134,6 +134,103 @@ describe("anthropic profile credentials", () => {
   });
 });
 
+describe("anthropic rejected refresh fallback", () => {
+  test("continues to the next OAuth owner after an invalid_grant refresh", async () => {
+    const kk = new MemoryCredentialStore();
+    const ct = new MemoryCredentialStore(new Map([[PROVIDER, oauth("ct", 0)]]));
+    const fbb = new MemoryCredentialStore(new Map([[PROVIDER, oauth("fbb")]]));
+    const shared = new MemoryCredentialStore();
+    const exhausted = new Set<CredentialStore>();
+    const switches: Array<[CredentialStore, CredentialStore]> = [];
+    const store = createProfileCredentialStore(kk, shared, "openai-codex", {
+      fallbacks: [ct, fbb],
+      route: {
+        pinned: () => undefined,
+        isExhausted: (_providerId, candidate) => exhausted.has(candidate),
+      },
+      onInvalidOAuthRefresh: (_providerId, candidate) => exhausted.add(candidate),
+      onOAuthFallback: (_providerId, from, to) => switches.push([from, to]),
+    });
+    const models = createModels({ credentials: store });
+    let rejectedRefreshes = 0;
+    models.setProvider({
+      id: PROVIDER,
+      name: "Synthetic Anthropic",
+      getModels: () => [],
+      auth: {
+        oauth: {
+          name: "Synthetic OAuth",
+          login: async () => oauth("login"),
+          refresh: async (credential) => {
+            if (credential.access === "ct") {
+              rejectedRefreshes += 1;
+              throw new Error('HTTP 400 {"error":"invalid_grant"}');
+            }
+            return oauth("refreshed");
+          },
+          toAuth: async (credential) => ({ apiKey: credential.access }),
+        },
+      },
+      stream: () => {
+        throw new Error("No network in this fixture");
+      },
+      streamSimple: () => {
+        throw new Error("No network in this fixture");
+      },
+    });
+
+    expect((await models.getAuth(PROVIDER))?.auth.apiKey).toBe("fbb");
+    expect(rejectedRefreshes).toBe(1);
+    expect(switches).toEqual([[ct, fbb]]);
+    expect(accessOf(await store.read(PROVIDER))).toBe("fbb");
+    expect((await models.getAuth(PROVIDER))?.auth.apiKey).toBe("fbb");
+    expect(rejectedRefreshes).toBe(1);
+    expect(accessOf(await ct.read(PROVIDER))).toBe("ct");
+    expect(accessOf(await fbb.read(PROVIDER))).toBe("fbb");
+  });
+  test("tries each OAuth owner once when every refresh token is rejected", async () => {
+    const ct = new MemoryCredentialStore(new Map([[PROVIDER, oauth("ct", 0)]]));
+    const fbb = new MemoryCredentialStore(new Map([[PROVIDER, oauth("fbb", 0)]]));
+    const store = createProfileCredentialStore(ct, new MemoryCredentialStore(), "openai-codex", {
+      fallbacks: [fbb],
+    });
+    const attempts: string[] = [];
+    const failure = new Error('HTTP 400 {"error":"invalid_grant"}');
+    await expect(
+      store.modify(PROVIDER, async (current) => {
+        if (current?.type === "oauth") attempts.push(current.access);
+        throw failure;
+      }),
+    ).rejects.toBe(failure);
+    expect(attempts).toEqual(["ct", "fbb"]);
+  });
+  test("preserves the auth failure when no later OAuth owner exists", async () => {
+    const ct = new MemoryCredentialStore(new Map([[PROVIDER, oauth("ct", 0)]]));
+    const store = createProfileCredentialStore(ct, new MemoryCredentialStore(), "openai-codex");
+    let attempts = 0;
+    await expect(
+      store.modify(PROVIDER, async () => {
+        attempts += 1;
+        throw new Error('HTTP 400 {"error":"invalid_grant"}');
+      }),
+    ).rejects.toThrow("invalid_grant");
+    expect(attempts).toBe(1);
+  });
+
+  test("does not switch accounts on a transient refresh error", async () => {
+    const ct = new MemoryCredentialStore(new Map([[PROVIDER, oauth("ct", 0)]]));
+    const fbb = new MemoryCredentialStore(new Map([[PROVIDER, oauth("fbb")]]));
+    const store = createProfileCredentialStore(ct, new MemoryCredentialStore(), "openai-codex", {
+      fallbacks: [fbb],
+    });
+    await expect(
+      store.modify(PROVIDER, async () => {
+        throw new Error("network unavailable");
+      }),
+    ).rejects.toThrow("network unavailable");
+    expect(accessOf(await store.read(PROVIDER))).toBe("ct");
+  });
+});
 describe("anthropic fallback along the profile order", () => {
   const withProvider = (access?: string) =>
     new MemoryCredentialStore(new Map(access === undefined ? [] : [[PROVIDER, oauth(access)]]));

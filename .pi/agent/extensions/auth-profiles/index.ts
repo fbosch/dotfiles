@@ -9,12 +9,17 @@
 
 import type { CredentialStore } from "@earendil-works/pi-ai";
 import { brandColor, PROVIDER_BRANDS, type ProviderBrand } from "../shared/provider-brand";
-import { installCredentialLoginBoundary, PROFILE_FALLBACK_PROVIDERS } from "./credential-login";
+import {
+  installCredentialLoginBoundary,
+  PROFILE_FALLBACK_PROVIDERS,
+  PROFILE_LOGIN_PROVIDERS,
+} from "./credential-login";
 import {
   type FallbackOwnerRoute,
   fallbackCredentialOwner,
   fallbackOwnerChain,
   openProfileCredentials,
+  type ProfileAuthFallbackCallbacks,
 } from "./profile-credentials";
 import type { GitRunner } from "./profile-resolver";
 import { type ProfileSelection, selectProfile } from "./profile-selector";
@@ -109,7 +114,7 @@ type InternalRuntime = {
   login: import("@earendil-works/pi-coding-agent").ModelRuntime["login"];
 };
 
-type BindProfileOptions = {
+type BindProfileOptions = ProfileAuthFallbackCallbacks & {
   refresh?: boolean;
   route?: FallbackOwnerRoute;
 };
@@ -166,6 +171,7 @@ async function bindProfile(
     profile,
     selection.profileOrder,
     options.route,
+    options,
   );
   if (options.refresh === false) return path;
 
@@ -491,6 +497,7 @@ export default function authProfiles(
   // usage limit. The live store reads this route on every request.
   const codexProviderId = providerAdapter.providerId;
   const fallbackExhaustedUntil = new Map<string, number>();
+  const authRejectedOwners = new Set<string>();
   // Limits already handled, including ones with no confirmed alternate, so repeated
   // responses from an exhausted owner do not refetch usage until it resets.
   const limitSeenUntil = new Map<string, number>();
@@ -503,7 +510,10 @@ export default function authProfiles(
       return pin !== undefined && pin.until > now() ? pin.owner : undefined;
     },
     isExhausted(providerId, owner) {
-      return (fallbackExhaustedUntil.get(fallbackKey(providerId, owner)) ?? 0) > now();
+      return (
+        authRejectedOwners.has(fallbackKey(providerId, owner)) ||
+        (fallbackExhaustedUntil.get(fallbackKey(providerId, owner)) ?? 0) > now()
+      );
     },
   };
   const holdsFallbackCredential = (profile: string, providerId: string) =>
@@ -665,7 +675,12 @@ export default function authProfiles(
   ) => {
     const { runtime } = credentialStoreBinding(ctx);
     if (!loginBoundaries.has(runtime)) {
-      loginBoundaries.set(runtime, installCredentialLoginBoundary(runtime));
+      loginBoundaries.set(
+        runtime,
+        installCredentialLoginBoundary(runtime, PROFILE_LOGIN_PROVIDERS, (providerId) => {
+          authRejectedOwners.delete(fallbackKey(providerId, activeProfile));
+        }),
+      );
     }
     // Usage-based selection chooses the Codex owner; the profile it fell back from stays
     // bound, so Anthropic and /login keep following the preferred profile.
@@ -681,7 +696,20 @@ export default function authProfiles(
     }
     let path: string;
     try {
-      path = await bindProfile(ctx, bound, providerAdapter, { ...options, route: fallbackRoute });
+      path = await bindProfile(ctx, bound, providerAdapter, {
+        ...options,
+        route: fallbackRoute,
+        onInvalidOAuthRefresh(providerId, owner) {
+          authRejectedOwners.add(fallbackKey(providerId, owner));
+          if (fallbackPins.get(providerId)?.owner === owner) fallbackPins.delete(providerId);
+        },
+        onOAuthFallback(_providerId, from, to) {
+          ctx.ui.notify(
+            `${from} Anthropic OAuth refresh was rejected; switched Anthropic to ${to}.`,
+            "warning",
+          );
+        },
+      });
     } catch (error) {
       if (previousPin === undefined) fallbackPins.delete(codexProviderId);
       else fallbackPins.set(codexProviderId, previousPin);

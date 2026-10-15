@@ -21,6 +21,11 @@ export type FallbackStoreRoute = {
   isExhausted(providerId: string, store: CredentialStore): boolean;
 };
 
+export type ProfileAuthFallbackCallbacks = {
+  onInvalidOAuthRefresh?: (providerId: string, owner: string) => void;
+  onOAuthFallback?: (providerId: string, from: string, to: string) => void;
+};
+
 export type ProfileCredentialStoreOptions = {
   /** Other profiles' stores, in effective profile order, consulted before `shared`. */
   fallbacks?: readonly CredentialStore[];
@@ -31,7 +36,19 @@ export type ProfileCredentialStoreOptions = {
    * isolating it to the selected profile. /login still saves to the selected profile.
    */
   routeProfileProvider?: boolean;
+  onInvalidOAuthRefresh?: (providerId: string, store: CredentialStore) => void;
+  onOAuthFallback?: (providerId: string, from: CredentialStore, to: CredentialStore) => void;
 };
+
+/** Only a rejected Anthropic refresh token is grounds to try another account. */
+function isAnthropicInvalidGrant(error: unknown): boolean {
+  let current = error;
+  for (let depth = 0; depth < 4 && current instanceof Error; depth++) {
+    if (/\binvalid_grant\b/.test(current.message)) return true;
+    current = current.cause;
+  }
+  return false;
+}
 
 /**
  * Owner lookup order shared by the live store and status observations: a valid pin
@@ -73,6 +90,8 @@ export function createProfileCredentialStore(
   const fallbackProviderIds = options.fallbackProviderIds ?? PROFILE_FALLBACK_PROVIDERS;
   const fallbacks = options.fallbacks ?? [];
   const route = options.route;
+  const onInvalidOAuthRefresh = options.onInvalidOAuthRefresh;
+  const onOAuthFallback = options.onOAuthFallback;
   const routesProfileProvider = options.routeProfileProvider === true && route !== undefined;
   const isFallbackProvider = (providerId: string) =>
     providerId === profileProviderId ? routesProfileProvider : fallbackProviderIds.has(providerId);
@@ -97,6 +116,7 @@ export function createProfileCredentialStore(
   const owner = async (
     providerId: string,
     options: AuthOperationOptions | undefined,
+    excluded?: ReadonlySet<CredentialStore>,
   ): Promise<{
     store: CredentialStore;
     credential: Awaited<ReturnType<CredentialStore["read"]>>;
@@ -110,7 +130,13 @@ export function createProfileCredentialStore(
             route.isExhausted(providerId, store),
           );
     for (const store of order) {
+      if (excluded?.has(store)) continue;
       const credential = await readFallback(store, providerId, options);
+      if (excluded?.size && credential?.type === "api_key") {
+        // shortcut: an OAuth refresh callback cannot resolve an API key; move this
+        // fallback above the store if mixed Anthropic auth types are configured.
+        continue;
+      }
       if (credential !== undefined) return { store, credential };
     }
     return { store: shared, credential: undefined };
@@ -148,10 +174,35 @@ export function createProfileCredentialStore(
       if (!isFallbackProvider(providerId)) {
         return target(providerId).modify(providerId, fn, options);
       }
-      const store = consumeCredentialLogin(options)
-        ? selected
-        : (await owner(providerId, options)).store;
-      return store.modify(providerId, fn, options);
+      if (consumeCredentialLogin(options)) return selected.modify(providerId, fn, options);
+      if (providerId !== "anthropic") {
+        return (await owner(providerId, options)).store.modify(providerId, fn, options);
+      }
+
+      const rejected = new Set<CredentialStore>();
+      let firstError: unknown;
+      let firstOwner: CredentialStore | undefined;
+      while (true) {
+        const { store, credential } = await owner(providerId, options, rejected);
+        if (credential === undefined) {
+          if (firstError !== undefined) throw firstError;
+          return store.modify(providerId, fn, options);
+        }
+        try {
+          const result = await store.modify(providerId, fn, options);
+          if (firstOwner !== undefined) {
+            for (const rejectedStore of rejected)
+              onInvalidOAuthRefresh?.(providerId, rejectedStore);
+            onOAuthFallback?.(providerId, firstOwner, store);
+          }
+          return result;
+        } catch (error) {
+          if (!isAnthropicInvalidGrant(error)) throw error;
+          firstError ??= error;
+          firstOwner ??= store;
+          rejected.add(store);
+        }
+      }
     },
     async delete(providerId, options) {
       if (!isFallbackProvider(providerId)) {
@@ -200,6 +251,7 @@ export async function openProfileCredentials(
   profile: string,
   profileOrder: readonly string[],
   route?: FallbackOwnerRoute,
+  callbacks: ProfileAuthFallbackCallbacks = {},
 ): Promise<CredentialStore> {
   const selected = await adapter.createCredentialStore(profile);
   const alternates = alternateProfiles(profile, profileOrder);
@@ -227,6 +279,17 @@ export async function openProfileCredentials(
   const labelFor = new Map(labelled.map(({ label, store }) => [store, label]));
   return createProfileCredentialStore(selected, shared, adapter.providerId, {
     fallbacks: alternateStores.map(({ store }) => store),
+    onInvalidOAuthRefresh: (providerId, store) => {
+      const owner = labelFor.get(store);
+      if (owner !== undefined) callbacks.onInvalidOAuthRefresh?.(providerId, owner);
+    },
+    onOAuthFallback: (providerId, from, to) => {
+      const fromOwner = labelFor.get(from);
+      const toOwner = labelFor.get(to);
+      if (fromOwner !== undefined && toOwner !== undefined) {
+        callbacks.onOAuthFallback?.(providerId, fromOwner, toOwner);
+      }
+    },
     ...(route === undefined
       ? {}
       : {
