@@ -109,11 +109,14 @@ describe("prompt autocomplete", () => {
   });
 
   test("colors FFF status in the suggestion side rail", () => {
-    const theme: Pick<Theme, "fg"> = {
-      fg: (color, text) => `${color}:${text}`,
+    const theme: Pick<Theme, "getFgAnsi"> = {
+      getFgAnsi: (color) => {
+        expect(color).toBe("warning");
+        return "\u001b[33m";
+      },
     };
 
-    expect(formatFffGitStatus(theme, "modified")).toBe("warning:▌");
+    expect(formatFffGitStatus(theme, "modified")).toBe("\u001b[43m \u001b[0m");
     expect(formatFffGitStatus(theme, "clean")).toBe("");
   });
 

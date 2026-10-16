@@ -37,11 +37,9 @@ import {
 import { contextIndicator } from "./context-health";
 import {
   backgroundToForeground,
-  DOCK_CHROME_WIDTH,
-  DOCK_RAIL,
-  DOCK_RIGHT_BORDER,
   fitColumns,
   foregroundToBackground,
+  paintDockBorderSpace,
   paintDockBottomEdge,
   paintDockRow,
 } from "./dock-rendering";
@@ -50,27 +48,28 @@ import { installClickableSubagentSessions } from "./subagent-session-links";
 import { colorizeHex } from "./terminal-color";
 
 const EDITOR_PADDING_X = 1;
+const PROMPT_RAIL_WIDTH = 1;
 const AUTOCOMPLETE_MAX_VISIBLE = 10;
 export const FILE_CHANGES_STATUS_KEY = "file-changes";
 export const MCP_STATUS_KEY = "mcp";
 const MCP_ICON = "";
-export function formatFffGitStatus(theme: Pick<Theme, "fg">, status: string): string {
+export function formatFffGitStatus(theme: Pick<Theme, "getFgAnsi">, status: string): string {
   switch (status) {
     case "untracked":
     case "unknown":
-      return theme.fg("success", DOCK_RAIL);
+      return paintDockBorderSpace(theme.getFgAnsi("success"));
     case "modified":
-      return theme.fg("warning", DOCK_RAIL);
+      return paintDockBorderSpace(theme.getFgAnsi("warning"));
     case "deleted":
     case "staged_deleted":
-      return theme.fg("error", DOCK_RAIL);
+      return paintDockBorderSpace(theme.getFgAnsi("error"));
     case "renamed":
-      return theme.fg("accent", DOCK_RAIL);
+      return paintDockBorderSpace(theme.getFgAnsi("accent"));
     case "staged_new":
     case "staged_modified":
-      return theme.fg("success", DOCK_RAIL);
+      return paintDockBorderSpace(theme.getFgAnsi("success"));
     case "ignored":
-      return theme.fg("dim", DOCK_RAIL);
+      return paintDockBorderSpace(theme.getFgAnsi("dim"));
     default:
       return "";
   }
@@ -420,13 +419,13 @@ export class PromptEditor extends CustomEditor {
   }
 
   render(width: number): string[] {
-    if (width <= DOCK_CHROME_WIDTH) {
+    if (width <= PROMPT_RAIL_WIDTH) {
       this.autocompleteOverlay.hide();
       return super.render(width);
     }
 
     const theme = this.ctx.ui.theme;
-    const editorWidth = width - DOCK_CHROME_WIDTH;
+    const editorWidth = width - PROMPT_RAIL_WIDTH;
     const inputLines = super.render(editorWidth);
     const model = this.ctx.model;
     const thinkingLevel = this.pi.getThinkingLevel();
@@ -465,13 +464,12 @@ export class PromptEditor extends CustomEditor {
       this.layoutCache = cached;
     }
 
-    const suggestionsRail = theme.fg("borderMuted", DOCK_RAIL);
+    const suggestionsRail = paintDockBorderSpace(theme.getFgAnsi("borderMuted"));
     const suggestionRails = cached.suggestions.map((line) => {
       const status = getSuggestionGitStatus(line, this.autocompleteItems);
       return (status === undefined ? "" : formatFffGitStatus(theme, status)) || suggestionsRail;
     });
     const backgroundAnsi = theme.getBgAnsi("userMessageBg");
-    const rightBorder = theme.fg("borderMuted", DOCK_RIGHT_BORDER);
     this.autocompleteOverlay.update(
       cached.suggestions,
       suggestionRails,
@@ -479,7 +477,7 @@ export class PromptEditor extends CustomEditor {
       cached.lines.length,
       {
         rail: suggestionsRail,
-        rightBorder,
+        rightBorder: "",
         backgroundAnsi,
         selectedBackgroundAnsi: foregroundToBackground(theme.getFgAnsi("accent")),
         selectedForegroundAnsi: backgroundToForeground(backgroundAnsi),
@@ -541,16 +539,17 @@ export class PromptEditor extends CustomEditor {
     ].join("");
     const modelRow = fitColumns(modelLeft, modelRight, input.editorWidth);
     const inputBorderColor = input.isWorking ? "accent" : "borderMuted";
-    const inputRail = input.theme.fg(inputBorderColor, DOCK_RAIL);
-    const rightBorder = input.theme.fg("borderMuted", DOCK_RIGHT_BORDER);
+    // Use the same styled spaces as suggestions so both borders align without copyable glyphs.
+    const inputRail = paintDockBorderSpace(input.theme.getFgAnsi(inputBorderColor));
     const backgroundAnsi = input.theme.getBgAnsi("userMessageBg");
     const dockRows = ["", ...coloredContent, "", modelRow].map((line) =>
-      paintDockRow(line, input.width, inputRail, backgroundAnsi, rightBorder),
+      paintDockRow(line, input.width, inputRail, backgroundAnsi),
     );
+    // The full-width half-block joins the full-cell left rail without narrowing its bottom corner.
     const bottomEdge = paintDockBottomEdge(
       input.width,
-      input.theme.fg(inputBorderColor, "▘"),
-      input.theme.fg("borderMuted", "▝"),
+      input.theme.fg(inputBorderColor, "▀"),
+      "",
       backgroundAnsi,
     );
     return { lines: [...dockRows, bottomEdge], suggestions };

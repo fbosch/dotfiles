@@ -11,6 +11,7 @@ import {
   type OverlayHandle,
   stripTerminalSequences,
   type TUI,
+  visibleWidth,
 } from "@earendil-works/pi-tui";
 import {
   getEditorTheme,
@@ -19,6 +20,7 @@ import {
   theme,
 } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import { AgentMentionCache } from "../../mentions/agent-mentions";
+import { foregroundToBackground } from "../dock-rendering";
 import { PromptEditor, type PromptEditorState } from "../prompt-editor";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../../../", import.meta.url));
@@ -106,6 +108,33 @@ test("hides slash suggestions before the selected command is submitted", async (
   fixture.editor.dispose();
 });
 
+test("aligns copy-safe suggestion rails with the unchanged prompt border color", async () => {
+  const fixture = createEditor();
+  try {
+    fixture.editor.handleInput("/");
+    await Bun.sleep(0);
+    const promptLines = fixture.editor.render(100);
+    const overlayLines = fixture.renderOverlay();
+    const rail = `${foregroundToBackground(theme.getFgAnsi("borderMuted"))} \u001b[0m`;
+
+    expect(overlayLines).toHaveLength(1);
+    for (const line of [...promptLines.slice(0, -1), ...overlayLines]) {
+      expect(line).toStartWith(rail);
+      expect(line).toEndWith("\u001b[49m");
+      expect(visibleWidth(line)).toBe(100);
+    }
+    expect(promptLines[0]).toBe(
+      `${rail}${theme.getBgAnsi("userMessageBg")}${" ".repeat(99)}\u001b[49m`,
+    );
+    const bottomEdge = promptLines[promptLines.length - 1] ?? "";
+    expect(stripTerminalSequences(bottomEdge)).toBe("▀".repeat(100));
+    expect(bottomEdge).toStartWith(theme.fg("borderMuted", "▀"));
+    expect(bottomEdge).toEndWith(`${"▀".repeat(99)}\u001b[39m`);
+  } finally {
+    fixture.editor.dispose();
+  }
+});
+
 test("renders modified FFF files with a warning-colored side rail", async () => {
   const fixture = createEditor();
   fixture.editor.setAutocompleteProvider({
@@ -131,12 +160,20 @@ test("renders modified FFF files with a warning-colored side rail", async () => 
 
   for (const character of "@.pi/") fixture.editor.handleInput(character);
   await Bun.sleep(30);
-  fixture.editor.render(100);
-
+  const promptLines = fixture.editor.render(100);
   const overlayLines = fixture.renderOverlay();
+
   expect(overlayLines).toHaveLength(2);
-  expect(stripTerminalSequences(overlayLines[0] ?? "")).toStartWith("▌ ");
-  expect(overlayLines[0]).toContain(theme.getFgAnsi("warning"));
-  expect(overlayLines[1]).toContain(theme.getFgAnsi("success"));
+  expect(stripTerminalSequences(overlayLines[0] ?? "")).toStartWith("  ");
+  expect(overlayLines[0]).toStartWith(
+    `${foregroundToBackground(theme.getFgAnsi("warning"))} \u001b[0m`,
+  );
+  expect(overlayLines[1]).toStartWith(
+    `${foregroundToBackground(theme.getFgAnsi("success"))} \u001b[0m`,
+  );
+  for (const line of [...promptLines.slice(0, -1), ...overlayLines]) {
+    expect(visibleWidth(line)).toBe(100);
+    expect(line).toEndWith("\u001b[49m");
+  }
   fixture.editor.dispose();
 });

@@ -4,6 +4,7 @@ import {
   backgroundToForeground,
   fitColumns,
   foregroundToBackground,
+  paintDockBorderSpace,
   paintDockBottomEdge,
   paintDockRow,
 } from "../dock-rendering";
@@ -64,6 +65,14 @@ describe("prompt dock rendering", () => {
     expect(foregroundToBackground("\u001b[39m")).toBe("\u001b[49m");
     expect(foregroundToBackground("\u001b[0m")).toBe("\u001b[0m");
     expect(foregroundToBackground("\u001b[38;2;256;0;0m")).toBe("\u001b[38;2;256;0;0m");
+  });
+
+  test("renders copy-safe border rails as colored spaces", () => {
+    const rail = paintDockBorderSpace("\u001b[38;5;44m");
+
+    expect(stripTerminalSequences(rail)).toBe(" ");
+    expect(visibleWidth(rail)).toBe(1);
+    expect(rail).toContain("\u001b[48;5;44m");
   });
 
   test("renders a half-height bottom edge instead of a full padding row", () => {

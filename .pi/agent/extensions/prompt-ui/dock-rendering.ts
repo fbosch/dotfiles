@@ -111,6 +111,10 @@ export function foregroundToBackground(foregroundAnsi: string): string {
   return convertAnsiColorSlot(foregroundAnsi, "foreground");
 }
 
+export function paintDockBorderSpace(foregroundAnsi: string): string {
+  return `${foregroundToBackground(foregroundAnsi)} \u001b[0m`;
+}
+
 export function paintDockBottomEdge(
   width: number,
   leftBorder: string,
