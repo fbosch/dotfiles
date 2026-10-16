@@ -22,6 +22,13 @@
 - Treat follow-up requests as cumulative unless the user resets scope.
 - Target the current contract. Add compatibility paths only for explicitly scoped
   persisted data or external consumers.
+- Test the current contract, not deletion history. When removing a feature,
+  remove obsolete tests and update affected coverage for remaining behavior.
+  Do not replace presence checks with absence checks solely to record removal;
+  no replacement test is required. Keep negative assertions only for explicit
+  ongoing requirements, such as security prohibitions or scoped compatibility
+  or migration contracts. Preserve coverage of supported behavior; never delete
+  tests merely to silence unexplained failures.
 - Prefer event-driven systems over polling when both are viable.
 - Do not use `any` casts to bypass type errors.
 - Put new JavaScript and TypeScript tests in a neighboring `__tests__` directory.

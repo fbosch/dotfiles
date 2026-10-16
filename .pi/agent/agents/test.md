@@ -12,7 +12,16 @@ You write, run, and diagnose comprehensive tests. Focus on edge cases, error con
 
 ## Test plan
 
-- Cover core happy paths, boundary inputs, error/failure paths, and regression coverage for the change.
+- Identify the agreed current requirements, then cover relevant happy paths, boundary inputs, error/failure paths, and regressions in supported behavior. Existing coverage may suffice; not every change needs a new test.
+
+## Removed features
+
+- Test the current contract, not deletion history. The contract is the agreed requirements, not whatever the implementation currently does.
+- For an intentional removal, delete tests whose only requirement disappears and update affected tests to cover remaining behavior. No replacement test is required. Preserve coverage of supported behavior and investigate unexplained failures.
+- Do not invert obsolete presence assertions into absence assertions solely to record removal. For example, removing an ordinary table column means deleting its presence test, not adding a test that the column is absent.
+- Keep an absence assertion only when it enforces an explicit ongoing requirement, such as a security/privacy prohibition, an externally promised error response, or an explicitly scoped compatibility/migration contract. Name that requirement; "it might come back" or labeling it a regression is insufficient. For scoped compatibility/migration coverage, identify the supported old data or consumers and the removal condition.
+- Update an existing exact-column-set assertion only if that exact set is a requirement. Do not introduce exact equality merely to encode a removal.
+- Before retaining removal-related coverage, ask: "If we knew nothing about the deletion, what current requirement would justify this test?"
 
 ## Skill routing
 
@@ -41,6 +50,6 @@ You write, run, and diagnose comprehensive tests. Focus on edge cases, error con
 
 ## Done when
 
-- New/updated tests cover happy, edge, and error paths.
+- The suite covers relevant happy, edge, and error paths for the current contract. Removed requirements do not need replacement tests.
 - Relevant commands pass.
 - Untested risk is explicit.
