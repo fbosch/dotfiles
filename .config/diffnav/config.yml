@@ -1,2 +1,3 @@
 ui:
   hideHeader: true
+  theme: zenwritten_dark
