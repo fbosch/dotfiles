@@ -148,4 +148,17 @@ describe("prompt footer statuses", () => {
       expect(visibleWidth(line)).toBe(width);
     }
   });
+  test("truncates a long cwd to keep MCP and sandbox statuses visible", () => {
+    const primaryStatus = [
+      renderMcpFooterStatus(ansiTheme, 2),
+      renderSandboxFooterStatus(ansiTheme, "nono"),
+    ].join(" · ");
+    const cwd = "/Projects/Organization/very-long-worktree-name-that-exceeds-the-footer-width";
+    const line = renderPromptHints(ansiTheme, keybindings, promptState, cwd, 60, primaryStatus);
+    const plainLine = stripTerminalSequences(line);
+
+    expect(plainLine.endsWith(" 2 MCP ·  ")).toBe(true);
+    expect(plainLine).not.toContain(cwd);
+    expect(visibleWidth(line)).toBe(60);
+  });
 });

@@ -81,12 +81,10 @@
       "args": [
         "-eu",
         "-c",
-        "browser=$(command -v google-chrome || command -v chromium || command -v chromium-browser || true); if [ -n \"$browser\" ]; then set -- \"--executable-path=$browser\" \"$@\"; fi; exec npx --yes chrome-devtools-mcp@1.10.1 \"$@\"",
+        "exec npx --yes chrome-devtools-mcp@1.10.1 \"$@\"",
         "chrome-devtools-mcp",
-        "--headless",
-        "--isolated",
+        "--browser-url=http://127.0.0.1:9222",
         "--no-usage-statistics",
-        "--chrome-arg=--no-sandbox",
         "--no-performance-crux"
       ],
       "env": {

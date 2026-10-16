@@ -403,6 +403,11 @@ in
         -l .config/nvim/tests/dekit_terminal.lua
     '';
 
+    "test:nvim-diffnav-terminal".exec = ''
+      REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE -i NONE \
+        -l .config/nvim/tests/diffnav_terminal.lua
+    '';
+
     "test:nvim-direnv-loader".exec = ''
       REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE \
         -l .config/nvim/tests/direnv_loader.lua
@@ -531,6 +536,7 @@ in
         "test:pi-extensions"
         "test:pi-mcp"
         "test:nvim-dekit-terminal"
+        "test:nvim-diffnav-terminal"
         "test:nvim-direnv-loader"
         "test:nvim-pi-direnv-launch"
         "test:nvim-pi-launcher"

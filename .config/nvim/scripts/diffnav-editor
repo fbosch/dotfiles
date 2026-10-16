@@ -1,0 +1,19 @@
+#!/bin/sh
+# diffnav executes EDITOR directly, without splitting arguments.
+export DIFFNAV_FILE="${1:?diffnav did not provide a file}"
+exec "${DIFFNAV_NVIM:?missing parent Neovim executable}" --headless -u NONE -i NONE -n \
+  -c 'lua
+local ok, err = pcall(function()
+  local channel = vim.fn.sockconnect("pipe", vim.env.NVIM, { rpc = true })
+  assert(channel > 0, "Cannot connect to parent Neovim")
+  local path = vim.fn.fnamemodify(vim.env.DIFFNAV_FILE, ":p")
+  local opened = vim.rpcrequest(channel, "nvim_exec_lua",
+    "return require(\"utils.diffnav\").open_file(...)", { path })
+  vim.fn.chanclose(channel)
+  assert(opened, "Parent Neovim could not open the selected file")
+end)
+if not ok then
+  vim.api.nvim_err_writeln(tostring(err))
+  vim.cmd.cquit()
+end
+' -c qa

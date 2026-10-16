@@ -119,6 +119,11 @@ return {
 			local diffnav_instance = nil
 			local diffnav_root = nil
 			usrcmd("FTermDiffnav", function()
+				local diffnav = require("utils.diffnav")
+				if diffnav_instance and diffnav_instance.win and vim.api.nvim_win_is_valid(diffnav_instance.win) then
+					diffnav.toggle(diffnav_instance)
+					return
+				end
 				local bufpath = vim.api.nvim_buf_get_name(0)
 				bufpath = (bufpath ~= "" and vim.uv.fs_realpath(bufpath)) or bufpath
 				local path = bufpath ~= "" and bufpath or vim.fn.getcwd()
@@ -136,14 +141,14 @@ return {
 					diffnav_root = root
 					diffnav_instance = fterm:new({
 						ft = "fterm_diffnav",
-						env = env,
-						shell = "dash",
-						cmd = string.format("cd %s && diffnav --watch", vim.fn.shellescape(root)),
+						env = diffnav.editor_env(env),
+						-- Bypass Fish startup, which resets EDITOR and would launch a nested Neovim.
+						cmd = { "dash", "-c", string.format("cd %s && exec diffnav --watch", vim.fn.shellescape(root)) },
 						dimensions = dimensions,
 					})
 				end
 
-				terminal.toggle_floating_terminal(diffnav_instance)
+				diffnav.toggle(diffnav_instance)
 			end, { bang = true })
 
 			local btop_instance = nil

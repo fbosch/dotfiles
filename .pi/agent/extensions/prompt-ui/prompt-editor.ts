@@ -11,6 +11,7 @@ import {
   type EditorTheme,
   stripTerminalSequences,
   type TUI,
+  truncateToWidth,
   visibleWidth,
 } from "@earendil-works/pi-tui";
 import {
@@ -228,14 +229,19 @@ export function renderPromptHints(
   const primaryRight = sanitizeStatus(primaryRightStatus);
   const secondaryRight = sanitizeStatus(secondaryRightStatus);
   const combinedRight = [secondaryRight, primaryRight].filter(Boolean).join(" · ");
-  const rightWidth = Math.max(0, width - visibleWidth(renderedLeft) - 1);
+  const requiredRight = primaryRight || secondaryRight;
+  // Keep the most important right status visible by letting the left side absorb truncation.
+  const leftWidth =
+    requiredRight.length === 0 ? width : Math.max(0, width - visibleWidth(requiredRight) - 2);
+  const fittedLeft = truncateToWidth(renderedLeft, leftWidth, "");
+  const rightWidth = Math.max(0, width - visibleWidth(fittedLeft) - 1);
   const hintRight =
     primaryRight && secondaryRight && visibleWidth(combinedRight) > rightWidth
       ? `${primaryRight} `
       : combinedRight.length > 0
         ? `${combinedRight} `
         : "";
-  return fitColumns(renderedLeft, hintRight, width);
+  return fitColumns(fittedLeft, hintRight, width);
 }
 
 interface CachedPromptLayout {

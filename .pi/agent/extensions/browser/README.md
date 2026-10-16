@@ -5,7 +5,7 @@ agent-browser with Lightpanda, Chrome MCP, and Firefox MCP.
 
 ## Choose a backend
 
-Run `/reload` after extension changes. Load inactive tools with `tool_load`.
+Run `/reload` after extension changes. If a `browser_*` tool is inactive, use Pi's native `tool_search` to discover and activate the specific tool. These tools use deferred exposure; `tool_load` does not activate them.
 
 1. Call `browser_open` with a backend and URL.
 2. Use the same backend for `browser_snapshot`, `browser_act`,
