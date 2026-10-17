@@ -3,6 +3,20 @@
 The `browser_*` tools share classifier selection and safety checks across
 agent-browser with Lightpanda, Chrome MCP, and Firefox MCP.
 
+## Agent routing
+
+The extension adds browser-first guidance to the session prompt before deferred
+tools are activated. Use `tool_search` to load the required `browser_*` tools,
+then use them for supported interactions on Chrome MCP and Firefox MCP as well
+as agent-browser. Local guidance takes precedence over CLI-only browser skills.
+
+Use raw MCP for unsupported operations such as page discovery, console or network
+diagnostics, screenshots, arbitrary JavaScript, and dragging, or when the user
+explicitly requests a native tool. State why raw MCP is needed. Native snapshots
+may supply UIDs for those operations. Keep the same page and backend, and take a
+fresh `browser_snapshot` before returning to browser actions after a page change.
+Do not use raw MCP to bypass a failed or denied browser action.
+
 ## Choose a backend
 
 Run `/reload` after extension changes. If a `browser_*` tool is inactive, use Pi's native `tool_search` to discover and activate the specific tool. These tools use deferred exposure; `tool_load` does not activate them.
@@ -50,6 +64,7 @@ Both adapters reject stale refs and refs whose page URL has changed.
 
 `index.ts` owns classifier policy and bounded workflows. `backends.ts` owns
 browser execution, native snapshot normalization, and MCP ref binding.
+`prompt.ts` owns browser-first session guidance.
 Add adapter regression cases in the neighboring `__tests__` directory.
 
 ```sh

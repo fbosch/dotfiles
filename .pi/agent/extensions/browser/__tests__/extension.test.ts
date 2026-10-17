@@ -46,6 +46,7 @@ describe("browser extension", () => {
     const tools: ToolDefinition[] = [];
     browserExtension({
       registerTool: (tool: ToolDefinition) => tools.push(tool),
+      on: () => {},
     } as unknown as ExtensionAPI);
     expect(tools.map((tool) => tool.name)).toEqual([
       "browser_open",

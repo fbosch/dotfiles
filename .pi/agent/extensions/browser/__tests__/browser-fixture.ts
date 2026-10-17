@@ -132,6 +132,7 @@ export function browserFixture(backend: BrowserBackend) {
   };
   const pi = {
     registerTool: (tool: ToolDefinition) => tools.push(tool),
+    on: () => {},
     exec: async (command: string, args: string[], options?: { signal?: AbortSignal }) => {
       calls.push({
         name: command,

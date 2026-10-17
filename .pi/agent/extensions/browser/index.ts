@@ -4,6 +4,7 @@ import { type Static, Type } from "typebox";
 import { requestClassifier } from "../../lib/classifier";
 import { INACTIVE_SPECIALIST_TOOL } from "../../lib/tool-exposure";
 import { type BrowserInteraction, createBrowserBackends } from "./backends";
+import { registerBrowserGuidance } from "./prompt";
 
 const DECISION_TIMEOUT_MS = 2_000;
 const MAX_PAGE_STATE_CHARS = 24_000;
@@ -436,6 +437,7 @@ function completionKey(candidate: RunCandidate): string {
 
 export default function browserExtension(pi: ExtensionAPI, classify = requestClassifier): void {
   const getBrowser = createBrowserBackends();
+  registerBrowserGuidance(pi);
   pi.registerTool({
     ...INACTIVE_SPECIALIST_TOOL,
     name: "browser_open",
@@ -476,7 +478,7 @@ export default function browserExtension(pi: ExtensionAPI, classify = requestCla
     executionMode: "sequential",
     label: "Act in browser",
     description:
-      "Perform one explicit browser interaction on the selected backend. Use current browser_snapshot refs; for press, target is a key combination.",
+      "Perform one explicit browser interaction on agent-browser, Chrome MCP, or Firefox MCP. Prefer this to raw DevTools calls for supported interactions. Use current browser_snapshot refs; for press, target is a key combination.",
     parameters: ActParameters,
     async execute(_toolCallId, params: ActInput, signal, _onUpdate, ctx) {
       const needsValue =
@@ -500,7 +502,7 @@ export default function browserExtension(pi: ExtensionAPI, classify = requestCla
     name: "browser_step",
     label: "Take browser step",
     description:
-      "Take one confidence-gated browser step: snapshot the page, use Classifier to choose a clickable candidate and verify it is navigation-only, click it, then return the updated snapshot. Does not execute uncertain or consequential actions.",
+      "Take one confidence-gated browser step on agent-browser, Chrome MCP, or Firefox MCP: snapshot the page, use Classifier to choose a clickable candidate and verify it is navigation-only, click it, then return the updated snapshot. Does not execute uncertain or consequential actions.",
     parameters: StepParameters,
     executionMode: "sequential",
     async execute(_toolCallId, params: StepInput, signal, _onUpdate, ctx) {
@@ -588,7 +590,7 @@ export default function browserExtension(pi: ExtensionAPI, classify = requestCla
     name: "browser_run",
     label: "Run browser workflow",
     description:
-      "Run a bounded multi-step browser workflow. Explicit inputs with a unique control match run directly; Classifier selects ambiguous or control actions and independently authorizes button and link clicks.",
+      "Run a bounded multi-step browser workflow on agent-browser, Chrome MCP, or Firefox MCP. Explicit inputs with a unique control match run directly; Classifier selects ambiguous or control actions and independently authorizes button and link clicks.",
     parameters: RunParameters,
     executionMode: "sequential",
     async execute(_toolCallId, params: RunInput, signal, _onUpdate, ctx) {
