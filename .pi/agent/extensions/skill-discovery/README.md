@@ -42,14 +42,14 @@ Configure provider preferences in global `~/.pi/agent/settings.json`. The first 
 {
   "classifier": {
     "providers": [
-      { "provider": "openrouter", "model": "typesafe/jev-1.13" },
-      { "provider": "vercel-ai-gateway", "model": "typesafe-ai/jev" }
+      { "provider": "openrouter", "model": "typesafe/jev-1.14" },
+      { "provider": "openrouter", "model": "openai/gpt-6-luna-decisions" }
     ]
   }
 }
 ```
 
-If `classifier.providers` is absent, the same OpenRouter-first order is used. OpenRouter model IDs use the `typesafe/` namespace with a Jev alias (`jev-latest`, `jev-preview`) or version (`jev-X.Y` / `jev-X.Y.Z`); the adapter sends the suffix as the wire model ID. The current Vercel route accepts `typesafe-ai/jev` and sends that ID unchanged. Unknown providers, unsupported provider/model pairs, duplicate providers, malformed lists, or malformed settings fail closed before auth or network access. Project settings do not override this global shared routing configuration.
+If `classifier.providers` is absent, the requester uses the list above. Both models accept text and images. Each entry names a registered classifier model; its native adapter handles the wire model ID. Missing or incompatible models are skipped. Malformed preference lists fail closed before auth or network access. Project settings do not override these global provider preferences.
 
 Automatic recommendations are enabled in this repository's global settings, but disabled by default in the extension. Configure them through `settings.json` or a trusted project settings file:
 

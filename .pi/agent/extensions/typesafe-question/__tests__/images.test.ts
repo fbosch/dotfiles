@@ -29,12 +29,12 @@ test("typesafe_question exposes image blocks and forwards them to the native ima
   expect(Value.Check(QuestionParameters, input)).toBe(true);
   expect(normalizeQuestionInput(input)).toEqual(input);
   const native = await createNativeClassifierRegistry();
-  const template = native.findOfType("classifier", "openrouter", "typesafe/jev-1.13");
+  const template = native.findOfType("classifier", "openrouter", "typesafe/jev-1.14");
   if (!template) throw new Error("Missing Jev fixture");
   const model: ClassifierModel<ClassifierApi> = {
     ...template,
     provider: "openrouter",
-    id: "openai/gpt-6-luna-decisions",
+    id: "typesafe/jev-1.14",
     api: "fixture-vision",
     input: ["text", "image"],
   };
@@ -43,8 +43,9 @@ test("typesafe_question exposes image blocks and forwards them to the native ima
     input,
     {
       findOfType: (_type, provider, id) => {
-        expect([provider, id]).toEqual(["openrouter", "openai/gpt-6-luna-decisions"]);
-        return model;
+        expect(provider).toBe("openrouter");
+        expect(["typesafe/jev-1.14", "openai/gpt-6-luna-decisions"]).toContain(id);
+        return id === model.id ? model : undefined;
       },
       classify: async (selected, request) => {
         calls++;
@@ -98,17 +99,16 @@ test("malformed image inputs fail before any model lookup or classification", as
   expect(calls).toBe(0);
 });
 
-test("unavailable image classifiers produce a sanitized error without a Jev request", async () => {
+test("unavailable image classifiers produce a sanitized error without a classifier request", async () => {
   let calls = 0;
-  const native = await createNativeClassifierRegistry();
   await expect(
     classifyQuestion(
       input,
       {
-        findOfType: native.findOfType.bind(native),
+        findOfType: () => undefined,
         classify: async () => {
           calls++;
-          throw new Error("must not classify images with Jev");
+          throw new Error("must not classify images without a compatible model");
         },
       },
       { agentDirectory: directory },

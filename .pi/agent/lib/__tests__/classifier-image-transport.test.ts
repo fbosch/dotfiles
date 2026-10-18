@@ -40,9 +40,9 @@ let native: ModelRegistry;
 let model: ClassifierModel<ClassifierApi>;
 beforeAll(async () => {
   native = await createNativeClassifierRegistry();
-  const template = native.findOfType("classifier", "openrouter", "typesafe/jev-1.13");
+  const template = native.findOfType("classifier", "openrouter", "typesafe/jev-1.14");
   if (!template) throw new Error("Missing native Jev fixture");
-  model = { ...template, id: "openai/gpt-6-luna-decisions", input: ["text", "image"] };
+  model = template;
 });
 beforeEach(() => {
   directory = mkdtempSync(join(tmpdir(), "classifier-image-transport-"));
@@ -96,6 +96,31 @@ test("OpenRouter images use documented multimodal state while native auth, mappi
     },
     usage: { input: 80, output: 5, totalTokens: 85 },
   });
+});
+
+test("Jev 1.14 image rejection falls back to Luna without changing image payloads", async () => {
+  const attempts: string[] = [];
+  const images = input.images;
+  if (!images) throw new Error("Missing image fixture");
+  const result = await createClassifierRequester(Date.now, directory)(registry(), input, {
+    fetch: async (url, init) => {
+      expect(String(url)).toBe("https://openrouter.ai/api/alpha/decisions");
+      const sent = JSON.parse(String(init?.body));
+      attempts.push(sent.model);
+      expect(sent.state).toEqual([
+        JSON.stringify(input.state),
+        ...images.map(({ data, mimeType }) => ({
+          type: "image_url",
+          image_url: { url: `data:${mimeType};base64,${data}` },
+        })),
+      ]);
+      return attempts.length === 1
+        ? new Response("Unsupported image", { status: 400 })
+        : Response.json(wireResponse);
+    },
+  });
+  expect(result).toMatchObject({ ok: true, value: { answers: { clean: { probability: 0.9 } } } });
+  expect(attempts).toEqual(["typesafe/jev-1.14", "openai/gpt-6-luna-decisions"]);
 });
 
 test("native classifier gate bridges images once and blocks disabled requests before transport", async () => {

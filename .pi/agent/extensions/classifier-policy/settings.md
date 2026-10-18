@@ -16,12 +16,17 @@ Run `/reload` once after installing this extension. The policy re-reads settings
 
 ## Input-aware routing
 
-Text-only requests use `classifier.providers`. Requests containing images use `classifier.imageProviders`, which defaults to Luna Decisions through OpenRouter:
+Text-only requests use `classifier.providers`; requests containing images use `classifier.imageProviders`. Both default to Jev 1.14 through OpenRouter, with Luna Decisions as the fallback:
 
 ```json
 {
   "classifier": {
+    "providers": [
+      { "provider": "openrouter", "model": "typesafe/jev-1.14" },
+      { "provider": "openrouter", "model": "openai/gpt-6-luna-decisions" }
+    ],
     "imageProviders": [
+      { "provider": "openrouter", "model": "typesafe/jev-1.14" },
       { "provider": "openrouter", "model": "openai/gpt-6-luna-decisions" }
     ]
   }
@@ -49,6 +54,8 @@ Programmatic callers can instead pass `images` alongside `state` and `questions`
 ```
 
 Image input is bounded to four PNG, JPEG, or WebP blocks, each at most 5 MiB base64-encoded. State and questions retain their separate 64 KB limit. Attached and explicit images share the same bounds. All supplied state and images are sent to the selected provider; do not include secrets or sensitive data.
+
+Jev's image support is experimental and has stricter [format and dimension limits](https://docs.typesafe.ai/images#limits). It accepts PNG and JPEG, not WebP. The requester passes images rejected by Jev intact to Luna. Both defaults use OpenRouter, so this fallback does not bypass an OpenRouter outage or provider cooldown.
 
 Pi's current System One adapter rejects image input. The OpenRouter bridge converts images to the [documented multimodal Decisions format](https://openrouter.ai/docs/guides/community/multimodal-decisions) while retaining native authentication, question mapping, answer parsing, and usage accounting. Unexpected transport or payload shapes fail before sending. Remove the bridge when Pi supports OpenRouter images natively.
 

@@ -820,8 +820,10 @@ test("read-only status does not start an absent runner", async () => {
   );
 });
 
-test("starts a confirmed script with argv boundaries and reports acknowledgement, not completion", async () => {
+test("starts a catalogued script without confirmation and reports acknowledgement, not completion", async () => {
   const h = await harness();
+  h.state.hasUI = false;
+  h.state.confirmed = false;
   const result = await h.invoke({
     action: "start",
     script: "package:test",
@@ -830,7 +832,7 @@ test("starts a confirmed script with argv boundaries and reports acknowledgement
   const task = resultTask(result.details);
   expect(isManagedTask(task)).toBe(true);
   expect(result.details).toEqual({ action: "start", project: h.cwd, task, accepted: true });
-  expect(h.state.confirmations).toHaveLength(1);
+  expect(h.state.confirmations).toEqual([]);
   expect(h.calls.at(-1)?.args).toEqual([
     "-C",
     h.cwd,
@@ -849,55 +851,28 @@ test("starts a confirmed script with argv boundaries and reports acknowledgement
   expect(h.calls.at(-1)?.options?.timeout).toBe(10_000);
 });
 
-test("denies declined, headless, and aborted mutations without spawning", async () => {
+test("requires project trust but not interactive confirmation to start scripts", async () => {
   const h = await harness();
+  h.state.hasUI = false;
   h.state.confirmed = false;
-  await expect(h.invoke({ action: "start", script: "package:test" })).rejects.toThrow("declined");
-  h.context.hasUI = false;
-  await expect(h.invoke({ action: "start", script: "package:test" })).rejects.toThrow(
-    "interactive confirmation",
+  await h.invoke({ action: "start", script: "package:test" });
+  expect(h.state.confirmations).toEqual([]);
+
+  h.state.trusted = false;
+  await expect(h.invoke({ action: "start", script: "package:serve" })).rejects.toThrow(
+    "trusted project",
   );
+  h.state.trusted = true;
+
+  const callsBeforeAbort = h.calls.length;
   const controller = new AbortController();
   controller.abort();
   await expect(
-    h.invoke({ action: "start", script: "package:test" }, controller.signal),
+    h.invoke({ action: "start", script: "package:serve" }, controller.signal),
   ).rejects.toThrow();
-  expect(h.calls.some((call) => call.args.includes("spawn"))).toBe(false);
+  expect(h.calls).toHaveLength(callsBeforeAbort);
 });
 
-test("revalidates package scripts and trust after confirmation", async () => {
-  const h = await harness();
-  h.state.onConfirm = async () => {
-    await writeFile(
-      h.packagePath,
-      JSON.stringify({ packageManager: "bun@1.4.0", scripts: { test: "different command" } }),
-    );
-  };
-  await expect(h.invoke({ action: "start", script: "package:test" })).rejects.toThrow(
-    "Script changed",
-  );
-  h.state.onConfirm = async () => {
-    h.state.trusted = false;
-  };
-  await expect(h.invoke({ action: "start", script: "package:test" })).rejects.toThrow(
-    "trusted project",
-  );
-  expect(h.calls.some((call) => call.args.includes("spawn"))).toBe(false);
-});
-
-test("detects Just body changes even when public recipe metadata is unchanged", async () => {
-  const h = await harness();
-  await writeFile(join(h.cwd, "justfile"), "build:\n  echo build\n");
-  h.state.onConfirm = async () => {
-    const build = h.state.just.recipes.build;
-    if (build === undefined) throw new Error("build fixture missing");
-    Object.assign(build, { body: ["different command"] });
-  };
-  await expect(h.invoke({ action: "start", script: "just:build" })).rejects.toThrow(
-    "Script changed",
-  );
-  expect(h.calls.some((call) => call.args.includes("spawn"))).toBe(false);
-});
 
 test("rejects missing scripts and does not overwrite an existing task", async () => {
   const h = await harness();
@@ -954,18 +929,26 @@ test("output is a bounded current screen, with exact task selection", async () =
   expect(h.calls.at(-1)?.args).toEqual(["-C", h.cwd, "--json", "screen", path]);
 });
 
-test("stop and restart confirm and operate on exactly one existing task", async () => {
+test("stop confirms while restart runs without an interactive prompt", async () => {
   const h = await harness();
   h.state.running = true;
-  for (const action of ["stop", "restart"]) {
-    expect((await h.invoke({ action, task: path })).details).toMatchObject({
-      action,
-      task: path,
-      accepted: true,
-    });
-    expect(h.calls.at(-1)?.args).toEqual(["-C", h.cwd, "--json", action, path]);
-  }
-  expect(h.state.confirmations).toHaveLength(2);
+  expect((await h.invoke({ action: "stop", task: path })).details).toMatchObject({
+    action: "stop",
+    task: path,
+    accepted: true,
+  });
+  expect(h.calls.at(-1)?.args).toEqual(["-C", h.cwd, "--json", "stop", path]);
+  expect(h.state.confirmations).toHaveLength(1);
+
+  h.state.hasUI = false;
+  h.state.confirmed = false;
+  expect((await h.invoke({ action: "restart", task: path })).details).toMatchObject({
+    action: "restart",
+    task: path,
+    accepted: true,
+  });
+  expect(h.calls.at(-1)?.args).toEqual(["-C", h.cwd, "--json", "restart", path]);
+  expect(h.state.confirmations).toHaveLength(1);
 });
 
 test("denies task replacement during confirmation and malformed CLI acknowledgements", async () => {
@@ -1022,33 +1005,6 @@ test("shares each whole-catalog fingerprint across its source and preserves hash
   expect(await discoverScripts(h.pi, h.cwd)).toEqual(scripts);
 });
 
-test.each(["just:build", "package:test"])(
-  "unrelated catalog body changes still block confirmed start of %s",
-  async (id) => {
-    const h = await harness();
-    await writeFile(join(h.cwd, "justfile"), "build:\n  echo build\n");
-    h.state.onConfirm = async () => {
-      if (id === "just:build")
-        h.state.just.recipes.hidden = {
-          ...h.state.just.recipes.hidden,
-          body: ["CHANGED_PRIVATE_BODY"],
-        };
-      else
-        await writeFile(
-          h.packagePath,
-          JSON.stringify({
-            packageManager: "bun@1.4.0",
-            scripts: { test: "printf hello", serve: "CHANGED_OTHER_BODY" },
-          }),
-        );
-    };
-    await expect(h.invoke({ action: "start", script: id })).rejects.toThrow(
-      "Script changed during confirmation",
-    );
-    expect(h.state.confirmations).toHaveLength(1);
-    expect(h.calls.some((call) => call.args.includes("spawn"))).toBe(false);
-  },
-);
 
 const liveTest = process.env.PI_DEKIT_LIVE === "1" ? test : test.skip;
 liveTest(

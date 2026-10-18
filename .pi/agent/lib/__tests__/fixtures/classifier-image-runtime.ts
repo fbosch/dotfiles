@@ -20,19 +20,19 @@ const runtime = await installed.ModelRuntime.create({
   allowModelNetwork: false,
 });
 const registry = new installed.ModelRegistry(runtime);
-const id = "openai/gpt-6-luna-decisions";
+const id = "typesafe/jev-1.14";
 // Supply the catalog entry explicitly so the adapter probe needs no catalog network access.
 registry.registerProvider("openrouter", {
   models: [
     {
       type: "classifier",
       id,
-      name: "Luna Decisions runtime fixture",
+      name: "Jev 1.14 runtime fixture",
       api: "typesafe-system-one",
       baseUrl: "https://openrouter.ai/api/v1",
       input: ["text", "image"],
-      cost: { input: 0.1, output: 0, cacheRead: 0, cacheWrite: 0 },
-      contextWindow: 1_050_000,
+      cost: { input: 0.042, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 262_144,
     },
   ],
 });

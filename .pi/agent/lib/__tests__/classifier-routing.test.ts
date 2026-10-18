@@ -1,5 +1,5 @@
 import { afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { ClassifierApi, ClassifierModel, ClassifierResult } from "@earendil-works/pi-ai";
@@ -34,10 +34,10 @@ beforeAll(async () => {
   const model = native.findOfType("classifier", "openrouter", "typesafe/jev-1.13");
   if (!model) throw new Error("Missing native Jev fixture");
   textModel = model;
+  const vision = native.findOfType("classifier", "openrouter", "typesafe/jev-1.14");
+  if (!vision) throw new Error("Missing Jev 1.14 fixture");
   imageModel = {
-    ...model,
-    provider: "openrouter",
-    id: "openai/gpt-6-luna-decisions",
+    ...vision,
     api: "fixture-vision",
     input: ["text", "image"],
   };
@@ -65,6 +65,7 @@ function registry(
     textModel,
     { ...textModel, provider: "vercel-ai-gateway", id: "typesafe-ai/jev" },
     imageModel,
+    { ...imageModel, id: "openai/gpt-6-luna-decisions" },
   ],
   classify: ClassifierRegistry["classify"] = async (model) => success(model),
 ): ClassifierRegistry {
@@ -87,10 +88,10 @@ describe("input-aware classifier routing", () => {
     });
     for (const request of [input, { ...input, images: [] }])
       expect((await requester()(fake, request)).ok).toBe(true);
-    expect(calls).toEqual(["typesafe/jev-1.13", "typesafe/jev-1.13"]);
+    expect(calls).toEqual(["typesafe/jev-1.14", "typesafe/jev-1.14"]);
   });
 
-  test("routes explicit images to Luna without changing state, questions, or images", async () => {
+  test("routes explicit images to Jev 1.14 without changing state, questions, or images", async () => {
     const calls: string[] = [];
     const fake = registry(undefined, async (model, request, options) => {
       calls.push(model.id);
@@ -102,7 +103,7 @@ describe("input-aware classifier routing", () => {
       ok: true,
       value: { answers: { clean: { type: "bool", probability: 0.9 } } },
     });
-    expect(calls).toEqual(["openai/gpt-6-luna-decisions"]);
+    expect(calls).toEqual(["typesafe/jev-1.14"]);
   });
 
   test("supports configured registered models and skips incompatible image candidates", async () => {
@@ -161,11 +162,11 @@ describe("input-aware classifier routing", () => {
         })
       ).ok,
     ).toBe(true);
-    expect(calls).toEqual(["openai/gpt-6-luna-decisions", "vision-backup"]);
+    expect(calls).toEqual(["typesafe/jev-1.14", "vision-backup"]);
     expect(fetches).toBe(2);
   });
 
-  test("does not send image requests to Jev when vision models are missing or incompatible", async () => {
+  test("does not send image requests to models without image capability", async () => {
     for (const imageProviders of [
       undefined,
       [{ provider: textModel.provider, model: textModel.id }],
@@ -230,14 +231,14 @@ describe("input-aware classifier routing", () => {
       ok: false,
       reason: "timeout",
     });
-    expect(calls).toBe(1);
+    expect(calls).toBe(2);
     const controller = new AbortController();
     controller.abort();
     expect(await requester()(fake, imageInput, { signal: controller.signal })).toMatchObject({
       ok: false,
       reason: "caller-cancellation",
     });
-    expect(calls).toBe(1);
+    expect(calls).toBe(2);
   });
 
   test("in-flight cancellation stops image fallback", async () => {
@@ -350,8 +351,19 @@ describe("input-aware classifier routing", () => {
       expect(() => assertClassifierInput({ ...input, images })).toThrow();
   });
 
+  test("checked-in settings match shared defaults for text and image requests", () => {
+    const configured: unknown = JSON.parse(
+      readFileSync(new URL("../../settings.json", import.meta.url), "utf8"),
+    );
+    for (const inputType of ["text", "image"] as const)
+      expect(resolveClassifierPreferences(configured, inputType)).toEqual(
+        resolveClassifierPreferences(undefined, inputType),
+      );
+  });
+
   test("validates both routes, bounded preference lists, and unique provider/model pairs", () => {
     expect(resolveClassifierPreferences(undefined, "image")).toEqual([
+      { provider: "openrouter", model: "typesafe/jev-1.14" },
       { provider: "openrouter", model: "openai/gpt-6-luna-decisions" },
     ]);
     const preference = { provider: "custom", model: "vision" };

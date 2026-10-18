@@ -108,7 +108,7 @@ describe("typesafe_question native classifiers", () => {
     expect(calledUrl).toBe(OPENROUTER_GATEWAY_ENDPOINT);
     expect(sent).toMatchObject({
       state: request.state,
-      model: "typesafe/jev-1.13",
+      model: "typesafe/jev-1.14",
       questions: { urgent: { ...request.questions.urgent, type: "noul" } },
     });
     expect(output.answers).toEqual(response.answers);

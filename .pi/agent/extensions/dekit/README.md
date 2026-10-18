@@ -22,7 +22,8 @@ Tool arguments are JSON:
 Use the exact `task` path returned by `start` for `status`, `output`, `stop`,
 or `restart`. Omit `task` from `status` to list Pi-managed tasks.
 
-- `start`, `stop`, and `restart` require interactive confirmation.
+- Starting and restarting catalogued public scripts do not require per-run confirmation.
+- Stopping a task requires interactive confirmation.
 - A successful mutation returns `accepted: true`. This is an acknowledgement,
   not script completion. Check `status` for `state` and `exit_code` or `signal`.
 - `output` returns the current terminal screen, not a complete log. It may
@@ -90,6 +91,28 @@ missing runner loads its project configuration. Read-only actions never
 start a runner. Tasks survive Pi shutdown; the extension does not own or stop
 the shared runner. If a task already exists, use `restart` rather than
 `start`.
+
+## Neovim shared picker
+
+In Neovim, `<A-m>` or `:FTermDekit` opens a combined script and task picker.
+It lists public Just recipes, package scripts, and existing project tasks.
+A script's default task uses the same ID as Pi, so an agent-started task
+appears on that script's row with its current state. Select it to view its
+output, restart it, or stop it. Opening the picker does not start a runner
+or execute a script.
+
+`Start with arguments…` accepts quoted arguments without shell expansion.
+Tasks with other argument combinations remain separate entries, identified
+by their task path unless they have a label. `Refresh` rereads the state;
+the picker does not poll. `Open task console` attaches the native shared
+console. Detach from that console rather than stopping its runner when
+you want tasks to keep running.
+
+Both clients must use the same project root. Neovim uses Bun and
+`project-cli.ts` from the Stow-linked Pi extension to reuse its catalog,
+package-manager selection, and task IDs. Discovery and task controls run
+under `direnv exec` when the root has an `.envrc`. Tasks defined only in
+`mprocs.yaml` are not imported.
 
 ## Maintenance
 

@@ -288,7 +288,7 @@ describe("skill selection", () => {
       ok: false,
       failure: {
         kind: "classifier-failure",
-        provider: "vercel-ai-gateway",
+        provider: "openrouter",
         stage: "config",
         reason: "model-unavailable",
       },
@@ -308,7 +308,7 @@ describe("skill selection", () => {
       ok: false,
       failure: {
         kind: "classifier-failure",
-        provider: "vercel-ai-gateway",
+        provider: "openrouter",
         stage: "request",
         reason: "request-failure",
       },
@@ -329,7 +329,7 @@ describe("skill selection", () => {
       ok: false,
       failure: {
         kind: "classifier-failure",
-        provider: "vercel-ai-gateway",
+        provider: "openrouter",
         stage: "request",
         reason: "http-status",
         httpStatus: 429,

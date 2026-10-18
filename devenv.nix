@@ -399,6 +399,7 @@ in
     '';
 
     "test:nvim-dekit-terminal".exec = ''
+      (cd .pi/agent && bun test extensions/dekit/__tests__/project-cli.test.ts)
       REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE -i NONE \
         -l .config/nvim/tests/dekit_terminal.lua
     '';

@@ -85,7 +85,7 @@ function observeRegistry(
 }
 
 describe("requestClassifier", () => {
-  test("uses native default provider order and falls back to the second provider", async () => {
+  test("falls back from Jev 1.14 to Luna through native adapters", async () => {
     const observations: Observations = { lookups: [], maxRetries: [] };
     const registry = observeRegistry(await createNativeClassifierRegistry(), observations);
     let fetchCalls = 0;
@@ -103,13 +103,9 @@ describe("requestClassifier", () => {
       ok: true,
       value: { answers: { gate: { type: "bool", probability: 0.9 } } },
     });
-    expect(observations.lookups.map(({ provider }) => provider)).toEqual([
-      OPENROUTER_PROVIDER_ID,
-      VERCEL_GATEWAY_PROVIDER_ID,
-    ]);
-    expect(observations.lookups.map(({ id }) => id)).toEqual([
-      "typesafe/jev-1.13",
-      "typesafe-ai/jev",
+    expect(observations.lookups).toEqual([
+      { provider: OPENROUTER_PROVIDER_ID, id: "typesafe/jev-1.14" },
+      { provider: OPENROUTER_PROVIDER_ID, id: "openai/gpt-6-luna-decisions" },
     ]);
   });
 
@@ -137,12 +133,20 @@ describe("requestClassifier", () => {
       jev: { providers: [{ provider: OPENROUTER_PROVIDER_ID, model: "invalid-model" }] },
     });
     expect(loadClassifierPreferences(testAgentDirectory)).toEqual([
-      { provider: OPENROUTER_PROVIDER_ID, model: "typesafe/jev-1.13" },
-      { provider: VERCEL_GATEWAY_PROVIDER_ID, model: "typesafe-ai/jev" },
+      { provider: OPENROUTER_PROVIDER_ID, model: "typesafe/jev-1.14" },
+      { provider: OPENROUTER_PROVIDER_ID, model: "openai/gpt-6-luna-decisions" },
     ]);
   });
 
   test("skips an OpenRouter 429 cooldown and retries that provider at expiry", async () => {
+    writeSettings({
+      classifier: {
+        providers: [
+          { provider: OPENROUTER_PROVIDER_ID, model: "typesafe/jev-1.14" },
+          { provider: VERCEL_GATEWAY_PROVIDER_ID, model: "typesafe-ai/jev" },
+        ],
+      },
+    });
     let now = 10_000;
     const requester = createRequester(() => now);
     const observations: Observations = { lookups: [], maxRetries: [] };

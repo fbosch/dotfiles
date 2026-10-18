@@ -76,10 +76,7 @@ export interface ClassifierOptions {
 }
 
 const DEFAULT_PROVIDERS = [
-  { provider: OPENROUTER_PROVIDER_ID, model: "typesafe/jev-1.13" },
-  { provider: VERCEL_GATEWAY_PROVIDER_ID, model: "typesafe-ai/jev" },
-] as const;
-const DEFAULT_IMAGE_PROVIDERS = [
+  { provider: OPENROUTER_PROVIDER_ID, model: "typesafe/jev-1.14" },
   { provider: OPENROUTER_PROVIDER_ID, model: "openai/gpt-6-luna-decisions" },
 ] as const;
 type Preference = { provider: ClassifierProviderId; model: string };
@@ -117,7 +114,7 @@ export function resolveClassifierPreferences(
     classifier?.providers === undefined ? DEFAULT_PROVIDERS : classifier.providers,
   );
   const imageProviders = parsePreferences(
-    classifier?.imageProviders === undefined ? DEFAULT_IMAGE_PROVIDERS : classifier.imageProviders,
+    classifier?.imageProviders === undefined ? DEFAULT_PROVIDERS : classifier.imageProviders,
   );
   if (!providers || !imageProviders) return undefined;
   return inputType === "image" ? imageProviders : providers;

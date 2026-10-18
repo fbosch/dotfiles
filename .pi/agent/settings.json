@@ -118,14 +118,18 @@
     "providers": [
       {
         "provider": "openrouter",
-        "model": "typesafe/jev-1.13"
+        "model": "typesafe/jev-1.14"
       },
       {
-        "provider": "vercel-ai-gateway",
-        "model": "typesafe-ai/jev"
+        "provider": "openrouter",
+        "model": "openai/gpt-6-luna-decisions"
       }
     ],
     "imageProviders": [
+      {
+        "provider": "openrouter",
+        "model": "typesafe/jev-1.14"
+      },
       {
         "provider": "openrouter",
         "model": "openai/gpt-6-luna-decisions"

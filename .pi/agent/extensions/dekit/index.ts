@@ -198,7 +198,7 @@ export default function dekitExtension(pi: ExtensionAPI): void {
       parameters: Parameters,
       outputSchema: Output,
       description:
-        "Discover and inspect public Just recipes and package.json scripts, then start and manage them as project-scoped dekit tasks. Actions: discover, inspect, start, status, output, stop, restart. Use a canonical script ID for inspect/start and an exact returned task path for task actions. Inspection returns Just parameter metadata; package-script parameters are unknown. Mutations require confirmation. Start/restart acknowledgements are not completion; inspect status for state and exit_code. Output is the current terminal screen, not a complete log.",
+        "Discover and inspect public Just recipes and package.json scripts, then start and manage them as project-scoped dekit tasks. Actions: discover, inspect, start, status, output, stop, restart. Use a canonical script ID for inspect/start and an exact returned task path for task actions. Inspection returns Just parameter metadata; package-script parameters are unknown. Starting and restarting public scripts do not require confirmation; stopping tasks does. Start/restart acknowledgements are not completion; inspect status for state and exit_code. Output is the current terminal screen, not a complete log.",
       promptSnippet: "Discover project scripts and manage them as dekit tasks",
       promptGuidelines: [
         "Use dekit discover before recreating a project workflow with shell commands.",
@@ -284,10 +284,12 @@ export default function dekitExtension(pi: ExtensionAPI): void {
           const before = await tasks(path);
           if (before.length !== 1 || before[0]?.path !== path)
             throw new Error("Task is not present in this project");
-          await confirm(action === "stop" ? "Stop" : "Restart", `Task: ${path}`);
+          if (action === "stop") await confirm("Stop", `Task: ${path}`);
           const after = await tasks(path);
           if (after.length !== 1 || after[0]?.id !== before[0]?.id || after[0]?.path !== path) {
-            throw new Error("Task changed during confirmation");
+            throw new Error(
+              action === "stop" ? "Task changed during confirmation" : "Task changed before restart",
+            );
           }
           await accept([action, path]);
           return { action, project, task: path, accepted: true };
@@ -401,19 +403,6 @@ export default function dekitExtension(pi: ExtensionAPI): void {
             // Never reuse a task whose actual command cannot be verified from the CLI task list.
             if (existing.length !== 0)
               throw new Error(`Task already exists: ${path}. Use status, stop, or restart.`);
-            await confirm(
-              "Start",
-              `Script: ${id}\nDescription: ${script.description.slice(0, 500)}\nTask: ${path}\nCommand arguments: ${JSON.stringify(command)}`,
-            );
-            const fresh = (await discoverScripts(pi, project, signal)).find(
-              (candidate) => candidate.id === id,
-            );
-            if (fresh === undefined || JSON.stringify(fresh) !== JSON.stringify(script)) {
-              throw new Error("Script changed during confirmation; discover it again");
-            }
-            if ((await runner()) === "running" && (await tasks(path)).length !== 0) {
-              throw new Error("Task appeared during confirmation");
-            }
             await accept(["spawn", path, "--cwd", project, "--", ...command]);
             return { action: "start", project, task: path, accepted: true };
           })

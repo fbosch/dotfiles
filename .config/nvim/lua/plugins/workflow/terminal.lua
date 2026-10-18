@@ -19,7 +19,7 @@ return {
 		init = function()
 			term_keymaps({
 				{ "<A-t>", "FTermToggle", "toggle floating terminal" },
-				{ "<A-m>", "FTermDekit", "toggle floating terminal with dekit" },
+				{ "<A-m>", "FTermDekit", "project scripts and tasks" },
 				{ "<A-g>", "FTermLazyGit", "toggle floating terminal with gitui" },
 				{ "<A-d>", "FTermDiffnav", "toggle floating terminal with diffnav" },
 				{ "<A-b>", "FTermBtop", "toggle floating terminal with btop" },
@@ -77,29 +77,32 @@ return {
 			usrcmd("FTermDekit", function()
 				local project = require("utils.project")
 				local cwd = project.get_project_root() or vim.fn.getcwd()
-				local escaped_cwd = vim.fn.shellescape(cwd)
-				local cmd = project.resolve_dekit_command(cwd)
-
-				if project.has_file(cwd, ".envrc") then
-					cmd = string.format("direnv exec %s %s", escaped_cwd, cmd)
+				if dekit_instance then
+					terminal.close_floating_terminal(dekit_instance)
 				end
-				cmd = string.format("cd %s && %s", escaped_cwd, cmd)
-
-				if not dekit_instance or dekit_command ~= cmd then
-					if dekit_instance then
-						terminal.close_floating_terminal(dekit_instance, true)
+				require("utils.dekit").pick(cwd, function(root, task)
+					local escaped_root = vim.fn.shellescape(root)
+					local cmd = project.resolve_dekit_command(root, task)
+					if project.has_file(root, ".envrc") then
+						cmd = string.format("direnv exec %s %s", escaped_root, cmd)
 					end
+					cmd = string.format("cd %s && %s", escaped_root, cmd)
 
-					dekit_command = cmd
-					dekit_instance = fterm:new({
-						ft = "fterm_dekit",
-						env = env,
-						shell = "dash",
-						cmd = cmd,
-						dimensions = dimensions,
-					})
-				end
-				terminal.toggle_floating_terminal(dekit_instance)
+					if not dekit_instance or dekit_command ~= cmd then
+						if dekit_instance then
+							terminal.close_floating_terminal(dekit_instance, true)
+						end
+						dekit_command = cmd
+						dekit_instance = fterm:new({
+							ft = "fterm_dekit",
+							env = env,
+							shell = "dash",
+							cmd = cmd,
+							dimensions = dimensions,
+						})
+					end
+					terminal.open_floating_terminal(dekit_instance)
+				end)
 			end, { bang = true })
 
 			local lazygit_instance = nil

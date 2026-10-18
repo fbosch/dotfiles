@@ -119,25 +119,12 @@ function M.find_file_in_project_root(pattern)
 	end
 end
 
-function M.resolve_dekit_command(cwd)
-	local args = {}
-	for _, name in ipairs({ "mprocs.yaml", "mprocs.yml" }) do
-		if M.has_file(cwd, name) then
-			table.insert(args, "--config " .. vim.fn.shellescape(cwd .. "/" .. name))
-			break
-		end
+function M.resolve_dekit_command(cwd, task)
+	local cmd = "dekit -C " .. vim.fn.shellescape(cwd) .. " attach"
+	if task then
+		cmd = cmd .. " --no-start -- " .. vim.fn.shellescape(task)
 	end
-	if M.has_any_file(cwd, { "justfile", "Justfile", ".justfile" }) then
-		table.insert(args, "--just")
-	elseif #args == 0 and M.has_file(cwd, "package.json") then
-		table.insert(args, "--npm")
-	end
-
-	-- Only the bundled mprocs UI can list recipes/scripts without starting them.
-	if #args > 0 then
-		return "dekit mprocs " .. table.concat(args, " ")
-	end
-	return "dekit -C " .. vim.fn.shellescape(cwd) .. " attach"
+	return cmd
 end
 
 return M
