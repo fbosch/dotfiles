@@ -837,10 +837,13 @@ test("starts a catalogued script without confirmation and reports acknowledgemen
     "-C",
     h.cwd,
     "--json",
-    "spawn",
+    "register",
     task,
     "--cwd",
     h.cwd,
+    "--label",
+    "package:test",
+    "--start",
     "--",
     "bun",
     "run",
@@ -873,25 +876,43 @@ test("requires project trust but not interactive confirmation to start scripts",
   expect(h.calls).toHaveLength(callsBeforeAbort);
 });
 
-
-test("rejects missing scripts and does not overwrite an existing task", async () => {
+test("rejects missing scripts before native registration", async () => {
   const h = await harness();
   await expect(h.invoke({ action: "start", script: "package:missing" })).rejects.toThrow(
     "does not exist",
   );
+});
+
+test("starts an existing script through atomic native definition verification", async () => {
+  const h = await harness();
   const script = (await discoverScripts(h.pi, h.cwd))[0];
   if (script === undefined) throw new Error("missing fixture");
+  const existingPath = taskPath(script, scriptCommand(script, []));
   h.state.running = true;
-  h.state.tasks[0] = {
-    id: 2,
-    path: taskPath(script, scriptCommand(script, [])),
-    state: "exited",
-    exit_code: 0,
-  };
-  await expect(h.invoke({ action: "start", script: "package:test" })).rejects.toThrow(
-    "already exists",
-  );
-  expect(h.state.confirmations).toEqual([]);
+  h.state.tasks[0] = { id: 2, path: existingPath, state: "idle", exit_code: 0 };
+  const result = await h.invoke({ action: "start", script: "package:test" });
+  expect(result.details).toEqual({
+    action: "start",
+    project: h.cwd,
+    task: existingPath,
+    accepted: true,
+  });
+  expect(h.calls.at(-1)?.args).toEqual([
+    "-C",
+    h.cwd,
+    "--json",
+    "register",
+    existingPath,
+    "--cwd",
+    h.cwd,
+    "--label",
+    "package:test",
+    "--start",
+    "--",
+    "bun",
+    "run",
+    "test",
+  ]);
 });
 
 test("rejects target globs, tags, traversal, spaces, and foreign runners", async () => {
@@ -1004,7 +1025,6 @@ test("shares each whole-catalog fingerprint across its source and preserves hash
   ]);
   expect(await discoverScripts(h.pi, h.cwd)).toEqual(scripts);
 });
-
 
 const liveTest = process.env.PI_DEKIT_LIVE === "1" ? test : test.skip;
 liveTest(

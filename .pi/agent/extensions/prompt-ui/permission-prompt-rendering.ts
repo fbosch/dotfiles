@@ -119,16 +119,20 @@ export function renderPermissionPromptActions(
   options: readonly ParsedOption[],
   width: number,
   theme: PermissionPromptTheme,
+  cancelVerb = "reject",
 ): string[] {
   if (width <= 0) return [];
-  const hint = theme.fg("muted", "←/→/↑/↓ select · enter confirm · esc reject");
+  const hint = theme.fg("muted", `←/→/↑/↓ select · enter confirm · esc ${cancelVerb}`);
   const optionRows = renderOptionRows(options, width, theme);
   const first = optionRows[0] ?? "";
   const combined = optionRows.length === 1 && visibleWidth(first) + 1 + visibleWidth(hint) <= width;
   const hints =
     visibleWidth(hint) <= width
       ? [hint]
-      : [theme.fg("muted", "←/→/↑/↓ select"), theme.fg("muted", "enter confirm · esc reject")];
+      : [
+          theme.fg("muted", "←/→/↑/↓ select"),
+          theme.fg("muted", `enter confirm · esc ${cancelVerb}`),
+        ];
   const actions = combined ? [fitColumns(first, hint, width)] : [...optionRows, ...hints];
   return fitLinesToWidth(["", theme.fg("borderMuted", "─".repeat(width)), ...actions], width);
 }

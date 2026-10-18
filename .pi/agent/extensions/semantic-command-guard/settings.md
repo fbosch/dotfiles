@@ -39,15 +39,23 @@ before reporting a verdict or accepting approval.
   disable checking rather than count as failures.
 
 TUI approvals use the orange inline permission prompt in `prompt-ui`, with
-`Allow once` and `Reject`. RPC keeps its standard confirmation dialog because
+`Run command` and `Cancel`. RPC keeps its standard confirmation dialog because
 it does not support custom terminal components.
 
-The TUI shows the risk category above a shaded command block. Local lexical
-highlighting distinguishes executables, paths, operators, and warning tokens;
-these colors are reading aids, not classifier explanations or proof of safety.
-Long commands wrap with a continuation marker without omitting arguments.
-Commands containing control or hidden formatting characters use an explicitly
-escaped display. Approval still applies to the unchanged original command.
+The warning shows the first local source match for each operation name and
+positive indicator used in the lexical assessment, with its line and column.
+These matches explain the assessment input, not the classifier's reasoning.
+Quoted data and comments can trigger warnings. The guard does not resolve
+execution, targets, or effects, so a name inside a `printf` payload is not proof
+of a shell operation. Source matches stay local and never enter classifier input.
+
+The TUI keeps the risk category and decision controls outside a bounded review
+pane. Use `PgUp`/`PgDn` to scroll, `Home`/`End` for the beginning and end,
+and `Ctrl+Y` to copy the unchanged command. The pane shows its position and keeps
+all command content available. Actual newlines remain line breaks; literal escape
+sequences remain literal. Hidden controls use a JSON-escaped display per source
+line. Local token colors are reading aids, not verdicts. Approval still applies
+to the unchanged original command.
 
 Confirm mode adds the classifier request duration to selected calls, plus any
 time spent awaiting approval. The earlier isolated replay measured warmed

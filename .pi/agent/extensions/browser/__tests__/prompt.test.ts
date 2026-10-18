@@ -64,6 +64,16 @@ describe("browser routing guidance", () => {
     expect(guidance).toContain("navigation-only");
   });
 
+  test("prefers browser_run for supported flows even when individual steps are obvious", () => {
+    const guidance = createHarness().start();
+    expect(guidance).toContain("Prefer `browser_run` for supported multi-step flows");
+    expect(guidance).toContain("over separate browser_act or raw MCP calls");
+    expect(guidance).toContain("even when individual steps are obvious");
+    expect(guidance).toContain("Unique input matches already run deterministically");
+    expect(guidance).toContain("inspection, a single explicit action");
+    expect(guidance).toContain("does not derive new input values from page content");
+  });
+
   test("bounds native MCP exceptions and prevents failed-action bypasses", () => {
     const guidance = createHarness().start();
     expect(guidance).toContain("operation the browser tools do not support");
@@ -75,6 +85,7 @@ describe("browser routing guidance", () => {
     expect(guidance).toContain("Do not pass browser @eN aliases to raw MCP tools");
     expect(guidance).toContain("fresh browser_snapshot");
     expect(guidance).toContain("Do not bypass a denied or failed browser action");
+    expect(guidance).toContain("workflow confidence or authorization stop");
     expect(guidance).toContain("replay a possibly completed action");
   });
 
@@ -97,6 +108,9 @@ describe("browser routing guidance", () => {
     expect(guidance).toContain("- browser_snapshot:");
     expect(guidance).not.toContain("- browser_open:");
     expect(guidance).not.toContain("- browser_run:");
+    expect(guidance).not.toContain("Prefer `browser_run`");
+    h.showTools(["browser_run"]);
+    expect(h.start()).toContain("Prefer `browser_run` for supported multi-step flows");
     h.tools.forEach((tool) => {
       tool.exposure = "hidden";
     });

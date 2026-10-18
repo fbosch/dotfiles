@@ -35,6 +35,10 @@ const corrections = [
   ["commmand", "command"],
   ["commmands", "commands"],
   ["everythign", "everything"],
+  ["locla", "local"],
+  ["dissapear", "disappear"],
+  ["notfication", "notification"],
+  ["notfications", "notifications"],
 ] as const;
 
 test("shared rules compile and every replacement is stable", () => {

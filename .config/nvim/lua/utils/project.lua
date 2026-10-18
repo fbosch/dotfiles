@@ -119,12 +119,10 @@ function M.find_file_in_project_root(pattern)
 	end
 end
 
-function M.resolve_dekit_command(cwd, task)
-	local cmd = "dekit -C " .. vim.fn.shellescape(cwd) .. " attach"
-	if task then
-		cmd = cmd .. " --no-start -- " .. vim.fn.shellescape(task)
-	end
-	return cmd
+function M.resolve_dekit_command(cwd)
+	local importer = vim.fn.expand("~/.pi/agent/extensions/dekit/import-scripts.ts")
+	local root = vim.fn.shellescape(cwd)
+	return "bun " .. vim.fn.shellescape(importer) .. " " .. root .. " && exec dekit -C " .. root .. " attach"
 end
 
 return M

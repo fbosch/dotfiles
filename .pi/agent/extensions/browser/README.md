@@ -10,12 +10,20 @@ tools are activated. Use `tool_search` to load the required `browser_*` tools,
 then use them for supported interactions on Chrome MCP and Firefox MCP as well
 as agent-browser. Local guidance takes precedence over CLI-only browser skills.
 
+Prefer `browser_run` for supported multi-step flows, even when individual steps
+are obvious. It fills uniquely matched inputs deterministically and uses the
+classifier for remaining choices. Use `browser_snapshot` and `browser_act` for
+inspection, a single explicit action, or a step the workflow cannot express.
+`browser_run` requires explicit input values and cannot derive new values from
+page content.
+
 Use raw MCP for unsupported operations such as page discovery, console or network
 diagnostics, screenshots, arbitrary JavaScript, and dragging, or when the user
 explicitly requests a native tool. State why raw MCP is needed. Native snapshots
 may supply UIDs for those operations. Keep the same page and backend, and take a
 fresh `browser_snapshot` before returning to browser actions after a page change.
-Do not use raw MCP to bypass a failed or denied browser action.
+Inspect workflow stop reasons before continuing. Do not use raw MCP to bypass
+a failed or denied browser action, or a workflow confidence or authorization stop.
 
 ## Choose a backend
 

@@ -26,10 +26,9 @@ import {
   rankScriptsLocally,
   type Script,
   type ScriptInspection,
-  scriptCommand,
   scriptSearchDescription,
-  taskPath,
 } from "./catalog";
+import { registerScript } from "./import-scripts";
 
 const Parameters = Type.Union([
   Type.Object(
@@ -288,7 +287,9 @@ export default function dekitExtension(pi: ExtensionAPI): void {
           const after = await tasks(path);
           if (after.length !== 1 || after[0]?.id !== before[0]?.id || after[0]?.path !== path) {
             throw new Error(
-              action === "stop" ? "Task changed during confirmation" : "Task changed before restart",
+              action === "stop"
+                ? "Task changed during confirmation"
+                : "Task changed before restart",
             );
           }
           await accept([action, path]);
@@ -397,13 +398,11 @@ export default function dekitExtension(pi: ExtensionAPI): void {
             const script = catalog.find((candidate) => candidate.id === id);
             if (script === undefined)
               throw new Error("Script is no longer public or does not exist");
-            const command = scriptCommand(script, args);
-            const path = taskPath(script, command);
-            const existing = (await runner()) === "running" ? await tasks(path) : [];
-            // Never reuse a task whose actual command cannot be verified from the CLI task list.
-            if (existing.length !== 0)
-              throw new Error(`Task already exists: ${path}. Use status, stop, or restart.`);
-            await accept(["spawn", path, "--cwd", project, "--", ...command]);
+            const path = await registerScript(pi, project, script, {
+              arguments: args,
+              start: true,
+              ...(signal === undefined ? {} : { signal }),
+            });
             return { action: "start", project, task: path, accepted: true };
           })
           .with({ action: "status" }, async ({ task }) => {

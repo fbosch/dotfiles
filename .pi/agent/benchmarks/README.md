@@ -157,3 +157,123 @@ Hosted classifier and primary-model runs are opt-in. They attempt one case by de
 bun run --cwd .pi/agent benchmark:recommend-agent --classifier --limit 1
 bun run --cwd .pi/agent benchmark:recommend-agent --primary provider/model --limit 1
 ```
+
+## Browser comparison benchmark
+
+Compare direct Chrome MCP calls with deterministic `browser_*` calls and
+classifier-orchestrated workflows on resettable local fixtures.
+
+1. Run scripted overhead measurements without hosted model calls:
+
+   ```bash
+   bun run --cwd .pi/agent benchmarks/browser-comparison.ts --phase scripted --runs 5 --warmups 1 --output /tmp/browser-scripted
+   ```
+
+2. Run the paid agent pilot with an explicit model and reasoning level:
+
+   ```bash
+   bun run --cwd .pi/agent benchmarks/browser-comparison.ts --phase agent --model openai-codex/gpt-6-luna --thinking high --runs 1 --warmups 0 --timeout-ms 90000 --max-turns 8 --output /tmp/browser-agent
+   ```
+
+The runner requires Chrome and cached `chrome-devtools-mcp@1.10.1`. It uses a
+new headless profile per sample and never attaches to personal tabs. This Nix
+setup uses `--no-sandbox`; run only the trusted local fixtures.
+
+Setup, tool discovery, correctness verification, and cleanup are excluded from
+timing. Each arm starts with its allowed tools active. Scripted arms use the
+same explicit snapshot/action sequence, not an optimized native-tool strategy.
+Agent success requires the expected private fixture state and completion within
+the time/turn limits. Failures remain in the results.
+
+Each output directory contains `metadata.json`, `samples.jsonl`, `summary.json`,
+MCP logs, and tool-only `trace-*.json` files. Traces omit reasoning content.
+Metadata records source hashes, SDK/runtime versions, model, and reasoning level.
+Check classifier availability in that SDK's catalog before interpreting
+orchestration results; `model-unavailable` is a setup failure, not evidence about
+classifier decision quality. Missing usage is recorded rather than treated as
+zero cost. Small pilots do not establish statistical significance.
+
+## Complex browser flows
+
+Compare classifier-only `browser_run` with Luna-high using browser wrappers
+with `--baseline luna`. Both share the Chrome adapter, full snapshots, goals,
+explicit inputs, and seeded initial states.
+The fixtures cover conditional onboarding with duplicate email labels,
+invoice validation recovery, and carrying a displayed code between views.
+The last case tests a boundary of the current API, which accepts input values
+but does not generate new ones from page content.
+
+1. Set `PI_SDK_ROOT` to the installed `@earendil-works/pi-coding-agent` package
+   root containing `dist/index.js`. Use a catalog that resolves the configured
+   classifier models. SDK 1.3.0 passed this check; the project's 0.99.1 catalog
+   did not. The runner does not upgrade dependencies.
+
+2. Check all fixtures through the shared browser adapter without model calls:
+
+   ```bash
+   bun run --cwd .pi/agent benchmarks/browser-flow-comparison.ts --sdk-root "$PI_SDK_ROOT" --mode replay --flows onboarding,recovery,handoff --output /tmp/browser-flow-replay
+   ```
+
+3. Run one paid, counterbalanced pair per flow:
+
+   ```bash
+   bun run --cwd .pi/agent benchmarks/browser-flow-comparison.ts --sdk-root "$PI_SDK_ROOT" --baseline luna --flows onboarding,recovery,handoff --runs 1 --output /tmp/browser-flow-measured
+   ```
+
+The default normal model is `openai-codex/gpt-6-luna` at `high`. The classifier
+arm uses the configured preference order and never falls back to Luna as a
+planner. It renews `browser_run` once only when the first ten-step chunk reaches
+`max_steps`. Both arms have a 20-action/effect budget and a three-minute
+deadline. Native per-character input events count as one continuous edit.
+An independent server-side check verifies exact saved values, one submission,
+validation recovery, and unchanged protected fields.
+
+The runner checks classifier catalog entries and makes native classifier and
+Luna preflight requests before measurement. Availability failures stop the run;
+they do not count as failed workflows. Preflight usage stays separate from
+trial costs. The classifier arm records deterministic input steps as well as
+classifier selections, so completion is not a measure of classifier decisions
+alone.
+
+Results include `metadata.json`, `preflight.json`, `samples.jsonl`,
+`summary.json`, `state-*.json`, and tool-only `trace-*.json` files. Failed replays
+also retain state and snapshot diagnostics. Setup and private-state verification
+are outside the timer. The runner records primary and classifier usage,
+fetch attempts, stop reasons, missing usage, and provider-reported cost
+estimates. These estimates are not billing receipts. Exit code 2 means trials
+finished with workflow failures; exit code 1 means the run was incomplete.
+
+Treat one pair per case as a pilot. Keep task failures in the report, and do
+not interpret the time to an early failure as a faster completed workflow.
+The Chrome prerequisites and trusted-fixture restrictions above also apply.
+
+
+## Flow speed against codemode + MCP
+
+Time a form with two uniquely named fields, review, and save:
+
+```bash
+bun run --cwd .pi/agent benchmarks/browser-flow-comparison.ts --sdk-root "$PI_SDK_ROOT" --flows form --baseline codemode --warmups 1 --runs 5 --timeout-ms 90000 --max-turns 12 --output /tmp/browser-flow-speed-new
+```
+
+Use a fresh output directory. The runner verifies both paths complete in the
+warmup pair before starting five counterbalanced measured pairs. Warmups remain
+in the raw samples but do not contribute to summary medians or costs.
+
+The default `--baseline codemode` activates Pi's real codemode extension with
+native Chrome MCP tools. It exposes no browser wrappers or classifier-model
+calls to the baseline. Luna-high generates its own scripts; batching is
+allowed, including native `fill_form`. Native tool schemas are prepared before
+timing, but model planning, script generation, and any additional discovery
+the model chooses are timed.
+
+`commitMs` ends at the independent server-side successful-save event.
+`durationMs` ends when the controller returns after observing confirmation.
+Report both, and verify each saved state. Failed flows have no comparable
+successful-completion time.
+
+This measures agent-generated codemode, not a prewritten or maximally batched
+program. Sum the root codemode-call durations separately to see tool execution
+time; do not equate that sum with the end-to-end flow time or pure MCP latency.
+The baseline uses fewer native calls when it batches field inputs, even if
+primary-model turns make its overall flow slower.

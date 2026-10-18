@@ -26,11 +26,35 @@ const OPERATIONS = [
 ] as const;
 const GIT_ACTIONS = ["push", "reset", "clean", "rebase", "branch"] as const;
 const MAX_COMMAND_CHARS = 16_000;
+const INDICATORS = {
+  recursive: ["Recursive flag", /(?:\s-[^-\s]*[rR]|--recursive\b)/],
+  force: ["Force flag", /(?:\s-[^-\s]*f|--force(?:-with-lease)?\b)/],
+  hardReset: ["Hard reset flag", /--hard\b/],
+  deleteDestination: ["Delete flag", /--delete\b/],
+  homeTarget: ["Home path reference", /(?:~\/|\$HOME\b|\/home\/|\/Users\/)/],
+  deviceTarget: ["Device path reference", /\/dev\//],
+  rootTarget: ["Root path reference", /(?:^|[\s"'])\/(?:\*|[\s"']|$)/],
+  networkDestination: ["Network reference", /(?:https?:\/\/|ssh:\/\/|\b[^\s]+@[^\s]+:)/],
+  localDataReference: [
+    "Local data reference",
+    /(?:--data(?:-binary|-raw)?|--upload-file|\s-[dT]\s|\b(?:scp|rsync)\b)/,
+  ],
+  credentialReference: [
+    "Credential reference",
+    /(?:token|secret|password|authorization|api[_-]?key|\.env\b|\.ssh\b)/i,
+  ],
+  inlineCode: [
+    "Inline code indicator",
+    /(?:\b(?:bash|sh|zsh|python3?)\b[^\n]*\s-[a-z]*c\b|\bnode\b[^\n]*\s(?:-e|--eval)\b|\beval\b)/,
+  ],
+  commandSubstitution: ["Command substitution marker", /\$\(|`/],
+  outputRedirection: ["Output redirection marker", />/],
+} satisfies Record<string, readonly [string, RegExp]>;
 
 export type Inspection =
   | { kind: "skip" }
   | { kind: "oversized" }
-  | { kind: "review"; input: ClassifierContext };
+  | { kind: "review"; input: ClassifierContext; evidence: readonly string[] };
 
 export function inspectCommand(command: string): Inspection {
   if (command.length > MAX_COMMAND_CHARS) return { kind: "oversized" };
@@ -41,13 +65,36 @@ export function inspectCommand(command: string): Inspection {
   if (/^\s*rm\s+(?:-[rfRF]+\s+)*(?:\.\/)?(?:dist|build|\.cache)\/?\s*$/.test(command))
     return { kind: "skip" };
 
-  const words = new Set(command.match(/[A-Za-z][A-Za-z0-9._-]*/g) ?? []);
+  const evidence: string[] = [];
+  const addEvidence = (label: string, match: RegExpMatchArray) => {
+    const leading = match[0].length - match[0].trimStart().length;
+    const offset = (match.index ?? 0) + leading;
+    const prefix = command.slice(0, offset);
+    const line = prefix.split("\n").length;
+    const column = Array.from(prefix.slice(prefix.lastIndexOf("\n") + 1)).length + 1;
+    evidence.push(`${label}: ${JSON.stringify(match[0].trim())} (line ${line}, column ${column})`);
+  };
+  const matches = [...command.matchAll(/[A-Za-z][A-Za-z0-9._-]*/g)];
+  const words = new Set(matches.map((match) => match[0]));
   const operations = OPERATIONS.filter((operation) => words.has(operation));
   const gitActions = GIT_ACTIONS.filter((action) => words.has(action));
-  const inlineCode =
-    /(?:\b(?:bash|sh|zsh|python3?)\b[^\n]*\s-[a-z]*c\b|\bnode\b[^\n]*\s(?:-e|--eval)\b|\beval\b)/.test(
-      command,
-    );
+  for (const [label, names] of [
+    ["Operation name", operations],
+    ["Git action name", gitActions],
+  ] as const) {
+    for (const name of names) {
+      const match = matches.find((match) => match[0] === name);
+      if (match) addEvidence(label, match);
+    }
+  }
+  const indicators = Object.fromEntries(
+    Object.entries(INDICATORS).map(([key, [label, pattern]]) => {
+      const match = pattern.exec(command);
+      if (match) addEvidence(label, match);
+      return [key, match !== null];
+    }),
+  );
+  const inlineCode = indicators.inlineCode;
   const risky =
     operations.some(
       (operation) => !["git", "bash", "sh", "zsh", "python", "python3", "node"].includes(operation),
@@ -60,25 +107,12 @@ export function inspectCommand(command: string): Inspection {
   // from arguments: redacting recognizable secrets alone cannot protect arbitrary data.
   return {
     kind: "review",
+    evidence,
     input: {
       state: {
         operations,
         gitActions,
-        recursive: /(?:\s-[^-\s]*[rR]|--recursive\b)/.test(command),
-        force: /(?:\s-[^-\s]*f|--force(?:-with-lease)?\b)/.test(command),
-        hardReset: /--hard\b/.test(command),
-        deleteDestination: /--delete\b/.test(command),
-        homeTarget: /(?:~\/|\$HOME\b|\/home\/|\/Users\/)/.test(command),
-        deviceTarget: /\/dev\//.test(command),
-        rootTarget: /(?:^|[\s"'])\/(?:\*|[\s"']|$)/.test(command),
-        networkDestination: /(?:https?:\/\/|ssh:\/\/|\b[^\s]+@[^\s]+:)/.test(command),
-        localDataReference:
-          /(?:--data(?:-binary|-raw)?|--upload-file|\s-[dT]\s|\b(?:scp|rsync)\b)/.test(command),
-        credentialReference:
-          /(?:token|secret|password|authorization|api[_-]?key|\.env\b|\.ssh\b)/i.test(command),
-        inlineCode,
-        commandSubstitution: command.includes("$(") || command.includes("`"),
-        outputRedirection: />/.test(command),
+        ...indicators,
         evidenceLimit:
           "Lexical summary only. Names, values, paths, code, and user intent are omitted. This does not establish safety or authorization.",
       },

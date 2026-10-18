@@ -31,6 +31,7 @@ function harness(act: (component: Dialog) => void, mode: ExtensionContext["mode"
   const rpcPrompts: string[] = [];
   let renders = 0;
   const tui = {
+    terminal: { rows: 40 },
     requestRender: () => {
       renders += 1;
     },
@@ -68,6 +69,7 @@ function harness(act: (component: Dialog) => void, mode: ExtensionContext["mode"
     command: "rm -rf src",
     cwd: "/workspace",
     risks: ["destructive changes"],
+    evidence: [] as string[],
     signal: controller.signal,
   };
   return {
@@ -97,8 +99,8 @@ describe("command permission UI", () => {
     expect(plain).not.toContain('Execute command "rm -rf src"');
     expect(plain).toContain("Possible destructive changes.");
     expect(plain).toContain("Working directory: /workspace");
-    expect(plain).toContain("Allow once");
-    expect(plain).toContain("Reject");
+    expect(plain).toContain("Run command");
+    expect(plain).toContain("Cancel");
     expect(plain).not.toContain("Allow session");
     expect(lines.join("\n")).toContain(ORANGE);
     expect(lines.every((line) => visibleWidth(line) <= 120)).toBe(true);
@@ -182,7 +184,7 @@ describe("command permission UI", () => {
       expect(lines.every((line) => visibleWidth(line) <= width)).toBe(true);
     }
     const plain = (h.dialogs[0]?.render(120) ?? []).map(stripTerminalSequences).join("\n");
-    expect(plain).toContain(JSON.stringify(h.request.command));
+    for (const line of h.request.command.split("\n")) expect(plain).toContain(JSON.stringify(line));
     expect(plain).toContain(JSON.stringify(h.request.cwd));
     expect(plain).not.toContain("\u001b");
   });

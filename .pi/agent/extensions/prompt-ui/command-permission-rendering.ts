@@ -7,6 +7,7 @@ interface CommandPresentation {
   command: string;
   cwd: string;
   concern: string;
+  evidence: readonly string[];
   allowSelected: boolean;
 }
 interface Token {
@@ -59,11 +60,17 @@ function tokenize(command: string): Token[] {
   for (const match of command.matchAll(SHELL_TOKENS)) {
     const text = match[0];
     let color: ThemeColor = "text";
-    if (comment) color = "syntaxComment";
-    else if (/^\s+$/.test(text)) {
+    if (/^\s+$/.test(text)) {
       tokens.push({ text, color });
+      if (text.includes("\n")) {
+        comment = false;
+        executable = true;
+        redirectTarget = false;
+      }
       continue;
-    } else if (text.startsWith("#")) {
+    }
+    if (comment) color = "syntaxComment";
+    else if (text.startsWith("#")) {
       comment = true;
       color = "syntaxComment";
     } else if (/^(?:&&|\|\||\|&|[|&;()])$/.test(text)) {
@@ -119,45 +126,85 @@ function commandRows(tokens: readonly Token[], width: number, theme: CommandThem
   return rows;
 }
 
+export function renderCommandPermissionSections(
+  request: CommandPresentation,
+  width: number,
+  theme: CommandTheme,
+): { header: string[]; body: string[]; footer: string[] } {
+  if (width <= 0) return { header: [], body: [], footer: [] };
+  const padding = width >= 6 ? 1 : 0;
+  const gutter = width >= 6 ? 2 : 0;
+  const codeWidth = width - padding * 2 - gutter;
+  const asciiOnly = codeWidth < 2;
+  const escaped =
+    asciiOnly || Array.from(request.command).some((char) => char !== "\n" && hiddenCharacter(char));
+  const display = escaped
+    ? request.command
+        .split("\n")
+        .map((line) => escapedText(line, asciiOnly))
+        .join("\n")
+    : request.command;
+  const tokens = escaped ? [{ text: display, color: "text" as const }] : tokenize(display);
+  let sourceLine: Token[] = [];
+  const sourceLines = [sourceLine];
+  // Split after tokenizing so multiline quoted payloads retain their string color.
+  for (const token of tokens) {
+    for (const [index, fragment] of token.text.split("\n").entries()) {
+      if (index > 0) {
+        sourceLine = [];
+        sourceLines.push(sourceLine);
+      }
+      sourceLine.push({ text: fragment, color: token.color });
+    }
+  }
+  const rows = sourceLines.flatMap((lineTokens) =>
+    commandRows(lineTokens, codeWidth, theme).map((line, index) => {
+      const marker = gutter ? theme.fg("muted", index === 0 ? "  " : "↪ ") : "";
+      const content = `${" ".repeat(padding)}${marker}${line}`;
+      return theme.bg(
+        "userMessageBg",
+        content + " ".repeat(Math.max(0, width - visibleWidth(content))),
+      );
+    }),
+  );
+  const fit = (lines: string[]) => lines.flatMap((line) => wrapTextWithAnsi(line, width));
+  return {
+    header: fit([
+      theme.fg("warning", " Run this bash command?"),
+      theme.fg("warning", metadata(request.concern)),
+    ]),
+    body: [
+      ...fit([
+        "",
+        theme.fg("accent", "Why flagged: lexical assessment"),
+        "Quoted data and comments can trigger warnings.",
+        "Targets and effects are not resolved.",
+        ...request.evidence.map((line) => metadata(line)),
+        "",
+        theme.fg("muted", escaped ? "Command (escaped)" : "Command"),
+        ...(escaped ? [theme.fg("muted", "Each source line below is a JSON string.")] : []),
+      ]),
+      ...rows,
+      "",
+      ...fit([theme.fg("muted", `Working directory: ${metadata(request.cwd)}`)]),
+    ],
+    footer: renderPermissionPromptActions(
+      [
+        { label: "Run command", selected: request.allowSelected },
+        { label: "Cancel", selected: !request.allowSelected },
+      ],
+      width,
+      theme,
+      "cancel",
+    ),
+  };
+}
+
 export function renderCommandPermissionLines(
   request: CommandPresentation,
   width: number,
   theme: CommandTheme,
 ): string[] {
-  if (width <= 0) return [];
-  const padding = width >= 6 ? 1 : 0;
-  const gutter = width >= 6 ? 2 : 0;
-  const codeWidth = width - padding * 2 - gutter;
-  const asciiOnly = codeWidth < 2;
-  const escaped = asciiOnly || Array.from(request.command).some(hiddenCharacter);
-  const display = escaped ? escapedText(request.command, asciiOnly) : request.command;
-  const tokens = escaped ? [{ text: display, color: "text" as const }] : tokenize(display);
-  const rows = commandRows(tokens, codeWidth, theme).map((line, index) => {
-    const marker = gutter ? theme.fg("muted", index === 0 ? "  " : "↪ ") : "";
-    const content = `${" ".repeat(padding)}${marker}${line}`;
-    return theme.bg(
-      "userMessageBg",
-      content + " ".repeat(Math.max(0, width - visibleWidth(content))),
-    );
-  });
-  const fit = (lines: string[]) => lines.flatMap((line) => wrapTextWithAnsi(line, width));
-  return [
-    ...fit([
-      theme.fg("warning", " Run this bash command?"),
-      theme.fg("warning", metadata(request.concern)),
-      "",
-      theme.fg("muted", escaped ? "Command (escaped)" : "Command"),
-    ]),
-    ...rows,
-    "",
-    ...fit([theme.fg("muted", `Working directory: ${metadata(request.cwd)}`)]),
-    ...renderPermissionPromptActions(
-      [
-        { label: "Allow once", selected: request.allowSelected },
-        { label: "Reject", selected: !request.allowSelected },
-      ],
-      width,
-      theme,
-    ),
-  ];
+  const { header, body, footer } = renderCommandPermissionSections(request, width, theme);
+  return [...header, ...body, ...footer];
 }

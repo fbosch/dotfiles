@@ -23,6 +23,7 @@ const input = {
   command: "rm -rf ./src/generated",
   cwd: "/workspace",
   concern: "Possible destructive changes.",
+  evidence: [],
   allowSelected: true,
 };
 const render = (command: string, width = 100) =>
@@ -51,8 +52,8 @@ describe("command permission presentation", () => {
     expect(text.indexOf(input.concern)).toBeLessThan(text.indexOf("Command"));
     expect(text).toContain(input.command);
     expect(text).toContain("Working directory: /workspace");
-    expect(text).toContain("Allow once");
-    expect(text).toContain("Reject");
+    expect(text).toContain("Run command");
+    expect(text).toContain("Cancel");
     expect(lines.join("\n")).toContain(BG);
     expect(text).not.toContain('"rm -rf');
     expect(text).not.toContain("Token colors are local hints");
@@ -151,9 +152,14 @@ describe("command permission presentation", () => {
     expect(lines.every((line) => visibleWidth(line) <= 80)).toBe(true);
   });
 
-  test("distinguishes literal escape text from actual control characters", () => {
-    expect(plain(render("printf 'a\\nb'"))).not.toContain("Command (escaped)");
-    expect(plain(render("printf 'a\nb'"))).toContain("Command (escaped)");
+  test("preserves physical line breaks and keeps literal escape text literal", () => {
+    expect(plain(render("printf 'a\\nb'"))).toContain("printf 'a\\nb'");
+    const rows = render("printf 'a\nb'")
+      .filter((line) => line.includes(BG))
+      .map(stripTerminalSequences);
+    expect(rows).toHaveLength(2);
+    expect(rows[0]).toContain("printf 'a");
+    expect(rows[1]).toContain("b'");
   });
 
   test("also escapes untrusted directory and concern metadata", () => {
@@ -199,9 +205,9 @@ describe("command permission presentation", () => {
   test("keeps confirm and rejection help visible at narrow widths", () => {
     const text = plain(render("rm -rf ./src/generated", 40));
     expect(text).toContain("enter confirm");
-    expect(text).toContain("esc reject");
-    expect(text).toContain("Allow once");
-    expect(text).toContain("Reject");
+    expect(text).toContain("esc cancel");
+    expect(text).toContain("Run command");
+    expect(text).toContain("Cancel");
   });
 
   test("fits wide graphemes and refreshes palette colors on each render", () => {
@@ -216,5 +222,12 @@ describe("command permission presentation", () => {
     expect(renderCommandPermissionLines(input, 100, updated).join("\n")).not.toContain(
       "\u001b[34m",
     );
+  });
+
+  test("keeps multiline quoted payloads and comments distinct from executable names", () => {
+    const command = "printf '%s' 'first\nrm -rf ./payload' # rm -rf ./comment\nrm -rf ./real";
+    const text = render(command).join("\n");
+    expect(text).toContain("\u001b[32mrm -rf ./payload'\u001b[39m");
+    expect(text.split("\u001b[33mrm\u001b[39m")).toHaveLength(2);
   });
 });

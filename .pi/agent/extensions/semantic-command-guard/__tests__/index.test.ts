@@ -434,7 +434,7 @@ describe("confirm mode", () => {
       expect(options).toEqual({ overlay: false });
       const decision = deferred<T>();
       const component = await factory(
-        { requestRender() {} } as import("@earendil-works/pi-tui").TUI,
+        { terminal: { rows: 40 }, requestRender() {} } as import("@earendil-works/pi-tui").TUI,
         {
           fg: (_color: string, text: string) => text,
           bg: (_color: string, text: string) => text,

@@ -6,8 +6,10 @@ The manual `/just <recipe> [arguments]` command remains unchanged.
 The tool auto-activates when the project root contains `justfile`, `Justfile`, `.justfile`, or
 `package.json`; elsewhere it remains deferred unless explicitly loaded.
 
-Requires dekit 0.10.0 on `PATH`, Just for Just recipes, and the project's
-package manager. Run `/reload` after changing the extension.
+Requires the local dekit 0.10.2 idle-registration patch from
+`~/nixos/pkgs/by-name/dekit`, including a patched project runner, plus Bun,
+Just for Just recipes, and the project's package manager. Run `/reload`
+after changing the extension.
 
 ## Usage
 
@@ -89,35 +91,49 @@ All actions require project trust. Task paths use the reserved `pi/` prefix;
 globs, tags, other runners, and unrelated tasks are rejected. Starting a
 missing runner loads its project configuration. Read-only actions never
 start a runner. Tasks survive Pi shutdown; the extension does not own or stop
-the shared runner. If a task already exists, use `restart` rather than
-`start`.
+the shared runner. Starting a matching registered task verifies its command
+and working directory inside the runner, then starts it without restarting
+an already active task. A conflicting definition is an error.
 
-## Neovim shared picker
+## Neovim native console
 
-In Neovim, `<A-m>` or `:FTermDekit` opens a combined script and task picker.
-It lists public Just recipes, package scripts, and existing project tasks.
-A script's default task uses the same ID as Pi, so an agent-started task
-appears on that script's row with its current state. Select it to view its
-output, restart it, or stop it. Opening the picker does not start a runner
-or execute a script.
+In Neovim, `<A-m>` or `:FTermDekit` toggles dekit's built-in task console.
+Each new attachment first imports the current public Just/package catalog
+through `import-scripts.ts`, then runs `dekit -C <project-root> attach`.
+Recipes appear as idle tasks without executing them or generating project
+configuration. Pi and Neovim use the same catalog, command arguments, and
+task IDs. Existing configured tasks and running children stay untouched.
+Labels identify the source script; recipes requiring arguments are marked
+`requires: ...`. Supply their arguments through Pi to start an argument-specific
+task. Changed command variants remain separate tasks rather than replacing
+existing processes.
 
-`Start with arguments…` accepts quoted arguments without shell expansion.
-Tasks with other argument combinations remain separate entries, identified
-by their task path unless they have a label. `Refresh` rereads the state;
-the picker does not poll. `Open task console` attaches the native shared
-console. Detach from that console rather than stopping its runner when
-you want tasks to keep running.
+With the task list focused, `s` starts a selected task and `r` restarts it.
+Hiding the terminal or detaching leaves tasks running. Reopening imports
+new scripts before attaching again. The quit menu can stop the shared
+runner, which affects both clients. Projects with an `.envrc` run both import
+and the native console through `direnv exec`.
 
-Both clients must use the same project root. Neovim uses Bun and
-`project-cli.ts` from the Stow-linked Pi extension to reuse its catalog,
-package-manager selection, and task IDs. Discovery and task controls run
-under `direnv exec` when the root has an `.envrc`. Tasks defined only in
-`mprocs.yaml` are not imported.
+Before using this integration:
+
+1. Install the patched dekit package through Nix and verify `dekit register --help`.
+2. Run `just stow-apply` from `~/dotfiles` after adding new files, so
+   `~/.pi/agent/extensions/dekit/import-scripts.ts` is deployed. Existing
+   file links reflect edits immediately, but new files need Stow links.
+3. Explicitly upgrade existing project runners to the patched kernel with
+   `dekit -C <project-root> runner upgrade`. Check kernel selection if it still
+   points at an older pinned binary.
+4. Restart Neovim and reload Pi's extension.
+
+The importer never upgrades or restarts a runner automatically. An older
+runner without registration support reports an error instead of falling
+back to executing recipes.
 
 ## Maintenance
 
-`catalog.ts` discovers scripts and constructs command arguments; `index.ts`
-registers the tool and manages task operations. Add scripts to the project's
+`catalog.ts` discovers scripts and constructs command arguments;
+`import-scripts.ts` registers their native tasks without starting them.
+`index.ts` manages Pi's tool operations. Add scripts to the project's
 Justfile or `package.json`, not to this extension.
 
 Run regression tests and the installed-CLI smoke test from the dotfiles root:
@@ -130,3 +146,17 @@ PI_DEKIT_LIVE=1 devenv test --option enterTest:string \
 
 Without `PI_DEKIT_LIVE=1`, the installed-CLI test is skipped. The live test
 uses an isolated temporary project and stops only its own runner.
+
+The idle-import integration checks can use a built binary before it is
+installed:
+
+```sh
+cd .pi/agent
+PI_DEKIT_IMPORT_LIVE=1 PI_DEKIT_BINARY=/path/to/dekit \
+  bun test extensions/dekit/__tests__/native-import.test.ts
+```
+
+These tests isolate user config and stop only their own temporary runners.
+`PI_DEKIT_TUI_LIVE=1` enables the native PTY-rendering check.
+`PI_DEKIT_LIVE=1` enables process execution/restart checks as well.
+Those checks require PTY and process-execution permissions.
