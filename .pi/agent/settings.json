@@ -37,7 +37,7 @@
   "quickReplies": {
     "enabled": true
   },
-  "hideThinkingBlock": true,
+  "hideThinkingBlock": false,
   "showFileChanges": false,
   "tuiMode": "fullscreen",
   "selectorOverlayWidth": 72,
@@ -155,7 +155,7 @@
     "npm:pi-codex-goal@latest",
     "npm:pi-context-view@0.7.2",
     "npm:@ff-labs/pi-fff@0.11.0",
-    "npm:@gotgenes/pi-subagents@24.0.0",
+    "npm:@gotgenes/pi-subagents@25.0.0",
     "npm:pi-web-access@0.42.0",
     "npm:pi-lens@4.4.3",
     "npm:pi-compaction-model@0.1.0",

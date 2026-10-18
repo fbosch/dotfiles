@@ -25,7 +25,12 @@ import {
 } from "./contracts";
 import { readHeaderOwnerSnapshot } from "./header-snapshot";
 import { captureStartupBaseline, deferStartupMeasurement } from "./startup-time";
-import { type UpdateAllResult, updateAllAvailablePackages } from "./update-all";
+import {
+  type UpdateAllProgress,
+  type UpdateAllResult,
+  updateAllAvailablePackages,
+} from "./update-all";
+import { UpdateOutputModal } from "./update-output-modal";
 import { readAvailableUpdates, type UpdateDetail } from "./updates";
 import { renderStartupHeader, startupHeaderTimeKey, UPDATE_ALL_BUTTON_TEXT } from "./view-model";
 import { inspectWorkspace, type WorkspaceIdentity } from "./workspace";
@@ -38,6 +43,7 @@ export interface StartupHeaderDependencies {
   readonly updateAllPackages?: (
     context: ExtensionContext,
     updates: readonly UpdateDetail[],
+    progress?: UpdateAllProgress,
   ) => Promise<UpdateAllResult>;
 }
 
@@ -107,7 +113,10 @@ export default function startupHeader(
     let requestRender = () => {};
     let updateActionState: "ready" | "updating" | "reloading" = "ready";
     let updateInProgress = false;
-    const updatePackages = dependencies.updateAllPackages ?? updateAllAvailablePackages;
+    const updatePackages: NonNullable<StartupHeaderDependencies["updateAllPackages"]> =
+      dependencies.updateAllPackages ??
+      ((context, updates, progress) =>
+        updateAllAvailablePackages(context, updates, undefined, progress));
     const runUpdateAll = async (actionContext: ExtensionCommandContext): Promise<boolean> => {
       if (!active || updateInProgress || updateActionState === "reloading") return false;
       const updates = readAvailableUpdates(owners.get("updates"), Date.now());
@@ -119,8 +128,58 @@ export default function startupHeader(
       updateInProgress = true;
       updateActionState = "updating";
       requestRender();
+
+      let outputModal: UpdateOutputModal | undefined;
+      let outputDialog: Promise<void> | undefined;
+      let pendingOutput: { stream: "stdout" | "stderr"; chunk: string }[] = [];
+      let pendingModalResult:
+        | { readonly type: "result"; readonly result: UpdateAllResult }
+        | { readonly type: "error"; readonly error: unknown }
+        | undefined;
+      const waitForOutputDialog = async () => {
+        if (outputDialog === undefined) return;
+        try {
+          await outputDialog;
+        } catch (error) {
+          actionContext.ui.notify(
+            `Could not display package update output: ${error instanceof Error ? error.message : String(error)}`,
+            "warning",
+          );
+        }
+      };
+      const progress: UpdateAllProgress = {
+        onStart: () => {
+          if (outputDialog !== undefined) return;
+          outputDialog = actionContext.ui.custom<void>(
+            (tui, theme, _keybindings, done) => {
+              const modal = new UpdateOutputModal(tui, theme, updates.length, done);
+              outputModal = modal;
+              for (const output of pendingOutput) {
+                modal.appendOutput(output.stream, output.chunk);
+              }
+              pendingOutput = [];
+              if (pendingModalResult?.type === "result") modal.finish(pendingModalResult.result);
+              else if (pendingModalResult?.type === "error") modal.fail(pendingModalResult.error);
+              return modal;
+            },
+            {
+              overlay: true,
+              overlayOptions: { anchor: "center", width: "85%", maxHeight: "80%", margin: 2 },
+            },
+          );
+          void outputDialog.catch(() => {});
+        },
+        onOutput: (stream, chunk) => {
+          if (outputModal !== undefined) outputModal.appendOutput(stream, chunk);
+          else pendingOutput.push({ stream, chunk });
+        },
+      };
+
       try {
-        const result = await updatePackages(actionContext, updates);
+        const result = await updatePackages(actionContext, updates, progress);
+        pendingModalResult = { type: "result", result };
+        outputModal?.finish(result);
+        await waitForOutputDialog();
         if (!active) return false;
         if (result.cancelled) {
           updateActionState = "ready";
@@ -159,6 +218,9 @@ export default function startupHeader(
         );
         return true;
       } catch (error) {
+        pendingModalResult = { type: "error", error };
+        outputModal?.fail(error);
+        await waitForOutputDialog();
         if (!active) return false;
         updateActionState = "ready";
         actionContext.ui.notify(

@@ -149,6 +149,20 @@ The importer never upgrades or restarts a runner automatically. An older
 runner without registration support reports an error instead of falling
 back to executing recipes.
 
+## Terminal colors
+
+The patched Nix package inherits the attaching terminal's default foreground,
+background, and ANSI colors. Inside Neovim, these come from its terminal
+buffer. A Zenwritten Dark terminal palette therefore needs no separate dekit
+theme file.
+
+Task output keeps its truecolor and indexed attributes. Selection uses reverse
+video, and modal backgrounds skip RGB shading to preserve terminal-owned colors.
+
+The runner renders the console. Existing runners need an explicit upgrade or
+restart to use `~/nixos/pkgs/by-name/dekit/inherit-terminal-theme.patch`;
+replacing the CLI client alone does not change their colors.
+
 ## Maintenance
 
 `catalog.ts` discovers scripts and constructs command arguments;

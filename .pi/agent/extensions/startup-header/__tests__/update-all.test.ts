@@ -82,4 +82,29 @@ describe("update all available packages", () => {
     expect(installed).toHaveLength(1);
     expect(result).toEqual({ updated: 1, failed: [], cancelled: false });
   });
+  test("forwards installer output after opening the progress view", async () => {
+    const events: string[] = [];
+    const result = await updateAllAvailablePackages(
+      context(async () => true),
+      [{ name: "user-package", current: "1.0.0", latest: "2.0.0", scope: "user" }],
+      {
+        readPatches: () => [],
+        installPackage: async (_context, _update, onOutput) => {
+          onOutput("stdout", "npm install output\n");
+          onOutput("stderr", "lifecycle script output\n");
+        },
+      },
+      {
+        onStart: () => events.push("start"),
+        onOutput: (stream, chunk) => events.push(`${stream}:${chunk}`),
+      },
+    );
+
+    expect(events[0]).toBe("start");
+    expect(events.join("")).toContain("--- Updating user-package (1.0.0 → 2.0.0) ---");
+    expect(events.join("")).toContain("stdout:npm install output");
+    expect(events.join("")).toContain("stderr:lifecycle script output");
+    expect(result).toEqual({ updated: 1, failed: [], cancelled: false });
+  });
+
 });

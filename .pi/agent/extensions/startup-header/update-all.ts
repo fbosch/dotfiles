@@ -1,12 +1,8 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import {
-  DefaultPackageManager,
-  type ExtensionContext,
-  getAgentDir,
-  SettingsManager,
-} from "@earendil-works/pi-coding-agent";
+import { type ExtensionContext, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { discoverPackagePatches, type PackagePatch } from "../../lib/patch-catalog";
+import { installPackageInPiCli, type PackageInstallOutputHandler } from "./package-install";
 import type { UpdateDetail } from "./updates";
 
 export interface UpdateAllResult {
@@ -15,13 +11,22 @@ export interface UpdateAllResult {
   readonly cancelled: boolean;
 }
 
+export interface UpdateAllProgress {
+  readonly onStart: () => void;
+  readonly onOutput: PackageInstallOutputHandler;
+}
+
 export interface UpdateAllDependencies {
-  readonly installPackage: (context: ExtensionContext, update: UpdateDetail) => Promise<void>;
+  readonly installPackage: (
+    context: ExtensionContext,
+    update: UpdateDetail,
+    onOutput: PackageInstallOutputHandler,
+  ) => Promise<void>;
   readonly readPatches: () => readonly PackagePatch[];
 }
 
 const DEFAULT_DEPENDENCIES: UpdateAllDependencies = {
-  installPackage: installConfiguredPackage,
+  installPackage: installPackageInPiCli,
   readPatches: readConfiguredPatches,
 };
 
@@ -29,6 +34,7 @@ export async function updateAllAvailablePackages(
   context: ExtensionContext,
   updates: readonly UpdateDetail[],
   dependencies: UpdateAllDependencies = DEFAULT_DEPENDENCIES,
+  progress?: UpdateAllProgress,
 ): Promise<UpdateAllResult> {
   const patchMismatches = findPatchMismatches(updates, dependencies.readPatches());
   if (patchMismatches.length > 0) {
@@ -42,14 +48,25 @@ export async function updateAllAvailablePackages(
     if (!confirmed) return { updated: 0, failed: [], cancelled: true };
   }
 
+  // Complete the patch warning first so the output overlay does not stack over a confirmation.
+  if (updates.length > 0) progress?.onStart();
+  const onOutput = progress?.onOutput ?? (() => {});
   let updated = 0;
   const failed: string[] = [];
   for (const update of updates) {
+    onOutput(
+      "stdout",
+      `\n--- Updating ${update.name} (${update.current} → ${update.latest}) ---\n`,
+    );
     try {
-      await dependencies.installPackage(context, update);
+      await dependencies.installPackage(context, update, onOutput);
       updated += 1;
-    } catch {
+    } catch (error) {
       failed.push(update.name);
+      onOutput(
+        "stderr",
+        `\nUpdate failed for ${update.name}: ${error instanceof Error ? error.message : String(error)}\n`,
+      );
     }
   }
   return { updated, failed: Object.freeze(failed), cancelled: false };
@@ -67,24 +84,6 @@ function findPatchMismatches(
         patch.version !== update.latest,
     ),
   );
-}
-
-async function installConfiguredPackage(
-  context: ExtensionContext,
-  update: UpdateDetail,
-): Promise<void> {
-  const agentDir = getAgentDir();
-  const settings = SettingsManager.create(context.cwd, agentDir, {
-    projectTrusted: context.isProjectTrusted(),
-  });
-  const manager = new DefaultPackageManager({
-    cwd: context.cwd,
-    agentDir,
-    settingsManager: settings,
-  });
-  await manager.installAndPersist(`npm:${update.name}@${update.latest}`, {
-    local: update.scope === "project",
-  });
 }
 
 function readConfiguredPatches(): readonly PackagePatch[] {

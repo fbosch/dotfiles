@@ -3,9 +3,15 @@ import type {
   ExtensionAPI,
   ExtensionCommandContext,
   ExtensionContext,
+  KeybindingsManager,
   Theme,
 } from "@earendil-works/pi-coding-agent";
-import type { TuiMouseEvent } from "@earendil-works/pi-tui";
+import {
+  stripTerminalSequences,
+  type Component,
+  type TUI,
+  type TuiMouseEvent,
+} from "@earendil-works/pi-tui";
 import {
   STARTUP_OWNER_IDS,
   STARTUP_OWNER_REQUEST_EVENT,
@@ -18,6 +24,9 @@ interface HeaderComponent {
   handleMouse?(event: TuiMouseEvent): { handled?: boolean } | undefined;
   invalidate?(): void;
 }
+
+type CustomDialogComponent = Component & { dispose?(): void };
+type CustomDialogOptions = Parameters<ExtensionCommandContext["ui"]["custom"]>[1];
 
 type Handler = (event: unknown, context: ExtensionContext) => void;
 
@@ -48,6 +57,19 @@ function createHarness() {
   let reloadCount = 0;
   const notifications: string[] = [];
   let renderRequests = 0;
+  const customDialogs: {
+    component: CustomDialogComponent;
+    options?: CustomDialogOptions;
+  }[] = [];
+  const dialogTui = {
+    terminal: { columns: 100, rows: 40 },
+    requestRender: () => {},
+  } as unknown as TUI;
+  const dialogTheme = {
+    fg: (_color: string, text: string) => text,
+    bg: (_color: string, text: string) => text,
+    bold: (text: string) => text,
+  } as unknown as Theme;
   const context = {
     mode: "tui" as const,
     reload: async () => {
@@ -62,6 +84,32 @@ function createHarness() {
       setHeader(factory: typeof headerFactory) {
         uiMutations.header += 1;
         headerFactory = factory;
+      },
+      custom<T>(
+        factory: (
+          tui: TUI,
+          theme: Theme,
+          keybindings: KeybindingsManager,
+          done: (result: T) => void,
+        ) => CustomDialogComponent | Promise<CustomDialogComponent>,
+        options?: CustomDialogOptions,
+      ): Promise<T> {
+        return new Promise<T>((resolve, reject) => {
+          let component: CustomDialogComponent | undefined;
+          const done = (result: T) => {
+            component?.dispose?.();
+            resolve(result);
+          };
+          void Promise.resolve(
+            factory(dialogTui, dialogTheme, {} as KeybindingsManager, done),
+          ).then(
+            (created) => {
+              component = created;
+              customDialogs.push({ component: created, options });
+            },
+            reject,
+          );
+        });
       },
       confirm: async () => true,
       notify(message: string) {
@@ -146,6 +194,7 @@ function createHarness() {
       return reloadCount;
     },
     notifications,
+    customDialogs,
     get renderRequests() {
       return renderRequests;
     },
@@ -337,6 +386,46 @@ describe("startup header registration", () => {
     ]);
     expect(harness.reloadCount).toBe(1);
     expect(harness.render()).toContain("Reloading Pi to activate updates…");
+  });
+
+  test("shows captured package output in a modal before reloading", async () => {
+    const harness = createHarness();
+    startupHeader(harness.pi, {
+      ...dependencies,
+      updateAllPackages: async (_context, updates, progress) => {
+        progress?.onStart();
+        progress?.onOutput("stdout", "npm install output\n");
+        progress?.onOutput("stderr", "postinstall output\n");
+        return { updated: updates.length, failed: [], cancelled: false };
+      },
+    });
+    harness.emit("session_start");
+    publishUpdateSnapshot(harness, {
+      name: "@acme/tool",
+      current: "1.0.0",
+      latest: "2.0.0",
+      scope: "project",
+    });
+
+    harness.triggerShortcut();
+    await Promise.resolve();
+
+    const dialog = harness.customDialogs[0];
+    if (dialog === undefined) throw new Error("Update output modal was not opened");
+    expect(dialog.options).toMatchObject({
+      overlay: true,
+      overlayOptions: { anchor: "center" },
+    });
+    const output = stripTerminalSequences(dialog.component.render(80).join("\n"));
+    expect(output).toContain("npm install output");
+    expect(output).toContain("postinstall output");
+    expect(output).toContain("Updated 1 package");
+    expect(harness.reloadCount).toBe(0);
+
+    dialog.component.handleInput?.("\r");
+    await harness.waitForCommand();
+
+    expect(harness.reloadCount).toBe(1);
   });
 
   test("registers the keyboard shortcut as an alternate update action", async () => {
