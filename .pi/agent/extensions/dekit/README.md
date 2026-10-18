@@ -1,15 +1,17 @@
 # Dekit script tool
 
-The agent uses one `dekit` tool to discover public Just recipes and
-`package.json` scripts, then manage them as persistent project tasks.
+The agent uses one `dekit` tool to discover public Just recipes,
+`package.json` scripts, and evaluated devenv tasks, then manage them as
+persistent project tasks.
 The manual `/just <recipe> [arguments]` command remains unchanged.
-The tool auto-activates when the project root contains `justfile`, `Justfile`, `.justfile`, or
-`package.json`; elsewhere it remains deferred unless explicitly loaded.
+The tool auto-activates when the project root contains `justfile`, `Justfile`,
+`.justfile`, `package.json`, or `devenv.nix`; elsewhere it remains deferred
+unless explicitly loaded.
 
 Requires the local dekit 0.10.2 idle-registration patch from
 `~/nixos/pkgs/by-name/dekit`, including a patched project runner, plus Bun,
-Just for Just recipes, and the project's package manager. Run `/reload`
-after changing the extension.
+Just for Just recipes, the project's package manager, and devenv for Nix
+tasks. Run `/reload` after changing the extension.
 
 ## Usage
 
@@ -22,7 +24,7 @@ Tool arguments are JSON:
 ```
 
 Use the exact `task` path returned by `start` for `status`, `output`, `stop`,
-or `restart`. Omit `task` from `status` to list Pi-managed tasks.
+or `restart`. Omit `task` from `status` to list imported tasks.
 
 - Starting and restarting catalogued public scripts do not require per-run confirmation.
 - Stopping a task requires interactive confirmation.
@@ -42,8 +44,9 @@ parameters retain their declaration order and report `name`, `kind`,
 and first-line `help` metadata. `star` accepts zero or more arguments;
 `plus` accepts one or more. Default expressions and command bodies remain local.
 
-Package scripts return `parameters: null` because their argument schema is
-unknown. A Just recipe with no parameters returns `parameters: []`.
+Package scripts and devenv tasks return `parameters: null` because their
+argument schemas are unknown. A Just recipe with no parameters returns
+`parameters: []`.
 Inspection reports parameter metadata, not a complete argument validator.
 
 ## Discovery ranking
@@ -79,15 +82,24 @@ list of semantic matches. Configuration follows the existing
 ## Project boundaries
 
 The canonical Pi working directory is the explicit dekit project root.
-Discovery reads a Justfile and `package.json` directly in that directory,
-without searching parent directories. Just recipes use compact first-line comments;
-package scripts use their names, never command bodies. Private Just recipes are excluded.
+Discovery checks for a Justfile, `package.json`, and `devenv.nix` directly in
+that directory, without searching parents. Just recipes use compact
+first-line comments; package scripts use their names, never command bodies.
+Private Just recipes are excluded.
 
 Package-manager selection uses `packageManager`, then lockfiles, then npm.
 Conflicting lockfiles without `packageManager` are rejected. Arguments are
 passed as separate command arguments, not interpolated into a shell command.
+Devenv discovery uses `devenv tasks list --json`, which evaluates Nix and
+includes imported task definitions without executing tasks or shell-entry
+hooks. Failed listing produces a `warnings` entry; available Just/package
+scripts remain usable. Devenv starts use `devenv tasks run --mode before`
+so dependencies run first. Explicit inputs accept `--input VALUE` and
+`--input-json VALUE`; extra task names and execution-mode overrides are
+rejected.
 
-All actions require project trust. Task paths use the reserved `pi/` prefix;
+All actions require project trust. Imported task paths live directly under
+`just/`, `package/`, or `devenv/` with stable command hashes;
 globs, tags, other runners, and unrelated tasks are rejected. Starting a
 missing runner loads its project configuration. Read-only actions never
 start a runner. Tasks survive Pi shutdown; the extension does not own or stop
@@ -98,7 +110,7 @@ an already active task. A conflicting definition is an error.
 ## Neovim native console
 
 In Neovim, `<A-m>` or `:FTermDekit` toggles dekit's built-in task console.
-Each new attachment first imports the current public Just/package catalog
+Each new attachment first imports the current Just/package/devenv catalog
 through `import-scripts.ts`, then runs `dekit -C <project-root> attach`.
 Recipes appear as idle tasks without executing them or generating project
 configuration. Pi and Neovim use the same catalog, command arguments, and
@@ -109,10 +121,14 @@ task. Changed command variants remain separate tasks rather than replacing
 existing processes.
 
 With the task list focused, `s` starts a selected task and `r` restarts it.
-Hiding the terminal or detaching leaves tasks running. Reopening imports
-new scripts before attaching again. The quit menu can stop the shared
-runner, which affects both clients. Projects with an `.envrc` run both import
-and the native console through `direnv exec`.
+Hiding the terminal keeps the console client and its tasks running.
+Reopening the same project's live console reuses that client without
+importing scripts again. A new attachment imports the current catalog.
+The quit menu can stop the shared runner, which affects both clients.
+
+Projects with an `.envrc` reuse Neovim's inherited direnv environment when
+it matches the project and remains approved. Otherwise, both the import
+and native console run through `direnv exec`.
 
 Before using this integration:
 
@@ -125,6 +141,10 @@ Before using this integration:
    points at an older pinned binary.
 4. Restart Neovim and reload Pi's extension.
 
+Existing runners with the old `pi/` paths need an explicit reset before
+importing the new grouping. Reset only an inactive runner; this clears
+registered task IDs and terminal history. Other project runners are not
+changed automatically.
 The importer never upgrades or restarts a runner automatically. An older
 runner without registration support reports an error instead of falling
 back to executing recipes.
@@ -134,7 +154,7 @@ back to executing recipes.
 `catalog.ts` discovers scripts and constructs command arguments;
 `import-scripts.ts` registers their native tasks without starting them.
 `index.ts` manages Pi's tool operations. Add scripts to the project's
-Justfile or `package.json`, not to this extension.
+Justfile, `package.json`, or `devenv.nix`, not to this extension.
 
 Run regression tests and the installed-CLI smoke test from the dotfiles root:
 

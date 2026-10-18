@@ -73,39 +73,38 @@ return {
 			end, { bang = true })
 
 			local dekit_instance = nil
-			local dekit_command = nil
+			local dekit_cwd = nil
 			usrcmd("FTermDekit", function()
 				local project = require("utils.project")
 				local cwd = project.get_project_root() or vim.fn.getcwd()
-				local escaped_cwd = vim.fn.shellescape(cwd)
-				local cmd = project.resolve_dekit_command(cwd)
-
-				if project.has_file(cwd, ".envrc") then
-					cmd = string.format("direnv exec %s dash -c %s", escaped_cwd, vim.fn.shellescape(cmd))
-				end
-				cmd = string.format("cd %s && %s", escaped_cwd, cmd)
-
-				if
-					dekit_instance
-					and dekit_command == cmd
-					and dekit_instance.win
-					and vim.api.nvim_win_is_valid(dekit_instance.win)
-				then
-					terminal.close_floating_terminal(dekit_instance)
+				cwd = vim.uv.fs_realpath(cwd) or cwd
+				-- Reuse the hidden job so toggling cannot re-enter direnv or reset the console.
+				if dekit_instance and dekit_cwd == cwd then
+					terminal.toggle_floating_terminal(dekit_instance)
 					return
 				end
-				-- Reattach to refresh the catalog; closing this client leaves the shared runner intact.
+
+				local escaped_cwd = vim.fn.shellescape(cwd)
+				local cmd = string.format("cd %s && %s", escaped_cwd, project.resolve_dekit_command(cwd))
 				if dekit_instance then
 					terminal.close_floating_terminal(dekit_instance, true)
 				end
-				dekit_command = cmd
-				dekit_instance = fterm:new({
+				dekit_cwd = cwd
+				local instance
+				instance = fterm:new({
 					ft = "fterm_dekit",
 					env = env,
 					shell = "dash",
 					cmd = cmd,
 					dimensions = dimensions,
+					-- FTerm may clear its job before on_exit; retain the client identity.
+					on_exit = function()
+						if dekit_instance == instance then
+							dekit_cwd = nil
+						end
+					end,
 				})
+				dekit_instance = instance
 				terminal.open_floating_terminal(dekit_instance)
 			end, { bang = true })
 

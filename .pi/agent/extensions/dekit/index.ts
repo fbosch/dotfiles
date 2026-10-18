@@ -101,6 +101,7 @@ interface Result {
   tasks?: Task[];
   screen?: string;
   truncated?: boolean;
+  warnings?: string[];
 }
 const Output = Type.Object({
   action: Type.String(),
@@ -125,10 +126,11 @@ const Output = Type.Object({
       }),
     ),
   ),
+  warnings: Type.Optional(Type.Array(Type.String())),
   script: Type.Optional(
     Type.Object({
       id: Type.String(),
-      source: Type.Union([Type.Literal("just"), Type.Literal("package")]),
+      source: Type.Union([Type.Literal("just"), Type.Literal("package"), Type.Literal("devenv")]),
       description: Type.String(),
       tags: Type.Array(Type.String()),
       parameters: Type.Union([
@@ -175,7 +177,7 @@ function requireTrust(ctx: ExtensionContext): void {
 function requireTask(path: string): void {
   if (!isManagedTask(path))
     throw new Error(
-      "Use an exact Pi task path returned by dekit; globs, tags, and other runners are not allowed",
+      "Use an exact managed task path returned by dekit; globs, tags, and other runners are not allowed",
     );
 }
 
@@ -197,11 +199,11 @@ export default function dekitExtension(pi: ExtensionAPI): void {
       parameters: Parameters,
       outputSchema: Output,
       description:
-        "Discover and inspect public Just recipes and package.json scripts, then start and manage them as project-scoped dekit tasks. Actions: discover, inspect, start, status, output, stop, restart. Use a canonical script ID for inspect/start and an exact returned task path for task actions. Inspection returns Just parameter metadata; package-script parameters are unknown. Starting and restarting public scripts do not require confirmation; stopping tasks does. Start/restart acknowledgements are not completion; inspect status for state and exit_code. Output is the current terminal screen, not a complete log.",
+        "Discover and inspect public Just recipes, package.json scripts, and devenv tasks, then start and manage them as project-scoped dekit tasks. Actions: discover, inspect, start, status, output, stop, restart. Use a canonical script ID for inspect/start and an exact returned task path for task actions. Inspection returns Just parameter metadata; package/devenv parameters are unknown. Starting and restarting public scripts do not require confirmation; stopping tasks does. Start/restart acknowledgements are not completion; inspect status for state and exit_code. Output is the current terminal screen, not a complete log.",
       promptSnippet: "Discover project scripts and manage them as dekit tasks",
       promptGuidelines: [
         "Use dekit discover before recreating a project workflow with shell commands.",
-        "Use dekit inspect with a canonical script ID before constructing Just arguments; package-script parameters are unknown, not an empty signature.",
+        "Use dekit inspect with a canonical script ID before constructing Just arguments; package/devenv parameters are unknown, not an empty signature.",
         "Query dekit discover by intent (e.g. 'run unit tests') or tags from Just groups (e.g. 'validation').",
         "A query matching a canonical script ID resolves that script locally without classification.",
         "Omit query or leave it blank to browse scripts locally without calling the classifier; limit bounds the displayed list.",
@@ -295,12 +297,18 @@ export default function dekitExtension(pi: ExtensionAPI): void {
           await accept([action, path]);
           return { action, project, task: path, accepted: true };
         }
+        let discoveryWarnings: string[] = [];
+        const loadCatalog = async () => {
+          const catalog = await discoverScripts(pi, project, signal);
+          discoveryWarnings = catalog.warnings;
+          return catalog.scripts;
+        };
         let discoveryUsage: Usage | undefined;
         let discoveryError: string | undefined;
         const data = await match(params)
           .returnType<Promise<Result>>()
           .with({ action: "discover" }, async ({ query, limit }) => {
-            const catalog = await discoverScripts(pi, project, signal);
+            const catalog = await loadCatalog();
             signal?.throwIfAborted();
             const byId = new Map(catalog.map((script) => [script.id, script]));
             if (byId.size !== catalog.length)
@@ -384,20 +392,24 @@ export default function dekitExtension(pi: ExtensionAPI): void {
             }
           })
           .with({ action: "inspect" }, async ({ script: id }) => {
-            const catalog = await discoverScripts(pi, project, signal);
+            const catalog = await loadCatalog();
             signal?.throwIfAborted();
             const script = catalog.find((candidate) => candidate.id === id);
             if (script === undefined)
-              throw new Error("Script is no longer public or does not exist");
+              throw new Error(
+                ["Script is no longer public or does not exist", ...discoveryWarnings].join("\n"),
+              );
             return { action: "inspect", project, script: inspectScript(script) };
           })
           .with({ action: "start" }, async ({ script: id, arguments: args = [] }) => {
             if (args.some((arg) => arg.includes("\0")))
               throw new Error("Arguments cannot contain NUL bytes");
-            const catalog = await discoverScripts(pi, project, signal);
+            const catalog = await loadCatalog();
             const script = catalog.find((candidate) => candidate.id === id);
             if (script === undefined)
-              throw new Error("Script is no longer public or does not exist");
+              throw new Error(
+                ["Script is no longer public or does not exist", ...discoveryWarnings].join("\n"),
+              );
             const path = await registerScript(pi, project, script, {
               arguments: args,
               start: true,
@@ -438,6 +450,7 @@ export default function dekitExtension(pi: ExtensionAPI): void {
           .with({ action: "stop" }, ({ task }) => control("stop", task))
           .with({ action: "restart" }, ({ task }) => control("restart", task))
           .exhaustive();
+        if (discoveryWarnings.length > 0) data.warnings = discoveryWarnings;
         const text =
           discoveryError ??
           match(data)
@@ -471,7 +484,7 @@ export default function dekitExtension(pi: ExtensionAPI): void {
         return {
           ...(discoveryUsage === undefined ? {} : { usage: discoveryUsage }),
           ...(discoveryError === undefined ? {} : { isError: true }),
-          content: [{ type: "text", text }],
+          content: [{ type: "text", text: [text, ...discoveryWarnings].join("\n") }],
           details: data,
           structuredContent: { ...data },
         };

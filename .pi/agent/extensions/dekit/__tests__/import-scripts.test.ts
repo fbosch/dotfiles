@@ -80,7 +80,7 @@ test("explicit start shares the import task ID and preserves literal npm argumen
   const imported = await importScripts(h.executor, h.root);
   const importedTask = imported.tasks[2];
   if (importedTask === undefined) throw new Error("missing imported task");
-  const script = (await discoverScripts(h.executor, h.root)).find(
+  const script = (await discoverScripts(h.executor, h.root)).scripts.find(
     (item) => item.id === "package:dev",
   );
   if (script === undefined) throw new Error("missing package fixture");
@@ -134,7 +134,7 @@ test.each(["not JSON", '{"matched":0}', '{"matched":2}'])(
   "rejects an invalid registration acknowledgement: %s",
   async (response) => {
     const h = await harness();
-    const script = (await discoverScripts(h.executor, h.root))[0];
+    const script = (await discoverScripts(h.executor, h.root)).scripts[0];
     if (script === undefined) throw new Error("missing fixture");
     h.state.response = response;
     await expect(registerScript(h.executor, h.root, script)).rejects.toThrow(

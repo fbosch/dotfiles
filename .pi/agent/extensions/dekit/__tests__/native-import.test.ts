@@ -187,7 +187,7 @@ tuiTest(
             screen += Buffer.from(data).toString();
             if (
               screen.includes("Tasks") &&
-              (screen.includes("pi/") || screen.includes("just:hello"))
+              (screen.includes("just/") || screen.includes("just:hello"))
             )
               rendered();
           },

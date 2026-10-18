@@ -33,7 +33,7 @@ afterEach(async () => {
   for (const directory of directories.splice(0))
     await rm(directory, { recursive: true, force: true });
 });
-const path = `pi/package/${"a".repeat(24)}`;
+const path = `package/${"a".repeat(24)}`;
 async function harness(options?: {
   modelRegistry?: ExtensionContext["modelRegistry"];
   includePackage?: boolean;
@@ -63,6 +63,8 @@ async function harness(options?: {
     response: undefined as string | undefined,
     code: 0,
     screen: "hello\r\n",
+    devenv: [{ name: "test:unit", description: "Run unit tests" }],
+    devenvCode: 0,
     just: {
       aliases: {} as Record<string, unknown>,
       recipes: {
@@ -96,6 +98,7 @@ async function harness(options?: {
       calls.push({ command, args, ...(options === undefined ? {} : { options }) });
       let data: object = { matched: 1 };
       if (command === "just") data = state.just;
+      if (command === "devenv") data = state.devenv;
       if (args.includes("runner"))
         data = state.running
           ? { status: "running", root: cwd, kind: "project" }
@@ -105,7 +108,7 @@ async function harness(options?: {
       return {
         stdout: state.response ?? JSON.stringify(data),
         stderr: "CLI failure",
-        code: state.code,
+        code: command === "devenv" ? state.devenvCode : state.code,
         killed: false,
       };
     },
@@ -221,7 +224,7 @@ function resultTask(details: unknown): string {
   return details.task;
 }
 
-for (const filename of ["justfile", "Justfile", ".justfile", "package.json"]) {
+for (const filename of ["justfile", "Justfile", ".justfile", "package.json", "devenv.nix"]) {
   test(`activates dekit when ${filename} exists at the project root`, async () => {
     const h = await harness({ includePackage: false });
     const contents =
@@ -885,7 +888,7 @@ test("rejects missing scripts before native registration", async () => {
 
 test("starts an existing script through atomic native definition verification", async () => {
   const h = await harness();
-  const script = (await discoverScripts(h.pi, h.cwd))[0];
+  const script = (await discoverScripts(h.pi, h.cwd)).scripts[0];
   if (script === undefined) throw new Error("missing fixture");
   const existingPath = taskPath(script, scriptCommand(script, []));
   h.state.running = true;
@@ -917,16 +920,9 @@ test("starts an existing script through atomic native definition verification", 
 
 test("rejects target globs, tags, traversal, spaces, and foreign runners", async () => {
   const h = await harness();
-  for (const task of [
-    "**",
-    "pi/package/*",
-    "+tag",
-    `host::${path}`,
-    "@dekit/console",
-    `../${path}`,
-  ]) {
+  for (const task of ["**", "package/*", "+tag", `host::${path}`, "@dekit/console", `../${path}`]) {
     for (const action of ["status", "output", "stop", "restart"])
-      await expect(h.invoke({ action, task })).rejects.toThrow("exact Pi task path");
+      await expect(h.invoke({ action, task })).rejects.toThrow("exact managed task path");
   }
   expect(h.calls).toEqual([]);
 });
@@ -994,7 +990,7 @@ test("honors declared managers, npm argument separator, and ambiguous lockfile r
     h.packagePath,
     JSON.stringify({ packageManager: "npm@10", scripts: { test: "echo hi" } }),
   );
-  const script = (await discoverScripts(h.pi, h.cwd))[0];
+  const script = (await discoverScripts(h.pi, h.cwd)).scripts[0];
   if (script === undefined) throw new Error("missing fixture");
   expect(scriptCommand(script, ["--watch"])).toEqual(["npm", "run", "test", "--", "--watch"]);
   await writeFile(h.packagePath, JSON.stringify({ scripts: { test: "echo hi" } }));
@@ -1007,7 +1003,7 @@ test("shares each whole-catalog fingerprint across its source and preserves hash
   const h = await harness();
   await writeFile(join(h.cwd, "justfile"), "build:\n  echo build\n");
   h.state.just.recipes.lint = { ...h.state.just.recipes.build, name: "lint", namepath: "lint" };
-  const scripts = await discoverScripts(h.pi, h.cwd);
+  const { scripts } = await discoverScripts(h.pi, h.cwd);
   const justFingerprint = createHash("sha256").update(JSON.stringify(h.state.just)).digest("hex");
   const packageFingerprint = createHash("sha256")
     .update(
@@ -1023,7 +1019,69 @@ test("shares each whole-catalog fingerprint across its source and preserves hash
     ["package:test", packageFingerprint],
     ["package:serve", packageFingerprint],
   ]);
-  expect(await discoverScripts(h.pi, h.cwd)).toEqual(scripts);
+  expect((await discoverScripts(h.pi, h.cwd)).scripts).toEqual(scripts);
+});
+
+test("discovers, inspects and starts a devenv task through the shared toolkit schema", async () => {
+  const h = await harness({ includePackage: false });
+  await writeFile(join(h.cwd, "devenv.nix"), "# fixture");
+  const discovered = await h.invoke({ action: "discover", query: "devenv:test:unit" });
+  expect(discovered.details).toMatchObject({
+    scripts: [{ id: "devenv:test:unit", description: "Run unit tests", parameters: [], tags: [] }],
+    rankingSource: "lexical",
+  });
+  const inspected = await h.invoke({ action: "inspect", script: "devenv:test:unit" });
+  expect(inspected.details).toEqual({
+    action: "inspect",
+    project: h.cwd,
+    script: {
+      id: "devenv:test:unit",
+      source: "devenv",
+      description: "Run unit tests",
+      parameters: null,
+      tags: [],
+    },
+  });
+  if (h.tool.outputSchema === undefined) throw new Error("Output schema missing");
+  expect(Value.Check(h.tool.outputSchema, inspected.structuredContent)).toBe(true);
+  const started = await h.invoke({ action: "start", script: "devenv:test:unit" });
+  expect(resultTask(started.details)).toMatch(/^devenv\/[a-f0-9]{24}$/u);
+  const registration = h.calls.find(
+    (call) => call.command === "dekit" && call.args.includes("register"),
+  );
+  if (registration === undefined) throw new Error("Missing native registration");
+  expect(registration.args.slice(registration.args.indexOf("--") + 1)).toEqual([
+    "devenv",
+    "tasks",
+    "run",
+    "--no-tui",
+    "--mode",
+    "before",
+    "--",
+    "test:unit",
+  ]);
+  expect(registration.args).toContain("--start");
+});
+
+test("surfaces devenv discovery warnings without breaking package discovery", async () => {
+  const h = await harness();
+  await writeFile(join(h.cwd, "devenv.nix"), "# fixture");
+  h.state.devenvCode = 1;
+  const result = await h.invoke({ action: "discover", limit: 10 });
+  if (h.tool.outputSchema === undefined) throw new Error("Output schema missing");
+  expect([...Value.Errors(h.tool.outputSchema, result.structuredContent)]).toEqual([]);
+  expect(result.details).toMatchObject({
+    scripts: [{ id: "package:test" }, { id: "package:serve" }],
+  });
+  if (!isMatching({ warnings: P.array(P.string) }, result.details))
+    throw new Error("Expected structured discovery warnings");
+  expect(result.details.warnings[0]).toContain("Could not inspect devenv tasks");
+  expect(result.content).toEqual([
+    expect.objectContaining({ text: expect.stringContaining("Could not inspect devenv tasks") }),
+  ]);
+  await expect(h.invoke({ action: "start", script: "devenv:test:unit" })).rejects.toThrow(
+    "Could not inspect devenv tasks",
+  );
 });
 
 const liveTest = process.env.PI_DEKIT_LIVE === "1" ? test : test.skip;

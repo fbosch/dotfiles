@@ -8,12 +8,16 @@ import { type JustRecipe, parseJustCatalog, searchRecipes } from "../just/catalo
 
 export interface Script {
   id: string;
-  source: "just" | "package";
+  source: "just" | "package" | "devenv";
   name: string;
   description: string;
   command: string[];
   fingerprint: string;
   recipe?: JustRecipe;
+}
+export interface ScriptCatalog {
+  scripts: Script[];
+  warnings: string[];
 }
 export type ScriptInspectionParameter = {
   name: string;
@@ -29,7 +33,7 @@ export type ScriptInspectionParameter = {
 
 export type ScriptInspection = {
   id: string;
-  source: "just" | "package";
+  source: "just" | "package" | "devenv";
   description: string;
   tags: string[];
   parameters: ScriptInspectionParameter[] | null;
@@ -58,7 +62,7 @@ export async function hasScriptCatalog(cwd: string): Promise<boolean> {
   for (const filename of JUSTFILE_NAMES) {
     if (await exists(join(cwd, filename))) return true;
   }
-  return exists(join(cwd, "package.json"));
+  return (await exists(join(cwd, "package.json"))) || exists(join(cwd, "devenv.nix"));
 }
 
 async function packageManager(cwd: string, declared: string | undefined): Promise<string> {
@@ -86,8 +90,9 @@ export async function discoverScripts(
   pi: Pick<ExtensionAPI, "exec">,
   cwd: string,
   signal?: AbortSignal,
-): Promise<Script[]> {
+): Promise<ScriptCatalog> {
   const scripts: Script[] = [];
+  const warnings: string[] = [];
   for (const filename of JUSTFILE_NAMES) {
     const path = join(cwd, filename);
     if (!(await exists(path))) continue;
@@ -140,7 +145,43 @@ export async function discoverScripts(
       });
     }
   }
-  return scripts;
+  if (await exists(join(cwd, "devenv.nix"))) {
+    try {
+      const result = await pi.exec("devenv", ["tasks", "list", "--json", "--no-tui"], {
+        cwd,
+        timeout: 30_000,
+        ...(signal === undefined ? {} : { signal }),
+      });
+      signal?.throwIfAborted();
+      if (result.killed || result.code !== 0)
+        throw new Error(`devenv tasks list did not complete successfully (exit ${result.code})`);
+      const tasks = parseJson(result.stdout, "devenv tasks list --json", (value) => {
+        if (!isMatching(P.array({ name: P.string, description: P.string }), value))
+          throw new Error("Invalid devenv task metadata");
+        if (new Set(value.map((task) => task.name)).size !== value.length)
+          throw new Error("Duplicate devenv task names");
+        return value;
+      });
+      const fingerprint = createHash("sha256").update(result.stdout).digest("hex");
+      for (const task of tasks) {
+        if (task.name === "" || task.name.startsWith("-") || task.name.includes("\0")) continue;
+        scripts.push({
+          id: `devenv:${task.name}`,
+          source: "devenv",
+          name: task.name,
+          description: task.description,
+          command: ["devenv", "tasks", "run", "--no-tui", "--mode", "before", "--", task.name],
+          fingerprint,
+        });
+      }
+    } catch (error) {
+      signal?.throwIfAborted();
+      // Nix evaluation can be unavailable inside the caller's sandbox; keep other catalogs usable.
+      const reason = error instanceof Error ? error.message : "metadata command failed";
+      warnings.push(`Could not inspect devenv tasks: ${reason.slice(0, 500)}`);
+    }
+  }
+  return { scripts, warnings };
 }
 
 export function scriptSearchDescription(script: Script): string {
@@ -158,7 +199,7 @@ export function inspectScript(script: Script): ScriptInspection {
   };
   return match(script.source)
     .returnType<ScriptInspection>()
-    .with("package", () => ({ ...metadata, parameters: null }))
+    .with("package", "devenv", () => ({ ...metadata, parameters: null }))
     .with("just", () => {
       if (script.recipe === undefined) throw new Error("Just script parameter metadata is missing");
       return {
@@ -224,6 +265,16 @@ export function scriptCommand(script: Script, args: string[]): string[] {
       ...(script.command[0] === "npm" && args.length > 0 ? ["--"] : []),
       ...args,
     ])
+    .with("devenv", () => {
+      for (let index = 0; index < args.length; index += 2) {
+        if (
+          !["--input", "--input-json"].includes(args[index] ?? "") ||
+          args[index + 1] === undefined
+        )
+          throw new Error("Use --input VALUE or --input-json VALUE for devenv task inputs");
+      }
+      return [...script.command.slice(0, -2), ...args, "--", script.name];
+    })
     .exhaustive();
 }
 
@@ -232,9 +283,9 @@ export function taskPath(script: Script, command: string[]): string {
     .update(JSON.stringify([script.id, command]))
     .digest("hex")
     .slice(0, 24);
-  return `pi/${script.source}/${digest}`;
+  return `${script.source}/${digest}`;
 }
 
 export function isManagedTask(path: string): boolean {
-  return /^pi\/(just|package)\/[a-f0-9]{24}$/u.test(path);
+  return /^(just|package|devenv)\/[a-f0-9]{24}$/u.test(path);
 }

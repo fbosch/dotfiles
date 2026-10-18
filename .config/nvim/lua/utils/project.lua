@@ -97,10 +97,16 @@ end
 
 function M.get_project_root()
 	local root_bare = vim.fs.root(vim.fn.getcwd(), { ".bare" }) -- support for worktrees
-	local root_other = vim.fs.root(
-		vim.fn.getcwd(),
-		{ "dekit.yaml", "package.json", ".git", "Cargo.toml", "justfile", "Justfile", ".justfile" }
-	)
+	local root_other = vim.fs.root(vim.fn.getcwd(), {
+		"dekit.yaml",
+		"devenv.nix",
+		"package.json",
+		".git",
+		"Cargo.toml",
+		"justfile",
+		"Justfile",
+		".justfile",
+	})
 
 	return root_other or root_bare
 end
@@ -119,10 +125,49 @@ function M.find_file_in_project_root(pattern)
 	end
 end
 
+local function direnv_is_loaded(cwd)
+	local active = vim.env.DIRENV_DIR
+	if type(active) ~= "string" or active:sub(1, 1) ~= "-" then
+		return false
+	end
+	local root = vim.uv.fs_realpath(cwd)
+	if root == nil or vim.uv.fs_realpath(active:sub(2)) ~= root then
+		return false
+	end
+
+	-- Direnv stamps directory metadata even for blocked loads; verify approval without evaluating .envrc.
+	local ok, result = pcall(function()
+		return vim.system({ "direnv", "status", "--json" }, { cwd = cwd, text = true }):wait(1000)
+	end)
+	if not ok or type(result) ~= "table" or result.code ~= 0 then
+		return false
+	end
+	local decoded, status = pcall(vim.json.decode, result.stdout)
+	if not decoded or type(status) ~= "table" or type(status.state) ~= "table" then
+		return false
+	end
+
+	local envrc = vim.uv.fs_realpath(vim.fs.joinpath(cwd, ".envrc"))
+	if envrc == nil then
+		return false
+	end
+	local function matches(rc)
+		return type(rc) == "table"
+			and rc.allowed == 0
+			and type(rc.path) == "string"
+			and vim.uv.fs_realpath(rc.path) == envrc
+	end
+	return matches(status.state.loadedRC) and matches(status.state.foundRC)
+end
+
 function M.resolve_dekit_command(cwd)
 	local importer = vim.fn.expand("~/.pi/agent/extensions/dekit/import-scripts.ts")
 	local root = vim.fn.shellescape(cwd)
-	return "bun " .. vim.fn.shellescape(importer) .. " " .. root .. " && exec dekit -C " .. root .. " attach"
+	local cmd = "bun " .. vim.fn.shellescape(importer) .. " " .. root .. " && exec dekit -C " .. root .. " attach"
+	if M.has_file(cwd, ".envrc") and not direnv_is_loaded(cwd) then
+		return string.format("direnv exec %s dash -c %s", root, vim.fn.shellescape(cmd))
+	end
+	return cmd
 end
 
 return M

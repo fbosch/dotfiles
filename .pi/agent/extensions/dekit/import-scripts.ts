@@ -62,7 +62,7 @@ export async function registerScript(
 export async function importScripts(executor: Executor, cwd: string, signal?: AbortSignal) {
   signal?.throwIfAborted();
   const project = await realpath(cwd);
-  const scripts = await discoverScripts(executor, project, signal);
+  const { scripts, warnings } = await discoverScripts(executor, project, signal);
   const tasks: string[] = [];
   for (const script of scripts) {
     tasks.push(
@@ -71,7 +71,7 @@ export async function importScripts(executor: Executor, cwd: string, signal?: Ab
       }),
     );
   }
-  return { project, imported: tasks.length, tasks };
+  return { project, imported: tasks.length, tasks, ...(warnings.length > 0 ? { warnings } : {}) };
 }
 
 if (import.meta.main) {
