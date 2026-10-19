@@ -9,13 +9,7 @@ import {
   Spacer,
   type TUI,
 } from "@earendil-works/pi-tui";
-import {
-  DOCK_CHROME_WIDTH,
-  DOCK_RAIL,
-  DOCK_RIGHT_BORDER,
-  paintDockBottomEdge,
-  paintDockRow,
-} from "./dock-rendering";
+import { paintDockBorderSpace, paintDockBottomEdge, paintDockRow } from "./dock-rendering";
 import {
   MODAL_FIXED_ROWS,
   MODAL_MAX_VISIBLE_ITEMS,
@@ -36,6 +30,7 @@ const FLOATING_DIALOG_OVERLAY = {
 
 const installedContexts = new WeakSet<ExtensionUIContext>();
 const INLINE_DIALOG_PADDING_X = 1;
+const INLINE_DIALOG_RAIL_WIDTH = 1;
 
 class InlineDockDialog implements Component {
   private permissionDecisionVisible = false;
@@ -60,37 +55,26 @@ class InlineDockDialog implements Component {
   }
 
   render(width: number): string[] {
-    if (width <= DOCK_CHROME_WIDTH) {
+    if (width <= INLINE_DIALOG_RAIL_WIDTH) {
       const rendered = this.component.render(width);
       this.permissionDecisionVisible = isPermissionDecisionPromptLines(rendered);
       return rendered;
     }
 
-    const availableWidth = width - DOCK_CHROME_WIDTH;
+    const availableWidth = width - INLINE_DIALOG_RAIL_WIDTH;
     const paddingX =
       availableWidth >= INLINE_DIALOG_PADDING_X * 2 + 1 ? INLINE_DIALOG_PADDING_X : 0;
     const contentWidth = availableWidth - paddingX * 2;
     const backgroundAnsi = this.theme.getBgAnsi("userMessageBg");
-    const rail = this.theme.fg("warning", DOCK_RAIL);
-    const rightBorder = this.theme.fg("borderMuted", DOCK_RIGHT_BORDER);
+    const rail = paintDockBorderSpace(this.theme.getFgAnsi("warning"));
     const rendered = this.component.render(contentWidth);
     this.permissionDecisionVisible = isPermissionDecisionPromptLines(rendered);
     const content = renderPermissionPromptLines(rendered, contentWidth, this.theme).map(
       (line) => `${" ".repeat(paddingX)}${line}`,
     );
-    const rows = ["", ...content].map((line) =>
-      paintDockRow(line, width, rail, backgroundAnsi, rightBorder),
-    );
+    const rows = ["", ...content].map((line) => paintDockRow(line, width, rail, backgroundAnsi));
 
-    return [
-      ...rows,
-      paintDockBottomEdge(
-        width,
-        this.theme.fg("warning", "▘"),
-        this.theme.fg("borderMuted", "▝"),
-        backgroundAnsi,
-      ),
-    ];
+    return [...rows, paintDockBottomEdge(width, this.theme.fg("warning", "▀"), "", backgroundAnsi)];
   }
 
   handleInput(data: string): void {

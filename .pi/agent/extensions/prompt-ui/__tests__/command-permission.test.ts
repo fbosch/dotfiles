@@ -22,6 +22,7 @@ const theme = {
   bg: (_color: string, text: string) => text,
   inverse: (text: string) => `\u001b[7m${text}\u001b[27m`,
   getBgAnsi: () => "",
+  getFgAnsi: (color: string) => (color === "warning" ? ORANGE : "\u001b[37m"),
 } as unknown as Theme;
 
 function harness(act: (component: Dialog) => void, mode: ExtensionContext["mode"] = "tui") {
@@ -103,6 +104,10 @@ describe("command permission UI", () => {
     expect(plain).toContain("Cancel");
     expect(plain).not.toContain("Allow session");
     expect(lines.join("\n")).toContain(ORANGE);
+    expect(
+      lines.slice(0, -1).every((line) => line.startsWith("\u001b[48;2;183;126;100m \u001b[0m")),
+    ).toBe(true);
+    expect(stripTerminalSequences(lines.at(-1) ?? "")).toBe("▀".repeat(120));
     expect(lines.every((line) => visibleWidth(line) <= 120)).toBe(true);
   });
 

@@ -46,7 +46,7 @@
       "src": "https://github.com/jinh0/eyeliner.nvim.git"
     },
     "fff.nvim": {
-      "rev": "d978416f77aec3f9928d56e00c9e56ba39ca1fda",
+      "rev": "51649e10e1ee5502f5c110679ef3102748c18c77",
       "src": "https://github.com/dmtrKovalenko/fff.nvim.git"
     },
     "fidget.nvim": {
@@ -66,7 +66,7 @@
       "src": "https://github.com/lionyxml/gitlineage.nvim.git"
     },
     "gitsigns.nvim": {
-      "rev": "851a051e2bd2caba97e23314c68d69f1b1cf5d19",
+      "rev": "fd780920613e541cbdfac41bf711583ed49f9249",
       "src": "https://github.com/lewis6991/gitsigns.nvim.git"
     },
     "helpview.nvim": {
@@ -110,11 +110,11 @@
       "src": "https://github.com/nvim-lualine/lualine.nvim.git"
     },
     "matchparen.nvim": {
-      "rev": "0d521d2d497ab3e338c7e6ec68a0d9589bfec8aa",
+      "rev": "87df7d1459c3376aaf5a67d116f0b293cc65ad13",
       "src": "https://github.com/monkoose/matchparen.nvim.git"
     },
     "mini.ai": {
-      "rev": "c2c4278beb759aa24b9506f56a67186a6cc2209c",
+      "rev": "d0c4987a1ead2bcf4eb22cc9815c662d76677c08",
       "src": "https://github.com/echasnovski/mini.ai.git"
     },
     "mini.sessions": {
@@ -147,11 +147,11 @@
       "src": "https://github.com/gennaro-tedesco/nvim-jqx.git"
     },
     "nvim-lsp-file-operations": {
-      "rev": "6f0997687c8dd2e3217a160167078b8bff052c43",
+      "rev": "8b150305362e971db0c40cee89ea4576a64e86cd",
       "src": "https://github.com/antosha417/nvim-lsp-file-operations.git"
     },
     "nvim-lspconfig": {
-      "rev": "6d27c288ff951e1e94cb5f91c800adeddf0dc0c2",
+      "rev": "45a3a444b710511c39abca3b60bb6e23a21e3de5",
       "src": "https://github.com/neovim/nvim-lspconfig.git"
     },
     "nvim-nio": {
@@ -184,11 +184,11 @@
       "src": "https://github.com/nguyenvukhang/nvim-toggler.git"
     },
     "nvim-tree.lua": {
-      "rev": "355bcc85a48f45b3e728219f10b880d569928965",
+      "rev": "0142ac30ba84fa6ebf7818b097b2addffed78668",
       "src": "https://github.com/nvim-tree/nvim-tree.lua.git"
     },
     "nvim-treesitter": {
-      "rev": "1a4f47b03dfe92d28de7d5654c67327ef008c9e6",
+      "rev": "d3e4a28b63961ba972b0945d66c73b6eec969953",
       "src": "https://github.com/nvim-treesitter/nvim-treesitter.git"
     },
     "nvim-ts-autotag": {
@@ -196,7 +196,7 @@
       "src": "https://github.com/windwp/nvim-ts-autotag.git"
     },
     "nvim-web-devicons": {
-      "rev": "58447c1fca354bbf184425e4a8d01deecbd6f3c4",
+      "rev": "ec309a0eaff6ea967e58c275996155ab5c16938d",
       "src": "https://github.com/nvim-tree/nvim-web-devicons.git"
     },
     "plenary.nvim": {
@@ -204,7 +204,7 @@
       "src": "https://github.com/nvim-lua/plenary.nvim.git"
     },
     "smart-splits.nvim": {
-      "rev": "07dbad410256f755e69ffd31cb8d122bcd6b91f7",
+      "rev": "ea553356370ea76dce189fb36947a424f124c04b",
       "src": "https://github.com/mrjones2014/smart-splits.nvim.git"
     },
     "snacks.nvim": {
