@@ -29,6 +29,8 @@ function createUI(createOptions: UIOptions = {}) {
     bg: (_color: string, text: string) => text,
     bold: (text: string) => text,
     getBgAnsi: () => "\u001b[48;2;34;34;34m",
+    getFgAnsi: (color: string) =>
+      color === "warning" ? "\u001b[38;2;255;200;0m" : "\u001b[38;2;90;90;90m",
     inverse: (text: string) => text,
   } as unknown as Theme;
   const tui = {
@@ -145,14 +147,19 @@ describe("floating extension dialogs", () => {
     const plain = rendered.map(stripTerminalSequences);
     expect(plain).toHaveLength(3);
     expect(plain[1]).toContain(" Permission required");
-    expect(plain.at(-1)).toBe(`▘${"▀".repeat(26)}▝`);
+    expect(plain.at(-1)).toBe("▀".repeat(28));
+    expect(
+      rendered.slice(0, -1).every((line) => line.startsWith("\u001b[48;2;255;200;0m \u001b[0m")),
+    ).toBe(true);
     expect(rendered.every((line) => visibleWidth(line) === 28)).toBe(true);
     expect(rendered[1]).toContain("\u001b[48;2;34;34;34m");
     expect(rendered[1]).toContain(CURSOR_MARKER);
 
-    const narrow = components[0]?.render(3) ?? [];
-    expect(narrow.map(stripTerminalSequences).at(-1)).toBe("▘▀▝");
-    expect(narrow.every((line) => visibleWidth(line) === 3)).toBe(true);
+    for (const width of [2, 3, 4, 5, 120]) {
+      const resized = components[0]?.render(width) ?? [];
+      expect(resized.map(stripTerminalSequences).at(-1)).toBe("▀".repeat(width));
+      expect(resized.every((line) => visibleWidth(line) === width)).toBe(true);
+    }
   });
   test("maps horizontal keys to choice navigation for permission prompts", async () => {
     const handledInput: string[] = [];
