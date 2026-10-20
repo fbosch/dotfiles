@@ -572,6 +572,8 @@ export default function authProfiles(
   let profileOperationTail: Promise<void> = Promise.resolve();
   let authStartupState: AuthStartupState = { profileOrder: [], observations: [] };
   let lastUsageStatus: UsageStatusPayload | undefined;
+  let usageGeneration = 0;
+  let usageContext: Pick<ExtensionContext, "mode"> | undefined;
   // Fallback-provider rows depend on the effective order, so observations are rebuilt
   // whenever either the usage status or the active selection changes.
   const observeUsage = (
@@ -619,19 +621,30 @@ export default function authProfiles(
       },
     });
 
-  const collectAndPublishUsage = async (cacheOnly = false): Promise<UsageStatusPayload> => {
+  const collectAndPublishUsage = async (): Promise<UsageStatusPayload> => {
+    const generation = ++usageGeneration;
+    const publish = (status: UsageStatusPayload) => {
+      if (generation !== usageGeneration) return;
+      authStartupState = {
+        ...authStartupState,
+        activeProfile,
+        observations: observeUsage(status),
+      };
+      authStartupOwner?.update();
+    };
     const status = await usageCollector({
       activeProfile,
-      cacheOnly,
       includeDefault: true,
       providerAdapter,
+      staleWhileRevalidate: true,
+      onRevalidated(status) {
+        publish(status);
+        if (generation === usageGeneration && usageContext) {
+          publishWezTermChange(usageContext, "usage", String(now()));
+        }
+      },
     });
-    authStartupState = {
-      ...authStartupState,
-      activeProfile,
-      observations: observeUsage(status),
-    };
-    authStartupOwner?.update();
+    publish(status);
     return status;
   };
 
@@ -784,12 +797,15 @@ export default function authProfiles(
   });
 
   pi.on("session_shutdown", () => {
+    usageGeneration += 1;
+    usageContext = undefined;
     authStartupOwner?.dispose();
     for (const dispose of loginBoundaries.values()) dispose();
     loginBoundaries.clear();
   });
 
   pi.on("session_start", async (_event, ctx) => {
+    usageContext = ctx;
     const resolution = await serializeProfileOperation(async () => {
       sessionProfile = restoreSessionProfile(ctx);
       const cached = startupSelection;
@@ -804,11 +820,6 @@ export default function authProfiles(
     });
     // Usage can update the header after activation; it must not hold up interactive startup.
     void serializeProfileOperation(async () => {
-      try {
-        await collectAndPublishUsage(true);
-      } catch {
-        // A missing cache does not prevent the live refresh.
-      }
       await collectAndPublishUsage();
     }).catch(() => {});
     if (resolution.selectionWarning) {
@@ -817,6 +828,13 @@ export default function authProfiles(
         "warning",
       );
     }
+  });
+
+  pi.on("agent_end", () => {
+    if (usageContext === undefined) return;
+    void collectAndPublishUsage().catch(() => {
+      // Keep the existing display when a background cache read fails.
+    });
   });
 
   const rotateCodexOwner = async (
@@ -1124,6 +1142,13 @@ export default function authProfiles(
   });
 
   if (providerAdapter.providerId === "openai-codex") {
-    registerResetCreditCommand(pi, { resolveCredential: resolveProfileCredential });
+    registerResetCreditCommand(pi, {
+      resolveCredential: resolveProfileCredential,
+      onConsumed: () => {
+        void collectAndPublishUsage().catch(() => {
+          // Reset consumption succeeded even if refreshing its display fails.
+        });
+      },
+    });
   }
 }

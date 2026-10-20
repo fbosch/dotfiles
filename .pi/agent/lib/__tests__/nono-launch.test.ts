@@ -228,6 +228,23 @@ test("honors XDG and hashline overrides while omitting missing integration paths
   expect(args).not.toContain(join(home, ".config", "pi-hashline-edit-pro"));
 });
 
+test.each([false, true])("grants gh extensions read-only with XDG override %s", (override) => {
+  const { root, cwd, agent, home } = fixture();
+  const data = override ? join(root, "xdg-data") : join(home, ".local", "share");
+  const extensions = join(data, "gh", "extensions");
+  mkdirSync(extensions, { recursive: true });
+  const environment = override ? { XDG_DATA_HOME: data } : {};
+  const args = launchArguments(cwd, agent, home, environment);
+  expect(args.slice(args.indexOf(extensions) - 1, args.indexOf(extensions) + 1)).toEqual([
+    "--read",
+    extensions,
+  ]);
+  expect(grants(args)).not.toContain(extensions);
+  expect(args).not.toContain(join(data, "gh"));
+  expect(args).not.toContain(join(home, ".config", "gh"));
+  expect(args).not.toContain(data);
+});
+
 test("grants direnv approval state as read-only", () => {
   const { cwd, agent, home } = fixture();
   const allowDirectory = join(home, ".local", "share", "direnv", "allow");

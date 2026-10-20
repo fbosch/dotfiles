@@ -50,6 +50,7 @@ type ResetCreditCommandOptions = {
   fetchFn?: FetchFn;
   now?: () => number;
   cachePath?: string;
+  onConsumed?: () => void;
 };
 
 type CommandOptions = {
@@ -416,6 +417,7 @@ export function registerResetCreditCommand(
         }
         invalidateUsageCache(options.cachePath ?? usageCachePath());
         publishWezTermChange(ctx, "usage", String(Date.now()));
+        options.onConsumed?.();
         const resetDescription =
           result.windowsReset === null
             ? "usage windows refreshed"

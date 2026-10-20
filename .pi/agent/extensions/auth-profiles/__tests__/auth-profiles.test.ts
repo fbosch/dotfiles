@@ -4,18 +4,30 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CredentialStore } from "@earendil-works/pi-ai";
-import type {
-  ExtensionAPI,
-  ExtensionCommandContext,
-  ExtensionContext,
+import {
+  createEventBus,
+  type ExtensionAPI,
+  type ExtensionCommandContext,
+  type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import type { Component } from "@earendil-works/pi-tui";
+import {
+  createStartupOwnerRequest,
+  readStartupOwnerSnapshot,
+  STARTUP_OWNER_REQUEST_EVENT,
+  STARTUP_OWNER_SNAPSHOT_EVENT,
+  type StartupOwnerSnapshot,
+} from "../../startup-header/contracts";
 import authProfiles from "../index";
 import type { ProfileSelection } from "../profile-selector";
 import { accountIdFor, authPathFor } from "../profile-store";
 import type { ProfileProviderAdapter } from "../provider-adapter";
 import { createCredentialStore, createOpenAiCodexProfileAdapter } from "../providers/openai-codex";
-import type { UsageStatusPayload } from "../usage-status-service";
+import {
+  AUTH_USAGE_OBSERVATION,
+  type CollectUsageStatusOptions,
+  type UsageStatusPayload,
+} from "../usage-status-service";
 
 type SessionStartHandler = (event: unknown, ctx: ExtensionContext) => Promise<void>;
 type BeforeModelAvailabilityHandler = (event: unknown, ctx: ExtensionContext) => Promise<void>;
@@ -335,6 +347,104 @@ describe("auth profile prompt status", () => {
     expect(profileSelections).toBe(2);
     expect(existsSync(authPathFor("default", agentDir))).toBe(false);
     expect(existsSync(authPathFor("work", agentDir))).toBe(false);
+  });
+
+  test("revalidates cached usage after activity and ignores obsolete updates", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-auth-usage-lifecycle-"));
+    temporaryDirectories.push(root);
+    const agentDir = join(root, "agent");
+    await mkdir(agentDir);
+    process.env.PI_CODING_AGENT_DIR = agentDir;
+    const events = createEventBus();
+    const snapshots: StartupOwnerSnapshot[] = [];
+    events.on(STARTUP_OWNER_SNAPSHOT_EVENT, (value) => {
+      const snapshot = readStartupOwnerSnapshot(value);
+      if (snapshot) snapshots.push(snapshot);
+    });
+    let sessionStart: SessionStartHandler | undefined;
+    let sessionShutdown: SessionStartHandler | undefined;
+    let agentEnd: SessionStartHandler | undefined;
+    const pi = {
+      events,
+      exec: async () => ({ code: 1, killed: false, stderr: "", stdout: "" }),
+      on(event: string, handler: SessionStartHandler) {
+        if (event === "session_start") sessionStart = handler;
+        if (event === "session_shutdown") sessionShutdown = handler;
+        if (event === "agent_end") agentEnd = handler;
+      },
+      registerCommand: () => undefined,
+    } as unknown as ExtensionAPI;
+    const currentTime = Date.now();
+    const payload = (count: number): UsageStatusPayload => ({
+      schema: "fbb.pi-auth-profiles-usage/v1",
+      profiles: [
+        {
+          profileLabel: "default",
+          active: true,
+          availableCount: count,
+          urgency: "unknown",
+          usage: [{ windowId: "primary", remaining: 80 }],
+          [AUTH_USAGE_OBSERVATION]: {
+            windows: [{ windowId: "primary", remaining: 80 }],
+            observedAt: currentTime,
+            staleAt: currentTime + 60_000,
+            bankedResetCount: count,
+          },
+        },
+      ],
+      diagnostics: [],
+    });
+    const reads: CollectUsageStatusOptions[] = [];
+    let cachedCount = 2;
+    authProfiles(pi, {
+      providerAdapter: testProviderAdapter(agentDir),
+      selectProfile: async () => ({
+        profile: "default",
+        profileOrder: ["default"],
+        source: "host default",
+        host: { name: "test-host", source: "system hostname" },
+        hostPreferences: [],
+        repositoryPreferences: [],
+      }),
+      usageCollector: async (options) => {
+        reads.push(options ?? {});
+        return payload(cachedCount);
+      },
+    });
+    const ctx = {
+      cwd: root,
+      isProjectTrusted: () => false,
+      modelRegistry: {
+        runtime: { login: async () => undefined, credentials: { store: new FakeAuthStore() } },
+        refresh: async () => undefined,
+      },
+      sessionManager: { getEntries: () => [], getHeader: () => ({ id: "s" }) },
+      ui: { notify: () => undefined, setStatus: () => undefined },
+    } as unknown as ExtensionContext;
+    const flush = () => new Promise<void>((resolve) => setImmediate(resolve));
+    try {
+      await sessionStart?.({}, ctx);
+      await flush();
+      events.emit(STARTUP_OWNER_REQUEST_EVENT, createStartupOwnerRequest("s", "g", "auth"));
+      expect(reads[0]?.staleWhileRevalidate).toBe(true);
+      expect(snapshots.at(-1)).toMatchObject({ payload: { profiles: [{ bankedResetCount: 2 }] } });
+      const oldUpdate = reads[0]?.onRevalidated;
+      cachedCount = 3;
+      oldUpdate?.(payload(3));
+      expect(snapshots.at(-1)).toMatchObject({ payload: { profiles: [{ bankedResetCount: 3 }] } });
+      await agentEnd?.({}, ctx);
+      await flush();
+      expect(reads).toHaveLength(2);
+      reads[1]?.onRevalidated?.(payload(4));
+      oldUpdate?.(payload(5));
+      expect(snapshots.at(-1)).toMatchObject({ payload: { profiles: [{ bankedResetCount: 4 }] } });
+      await sessionShutdown?.({}, ctx);
+      const count = snapshots.length;
+      reads[1]?.onRevalidated?.(payload(6));
+      expect(snapshots).toHaveLength(count);
+    } finally {
+      await sessionShutdown?.({}, ctx);
+    }
   });
 
   test("reports usage and reset-token status for all profiles", async () => {

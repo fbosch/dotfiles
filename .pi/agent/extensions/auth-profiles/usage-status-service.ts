@@ -35,6 +35,8 @@ const USAGE_CACHE_MS = 10_000;
 const RESET_CREDITS_CACHE_MS = 8 * 60 * 60 * 1_000;
 const MAX_CONCURRENT_REQUESTS = 4;
 const liveUsageByCredential = new Map<string, ProviderUsageSnapshot>();
+const CACHE_NEEDS_REVALIDATION: unique symbol = Symbol("usage-cache-needs-revalidation");
+const pendingRevalidations = new Map<string, Promise<UsageStatusPayload>>();
 
 export type FetchFn = ProviderFetch;
 type Urgency = UsageUrgency;
@@ -78,6 +80,7 @@ export type UsageStatusPayload = {
   schema: typeof OUTPUT_SCHEMA;
   profiles: ProfileUsageStatus[];
   diagnostics: Array<{ profileLabel: string; code: DiagnosticCode }>;
+  readonly [CACHE_NEEDS_REVALIDATION]?: boolean;
 };
 
 type UsageSnapshot = {
@@ -120,6 +123,7 @@ type AccountResult = {
   cached: CachedAccount;
   profile: Omit<ProfileUsageStatus, "profileLabel" | "active">;
   errors: DiagnosticCode[];
+  needsRevalidation: boolean;
 };
 
 export type CollectUsageStatusOptions = {
@@ -129,6 +133,8 @@ export type CollectUsageStatusOptions = {
   cacheOnly?: boolean;
   fetchFn?: FetchFn;
   forceUsageRefresh?: boolean;
+  staleWhileRevalidate?: boolean;
+  onRevalidated?: (status: UsageStatusPayload) => void;
   includeDefault?: boolean;
   includeResetCredits?: boolean;
   now?: () => number;
@@ -290,7 +296,7 @@ function writeUsageCache(path: string, cache: UsageCache): void {
   renameSync(temporaryPath, path);
 }
 
-function defaultCachePath(): string {
+export function defaultCachePath(): string {
   const cacheHome = process.env.XDG_CACHE_HOME || join(homedir(), ".cache");
   return join(cacheHome, "fbb", "pi-auth-profiles-usage.json");
 }
@@ -343,6 +349,17 @@ function displayUsageWindows(
     remaining,
     ...(resetsIn === undefined ? {} : { resetsIn }),
   }));
+}
+
+function resetCreditsNeedRefresh(cached: CachedAccount, now: number): boolean {
+  return (
+    cached.resetCreditsCheckedAt === undefined ||
+    now - cached.resetCreditsCheckedAt >= RESET_CREDITS_CACHE_MS ||
+    (cached.usage?.availableCount !== undefined &&
+      cached.resetCredits?.availableCount !== cached.usage.availableCount) ||
+    ((cached.resetCredits?.availableCount ?? 0) > 0 &&
+      cached.resetCredits?.nextExpiresAt === undefined)
+  );
 }
 
 async function refreshAccount(
@@ -400,18 +417,12 @@ async function refreshAccount(
   }
 
   const usageCount = next.usage?.availableCount;
-  const resetCreditsAreStale =
-    !next.resetCreditsCheckedAt || now - next.resetCreditsCheckedAt >= RESET_CREDITS_CACHE_MS;
-  const resetCreditsCountChanged =
-    usageCount !== undefined && next.resetCredits?.availableCount !== usageCount;
-  const resetCreditsExpiryMissing =
-    (next.resetCredits?.availableCount ?? 0) > 0 && next.resetCredits?.nextExpiresAt === undefined;
   if (
     includeResetCredits &&
     !cacheOnly &&
     credential.expiresAt > now &&
     adapter.fetchCredits !== undefined &&
-    (resetCreditsAreStale || resetCreditsCountChanged || resetCreditsExpiryMissing)
+    resetCreditsNeedRefresh(next, now)
   ) {
     try {
       next.resetCredits = await adapter.fetchCredits(credential, fetchFn, now);
@@ -421,7 +432,12 @@ async function refreshAccount(
     }
   }
 
-  const availableCount = next.resetCredits?.availableCount ?? usageCount;
+  // Credit details can outlive a failed refresh; keep the newest successful count.
+  const usageCountIsNewer =
+    usageCount !== undefined && (next.usageCheckedAt ?? 0) > (next.resetCreditsCheckedAt ?? 0);
+  const availableCount = usageCountIsNewer
+    ? usageCount
+    : (next.resetCredits?.availableCount ?? usageCount);
   const resetCredits =
     availableCount !== undefined && next.resetCredits?.availableCount === availableCount
       ? next.resetCredits
@@ -450,7 +466,19 @@ async function refreshAccount(
     });
     Object.defineProperty(profile, AUTH_USAGE_OBSERVATION, { value: observation });
   }
-  return { cached: next, profile, errors };
+  return {
+    cached: next,
+    profile,
+    errors,
+    needsRevalidation:
+      credential.expiresAt <= now ||
+      (cacheOnly && forceUsageRefresh) ||
+      next.usageCheckedAt === undefined ||
+      now - next.usageCheckedAt >= USAGE_CACHE_MS ||
+      (includeResetCredits &&
+        adapter.fetchCredits !== undefined &&
+        resetCreditsNeedRefresh(next, now)),
+  };
 }
 
 const ANTHROPIC_CACHE_MS = 5 * 60_000;
@@ -465,16 +493,16 @@ async function anthropicUsageFor(
   cacheOnly: boolean,
   previous: Record<string, CachedAccount>,
   cache: Record<string, CachedAccount>,
-): Promise<UsageWindowStatus[] | undefined> {
+): Promise<{ windows: UsageWindowStatus[] | undefined; needsRevalidation: boolean }> {
   let credential: AnthropicCredential | undefined = readAnthropicCredential(profileLabel, agentDir);
-  if (credential === undefined) return undefined;
+  if (credential === undefined) return { windows: undefined, needsRevalidation: false };
   const key = accountCredentialKey(ANTHROPIC_PROVIDER_ID, credential.identity);
   const cached = previous[key];
   if (cached) cache[key] = cached;
   const cachedWindows = cached?.usage ? anthropicDisplayWindows(cached.usage.windows) : undefined;
   const attemptedAt = cached?.attemptedAt ?? cached?.usageCheckedAt;
   const fresh = attemptedAt !== undefined && now - attemptedAt < ANTHROPIC_CACHE_MS;
-  if (cacheOnly || fresh) return cachedWindows;
+  if (cacheOnly || fresh) return { windows: cachedWindows, needsRevalidation: !fresh };
   try {
     if (credential.expiresAt <= now) {
       credential = await refreshAnthropicCredential(credential, agentDir, false);
@@ -489,14 +517,14 @@ async function anthropicUsageFor(
     }
     if (windows.length === 0) {
       cache[key] = { credentialKey: key, attemptedAt: now };
-      return undefined;
+      return { windows: undefined, needsRevalidation: false };
     }
     cache[key] = { credentialKey: key, usage: { windows }, usageCheckedAt: now, attemptedAt: now };
-    return anthropicDisplayWindows(windows);
+    return { windows: anthropicDisplayWindows(windows), needsRevalidation: false };
   } catch {
     // Back off for a full interval so a failing endpoint is not retried on every render.
     cache[key] = { ...(cached ?? { credentialKey: key }), attemptedAt: now };
-    return cachedWindows;
+    return { windows: cachedWindows, needsRevalidation: false };
   }
 }
 
@@ -518,9 +546,51 @@ async function mapWithConcurrency<T, R>(
   return results;
 }
 
+export function usageStatusNeedsRevalidation(status: UsageStatusPayload): boolean {
+  return status[CACHE_NEEDS_REVALIDATION] === true;
+}
+
 export async function collectUsageStatus(
   options: CollectUsageStatusOptions = {},
 ): Promise<UsageStatusPayload> {
+  if (options.staleWhileRevalidate === true && options.cacheOnly !== true) {
+    const cached = await collectUsageStatus({ ...options, cacheOnly: true });
+    if (usageStatusNeedsRevalidation(cached)) {
+      const key = JSON.stringify([
+        options.cachePath ?? defaultCachePath(),
+        options.agentDir ?? getAgentDir(),
+        options.activeProfile,
+        options.profileLabels,
+        options.includeDefault,
+        options.includeResetCredits,
+        options.providerAdapter?.providerId,
+      ]);
+      let pending = pendingRevalidations.get(key);
+      if (pending === undefined) {
+        const { onRevalidated: _callback, ...refreshOptions } = options;
+        // Defer work until callers have published the cached snapshot.
+        pending = new Promise<void>((resolve) => setImmediate(resolve))
+          .then(() => collectUsageStatus({ ...refreshOptions, staleWhileRevalidate: false }))
+          .finally(() => {
+            pendingRevalidations.delete(key);
+          });
+        pendingRevalidations.set(key, pending);
+      }
+      void pending
+        .then((status) => {
+          const failures = new Set(status.diagnostics.map(({ profileLabel }) => profileLabel));
+          const labels = new Set(status.profiles.map(({ profileLabel }) => profileLabel));
+          const retained = cached.profiles.filter(
+            ({ profileLabel }) => failures.has(profileLabel) && !labels.has(profileLabel),
+          );
+          options.onRevalidated?.({ ...status, profiles: [...status.profiles, ...retained] });
+        })
+        .catch(() => {
+          // Background failures retain the last successful snapshot for the next read.
+        });
+    }
+    return cached;
+  }
   const agentDir = options.agentDir ?? getAgentDir();
   const fetchFn = options.fetchFn ?? fetch;
   const now = (options.now ?? Date.now)();
@@ -533,6 +603,7 @@ export async function collectUsageStatus(
   // Profiles holding only non-Codex credentials still need an indicator entry.
   const codexlessProfiles: string[] = [];
 
+  const failedCredentialKeys = new Set<string>();
   for (const rawName of listProfiles(agentDir)) {
     if (rawName === DEFAULT_PROFILE && options.includeDefault !== true) continue;
 
@@ -569,6 +640,7 @@ export async function collectUsageStatus(
           refreshed = await adapter.refreshCredential({ expectedIdentity, profileLabel });
         } catch {
           diagnostics.push({ profileLabel, code: "credential-refresh-failed" });
+          failedCredentialKeys.add(accountCredentialKey(adapter.providerId, expectedIdentity));
           return undefined;
         }
         if (refreshed.identity !== expectedIdentity) {
@@ -643,6 +715,11 @@ export async function collectUsageStatus(
     schema: CACHE_SCHEMA,
     accounts: requestedProfiles ? { ...cache.accounts } : {},
   };
+  // Credential refresh failures must not erase the last successful display snapshot.
+  for (const key of failedCredentialKeys) {
+    const retained = cache.accounts[key];
+    if (retained) nextCache.accounts[key] = retained;
+  }
   for (const [credentialKey, result] of resultsByKey) {
     nextCache.accounts[credentialKey] = result.cached;
   }
@@ -687,7 +764,7 @@ export async function collectUsageStatus(
     ),
   );
   profiles.forEach((profile, index) => {
-    const windows = anthropicUsage[index];
+    const windows = anthropicUsage[index]?.windows;
     if (windows) profile.anthropicUsage = windows;
   });
 
@@ -699,5 +776,11 @@ export async function collectUsageStatus(
     }
   }
 
-  return { schema: OUTPUT_SCHEMA, profiles, diagnostics };
+  const status: UsageStatusPayload = { schema: OUTPUT_SCHEMA, profiles, diagnostics };
+  Object.defineProperty(status, CACHE_NEEDS_REVALIDATION, {
+    value:
+      accountResults.some((result) => result.needsRevalidation) ||
+      anthropicUsage.some((result) => result.needsRevalidation),
+  });
+  return status;
 }

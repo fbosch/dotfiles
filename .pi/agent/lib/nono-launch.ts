@@ -67,6 +67,12 @@ export function launchArguments(
   const cacheHome = environment.XDG_CACHE_HOME || join(home, ".cache");
   const integrationGrants: string[] = [];
 
+  // gh discovers installed MCP extensions here; expose code, not its credential directory.
+  const ghExtensions = join(dataHome, "gh", "extensions");
+  if (existingDirectory(ghExtensions) !== undefined) {
+    integrationGrants.push("--read", ghExtensions);
+  }
+
   // direnv checks approval hashes here; keep the grant narrow and preserve XDG symlink aliases.
   const direnvAllowPath = join(dataHome, "direnv", "allow");
   const hasDirenvAllowDirectory = existingDirectory(direnvAllowPath) !== undefined;

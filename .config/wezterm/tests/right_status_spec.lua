@@ -163,6 +163,14 @@ local function find_text(items, text)
 	return false
 end
 
+local function status_text(items)
+	local parts = {}
+	for _, item in ipairs(items) do
+		table.insert(parts, item.Text or "")
+	end
+	return table.concat(parts)
+end
+
 local function color_before_text(items, text)
 	for index, item in ipairs(items) do
 		if item.Text == text then
@@ -275,11 +283,16 @@ assert_eq(type(captured_status), "table", "profile change rerenders status")
 mock_credit_count = 1
 captured_status = nil
 user_var_changed(window, active_pane, "pi_usage_changed")
-assert_eq(find_text(captured_status, "¹"), true, "usage refresh updates credit count")
+assert_eq(status_text(captured_status):find("ct¹", 1, true) ~= nil, true, "usage refresh updates profile credit count")
 
 mock_credit_count = 0
 captured_status = nil
-update_status(window)
+user_var_changed(window, active_pane, "pi_usage_changed")
+assert_eq(
+	status_text(captured_status):find("ct  ", 1, true) ~= nil,
+	true,
+	"usage refresh clears profile credit count"
+)
 assert_eq(find_text(captured_status, "⁰"), false, "zero reset credits omitted")
 
 mock_profile_alias = "renamed-profile"

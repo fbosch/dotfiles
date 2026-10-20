@@ -1,6 +1,10 @@
 {
   "autoEnableCodemode": false,
   "mcpServers": {
+    "cloudflare": {
+      "url": "https://mcp.cloudflare.com/mcp",
+      "exposure": "deferred"
+    },
     "github": {
       "command": "gh",
       "args": [

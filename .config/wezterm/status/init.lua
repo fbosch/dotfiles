@@ -2,7 +2,7 @@ local is_windows = package.config:sub(0, 1) == "\\"
 local wezterm = require("wezterm")
 local agent_deck = require("agent")
 local palette = require("theme")
-local codex = require("status.codex")
+local ai_usage = require("status.ai_usage")
 local workhours = require("status.workhours")
 
 local color_gray = { Color = palette.semantic.muted }
@@ -79,7 +79,7 @@ local function update_right_status(window, active_pane)
 		{ Text = waiting_count > 0 and "▏" or "" },
 	}
 
-	codex.append(status, active_pane)
+	ai_usage.append(status, active_pane)
 
 	table.insert(status, { Foreground = color_gray })
 	table.insert(status, { Text = date })
@@ -111,7 +111,7 @@ return function()
 		wezterm.on("window-config-reloaded", update_right_status)
 		wezterm.on("update-right-status", update_right_status)
 		wezterm.on("user-var-changed", function(window, pane, name)
-			if codex.handle_user_var(name) then
+			if ai_usage.handle_user_var(name) then
 				update_right_status(window, pane)
 			end
 		end)

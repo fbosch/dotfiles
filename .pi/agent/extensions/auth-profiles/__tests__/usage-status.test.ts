@@ -160,6 +160,97 @@ describe("auth profile usage status", () => {
     );
   });
 
+  test("keeps reset credit counts in sync with newer usage when credit refresh fails", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-auth-profile-credit-sync-"));
+    temporaryDirectories.push(root);
+    const agentDir = join(root, "agent");
+    const profilesDir = join(agentDir, "auth-profiles");
+    const cachePath = join(root, "usage.json");
+    await mkdir(profilesDir, { recursive: true });
+    await writeCredential(join(profilesDir, "work.json"), {
+      access: "work-access-token",
+      accountId: "account-work",
+    });
+    const nextExpiresAt = new Date(now + 6 * 60 * 60 * 1_000).toISOString();
+    await collectUsageStatus({
+      agentDir,
+      cachePath,
+      fetchFn: async (input) =>
+        String(input).endsWith("/usage")
+          ? usageResponse(57, 2)
+          : resetCreditsResponse(2, nextExpiresAt),
+      now: () => now,
+    });
+
+    for (const [index, count] of [1, 0].entries()) {
+      const at = now + (index + 1) * 10_000;
+      const payload = await collectUsageStatus({
+        agentDir,
+        cachePath,
+        fetchFn: async (input) => {
+          if (String(input).endsWith("/usage")) return usageResponse(57, count);
+          throw new Error("credit details unavailable");
+        },
+        now: () => at,
+      });
+      expect(payload.profiles[0]).toMatchObject({ availableCount: count, urgency: "unknown" });
+      expect(payload.profiles[0]?.[AUTH_USAGE_OBSERVATION]).toMatchObject({
+        observedAt: at,
+        bankedResetCount: count,
+      });
+      expect(payload.diagnostics).toEqual([
+        { profileLabel: "work", code: "reset-credits-request-failed" },
+      ]);
+
+      const cached = await collectUsageStatus({
+        agentDir,
+        cachePath,
+        cacheOnly: true,
+        now: () => at,
+      });
+      expect(cached.profiles[0]?.availableCount).toBe(count);
+    }
+  });
+
+  test("uses newer credit details when usage refresh fails", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pi-auth-profile-credit-sync-"));
+    temporaryDirectories.push(root);
+    const agentDir = join(root, "agent");
+    const profilesDir = join(agentDir, "auth-profiles");
+    const cachePath = join(root, "usage.json");
+    await mkdir(profilesDir, { recursive: true });
+    await writeCredential(join(profilesDir, "work.json"), {
+      access: "work-access-token",
+      accountId: "account-work",
+    });
+    await collectUsageStatus({
+      agentDir,
+      cachePath,
+      includeResetCredits: false,
+      fetchFn: async () => usageResponse(57, 2),
+      now: () => now,
+    });
+
+    const nextExpiresAt = new Date(now + 6 * 60 * 60 * 1_000).toISOString();
+    const payload = await collectUsageStatus({
+      agentDir,
+      cachePath,
+      forceUsageRefresh: true,
+      fetchFn: async (input) => {
+        if (String(input).endsWith("/usage")) throw new Error("usage unavailable");
+        return resetCreditsResponse(1, nextExpiresAt);
+      },
+      now: () => now + 1_000,
+    });
+    expect(payload.profiles[0]).toMatchObject({
+      availableCount: 1,
+      nextExpiresAt,
+      urgency: "urgent",
+    });
+    expect(payload.profiles[0]?.[AUTH_USAGE_OBSERVATION]?.bankedResetCount).toBe(1);
+    expect(payload.diagnostics).toEqual([{ profileLabel: "work", code: "usage-request-failed" }]);
+  });
+
   test("lists a profile that holds only non-Codex credentials", async () => {
     const root = await mkdtemp(join(tmpdir(), "pi-auth-profile-usage-"));
     temporaryDirectories.push(root);
