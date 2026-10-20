@@ -105,7 +105,6 @@ bind.register(
 -- Desktop and session controls
 bind.register(main("SHIFT + C"), "hyprpicker -a")
 bind.register(main("N"), "swaync-client -t")
-bind.register("CTRL + ALT + L", "hyprlock")
 bind.register("PAUSE", "wl-freeze -a")
 bind.register(main("SHIFT + P"), toggle_powersave_mode.toggle_powersave_mode)
 bind.register(main("M"), confirm_exit.confirm_exit)
