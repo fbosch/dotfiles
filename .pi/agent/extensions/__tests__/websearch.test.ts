@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import type { ExtensionAPI, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import webSearchExtension, {
   parseMcpResponse,
@@ -18,13 +18,65 @@ describe("websearch", () => {
     expect(tool?.defaultActive).toBe(false);
   });
 
-  test("honors an explicit provider override", () => {
-    expect(selectWebSearchProvider("session", "exa")).toBe("exa");
-    expect(selectWebSearchProvider("session", "parallel")).toBe("parallel");
-    expect(() => selectWebSearchProvider("session", "paralell")).toThrow(
-      "Invalid web search provider",
+  describe("provider selection", () => {
+    const previousPiProvider = process.env.PI_WEBSEARCH_PROVIDER;
+    const previousOpenCodeProvider = process.env.OPENCODE_WEBSEARCH_PROVIDER;
+
+    beforeEach(() => {
+      delete process.env.PI_WEBSEARCH_PROVIDER;
+      delete process.env.OPENCODE_WEBSEARCH_PROVIDER;
+    });
+
+    afterEach(() => {
+      if (previousPiProvider === undefined) delete process.env.PI_WEBSEARCH_PROVIDER;
+      else process.env.PI_WEBSEARCH_PROVIDER = previousPiProvider;
+      if (previousOpenCodeProvider === undefined) delete process.env.OPENCODE_WEBSEARCH_PROVIDER;
+      else process.env.OPENCODE_WEBSEARCH_PROVIDER = previousOpenCodeProvider;
+    });
+
+    test("defaults to Exa with or without an explicit result count", () => {
+      expect(selectWebSearchProvider()).toBe("exa");
+      expect(selectProviderForSearch({ query: "topic" })).toBe("exa");
+      expect(selectProviderForSearch({ query: "topic", numResults: 2 })).toBe("exa");
+    });
+
+    test("honors an explicit provider override", () => {
+      expect(selectWebSearchProvider("exa")).toBe("exa");
+      expect(selectWebSearchProvider("parallel")).toBe("parallel");
+    });
+
+    test.each(["PI_WEBSEARCH_PROVIDER", "OPENCODE_WEBSEARCH_PROVIDER"])(
+      "honors the %s environment override",
+      (variable) => {
+        process.env[variable] = "parallel";
+        expect(selectProviderForSearch({ query: "topic" })).toBe("parallel");
+        expect(() => selectProviderForSearch({ query: "topic", numResults: 2 })).toThrow(
+          "Parallel web search does not support numResults",
+        );
+
+        process.env[variable] = "exa";
+        expect(selectProviderForSearch({ query: "topic", numResults: 2 })).toBe("exa");
+      },
     );
-    expect(selectProviderForSearch({ query: "topic", numResults: 2 }, "session")).toBe("exa");
+
+    test("gives the Pi override precedence", () => {
+      process.env.OPENCODE_WEBSEARCH_PROVIDER = "parallel";
+      process.env.PI_WEBSEARCH_PROVIDER = "exa";
+      expect(selectProviderForSearch({ query: "topic" })).toBe("exa");
+    });
+
+    test("treats an empty override as the default", () => {
+      process.env.PI_WEBSEARCH_PROVIDER = "";
+      expect(selectProviderForSearch({ query: "topic" })).toBe("exa");
+    });
+
+    test("rejects invalid overrides even when a result count is supplied", () => {
+      expect(() => selectWebSearchProvider("paralell")).toThrow("Invalid web search provider");
+      process.env.PI_WEBSEARCH_PROVIDER = "paralell";
+      expect(() => selectProviderForSearch({ query: "topic", numResults: 2 })).toThrow(
+        "Invalid web search provider",
+      );
+    });
   });
 
   test("parses JSON and server-sent event MCP responses", () => {

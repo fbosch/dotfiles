@@ -56,40 +56,22 @@ const WebSearchParamsSchema = {
   },
 };
 
-function stableParity(value: string): number {
-  let hash = 2_166_136_261;
-  for (const character of value) {
-    hash ^= character.codePointAt(0) ?? 0;
-    hash = Math.imul(hash, 16_777_619);
-  }
-  return hash >>> 0;
-}
-
 export function selectWebSearchProvider(
-  sessionId: string,
   override = process.env.PI_WEBSEARCH_PROVIDER ?? process.env.OPENCODE_WEBSEARCH_PROVIDER,
 ): WebSearchProvider {
   if (override === "exa" || override === "parallel") return override;
   if (override !== undefined && override.length > 0) {
     throw new Error(`Invalid web search provider: ${override}`);
   }
-  return stableParity(sessionId) % 2 === 0 ? "exa" : "parallel";
+  return "exa";
 }
 
-export function selectProviderForSearch(
-  params: WebSearchParams,
-  sessionId: string,
-): WebSearchProvider {
-  const override = process.env.PI_WEBSEARCH_PROVIDER ?? process.env.OPENCODE_WEBSEARCH_PROVIDER;
-  if (override !== undefined && override.length > 0) {
-    const provider = selectWebSearchProvider(sessionId, override);
-    if (provider === "parallel" && params.numResults !== undefined) {
-      throw new Error("Parallel web search does not support numResults");
-    }
-    return provider;
+export function selectProviderForSearch(params: WebSearchParams): WebSearchProvider {
+  const provider = selectWebSearchProvider();
+  if (provider === "parallel" && params.numResults !== undefined) {
+    throw new Error("Parallel web search does not support numResults");
   }
-  if (params.numResults !== undefined) return "exa";
-  return selectWebSearchProvider(sessionId);
+  return provider;
 }
 
 function parseMcpPayload(value: unknown, expectedId = 1): string | undefined {
@@ -296,7 +278,7 @@ export default function webSearchExtension(pi: ExtensionAPI): void {
         if (query.length === 0) throw new Error("Web search query must not be empty");
 
         const sessionId = ctx.sessionManager.getSessionId();
-        const provider = selectProviderForSearch(params, sessionId);
+        const provider = selectProviderForSearch(params);
         const currentModelName = modelName(ctx);
         const result = await searchWeb(
           { ...params, query },
