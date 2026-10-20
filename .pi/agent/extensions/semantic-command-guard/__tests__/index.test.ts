@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -43,6 +43,7 @@ function harness(
   request: typeof import("../../../lib/classifier").requestClassifier = async () => FLAGGED,
   loadSettings: () => unknown = () => ENABLED,
   confirm: (signal: AbortSignal | undefined) => Promise<boolean> = async () => false,
+  cwd: string = "/private-workspace",
 ) {
   const handlers = new Map<string, (event: unknown, ctx: ExtensionContext) => unknown>();
   const notifications: string[] = [];
@@ -50,7 +51,7 @@ function harness(
   const controller = new AbortController();
   const ctx = {
     mode: "rpc",
-    cwd: "/private-workspace",
+    cwd: cwd,
     hasUI: true,
     signal: controller.signal,
     modelRegistry: {},
@@ -132,14 +133,14 @@ describe("local inspection", () => {
     "echo 'rm -rf src'",
     "git status",
     "git diff",
-    "rm -rf dist",
-    "rm -rf ./build/",
-    "rm -rf .cache",
   ])("skips routine commands: %s", (command) => {
     expect(inspectCommand(command).kind).toBe("skip");
   });
   test.each([
     "rm -rf src",
+    "rm -rf dist",
+    "rm -rf ./build/",
+    "rm -rf .cache",
     "sudo rm -rf ~/Documents",
     "git reset --hard",
     "git push --force",
@@ -415,6 +416,51 @@ const CLEAR: ClassifierRequestResult = {
 };
 
 describe("confirm mode", () => {
+  test("allows verified repo-local deletion without classifier approval", async () => {
+    const root = mkdtempSync(join(tmpdir(), "command-guard-repo-"));
+    roots.push(root);
+    mkdirSync(join(root, ".git"));
+    mkdirSync(join(root, "src"));
+    let requests = 0;
+    const h = harness(
+      async () => {
+        requests += 1;
+        return FLAGGED;
+      },
+      () => CONFIRM,
+      undefined,
+      root,
+    );
+
+    expect(await h.call("rm -rf src")).toBeUndefined();
+    expect(requests).toBe(0);
+    expect(h.prompts).toHaveLength(0);
+  });
+
+  test("keeps outside and unresolved rm targets under confirmation", async () => {
+    const root = mkdtempSync(join(tmpdir(), "command-guard-repo-"));
+    roots.push(root);
+    mkdirSync(join(root, ".git"));
+    let requests = 0;
+    const h = harness(
+      async () => {
+        requests += 1;
+        return FLAGGED;
+      },
+      () => CONFIRM,
+      undefined,
+      root,
+    );
+
+    for (const command of ["rm -rf ../outside", 'rm -rf "$HOME"']) {
+      expect(await h.call(command)).toEqual({
+        block: true,
+        reason: "Bash command was not approved.",
+      });
+    }
+    expect(requests).toBe(2);
+    expect(h.prompts).toHaveLength(2);
+  });
   test.each([
     { key: "\r", approved: true },
     { key: "\u001b", approved: false },

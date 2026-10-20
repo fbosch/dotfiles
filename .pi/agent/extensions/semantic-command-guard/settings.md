@@ -78,8 +78,11 @@ override for those commands.
 The guard handles only bash calls, including calls nested inside codemode.
 The codemode script itself is not classified. Local lexical filters select
 deletion, overwriting, destructive Git operations, network transfers, and
-inline code. Simple reads, ordinary Git inspection, and single-target deletion
-of `dist`, `build`, or `.cache` skip classification.
+inline code. Simple reads and ordinary Git inspection skip classification. A
+standalone `rm` skips classification only when its literal targets resolve
+strictly inside the Git worktree. Shell expansion, globs, compound commands,
+worktree-root or outside targets, and paths resolving outside through symlinks
+remain under review.
 
 Commands longer than 16,000 characters are not truncated. Shadow mode skips
 them with a warning; confirm mode blocks them.

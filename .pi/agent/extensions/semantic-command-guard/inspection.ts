@@ -62,8 +62,6 @@ export function inspectCommand(command: string): Inspection {
   // Use a shell parser before claiming comprehensive command coverage.
   if (/^\s*(?:cat|ls|pwd|rg|grep|head|tail|wc|echo|printf)\b[^;|&$`\n<>]*$/.test(command))
     return { kind: "skip" };
-  if (/^\s*rm\s+(?:-[rfRF]+\s+)*(?:\.\/)?(?:dist|build|\.cache)\/?\s*$/.test(command))
-    return { kind: "skip" };
 
   const evidence: string[] = [];
   const addEvidence = (label: string, match: RegExpMatchArray) => {
