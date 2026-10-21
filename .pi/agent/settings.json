@@ -151,12 +151,12 @@
     }
   },
   "packages": [
-    "npm:pi-hashline-edit-pro@6.5.0",
+    "npm:pi-hashline-edit-pro@6.5.1",
     "npm:pi-codex-goal@latest",
     "npm:pi-context-view@0.7.2",
     "npm:@ff-labs/pi-fff@0.11.0",
     "npm:@gotgenes/pi-subagents@25.0.1",
-    "npm:pi-web-access@0.43.0",
+    "npm:pi-web-access@0.44.0",
     "npm:pi-lens@4.4.4",
     "npm:pi-compaction-model@0.1.0",
     "npm:pi-codemode-compact@0.3.0"

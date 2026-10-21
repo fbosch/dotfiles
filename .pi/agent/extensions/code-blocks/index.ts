@@ -563,17 +563,17 @@ function renderCodePanel(
   const numberWidth = Math.max(3, String(maxLineNumber).length);
   const showLineNumbers =
     descriptor.isDiff || (descriptor.language !== "bash" && descriptor.language !== "fish");
-  const gutterWidth = showLineNumbers && width > numberWidth + 2 ? numberWidth + 2 : 0;
-  const contentWidth = Math.max(1, width - gutterWidth);
+  const padding = width > 1 ? " " : "";
+  const availableWidth = width - padding.length;
+  const gutterWidth = showLineNumbers && availableWidth > numberWidth + 2 ? numberWidth + 2 : 0;
+  const contentWidth = Math.max(1, availableWidth - gutterWidth);
   const headerBackground = activeTheme?.getBgAnsi("customMessageBg") ?? "";
   const lines = [
-    paintBackground("", width, headerBackground),
     paintBackground(
       renderCodeHeader(descriptor, code, width, activeTheme),
       width,
       headerBackground,
     ),
-    paintBackground("", width, headerBackground),
     paintBackground("", width, activeTheme?.getBgAnsi("userMessageBg") ?? ""),
   ];
 
@@ -590,7 +590,7 @@ function renderCodePanel(
           : visualIndex === 0
             ? renderGutter(row, numberWidth, activeTheme)
             : " ".repeat(gutterWidth);
-      lines.push(paintBackground(`${gutter}${visualLine}`, width, background));
+      lines.push(paintBackground(`${padding}${gutter}${visualLine}`, width, background));
     }
   }
 
