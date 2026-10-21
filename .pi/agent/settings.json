@@ -145,9 +145,6 @@
       "threshold": 0.72,
       "timeoutMs": 2400,
       "maxRecommendations": 3
-    },
-    "recommendAgent": {
-      "enabled": true
     }
   },
   "packages": [

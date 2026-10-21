@@ -7,7 +7,7 @@ import {
   SUBAGENT_CHECKPOINT_TOOL_NAME,
   type SubagentCheckpointInput,
 } from "../checkpoint";
-import recommendAgentExtension from "../index";
+import subagentCheckpointExtension from "../index";
 
 const choices = ["continue", "narrow", "redirect", "escalate", "abstain"] as const;
 const input: SubagentCheckpointInput = {
@@ -202,28 +202,20 @@ describe("assess_subagent_checkpoint", () => {
     expect(await pending).toMatchObject({ status: "cancelled", duplicate: false });
   });
 
-  test("registers the explicit checkpoint tool without removing the existing route hook", () => {
-    const eventNames: string[] = [];
+  test("registers the explicit checkpoint tool", () => {
     const registeredTools: unknown[] = [];
     const pi = {
-      on(name: string) {
-        eventNames.push(name);
-      },
       registerTool(tool: unknown) {
         registeredTools.push(tool);
       },
     } as unknown as ExtensionAPI;
 
-    recommendAgentExtension(pi);
+    subagentCheckpointExtension(pi);
 
-    expect(eventNames).toContain("tool_call");
     expect(
       registeredTools.filter(
         (tool) => isRecord(tool) && tool.name === SUBAGENT_CHECKPOINT_TOOL_NAME,
       ),
     ).toHaveLength(1);
-    expect(
-      registeredTools.filter((tool) => isRecord(tool) && tool.name === "recommend_agent"),
-    ).toHaveLength(0);
   });
 });

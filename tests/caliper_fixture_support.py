@@ -18,7 +18,7 @@ def seed_repo(repo: Path) -> Path:
         agent / "npm/node_modules/@gotgenes/pi-subagents/src/index.ts",
         agent / "extensions/openai-capabilities.ts",
         agent / "extensions/instruction-fragments.ts",
-        agent / "extensions/recommend-agent/index.ts",
+        agent / "extensions/subagent-checkpoint/index.ts",
         fixture / "fixture.ts",
     ):
         path.parent.mkdir(parents=True, exist_ok=True)

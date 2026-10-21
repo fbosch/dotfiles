@@ -45,7 +45,7 @@ def prepare(repo: Path, run_root: Path, evidence: Path, without: bool,
         agent / "npm/node_modules/@gotgenes/pi-subagents/src/index.ts",
         agent / "extensions/openai-capabilities.ts",
         agent / "extensions/instruction-fragments.ts",
-        agent / "extensions/recommend-agent/index.ts",
+        agent / "extensions/subagent-checkpoint/index.ts",
         fixture / "fixture.ts",
     ]
     for path in extensions:
@@ -99,7 +99,7 @@ def configure_attempt(home: Path, agent: Path, config: dict, trace: Path, case: 
     catalog = config["catalog"]
     settings = {
         "packages": [], "extensions": config["extensions"], "skills": [], "prompts": [],
-        "defaultProjectTrust": "always", "classifier": {"recommendAgent": {"enabled": True}},
+        "defaultProjectTrust": "always",
     }
     agent.mkdir(parents=True, exist_ok=True)
     (agent / "settings.json").write_text(json.dumps(settings))

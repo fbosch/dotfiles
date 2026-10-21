@@ -87,7 +87,6 @@ presets, not the quality of every production agent prompt.
 at a gate while the parent calls the classifier and sends native steering. Only successful
 steering releases it. The worker must acknowledge a random marker disclosed
 only to the parent after the gate was reached, then read the assigned file.
-The `@quick` request deliberately bypasses delegation routing in this case.
 
 The natural finding/blocker prompts do not mention checkpoints or steering.
 They grade evidence-backed decisions after worker reports. The instruction says
@@ -98,7 +97,7 @@ Routine progress is a decision probe, not a live-worker scenario.
 ## Isolation and evidence
 
 Each attempt has a disposable HOME and synthetic workspace. The extension allowlist contains native subagents, the model translation hook,
-instruction fragments, recommend-agent, and the fixture. The actual instruction
+instruction fragments, subagent-checkpoint, and the fixture. The actual instruction
 loader injects only the copied orchestration index; model tools can explicitly
 read the copied sibling references as well as the copied swarm skill. Model tools
 cannot execute shell commands, write files, or read credentials, specs, traces,

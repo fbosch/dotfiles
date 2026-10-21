@@ -1,5 +1,4 @@
 import { resolveClassifierEnabled, resolveClassifierPreferences } from "../../lib/classifier";
-import { resolveRecommendAgentConfig } from "../recommend-agent/settings";
 import { resolveSkillSelectionConfig } from "../skill-discovery/selection-config";
 import { resolveClassifierToolDiscoveryConfig } from "../tool-discovery";
 import type { StartupOwnerState } from "./contracts";
@@ -27,9 +26,7 @@ export function resolveClassifierStartupStatus(
 
   const toolDiscovery = resolveClassifierToolDiscoveryConfig(globalSettings, projectSettings);
   const skillSelection = resolveSkillSelectionConfig(globalSettings, projectSettings);
-  const recommendAgent = resolveRecommendAgentConfig(globalSettings);
-  if (!toolDiscovery.enabled && !skillSelection.enabled && !recommendAgent.enabled)
-    return undefined;
+  if (!toolDiscovery.enabled && !skillSelection.enabled) return undefined;
 
   if (typeof modelRegistry !== "object" || modelRegistry === null) return { state: "unavailable" };
   const reader = modelRegistry as ProviderAuthStatusReader;

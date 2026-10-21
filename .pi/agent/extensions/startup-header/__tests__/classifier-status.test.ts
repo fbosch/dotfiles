@@ -5,7 +5,6 @@ const disabledSettings = {
   classifier: {
     toolDiscovery: { enabled: false },
     skillSelection: { enabled: false },
-    recommendAgent: { enabled: false },
   },
 };
 
@@ -86,14 +85,6 @@ describe("startup header Classifier status", () => {
   });
 
   test("degrades an enabled feature when Gateway credentials are missing", () => {
-    expect(
-      resolveClassifierStartupStatus(
-        disabledSettings,
-        { classifier: { recommendAgent: { enabled: true } } },
-        { getProviderAuthStatus: () => ({ configured: false }) },
-      ),
-    ).toBeUndefined();
-
     expect(
       resolveClassifierStartupStatus(
         { classifier: { toolDiscovery: { enabled: true } } },

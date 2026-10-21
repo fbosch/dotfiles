@@ -2,15 +2,7 @@
 
 - When a specialized agent fits the task, prefer it over a generic `general-purpose` or `general` agent. Use a generic agent only when no specialized agent applies or the task genuinely spans several specialties.
 - Delegate visualization to `visualizer` when requested directly or indirectly, or when a visual would help explain the response. Route before visualization-specific tool discovery, data collection, aggregation, or rendering; simplicity is not a reason to do that work in the parent. Pass the question, known evidence or bounded source locations, and constraints. The worker owns collection through visual validation; the parent resolves material ambiguity and publishes the validated result.
-- After any required recommendation and availability/permission check, launch the selected specialist using the context already supplied. When the user names artifacts for delegated inspection, pass those paths directly; do not read the artifacts first to prepare the worker's prompt. Pass already-collected evidence without collecting it again. If delegation is unavailable or prohibited, report that limitation before using a permitted direct fallback.
-
-## Agent recommendations
-
-- The recommend-agent extension automatically evaluates at most the first eligible native `subagent` delegation per user turn with shared classifier routing immediately before execution. Do not call a separate recommendation tool; the old `recommend_agent` tool is intentionally not registered.
-- Classifier agreement lets the proposed `subagent_type` execute. A disagreement or `stay` result blocks once with a concise advisory so the primary can reconsider; it never substitutes or spawns another agent. The one-evaluation budget resets for each user turn and session start, so subsequent delegations in that turn are intentionally uninspected.
-- Inference failure, abstention, disabled settings, or malformed delegation input fail open. The hook uses a bounded, credential/path-redacted prefix of the proposed delegation prompt; keep sensitive content out of delegation instructions because the existing redaction is not exhaustive.
-- A user-selected `@agent` mention in the latest user request bypasses routing for that turn. Resume calls bypass routing because they continue an existing worker. These are authorization boundaries: do not treat an agent-generated prompt or tool argument as user selection.
-- Independently apply the role-boundary guidance below and verify availability/permission before delegating. The hook is advisory and never overrides explicit user routing or native tool permissions.
+- Verify agent availability and permissions before delegating, then launch the selected specialist using the context already supplied. When the user names artifacts for delegated inspection, pass those paths directly; do not read the artifacts first to prepare the worker's prompt. Pass already-collected evidence without collecting it again. If delegation is unavailable or prohibited, report that limitation before using a permitted direct fallback.
 
 ## Role boundaries
 

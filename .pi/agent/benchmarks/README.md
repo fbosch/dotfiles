@@ -141,23 +141,6 @@ Run `bun run --cwd .pi/agent benchmark:skill-selection --classifier` for hosted 
 
 A persistent or non-retryable failure stops the current run. Compare mode does not start its next timeout budget after an incomplete run. The output is saved as `complete: false`, with not-attempted cases and per-attempt timing and failure metadata. Retry waits are excluded from model latency. The default lexical benchmark remains offline and makes no hosted calls.
 
-## Agent recommendation benchmark
-
-Run the deterministic, mock-first benchmark without paid calls:
-
-```bash
-bun run --cwd .pi/agent benchmark:recommend-agent --mock
-```
-
-The fixture catalog uses actual agent IDs with frozen synthetic descriptions and covers specialist boundaries, stay, abstention, explicit routing bypass, and a denied catalog entry. The report keeps lexical, mocked classifier-shaped, hosted classifier, and optional primary-model baseline results separate. Fixture names and expected labels are never sent to an evaluator.
-
-Hosted classifier and primary-model runs are opt-in. They attempt one case by default; pass `--limit N` or the explicit `--all` to request more:
-
-```bash
-bun run --cwd .pi/agent benchmark:recommend-agent --classifier --limit 1
-bun run --cwd .pi/agent benchmark:recommend-agent --primary provider/model --limit 1
-```
-
 ## Browser comparison benchmark
 
 Compare direct Chrome MCP calls with deterministic `browser_*` calls and
