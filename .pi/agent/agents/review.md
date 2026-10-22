@@ -32,6 +32,7 @@ Review code systematically for bugs and edge cases, security vulnerabilities, pe
 
 ## Skill routing
 
+- For security reviews and vulnerability triage, load `security-audit` in guidance mode. Apply relevant attack-class references and candidate-validation rules within this agent's read-only scope. Return unresolved reproduction requirements to the parent as validation gaps, not confirmed findings. Keep the existing review output format; leave full-audit orchestration and shared audit artifacts to the parent.
 - Load and apply the `security-and-hardening` skill for auth/session, untrusted input, data protection, or third-party integration changes.
 - Load and apply the `github-actions-docs` skill for CI/CD workflows, Actions permissions, and deployment automation.
 - Load and apply the `thermo-nuclear-code-quality-review` skill for explicitly harsh maintainability audits centered on abstraction quality, giant files, or spaghetti conditions.

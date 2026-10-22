@@ -31,5 +31,6 @@ Assume the design is wrong until proven resilient. Every issue must have a concr
 
 ## Skill routing
 
+- For source-level vulnerability hunting, load `security-audit` in guidance mode. Apply relevant attack-class references, candidate-validation rules, and execution-safety requirements. Return findings and validation blockers to the parent; do not launch the full audit workflow or create shared audit artifacts.
 - When findings involve application security controls (input validation, authn/authz, secret handling, transport/storage safety), load and apply the `security-and-hardening` skill and map each top risk to concrete hardening actions.
 - Keep this agent focused on break scenarios and reproducers; use that guidance to refine mitigation specifics.
