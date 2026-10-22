@@ -25,6 +25,14 @@ fenced code, and other block syntax intact. Their collapse control occupies a
 separate paragraph so it cannot become a table cell. Inline expansions retain
 upstream colour. Each stretch keeps its assigned colour when reopened within the session.
 
+Click targets use Pi's grapheme-aware OSC-8 lookup, including joined emoji,
+skin-tone modifiers, flags, and combining characters.
+
+The keyboard's recent-reply window tracks the last three completed assistant
+messages containing stretches. Multiple text blocks in one message share a slot;
+streaming redraws do not add replies. Session startup, reload, and tree navigation
+rebuild this window from the active branch, independently of rendering.
+
 Keep the short form on one line and include blank lines around tables in long forms:
 
 ```text

@@ -22,9 +22,12 @@ export type Lettering = {
   byName: ReadonlyMap<string, string>;
 };
 
+/** Visible text blocks belonging to one completed assistant message. */
+export type Reply = readonly string[];
+
 export type StretchState = {
-  /** Every reply text holding a stretch, in the order Pi first drew it. */
-  replies: readonly string[];
+  /** Completed messages holding stretches, with text blocks grouped in message order. */
+  replies: readonly Reply[];
   /** Open stretches by name, each with the count it was opened at, which picks its colour. */
   open: ReadonlyMap<string, number>;
   /** Assigned palette positions survive collapse so reopening reuses the same colour. */
@@ -56,9 +59,27 @@ export const initialState: StretchState = {
 export const isOpen = (state: StretchState, reply: string, key: string) =>
   state.open.has(nameIn(reply, key));
 
-/** Notes a reply holding a stretch, the first time Pi draws it. */
-export const remember = (reply: string): Change =>
-  State.modify((s) => (s.replies.includes(reply) ? s : { ...s, replies: [...s.replies, reply] }));
+const withStretches = (reply: Reply): Reply =>
+  reply.filter((text) => stretches(parse(text)).length > 0);
+
+/** Notes one completed assistant message, never a streaming render snapshot. */
+export const remember = (blocks: Reply): Change => {
+  const reply = withStretches(blocks);
+  return State.modify((s) => (reply.length === 0 ? s : { ...s, replies: [...s.replies, reply] }));
+};
+
+/** Rebuilds the active branch without reporting historical replies as newly written. */
+export const restoreReplies = (messages: readonly Reply[]): Change => {
+  const replies = messages.map(withStretches).filter((reply) => reply.length > 0);
+  // Branch navigation must not discard palette assignments for stretches already opened.
+  return State.modify((s) => ({
+    ...s,
+    replies,
+    repliesAtPrompt: replies.length,
+    read: new Set(),
+    lettering: Option.none,
+  }));
+};
 
 /** Toggles a stretch immediately and yields whether it is now open. */
 export const toggle = (target: Target): Change<boolean> =>
@@ -115,6 +136,7 @@ export const takeReadNote = (): Change<Option<string>> =>
 function readNoteFor(state: StretchState): Option<string> {
   const written = state.replies
     .slice(state.repliesAtPrompt)
+    .flat()
     .flatMap((reply) => stretches(parse(reply)).filter(isLinkable))
     .map((stretch) => stretch.short.trim());
   const opened = [...state.read];
@@ -133,7 +155,9 @@ function letteringFor(state: StretchState, mode: Mode): Lettering {
   state.replies
     .slice(-LETTERED_REPLIES)
     .flatMap((reply) =>
-      reachable(state, reply, parse(reply)).map((stretch) => ({ reply, stretch })),
+      reply.flatMap((text) =>
+        reachable(state, text, parse(text)).map((stretch) => ({ reply: text, stretch })),
+      ),
     )
     .filter(
       (target) =>

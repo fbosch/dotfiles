@@ -4,7 +4,7 @@ import { LinkTable } from "../src/links";
 import { Option, Store } from "../src/monad";
 import { parse, stretches } from "../src/parse";
 import { draw } from "../src/render";
-import { initialState, remember, takeReadNote, toggle } from "../src/state";
+import { initialState, remember, restoreReplies, takeReadNote, toggle } from "../src/state";
 import type { Target } from "../src/target";
 
 const theme = loadThemeFromPath(
@@ -15,7 +15,7 @@ function setup(reply: string) {
   const store = new Store(initialState, () => {});
   const canvas = { links: new LinkTable(), theme: Option.some(theme) };
   const targets = stretches(parse(reply)).map((stretch): Target => ({ reply, stretch }));
-  store.run(remember(reply));
+  store.run(remember([reply]));
   return {
     store,
     target(index: number) {
@@ -102,4 +102,25 @@ test("table collapse controls retain their assigned colour when reopened", () =>
   store.run(toggle(target(1)));
   store.run(toggle(table));
   expect(view(table)).toBe(original);
+});
+
+test("branch reconstruction preserves a stretch's assigned colour when reopened", () => {
+  const reply = "{{First.|First added.}} {{Second.|Second added.}}";
+  const { store, target, view } = setup(reply);
+  store.run(toggle(target(0)));
+  store.run(toggle(target(1)));
+  const original = view(target(1));
+  expect(original).toContain(theme.fg("accent", "[« Collapse]"));
+  store.run(toggle(target(1)));
+  store.run(restoreReplies([["{{Other.|Other detail.}}"]]));
+  store.run(restoreReplies([[reply]]));
+  store.run(toggle(target(1)));
+  expect(view(target(1))).toBe(original);
+});
+
+test("identical completed messages still occupy distinct recent-reply slots", () => {
+  const reply = "{{Details.|Details added.}}";
+  const { store } = setup(reply);
+  store.run(remember([reply]));
+  expect(store.current.replies).toEqual([[reply], [reply]]);
 });

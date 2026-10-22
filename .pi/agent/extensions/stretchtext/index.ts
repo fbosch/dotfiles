@@ -3,7 +3,11 @@
 // in fullscreen a click on it opens it in place and a click on « closes it. alt+o puts a letter
 // over each closed stretch and typing it opens it; alt+c does the same over each « to close.
 
-import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type {
+  ExtensionAPI,
+  ExtensionContext,
+  MessageEndEvent,
+} from "@earendil-works/pi-coding-agent";
 
 import { LinkTable } from "./src/links";
 import { Store } from "./src/monad";
@@ -17,16 +21,30 @@ import {
   initialState,
   pickLetter,
   remember,
+  restoreReplies,
   startLettering,
   takeReadNote,
   toggle,
 } from "./src/state";
 import type { Target } from "./src/target";
 
+function textBlocks(message: MessageEndEvent["message"]): readonly string[] {
+  if (message.role !== "assistant") return [];
+  // Pi renders each text block separately and trims it before the Markdown transformer runs.
+  return message.content.flatMap((block) => (block.type === "text" ? [block.text.trim()] : []));
+}
+
 export default function stretchtext(pi: ExtensionAPI) {
   const screen = new Screen();
   const store = new Store(initialState, () => screen.redraw());
   const links = new LinkTable();
+
+  function restoreBranch(ctx: ExtensionContext) {
+    const replies = ctx.sessionManager
+      .getBranch()
+      .flatMap((entry) => (entry.type === "message" ? [textBlocks(entry.message)] : []));
+    store.run(restoreReplies(replies));
+  }
 
   function toggleStretch(target: Target) {
     store.run(toggle(target));
@@ -62,9 +80,14 @@ export default function stretchtext(pi: ExtensionAPI) {
     if (messageType !== "assistant" || !markdown.includes("{{")) return markdown;
     const segments = parse(markdown);
     if (stretches(segments).length === 0) return markdown;
-    store.run(remember(markdown));
     return draw(store.current, { links, theme: screen.theme }, markdown, segments);
   });
+
+  pi.on("message_end", (event) => {
+    store.run(remember(textBlocks(event.message)));
+  });
+
+  pi.on("session_tree", (_event, ctx) => restoreBranch(ctx));
 
   pi.on("before_agent_start", (event) => {
     const sections = event.systemPromptOptions.sections;
@@ -81,6 +104,7 @@ export default function stretchtext(pi: ExtensionAPI) {
 
   // An empty widget below the editor draws nothing and takes no row; it is only how an extension gets the TUI.
   pi.on("session_start", (_event, ctx) => {
+    restoreBranch(ctx);
     if (ctx.mode !== "tui") return;
     ctx.ui.setWidget(
       "stretchtext",

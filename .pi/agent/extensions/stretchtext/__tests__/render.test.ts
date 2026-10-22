@@ -31,7 +31,7 @@ const TABLE =
 function opened(reply: string) {
   const store = new Store(initialState, () => {});
   const links = new LinkTable();
-  store.run(remember(reply));
+  store.run(remember([reply]));
   const stretch = stretches(parse(reply))[0];
   if (!stretch) throw new Error("Fixture has no stretch");
   const target: Target = { reply, stretch };
