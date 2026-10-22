@@ -1,3 +1,4 @@
+set -gx PI_CACHE_RETENTION long
 if string match -q vscode $TERM_PROGRAM
     # Switch to dash in Cursor editor to avoid fish configuration issues
     set -x ENV "$HOME/.shinit"

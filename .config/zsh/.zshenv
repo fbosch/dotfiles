@@ -19,6 +19,7 @@ export PNPM_HOME="$HOME/Library/pnpm"
 export BUN_INSTALL="$HOME/.bun"
 export RIPGREP_CONFIG_PATH="$HOME/.config/.ripgreprc"
 export AGENT_BROWSER_ENGINE="lightpanda"
+export PI_CACHE_RETENTION="long"
 
 if [[ -e /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh ]]; then
   . /nix/var/nix/profiles/default/etc/profile.d/nix-daemon.sh
