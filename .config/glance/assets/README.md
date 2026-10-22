@@ -16,7 +16,6 @@ Static files served by Glance from `/assets/*`. The container maps this director
 - `/assets/css/start-command-prompt.css`
 - `/assets/css/real-debrid.css`
 - `/assets/css/plex.css`
-- `/assets/css/komodo-containers.css`
 - `/assets/js/quicklink-init.js`
 - `/assets/js/freshrss-actualize.js`
 - `/assets/js/start-command-prompt.js`

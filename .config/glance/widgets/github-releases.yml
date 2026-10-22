@@ -9,7 +9,6 @@
     - glanceapp/glance
     - louislam/uptime-kuma
     - amir20/dozzle
-    - moghtech/komodo
 
     # Self-hosted Apps
     - linkwarden/linkwarden
@@ -36,7 +35,6 @@
     # Containers & Infrastructure
     - containers/podman
     - dockerhub:postgres:16-alpine
-    - dockerhub:mongo:latest
     - dockerhub:getmeili/meilisearch
 
     # AI

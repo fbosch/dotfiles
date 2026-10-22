@@ -14,7 +14,6 @@
           widgets:
             - $include: ../widgets/dozzle-stats.yml
             - $include: ../widgets/uptime-kuma.yml
-            - $include: ../widgets/komodo-containers.yml
             - $include: ../widgets/tailscale-devices.yml
     - size: small
       widgets:
