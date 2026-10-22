@@ -39,25 +39,25 @@
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/codebase-design/SKILL.md",
-      "computedHash": "5a17552cc1482f1a40124bf4e6c9dbd90ac0dbb47e71c07d47369f9e5f2ae3b5"
+      "computedHash": "b2888e4f4e8c0af3bfd557575a64b905c44e6248c3101d72077816882b3a92b9"
     },
     "diagnosing-bugs": {
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/diagnosing-bugs/SKILL.md",
-      "computedHash": "37b5e9c624513551da790b52864dc8c84bff996a6d03a380cc6facdcc0a88354"
+      "computedHash": "ede7254edbd22fcab97a0941511f7d440d8f9a249348fea97c50987ad5501674"
     },
     "domain-modeling": {
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/domain-modeling/SKILL.md",
-      "computedHash": "a11713c0ff7870efa3c331b2e273f09116158485246edc89ae5088eefd1b0b48"
+      "computedHash": "b3eb40152b81f0c98fd2095a023c019452dbdce56f7540cc67fece2972db8369"
     },
     "evaluate-skill": {
       "source": "edonadei/caliper",
       "sourceType": "github",
       "skillPath": "skills/evaluate-skill/SKILL.md",
-      "computedHash": "52f1fa514ac4ebcd7c6eeea3e9ee9f19a0065e9f7e50a1ca860cc130a19f8846"
+      "computedHash": "e7ea1d33fb525012dc7eaf4210f56abf4160a8afe4fb8dafab915e411faa6993"
     },
     "github-actions-docs": {
       "source": "xixu-me/skills",
@@ -75,7 +75,7 @@
       "source": "edonadei/caliper",
       "sourceType": "github",
       "skillPath": "skills/grill-skill/SKILL.md",
-      "computedHash": "9ec571be497ee3c1eb43f40deb7b54c79bcc63823e746e76b3456bd9180a90df"
+      "computedHash": "8713b78f358d6130f2f6a242383f40b68d51b95fe23ae0e5709dac878b320e5a"
     },
     "grill-with-docs": {
       "source": "mattpocock/skills",
@@ -87,25 +87,25 @@
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/productivity/grilling/SKILL.md",
-      "computedHash": "4dd886b0196bf43729d954ae326016f2bd9f5f79d892500b407c33a753362f14"
+      "computedHash": "ef1641a2047b71b60f1942cd35efb47d3afc9d584dff5a0b01f8c7db923aaa08"
     },
     "herdr": {
       "source": "herdrdev/herdr",
       "sourceType": "github",
       "skillPath": "skills/herdr/SKILL.md",
-      "computedHash": "c741134cc22372c08da2f469d49aac9f9bbddd4f5e1da0558cf1132836fa3287"
+      "computedHash": "72177e911f55467de8737174072ec6bb08e30bbf62bceabcb69678e944398b18"
     },
     "how": {
       "source": "cursor/plugins",
       "sourceType": "github",
       "skillPath": "pstack/skills/how/SKILL.md",
-      "computedHash": "532e080fb8d0f9119488628910d2ff2e2976882b009d3df4e8a29c86016e3207"
+      "computedHash": "1eedca26dced34439d87e9e636fe161cfeea0d3143e61983aa8567c6b99f8294"
     },
     "improve-codebase-architecture": {
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/improve-codebase-architecture/SKILL.md",
-      "computedHash": "2449db6ab1ded9581f69fcc56c1f64818112d05e271fd4c5da23c6523f9d3d9d"
+      "computedHash": "ac2c94885f34ff8492dc12aa4543182f661f32ea1722b8d6b6c2c7045af33ae3"
     },
     "linear": {
       "source": "openai/skills",
@@ -128,13 +128,13 @@
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/tdd/SKILL.md",
-      "computedHash": "e753a5da75292bbe59d302d89566bc2c53d0e73944da2f0e944a7578883c07d0"
+      "computedHash": "daf55026f456af104a72fa43247f7bcec89e5127316dc5b1b8d675d6a9d8ce94"
     },
     "technical-writing": {
       "source": "cursor/plugins",
       "sourceType": "github",
       "skillPath": "pstack/skills/technical-writing/SKILL.md",
-      "computedHash": "820fc92bb14b53f5b724fc17e0c1edd3b3a9e96bbe4db1da666a12127b0aac0a"
+      "computedHash": "a7c43dc2b94eeff919575766da35b695d61b677ec44476bb8feb5d82c5fa0328"
     },
     "thermo-nuclear-code-quality-review": {
       "source": "cursor/plugins",
@@ -146,7 +146,7 @@
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/triage/SKILL.md",
-      "computedHash": "b954d74c219c805bf353d6642251a713c9b2e9cfdb11babfe588bcfe7dfd16d5"
+      "computedHash": "a683e69163e23630f39c05a50fb9d83a3795a6a6fbd317357669e082cd43a158"
     },
     "typesafe-ai": {
       "source": "typesafe-ai/skills",
@@ -158,25 +158,25 @@
       "source": "cursor/plugins",
       "sourceType": "github",
       "skillPath": "pstack/skills/unslop/SKILL.md",
-      "computedHash": "6018ca8c329ba87c6b4298207f58d6b773fe23e44ff52a00a9a4d160c19bedc0"
+      "computedHash": "eca0ad9fa3a3867c83f3aaf3a058e247a569c8976a68ca423a569b93eb86de5d"
     },
     "why": {
       "source": "cursor/plugins",
       "sourceType": "github",
       "skillPath": "pstack/skills/why/SKILL.md",
-      "computedHash": "552d937a5bad70c5e0c2b92fa21cc914cd4b59d3c1747554a68f26bce9fc9a0f"
+      "computedHash": "250259b852c857557dd0fdd5ee26cf9d9c802ca77a28753f9a1b9f66ac4e9297"
     },
     "worktrunk": {
       "source": "max-sixty/worktrunk",
       "sourceType": "github",
       "skillPath": "skills/worktrunk/SKILL.md",
-      "computedHash": "4cac44d5225ca5e345ab8319d94444ddb37f444a7a4d20213d1e224412ba3ab5"
+      "computedHash": "9e50a03f6f370dcdd658276736296d32c4261e08037ec5f9c2e05ab0c0bab899"
     },
     "wt-switch-create": {
       "source": "max-sixty/worktrunk",
       "sourceType": "github",
       "skillPath": "skills/wt-switch-create/SKILL.md",
-      "computedHash": "796db886726df2330e896ca8939789a1fc52143ecc4d4be660974bf1a78581f6"
+      "computedHash": "ae03a4041c37bab00bd65f93d42bf06689c93fd8d916c6600a9aff1c5ed245a7"
     }
   }
 }

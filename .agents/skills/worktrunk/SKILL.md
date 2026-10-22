@@ -1,6 +1,6 @@
 ---
 name: worktrunk
-description: Guidance for Worktrunk (the `wt` CLI) — git worktree management, hooks, and config. Load when editing .config/wt.toml or ~/.config/worktrunk/config.toml; adding, modifying, or debugging hooks (post-merge, post-start, pre-commit, pre-merge, post-switch, etc.); configuring commit message generation or command aliases; or troubleshooting wt behavior. Also answers general worktrunk/wt questions.
+description: Guidance for Worktrunk (the `wt` CLI) — git worktree management, hooks, and config. Load when working out which worktree a `wt` command will act on, or reaching for the global `-C <path>` to target one; editing .config/wt.toml or ~/.config/worktrunk/config.toml; adding, modifying, or debugging hooks (post-merge, post-start, pre-commit, pre-merge, post-switch, etc.); configuring commit message generation or command aliases; or troubleshooting wt behavior. Also answers general worktrunk/wt questions.
 license: MIT OR Apache-2.0
 compatibility: Requires the `wt` CLI (https://worktrunk.dev)
 ---
@@ -24,6 +24,23 @@ Reference files are synced from [worktrunk.dev](https://worktrunk.dev) documenta
 
 For command-specific options, run `wt <command> --help`. For configuration, follow the workflows below.
 
+## Which worktree a command acts on
+
+`wt` finds the *repository* from the working directory, and the *worktree* from the command's own arguments. Two rules cover every case:
+
+1. **A command that names a branch already names its worktree.** Worktrees are addressed by branch name, so `wt switch <branch>`, `wt remove <branch>`, `wt step diff --branch <branch>`, and `wt config state marker set --branch <branch>` act on that branch's worktree no matter which worktree you run them from. Every such argument also accepts the worktree's own path, for the cases a branch cannot name — a second checkout of the same branch, or a detached worktree (which `marker` still rejects, since it keys state by branch name).
+2. **`-C <path>` moves the working directory, not the worktree selection.** Reach for it when the repository lookup is what's wrong: a *different* repository; a command that acts on the current worktree and takes no branch argument (`wt merge`, `wt step rebase|squash|push` — their `[TARGET]` is the merge target, not a worktree); or a caller whose working directory isn't inside a repository at all, such as an agent hook the host pins elsewhere.
+
+Layering `-C` on top of a branch argument names the same worktree twice. From inside the `alpha` worktree of a repo that also has `beta`:
+
+```bash
+wt step diff --branch beta                    # ✓ the branch argument selects the worktree
+wt -C ../repo.beta step diff --branch beta    # ✗ says beta twice
+
+wt switch --create beta                       # ✓ --base already defaults to the default branch
+wt -C ../repo switch --create beta            # ✗ -C adds nothing; you are already in that repo
+```
+
 ## Two types of configuration
 
 Worktrunk uses two config files with different scopes and permission models:
@@ -42,16 +59,7 @@ Detect which tools are installed (`which claude codex llm aichat`); if none, rec
 
 ### Configuring project hooks
 
-Pick the hook type by when the command should run and whether it may block (10 types: 5 events × pre/post — full reference in `reference/hook.md`):
-
-- Dependencies and env files a later step needs → `pre-start` (blocks creation)
-- Dev servers, long builds, cache copying → `post-start` (background)
-- Formatters, linters, type checks → `pre-commit`
-- Tests that must pass before merging → `pre-merge`
-- CI triggers, notifications → `post-commit`
-- Deployment → `post-merge`
-- Setup before branch resolution / terminal-IDE updates → `pre-switch` / `post-switch`
-- Cleanup before/after removal (save artifacts; stop servers, remove containers) → `pre-remove` / `post-remove`
+Pick the hook type by when the command should run and whether it may block — `reference/hook.md` maps all ten (5 events × pre/post) to their timing and typical uses.
 
 Derive the commands from the project itself (`package.json` scripts, `Cargo.toml`, `pyproject.toml`) and verify they run before adding them.
 
@@ -80,7 +88,7 @@ Test with `wt switch --create test-hooks`.
 - Customize worktree paths → `reference/config.md#worktree-path-template`
 - Custom commit templates → `reference/llm-commits.md#prompt-templates`
 - Configure command defaults → `reference/config.md#command-config`
-- Set up personal hooks → `reference/config.md#hooks`
+- Set up personal hooks → `reference/config.md#user-hooks`
 
 ### Project config tasks
 - Set up hooks for new project → `reference/hook.md`
@@ -92,7 +100,7 @@ Test with `wt switch --create test-hooks`.
 - Create a `wt` alias → `reference/extending.md#aliases`
 - Run a command in every worktree → `reference/step.md#wt-step-for-each`
 - Rebase every worktree (up-style) → `reference/extending.md#recipe-rebase-every-worktree-onto-its-upstream`
-- Defer a template variable to a nested `wt` command → `reference/extending.md#deferring-expansion-to-a-nested-wt-command`
+- Pass a template to a nested `wt` command → `reference/extending.md#nesting-templates`
 
 ## Key commands
 
@@ -129,52 +137,30 @@ The resolution is for the user to make the trust decision themselves:
 
 ## Advanced: agent handoffs
 
-When the user requests spawning a worktree with an agent in a background session ("spawn a worktree for...", "hand off to another agent"), use the appropriate pattern for their terminal multiplexer. Substitute `<agent-cli>` with the CLI you are running as: `claude` for Claude Code, `'opencode run'` for OpenCode.
-
-**tmux** (check `$TMUX` env var):
-```bash
-tmux new-session -d -s <branch-name> "wt switch --create <branch-name> -x <agent-cli> -- '<task description>'"
-```
-
-**Zellij** (check `$ZELLIJ` env var):
-```bash
-zellij run -- wt switch --create <branch-name> -x <agent-cli> -- '<task description>'
-```
+When the user requests spawning a worktree with an agent in a background session ("spawn a worktree for...", "hand off to another agent"), use the tmux or Zellij command from `reference/tips-patterns.md#agent-handoffs` with the CLI you are running as in place of `claude`, following that section's note on where a subcommand such as OpenCode's `run` goes.
 
 **Requirements** (all must be true):
 - User explicitly requests spawning/handoff
-- User is in a supported multiplexer (tmux or Zellij)
+- User is in a supported multiplexer (check `$TMUX` / `$ZELLIJ`)
 - The user's project instructions (`CLAUDE.md` or `AGENTS.md`) or an explicit prompt authorize this pattern
 
 **Do not use this pattern** for normal worktree operations.
-
-Example (tmux, Claude Code):
-```bash
-tmux new-session -d -s fix-auth-bug "wt switch --create fix-auth-bug -x claude -- \
-  'The login session expires after 5 minutes. Find the session timeout config and extend it to 24 hours.'"
-```
-
-Example (Zellij, OpenCode):
-```bash
-zellij run -- wt switch --create fix-auth-bug -x 'opencode run' -- \
-  'The login session expires after 5 minutes. Find the session timeout config and extend it to 24 hours.'
-```
 
 ### Parallel sub-Agents (single Claude Code session)
 
 To spawn multiple sub-Agents that each work in their own worktree from one Claude Code session — no terminal multiplexer, no human in the other pane — pre-start each worktree from the parent and pass the path into the sub-Agent prompt:
 
 ```bash
-wt switch --create <branch> --no-cd --no-hooks
+wt switch --create <branch> --no-cd
 ```
 
 Then call the `Agent` tool **without** `isolation: "worktree"`, naming the path in the prompt:
 
 ```
-You are working in `/abs/path/to/worktrunk.<branch>` on branch `<branch>`.
+You are working in `/abs/path/to/myproject.<branch>` on branch `<branch>`.
 All edits must stay in that worktree.
 ```
 
-`--no-cd` skips the shell-integration cd script the parent can't consume; `--no-hooks` is appropriate when each sub-Agent will run its own build/test step (e.g. `cargo run -- hook pre-merge --yes`) and you don't need post-start setup repeated per worktree.
+`--no-cd` skips the shell-integration cd script the parent can't consume. Add `--no-hooks` only when no user or project hooks provision the worktree and each sub-Agent does its own build/test step (e.g. `cargo run -- hook pre-merge --yes`) — a `pre-start` hook that installs dependencies or links a gitignored build environment hands the sub-Agent a worktree it can't build in when it's skipped. Leaving hooks on needs the project's hook commands already approved: the parent session can't prompt, so an unapproved command in `.config/wt.toml` aborts the create — see **Hook approvals in non-interactive sessions** above.
 
-**Do not** use `Agent { isolation: "worktree" }` for this. Claude Code passes its internal agent ID as `name` to the `WorktreeCreate` hook, so `wt` creates the worktree as `worktrunk.agent-<id>` on a throwaway branch. If the sub-Agent then creates a feature branch on top, you end up with non-canonical paths, orphan branches, and post-start hooks fired against the wrong branch. Pre-creating with `wt switch --create` keeps path, branch, and hook target aligned.
+**Do not** use `Agent { isolation: "worktree" }` for this. Claude Code passes its internal agent ID as `name` to the `WorktreeCreate` hook, so `wt` creates the worktree as `myproject.agent-<id>` on a throwaway branch. If the sub-Agent then creates a feature branch on top, you end up with non-canonical paths, orphan branches, and post-start hooks fired against the wrong branch. Pre-creating with `wt switch --create` keeps path, branch, and hook target aligned.

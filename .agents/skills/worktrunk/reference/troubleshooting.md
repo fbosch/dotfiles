@@ -2,7 +2,7 @@
 
 Claude-specific troubleshooting guidance for common worktrunk issues.
 
-## Commit Message Generation
+## Commit message generation
 
 ### Command not found
 
@@ -35,13 +35,11 @@ Common issues:
 3. Check TOML syntax: `cat ~/.config/worktrunk/config.toml`
 4. Look for validation errors (path must be relative, not absolute)
 
-### Template conflicts
+### Template config errors
 
-Check for mutually exclusive options:
-- `template` and `template-file` cannot both be set
-- `squash-template` and `squash-template-file` cannot both be set
-
-If a template file is used, verify it exists at the specified path.
+Only inline `template` and `squash-template` values are supported. If the
+config still uses the retired `template-file` or `squash-template-file` keys,
+paste each file's contents into the corresponding inline setting.
 
 ## Hooks
 
@@ -83,7 +81,7 @@ post-start = "npm run build"
 
 ### A `for-each` or `--execute` alias uses the same value in every worktree
 
-The alias body renders once at dispatch, in the invoking worktree, so a per-worktree variable like `{{ branch }}` is baked before the nested `wt` command iterates. If `wt config alias dry-run <name>` shows a single substituted value (e.g. `… echo branch=main`), it was baked at that first pass. Defer it with `{% raw %}{{ branch }}{% endraw %}`, and for `for-each` keep it inside a quoted `sh -c '...'` so the alias's shell doesn't word-split it. Repo-level variables like `{{ default_branch }}` are unaffected — they are identical in every worktree. See `reference/extending.md#deferring-expansion-to-a-nested-wt-command`.
+The alias body rendered once at dispatch, baking the variable to the invoking worktree's value before the nested `wt` command iterated. See `reference/extending.md#nesting-templates` for how to pass the template through unrendered.
 
 ## List
 
@@ -92,7 +90,7 @@ The alias body renders once at dispatch, in the invoking worktree, so a per-work
 The timeout warning names the tasks that didn't finish:
 
 ```
-wt list timed out after 120s (170 results received); blocked tasks:
+Listing worktrees timed out after 120s (170 results received); blocked tasks:
   <branch>: working-tree-diff, working-tree-conflicts
 ```
 
