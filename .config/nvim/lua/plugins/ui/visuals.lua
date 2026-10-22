@@ -72,9 +72,13 @@ return {
 		src = "https://github.com/petertriho/nvim-scrollbar.git",
 		module = "scrollbar",
 		opts = {
-			excluded_buftypes = { "terminal", "prompt" },
-			handle = {
-				color = "#222222",
+			exclude = {
+				buftypes = { "terminal", "prompt" },
+			},
+			scrollbar = {
+				thumb = {
+					highlight = { bg = "#222222" },
+				},
 			},
 		},
 	},
