@@ -345,7 +345,7 @@ in
     "test:pi-extensions".exec = ''
       set -euo pipefail
       cd .pi/agent
-      bun test extensions benchmarks lib evals/semantic-command-guard
+      bun test extensions benchmarks lib evals/semantic-command-guard evals/stretchtext
       bun run typecheck
     '';
 
