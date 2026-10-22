@@ -1,0 +1,89 @@
+{
+  "name": "@gotgenes/pi-subagents",
+  "version": "25.0.1",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/public.d.ts",
+      "default": "./src/service/service.ts"
+    },
+    "./settings": {
+      "types": "./dist/settings.d.ts",
+      "default": "./src/layered-settings.ts"
+    }
+  },
+  "files": [
+    "src",
+    "dist",
+    "docs/*.md",
+    "docs/architecture",
+    "docs/decisions",
+    "CHANGELOG.md"
+  ],
+  "imports": {
+    "#src/*": "./src/*",
+    "#test/*": "./test/*"
+  },
+  "description": "A focused, in-process sub-agent core for pi — autonomous agents plus a typed API and lifecycle events other extensions build on. Friendly fork of @tintinweb/pi-subagents.",
+  "author": {
+    "name": "Chris Lasher"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/gotgenes/pi-packages.git",
+    "directory": "packages/pi-subagents"
+  },
+  "homepage": "https://github.com/gotgenes/pi-packages/tree/main/packages/pi-subagents#readme",
+  "bugs": {
+    "url": "https://github.com/gotgenes/pi-packages/issues"
+  },
+  "keywords": [
+    "pi-package",
+    "pi",
+    "pi-extension",
+    "subagent",
+    "agent",
+    "autonomous"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@earendil-works/pi-ai": ">=1.0.0",
+    "@earendil-works/pi-coding-agent": ">=1.0.0",
+    "@earendil-works/pi-tui": ">=1.0.0",
+    "typebox": "*"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.11",
+    "@earendil-works/pi-ai": "1.0.0",
+    "@earendil-works/pi-coding-agent": "1.0.0",
+    "@earendil-works/pi-tui": "1.0.0",
+    "@types/node": "^22.15.3",
+    "rollup": "^4.63.1",
+    "rollup-plugin-dts": "^6.5.1",
+    "rumdl": "0.2.24",
+    "typebox": "^1.3.7",
+    "typescript": "^6.0.3",
+    "vitest": "^4.1.11"
+  },
+  "pi": {
+    "extensions": [
+      "./src/index.ts"
+    ],
+    "image": "https://raw.githubusercontent.com/gotgenes/pi-packages/main/packages/pi-subagents/docs/assets/demo.webp"
+  },
+  "scripts": {
+    "check": "tsc --noEmit",
+    "build:types": "rollup -c rollup.dts.config.mjs",
+    "verify:public-types": "bash scripts/verify-public-types.sh",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint:md": "rumdl check *.md docs/**/*.md",
+    "lint": "biome check . && eslint . && pnpm run lint:md"
+  }
+}

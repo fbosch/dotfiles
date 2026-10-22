@@ -1,6 +1,11 @@
 # Tasks
 
-All tasks remain unstarted. Creating these artifacts does not validate host integration or authorize runtime cutover. Task group 1 is a blocking feasibility gate for every later group. Put new JavaScript/TypeScript tests in neighboring `__tests__` directories and add/run project checks through `devenv test`.
+Implementation starts with baseline measurement. Task group 1 is a blocking feasibility gate for every runtime implementation group that follows it. Put new JavaScript/TypeScript tests in neighboring `__tests__` directories and add/run project checks through `devenv test`.
+
+## 0. Capture the current baseline
+
+- [x] 0.1 Record installed runner and local integration footprint, context components, and explicitly defined complexity measures in `references/baseline.md`, with reproducible scope, versions, source identities, and measured-versus-estimated labels; verify totals against collected evidence.
+- [x] 0.2 Record repeated minimal-response and fixed read-only task samples using the current runner, including exact workload/model settings, launch and completion timing boundaries, available usage, correctness checks, and limits; verify raw samples support the reported summaries and identify missing metrics without inventing values.
 
 ## 1. Establish supported Pi integration paths
 

@@ -1,0 +1,1315 @@
+{
+  "schemaVersion": 1,
+  "measuredAtUtc": "2026-10-22",
+  "baselineHead": "1dd4327e0a0ca7c6984c2bdc0fb28c5d68584901",
+  "initialWorktree": "clean",
+  "environment": {
+    "system": "Darwin",
+    "release": "27.0.0",
+    "machine": "arm64",
+    "python": "3.14.8",
+    "node": "v24.20.0",
+    "bun": "1.4.2",
+    "piPackage": "1.3.0",
+    "subagentPackage": "25.0.1"
+  },
+  "scope": {
+    "installed_source": [
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/config/agent-types.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/config/custom-agents.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/config/default-agents.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/config/invocation-config.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/config/thinking-level.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/debug.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/handlers/index.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/handlers/interrupt.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/handlers/lifecycle.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/handlers/widget-events.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/index.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/layered-settings.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/child-lifecycle.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/child-shutdown.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/concurrency-limiter.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/create-subagent-session.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/parent-snapshot.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/record-observer.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/subagent-manager.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/subagent-run.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/subagent-session.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/subagent-state.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/subagent.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/turn-limits.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/usage.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/workspace-bracket.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/workspace.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/observation/composite-subagent-observer.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/observation/notification.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/observation/outcome-delivery.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/observation/subagent-events-observer.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/persisted-record.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/runtime.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/service/service-adapter.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/service/service.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/ask-parent-tool.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/builtin-extensions.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/content-items.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/context.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/conversation.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/env.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/mcp-tool-patterns.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/model-resolver.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/notify-parent-tool.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/package-exclusions.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/project-context.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/prompts.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/provider-inheritance.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/session-config.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/session-dir.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/settings.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/agent-tool.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/background-spawner.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/foreground-runner.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/get-result-renderer.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/get-result-report.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/get-result-tool.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/helpers.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/progress-stream.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/result-renderer.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/spawn-config.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/steer-tool.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/types.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/agent-widget.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/bounded-lines.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/display.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/glyphs.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/labeled-rule.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/notification-renderer.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigation.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigator.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/subagents-settings.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/transcript-content.ts",
+      ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/widget-renderer.ts"
+    ],
+    "installed_tests": [],
+    "local_glue": [
+      ".pi/agent/extensions/routed-prompts.ts",
+      ".pi/agent/extensions/prompt-ui/subagent-session-links.ts",
+      ".pi/agent/extensions/prompt-ui/subagent-session-target.ts",
+      ".pi/agent/extensions/prompt-ui/subagent-transcript-frame.ts",
+      ".pi/agent/extensions/prompt-ui/subagent-transcript-records.ts",
+      ".pi/agent/extensions/prompt-ui/subagent-widget-frame.ts",
+      ".pi/agent/subagents.json",
+      ".pi/agent/extensions/subagent-steering-notice.ts"
+    ],
+    "local_tests": [
+      ".pi/agent/extensions/__tests__/routed-prompts.test.ts",
+      ".pi/agent/extensions/prompt-ui/__tests__/subagent-session-links.test.ts",
+      ".pi/agent/extensions/prompt-ui/__tests__/subagent-transcript-frame.test.ts",
+      ".pi/agent/extensions/prompt-ui/__tests__/subagent-widget-frame.test.ts",
+      ".pi/agent/extensions/__tests__/subagent-steering-notice.test.ts"
+    ],
+    "agents": [
+      ".pi/agent/agents/adversarial.md",
+      ".pi/agent/agents/analyze.md",
+      ".pi/agent/agents/backlog-planning.md",
+      ".pi/agent/agents/benchmark.md",
+      ".pi/agent/agents/debug.md",
+      ".pi/agent/agents/docs.md",
+      ".pi/agent/agents/explore.md",
+      ".pi/agent/agents/general.md",
+      ".pi/agent/agents/ideate.md",
+      ".pi/agent/agents/lookup.md",
+      ".pi/agent/agents/patterns.md",
+      ".pi/agent/agents/pr-feedback.md",
+      ".pi/agent/agents/quick.md",
+      ".pi/agent/agents/refactor.md",
+      ".pi/agent/agents/research.md",
+      ".pi/agent/agents/review.md",
+      ".pi/agent/agents/spec.md",
+      ".pi/agent/agents/test.md",
+      ".pi/agent/agents/validate.md",
+      ".pi/agent/agents/visualizer.md"
+    ],
+    "orchestration": [
+      ".pi/agent/instructions/orchestration/assignments.md",
+      ".pi/agent/instructions/orchestration/coordination.md",
+      ".pi/agent/instructions/orchestration/index.md",
+      ".pi/agent/instructions/orchestration/routing.md",
+      ".pi/agent/instructions/orchestration/supervision.md"
+    ]
+  },
+  "installedPackage": {
+    "files": 117,
+    "bytes": 1364147
+  },
+  "files": {
+    ".pi/agent/agents/adversarial.md": {
+      "path": ".pi/agent/agents/adversarial.md",
+      "bytes": 2131,
+      "sha256": "c4d5dbe8b33e18871ceb66e198e00a7780c22842b4c54c366243a6b7633110b9",
+      "lines": 36,
+      "words": 284,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/agents/analyze.md": {
+      "path": ".pi/agent/agents/analyze.md",
+      "bytes": 2768,
+      "sha256": "98bc6de9051e62ea939174aea2f7787fe429edc491a4c1316bb2ece088402f09",
+      "lines": 61,
+      "words": 407,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/agents/backlog-planning.md": {
+      "path": ".pi/agent/agents/backlog-planning.md",
+      "bytes": 4381,
+      "sha256": "03e6efc39c3f50cf2b9bc3cdcadc1edd4ccf63e86ca9e84f53d237d10f747597",
+      "lines": 77,
+      "words": 613,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/agents/benchmark.md": {
+      "path": ".pi/agent/agents/benchmark.md",
+      "bytes": 1731,
+      "sha256": "4d5d400581fac18b2faa77866a41ecc1030191163cbd36fcd2e1da9775d38cad",
+      "lines": 17,
+      "words": 206,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/agents/debug.md": {
+      "path": ".pi/agent/agents/debug.md",
+      "bytes": 3892,
+      "sha256": "2b90816d20070786763dacf4559bb6ae18afd1df08f8ff95d3e4d663d3d7292c",
+      "lines": 70,
+      "words": 553,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/agents/docs.md": {
+      "path": ".pi/agent/agents/docs.md",
+      "bytes": 2424,
+      "sha256": "4621bad505d4e8867432d2909720853250449e4c999b6e0a46037e52476c0a5e",
+      "lines": 58,
+      "words": 339,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/agents/explore.md": {
+      "path": ".pi/agent/agents/explore.md",
+      "bytes": 468,
+      "sha256": "9fcf83f04121b60fca8c79e6e303270c1a647c7b86bc2e8c4424b802b3c4dc5f",
+      "lines": 12,
+      "words": 60,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/agents/general.md": {
+      "path": ".pi/agent/agents/general.md",
+      "bytes": 918,
+      "sha256": "cc5f8e18c96e4e1f977a50b74c9d7285f5d2c626eaeed1fb2b74405a60d7c854",
+      "lines": 13,
+      "words": 126,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/agents/ideate.md": {
+      "path": ".pi/agent/agents/ideate.md",
+      "bytes": 2685,
+      "sha256": "9a562e9abf022dff4b4def611268be54268d1b6ac5fce88deaf50a4549db0c79",
+      "lines": 50,
+      "words": 395,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/agents/lookup.md": {
+      "path": ".pi/agent/agents/lookup.md",
+      "bytes": 1709,
+      "sha256": "35fd1067297376e8a58adb512e8d40fb45d920054414c01e5710b7a09562bd80",
+      "lines": 35,
+      "words": 230,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/agents/patterns.md": {
+      "path": ".pi/agent/agents/patterns.md",
+      "bytes": 2100,
+      "sha256": "17f48e02c7e24fcda3eb6871e9c077dcd9e6509a3e74b082bdfc9967a01394d7",
+      "lines": 55,
+      "words": 303,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/agents/pr-feedback.md": {
+      "path": ".pi/agent/agents/pr-feedback.md",
+      "bytes": 5019,
+      "sha256": "311888041e0e89b096d786f733dd9bef7b2ae6273fe404da9204bd0b3e5c41b5",
+      "lines": 87,
+      "words": 705,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/agents/quick.md": {
+      "path": ".pi/agent/agents/quick.md",
+      "bytes": 1888,
+      "sha256": "853af95abc70ce8355696024faca3afe2b569a19ff43f77423f67edc3af35b27",
+      "lines": 44,
+      "words": 269,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/agents/refactor.md": {
+      "path": ".pi/agent/agents/refactor.md",
+      "bytes": 1287,
+      "sha256": "200e0dae4b18c27b65ad12d27e6b1d8ed3040882b29ff9cdd22a629edafa3d28",
+      "lines": 28,
+      "words": 180,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/agents/research.md": {
+      "path": ".pi/agent/agents/research.md",
+      "bytes": 2958,
+      "sha256": "9b1fab0698a2a7fd01f6f7e0837f8cd0b5ba7a84dca762dfe20cea9cf7a63417",
+      "lines": 57,
+      "words": 380,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/agents/review.md": {
+      "path": ".pi/agent/agents/review.md",
+      "bytes": 3542,
+      "sha256": "b1f78832a51c9f12548324883b13e06d944281407d19722d3d75d979566a7515",
+      "lines": 62,
+      "words": 464,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/agents/spec.md": {
+      "path": ".pi/agent/agents/spec.md",
+      "bytes": 2741,
+      "sha256": "7c31905109b4e0945bb46b58f00e9e84e91d560d0bbc3bcef33ee4d66aeba356",
+      "lines": 51,
+      "words": 362,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/agents/test.md": {
+      "path": ".pi/agent/agents/test.md",
+      "bytes": 4276,
+      "sha256": "bad8e3bb25ac320b7a0376f085fd7f1578e469691a6583a883097ee490e50aea",
+      "lines": 55,
+      "words": 620,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/agents/validate.md": {
+      "path": ".pi/agent/agents/validate.md",
+      "bytes": 1591,
+      "sha256": "349d426a30159005f9ad8d08f4d2f098560157440347ac2c836f106637778ccd",
+      "lines": 38,
+      "words": 217,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/agents/visualizer.md": {
+      "path": ".pi/agent/agents/visualizer.md",
+      "bytes": 12677,
+      "sha256": "626940540712f6445385dd36728dad91b536f3acfead578121a6a3ab109a9af6",
+      "lines": 108,
+      "words": 1648,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/extensions/__tests__/routed-prompts.test.ts": {
+      "path": ".pi/agent/extensions/__tests__/routed-prompts.test.ts",
+      "bytes": 8266,
+      "sha256": "169bdda4947f1da56556a2f90627496da0fccb693c4dd6957a171de4e7229cb6",
+      "lines": 288,
+      "words": 797,
+      "lexicalMarkers": 8
+    },
+    ".pi/agent/extensions/prompt-ui/__tests__/subagent-session-links.test.ts": {
+      "path": ".pi/agent/extensions/prompt-ui/__tests__/subagent-session-links.test.ts",
+      "bytes": 40846,
+      "sha256": "806a5a43ddcdda2035675652cb82cf1eea8c8c1c2337b1464a611a4c0ab8b063",
+      "lines": 1163,
+      "words": 3895,
+      "lexicalMarkers": 37
+    },
+    ".pi/agent/extensions/prompt-ui/__tests__/subagent-transcript-frame.test.ts": {
+      "path": ".pi/agent/extensions/prompt-ui/__tests__/subagent-transcript-frame.test.ts",
+      "bytes": 6825,
+      "sha256": "c1cf07691c1ca76fc5f907248b11ffc2708c7062519cc42f5116e198780df494",
+      "lines": 191,
+      "words": 599,
+      "lexicalMarkers": 10
+    },
+    ".pi/agent/extensions/prompt-ui/__tests__/subagent-widget-frame.test.ts": {
+      "path": ".pi/agent/extensions/prompt-ui/__tests__/subagent-widget-frame.test.ts",
+      "bytes": 16609,
+      "sha256": "f209cf9aa03f34192681944666307f23ad67eab9eeedf8c00b4962b3ed2c5b21",
+      "lines": 494,
+      "words": 1607,
+      "lexicalMarkers": 24
+    },
+    ".pi/agent/extensions/prompt-ui/subagent-session-links.ts": {
+      "path": ".pi/agent/extensions/prompt-ui/subagent-session-links.ts",
+      "bytes": 29182,
+      "sha256": "b6d1f8254698da29aba3bb661a26761cb074ad2b2c979d94df9acded336422a7",
+      "lines": 849,
+      "words": 2812,
+      "lexicalMarkers": 162
+    },
+    ".pi/agent/extensions/prompt-ui/subagent-session-target.ts": {
+      "path": ".pi/agent/extensions/prompt-ui/subagent-session-target.ts",
+      "bytes": 1745,
+      "sha256": "ed770b84a1cac7b9e8dfd282217dc25c3f239347940719c04622028661c4134f",
+      "lines": 55,
+      "words": 168,
+      "lexicalMarkers": 20
+    },
+    ".pi/agent/extensions/prompt-ui/subagent-transcript-frame.ts": {
+      "path": ".pi/agent/extensions/prompt-ui/subagent-transcript-frame.ts",
+      "bytes": 2474,
+      "sha256": "5ade79f5bc33ef48b16a8bc670e4acb91a8653a9d5df192307773652186dd3bd",
+      "lines": 66,
+      "words": 240,
+      "lexicalMarkers": 9
+    },
+    ".pi/agent/extensions/prompt-ui/subagent-transcript-records.ts": {
+      "path": ".pi/agent/extensions/prompt-ui/subagent-transcript-records.ts",
+      "bytes": 2093,
+      "sha256": "550fd9f6b5c93ae70b1a423cec75d1291d7189dcc59af9c38647fc784c9ea417",
+      "lines": 73,
+      "words": 200,
+      "lexicalMarkers": 11
+    },
+    ".pi/agent/extensions/prompt-ui/subagent-widget-frame.ts": {
+      "path": ".pi/agent/extensions/prompt-ui/subagent-widget-frame.ts",
+      "bytes": 16513,
+      "sha256": "9c20263323a3715987244d59af877fc20ac3acad8b87f36dc3e16bc345288326",
+      "lines": 460,
+      "words": 1602,
+      "lexicalMarkers": 102
+    },
+    ".pi/agent/extensions/routed-prompts.ts": {
+      "path": ".pi/agent/extensions/routed-prompts.ts",
+      "bytes": 12002,
+      "sha256": "e713a9461b77ee891ba2d954cabe0e486f8602bada320012d4364346cb556e02",
+      "lines": 362,
+      "words": 1271,
+      "lexicalMarkers": 96
+    },
+    ".pi/agent/instructions/orchestration/assignments.md": {
+      "path": ".pi/agent/instructions/orchestration/assignments.md",
+      "bytes": 3413,
+      "sha256": "3d9001b1a508d632e93f45132570738f35872d0ea514ddcc70b928501b8b7c87",
+      "lines": 13,
+      "words": 495,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/instructions/orchestration/coordination.md": {
+      "path": ".pi/agent/instructions/orchestration/coordination.md",
+      "bytes": 2078,
+      "sha256": "36f01b90c28dda14ac7ce68af04698bac1c0a67f4e20b6dab723e942006273af",
+      "lines": 10,
+      "words": 305,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/instructions/orchestration/index.md": {
+      "path": ".pi/agent/instructions/orchestration/index.md",
+      "bytes": 3396,
+      "sha256": "86407844563bed0922bb55f8d5c3927772c4d3f011a867c639901c90317242f8",
+      "lines": 25,
+      "words": 411,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/instructions/orchestration/routing.md": {
+      "path": ".pi/agent/instructions/orchestration/routing.md",
+      "bytes": 4341,
+      "sha256": "4bd62f6f06c6c4115c5bc9167cef39b87359729916bee64ad022baab3f0eec83",
+      "lines": 30,
+      "words": 618,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/instructions/orchestration/supervision.md": {
+      "path": ".pi/agent/instructions/orchestration/supervision.md",
+      "bytes": 6371,
+      "sha256": "f5604eba1ca59f6aa79d81a7283f5cc7d9b3466165fccf0e189b421779dda91a",
+      "lines": 27,
+      "words": 941,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/config/agent-types.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/config/agent-types.ts",
+      "bytes": 4859,
+      "sha256": "fbbf83c3e480d529b6888dfe9a9916edb1232524c6057f42abd753f1aa1923b0",
+      "lines": 135,
+      "words": 554,
+      "lexicalMarkers": 16
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/config/custom-agents.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/config/custom-agents.ts",
+      "bytes": 6045,
+      "sha256": "f19e8c8bc1258a6856adf7e786a4a76535f0f2814b291ddaae7e571b88ecd115",
+      "lines": 151,
+      "words": 766,
+      "lexicalMarkers": 33
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/config/default-agents.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/config/default-agents.ts",
+      "bytes": 4421,
+      "sha256": "fa619d385f09f4bbec204b65284388f738a5d2464b7e23fa3035b2e4bbbf7716",
+      "lines": 121,
+      "words": 628,
+      "lexicalMarkers": 19
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/config/invocation-config.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/config/invocation-config.ts",
+      "bytes": 5980,
+      "sha256": "2e8e77065cce68c8b898d5963281d439557ad559ae9b4bce2aa2fb7bafad417b",
+      "lines": 167,
+      "words": 796,
+      "lexicalMarkers": 20
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/config/thinking-level.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/config/thinking-level.ts",
+      "bytes": 2470,
+      "sha256": "a1dd831bdf3ad3b6e7f6c0aad665c3ffa17eb4167d6953781e3b8ec4e5b7de21",
+      "lines": 58,
+      "words": 364,
+      "lexicalMarkers": 6
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/debug.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/debug.ts",
+      "bytes": 702,
+      "sha256": "83aa330d9c67b65d913b5282736877e2f3aa2dd1a1d80672bf7cefbe09a6ef36",
+      "lines": 20,
+      "words": 95,
+      "lexicalMarkers": 4
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/handlers/index.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/handlers/index.ts",
+      "bytes": 194,
+      "sha256": "a841fd93bdcf165b3bda1cd3db09b96ad5adb55aa4e79bccd66ce372b8b07fd7",
+      "lines": 3,
+      "words": 18,
+      "lexicalMarkers": 0
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/handlers/interrupt.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/handlers/interrupt.ts",
+      "bytes": 1941,
+      "sha256": "1d068bcd14d9dd96d4cc697fbd0ca0791c786fe4b9e29c17c299f7a9553c6b64",
+      "lines": 58,
+      "words": 272,
+      "lexicalMarkers": 5
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/handlers/lifecycle.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/handlers/lifecycle.ts",
+      "bytes": 2332,
+      "sha256": "a30223f5aaf2ff4372a5d7b2091e6badb1eba991699ad5a2dca105596f093e21",
+      "lines": 65,
+      "words": 279,
+      "lexicalMarkers": 0
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/handlers/widget-events.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/handlers/widget-events.ts",
+      "bytes": 1644,
+      "sha256": "df7f2d8ed8d6fd97a324686161384826dac37b5b9620d3d8c3fb021483e4b457",
+      "lines": 49,
+      "words": 248,
+      "lexicalMarkers": 2
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/index.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/index.ts",
+      "bytes": 13205,
+      "sha256": "677355618c6306a39e5a9f8f7e3bc88329724731ff6549f5bcb9bfeca9bafaaf",
+      "lines": 287,
+      "words": 1366,
+      "lexicalMarkers": 7
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/layered-settings.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/layered-settings.ts",
+      "bytes": 3961,
+      "sha256": "2f89301c6348655410a054b231a7a881c165cd408f88a03b299efd827274df7e",
+      "lines": 105,
+      "words": 554,
+      "lexicalMarkers": 15
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/child-lifecycle.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/child-lifecycle.ts",
+      "bytes": 4173,
+      "sha256": "ccc5912f6abcefce46242d72026d00cc5fe1a17af52714fb026aadb04d82b992",
+      "lines": 115,
+      "words": 532,
+      "lexicalMarkers": 9
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/child-shutdown.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/child-shutdown.ts",
+      "bytes": 3835,
+      "sha256": "d7adf5877123c651876e4591b381f27f669daa8f3d48148f8ba4e2378bf57364",
+      "lines": 105,
+      "words": 509,
+      "lexicalMarkers": 9
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/concurrency-limiter.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/concurrency-limiter.ts",
+      "bytes": 1799,
+      "sha256": "f60b98819349b9453f36ad674249b9958865e721024561c9799f6ff916a3165d",
+      "lines": 55,
+      "words": 262,
+      "lexicalMarkers": 6
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/create-subagent-session.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/create-subagent-session.ts",
+      "bytes": 13853,
+      "sha256": "ad74e497da043dbbce82a73ed8dea6a13751543735ddea00960297fe47b764be",
+      "lines": 337,
+      "words": 1559,
+      "lexicalMarkers": 33
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/parent-snapshot.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/parent-snapshot.ts",
+      "bytes": 4528,
+      "sha256": "9b091142cba327ea4c87c2406c2e1161b6aefa274e10bc4dee36df32668e7f2c",
+      "lines": 104,
+      "words": 630,
+      "lexicalMarkers": 21
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/record-observer.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/record-observer.ts",
+      "bytes": 2386,
+      "sha256": "f894bdfaef22474948ac2ed50251a0ebaf922a8c089fa1f512467f86f068f4fd",
+      "lines": 75,
+      "words": 240,
+      "lexicalMarkers": 12
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/subagent-manager.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/subagent-manager.ts",
+      "bytes": 21748,
+      "sha256": "51d078aae7c83611b4f692ab90164b05c5100f031009a8ad86550872a3e0a3d4",
+      "lines": 566,
+      "words": 2659,
+      "lexicalMarkers": 82
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/subagent-run.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/subagent-run.ts",
+      "bytes": 12807,
+      "sha256": "58af166bf6d98bd18dd0cffcd3a2fc782d34460eacc6c9a6a166148232ca3e9f",
+      "lines": 350,
+      "words": 1824,
+      "lexicalMarkers": 66
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/subagent-session.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/subagent-session.ts",
+      "bytes": 16306,
+      "sha256": "86c409d006ade2794b2c739481f9919202925ca21e74c8eba6740c31b98e00d7",
+      "lines": 417,
+      "words": 2093,
+      "lexicalMarkers": 60
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/subagent-state.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/subagent-state.ts",
+      "bytes": 5462,
+      "sha256": "05ba5f53da4599f3f629a65b6c6a5178f7e93bf188b4ec9fc58961fd1e8fde72",
+      "lines": 146,
+      "words": 705,
+      "lexicalMarkers": 19
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/subagent.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/subagent.ts",
+      "bytes": 35360,
+      "sha256": "a899288615159e03d30e657dab554c517cb517c6ba927aa6dbb35f703b27d088",
+      "lines": 864,
+      "words": 4850,
+      "lexicalMarkers": 121
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/turn-limits.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/turn-limits.ts",
+      "bytes": 6321,
+      "sha256": "fbad6710041a2b787e9aacef463a51408b54956606b91107da0ea22dfe5dce23",
+      "lines": 166,
+      "words": 977,
+      "lexicalMarkers": 35
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/usage.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/usage.ts",
+      "bytes": 2450,
+      "sha256": "faf27d43429c90fcf52d84ab2ea5a2ee5c9e59f372d953da7aaf72fab82bca44",
+      "lines": 60,
+      "words": 340,
+      "lexicalMarkers": 10
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/workspace-bracket.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/workspace-bracket.ts",
+      "bytes": 2880,
+      "sha256": "69027868028e0dfcf03cbc4f4692761204a23ad7823ca3abdc11830d34ad551a",
+      "lines": 76,
+      "words": 404,
+      "lexicalMarkers": 12
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/workspace.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/lifecycle/workspace.ts",
+      "bytes": 1794,
+      "sha256": "80ced9a416e624a54559c58e14a88127fbbf22470aeb136ed61b4fdff53818e9",
+      "lines": 46,
+      "words": 261,
+      "lexicalMarkers": 3
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/observation/composite-subagent-observer.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/observation/composite-subagent-observer.ts",
+      "bytes": 2466,
+      "sha256": "650239876b121861a6fd8ccae170f149bab2bbcb155a5a57fa6fd867596190ec",
+      "lines": 67,
+      "words": 251,
+      "lexicalMarkers": 3
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/observation/notification.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/observation/notification.ts",
+      "bytes": 16388,
+      "sha256": "0ab98564669390039910c6761c4f21cbede133f56231c126302fab6c86babe47",
+      "lines": 431,
+      "words": 1952,
+      "lexicalMarkers": 68
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/observation/outcome-delivery.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/observation/outcome-delivery.ts",
+      "bytes": 11107,
+      "sha256": "7c2bd21773907df7483383b513a6dac75e50c67b373c30845feba1f864ff4af7",
+      "lines": 264,
+      "words": 1708,
+      "lexicalMarkers": 41
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/observation/subagent-events-observer.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/observation/subagent-events-observer.ts",
+      "bytes": 4846,
+      "sha256": "2a774e18faf60a58095c4b898a26e309c5deb48232f6960f641314ae1fc0fa26",
+      "lines": 123,
+      "words": 575,
+      "lexicalMarkers": 7
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/persisted-record.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/persisted-record.ts",
+      "bytes": 4026,
+      "sha256": "23c276bb65397d615426f17d1da660f35f03205a8e1db3f0ff8d5c0974864cda",
+      "lines": 102,
+      "words": 518,
+      "lexicalMarkers": 22
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/runtime.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/runtime.ts",
+      "bytes": 3651,
+      "sha256": "1fad76a84997e6c98ac7fc4d6204692015752a1832907c780da340f45c4bacbf",
+      "lines": 101,
+      "words": 421,
+      "lexicalMarkers": 6
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/service/service-adapter.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/service/service-adapter.ts",
+      "bytes": 7906,
+      "sha256": "f8af5cf3e34c71859ddcaada0db8ee967ee3e843c4968296dab0871ba5c66a9b",
+      "lines": 197,
+      "words": 860,
+      "lexicalMarkers": 23
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/service/service.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/service/service.ts",
+      "bytes": 8149,
+      "sha256": "7db032d80dce49328075ab3b8746df7b52436926ce5d262e4f8e2518468aa7d2",
+      "lines": 214,
+      "words": 1106,
+      "lexicalMarkers": 38
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/ask-parent-tool.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/ask-parent-tool.ts",
+      "bytes": 2729,
+      "sha256": "a8fe018b254ffc616d97dad204c6ad60463c4347165ad3c1a6e576e841ae4b7b",
+      "lines": 69,
+      "words": 396,
+      "lexicalMarkers": 4
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/builtin-extensions.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/builtin-extensions.ts",
+      "bytes": 2468,
+      "sha256": "21c273d6193a513265318425dfbd2e2484a6c3d2219863dd9ce10c7ad67a720c",
+      "lines": 65,
+      "words": 328,
+      "lexicalMarkers": 3
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/content-items.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/content-items.ts",
+      "bytes": 2104,
+      "sha256": "db257659bfcb9d6362e3d530a4e8acc1ee00b584f76ae8ebf66167e6253d4009",
+      "lines": 53,
+      "words": 244,
+      "lexicalMarkers": 7
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/context.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/context.ts",
+      "bytes": 3071,
+      "sha256": "318047c03e00e566708bb8f17cb6e152dcc78fbf56289eaf2d3236679d8407c3",
+      "lines": 80,
+      "words": 410,
+      "lexicalMarkers": 16
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/conversation.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/conversation.ts",
+      "bytes": 1922,
+      "sha256": "65dd82c44b2c83f48fb8c5391734e01a77443f35fd385228b70128b56c16254c",
+      "lines": 49,
+      "words": 221,
+      "lexicalMarkers": 17
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/env.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/env.ts",
+      "bytes": 994,
+      "sha256": "886f689b61ca3864a6b877b8698818dcb76a700973e307f8ad819ab0ed2dd2ed",
+      "lines": 40,
+      "words": 132,
+      "lexicalMarkers": 6
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/mcp-tool-patterns.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/mcp-tool-patterns.ts",
+      "bytes": 2065,
+      "sha256": "60d1cb80278011ae2e7b442c754e520b2f485d94db52b8b605558f8d4050c629",
+      "lines": 55,
+      "words": 280,
+      "lexicalMarkers": 6
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/model-resolver.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/model-resolver.ts",
+      "bytes": 4571,
+      "sha256": "1051d01d6d6301422cdce6d8203611e6ade4d61290bb3079d15293b036eaa9d9",
+      "lines": 126,
+      "words": 607,
+      "lexicalMarkers": 27
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/notify-parent-tool.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/notify-parent-tool.ts",
+      "bytes": 3313,
+      "sha256": "2f4b02fe7133c21862a69eeef96674126790afabaacdff1cd798f0e139c8430b",
+      "lines": 83,
+      "words": 494,
+      "lexicalMarkers": 10
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/package-exclusions.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/package-exclusions.ts",
+      "bytes": 3134,
+      "sha256": "43fa947b6b6b7919653e83c2e42a276f25710b4f6f35ba74cc9da3c0aefa3d33",
+      "lines": 75,
+      "words": 406,
+      "lexicalMarkers": 8
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/project-context.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/project-context.ts",
+      "bytes": 2781,
+      "sha256": "6a344f5dabcb9bd46c46334c5750473c3b80226af3fdefa5f0a8692ce36bf4ae",
+      "lines": 73,
+      "words": 403,
+      "lexicalMarkers": 8
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/prompts.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/prompts.ts",
+      "bytes": 21628,
+      "sha256": "8df2ed8bccf02646ab9ecba023ee0b2003b841b408e1a4beab75578a3dc9bc25",
+      "lines": 516,
+      "words": 3214,
+      "lexicalMarkers": 76
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/provider-inheritance.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/provider-inheritance.ts",
+      "bytes": 2415,
+      "sha256": "921ba31a0b020fd19f93e22c3b0ae165e6052d67e149a6a1aba96f0502bace1f",
+      "lines": 56,
+      "words": 323,
+      "lexicalMarkers": 6
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/session-config.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/session-config.ts",
+      "bytes": 8447,
+      "sha256": "cc9a3842c1fcf92a2d768dda20303817b6ea85488e871e4b6099d90ab1060f48",
+      "lines": 216,
+      "words": 987,
+      "lexicalMarkers": 31
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/session-dir.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/session/session-dir.ts",
+      "bytes": 1434,
+      "sha256": "5f5508d50ab4989150d91593da245cae0e9df7cd42db39f92b11e9f38d31271d",
+      "lines": 38,
+      "words": 177,
+      "lexicalMarkers": 4
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/settings.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/settings.ts",
+      "bytes": 18806,
+      "sha256": "c4b9e4d44368e0adf7ec8fad5d515743e40c0ed60830bc9f7937d53126fce880",
+      "lines": 475,
+      "words": 2123,
+      "lexicalMarkers": 71
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/agent-tool.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/agent-tool.ts",
+      "bytes": 13515,
+      "sha256": "5cf0cf1798308e6ba52c625d3529cdaa165087875c1f09ab0f039fc8be5933de",
+      "lines": 350,
+      "words": 1596,
+      "lexicalMarkers": 29
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/background-spawner.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/background-spawner.ts",
+      "bytes": 4244,
+      "sha256": "4ccd985c010f01d6a0878617159c07aa1de41752c1aa1d95901dae4e097ba696",
+      "lines": 110,
+      "words": 486,
+      "lexicalMarkers": 15
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/foreground-runner.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/foreground-runner.ts",
+      "bytes": 4363,
+      "sha256": "3cfc27a6335e4e5741d832af8602d58aa1ddb8e1f6ca7c8472bf833669518de2",
+      "lines": 123,
+      "words": 465,
+      "lexicalMarkers": 8
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/get-result-renderer.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/get-result-renderer.ts",
+      "bytes": 5206,
+      "sha256": "0d993cb65a71c8ee42c2b7df3659509abe769310745cdbb6ad422d70d37625d6",
+      "lines": 125,
+      "words": 662,
+      "lexicalMarkers": 21
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/get-result-report.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/get-result-report.ts",
+      "bytes": 6376,
+      "sha256": "8ed6d1857bbf025eca44d958c207b3e0b11dfcc5f017f9d17120ef371392e9c9",
+      "lines": 153,
+      "words": 869,
+      "lexicalMarkers": 31
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/get-result-tool.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/get-result-tool.ts",
+      "bytes": 12207,
+      "sha256": "076f7894ed7ba3fb920b41a026f73a4a8e954fd73d00b2de785a77e29e0a1609",
+      "lines": 332,
+      "words": 1501,
+      "lexicalMarkers": 33
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/helpers.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/helpers.ts",
+      "bytes": 4877,
+      "sha256": "f20c93afffaa62427cf0677fa28e628668592e47731aa890d7c5bcdae4b24a97",
+      "lines": 119,
+      "words": 568,
+      "lexicalMarkers": 19
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/progress-stream.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/progress-stream.ts",
+      "bytes": 2531,
+      "sha256": "59c3922404c982db5de583456ff4e97ea8b1d4785681ec4f39b1aac9cbab795e",
+      "lines": 69,
+      "words": 318,
+      "lexicalMarkers": 5
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/result-renderer.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/result-renderer.ts",
+      "bytes": 5998,
+      "sha256": "c88c9cebdf68ac8cdd4bc81aba4c0f5d6149bf97c949a805079322d2eb5516e5",
+      "lines": 169,
+      "words": 776,
+      "lexicalMarkers": 35
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/spawn-config.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/spawn-config.ts",
+      "bytes": 6905,
+      "sha256": "ec57ab026898bcf8c060aa84425af5d68fb703c470fadfcd586726132531de93",
+      "lines": 199,
+      "words": 783,
+      "lexicalMarkers": 14
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/steer-tool.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/tools/steer-tool.ts",
+      "bytes": 3573,
+      "sha256": "a90261fa5bb38f41da230c0b05eeb2e421cecf61ef97ed4206b5b07c9804906a",
+      "lines": 109,
+      "words": 418,
+      "lexicalMarkers": 12
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/types.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/types.ts",
+      "bytes": 5276,
+      "sha256": "3773668a0c8bf336f9f9355f1fee292c414d66fce04c28c21ec8393c2976b695",
+      "lines": 141,
+      "words": 704,
+      "lexicalMarkers": 31
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/agent-widget.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/agent-widget.ts",
+      "bytes": 14035,
+      "sha256": "7d7e2748839f802f3dfc61a75bbc5aceea13e40c65c5dd6c43437736770c59d1",
+      "lines": 368,
+      "words": 1751,
+      "lexicalMarkers": 52
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/bounded-lines.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/bounded-lines.ts",
+      "bytes": 1942,
+      "sha256": "7c3b329be893031262a4458f3cb1ce3eae72475738f5f7035eec5cd77f1fd2b1",
+      "lines": 45,
+      "words": 314,
+      "lexicalMarkers": 4
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/display.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/display.ts",
+      "bytes": 7057,
+      "sha256": "6981d2f5d42a4c871d4f68db340033fad8ef3215369d00539ea72d9cba2d6ac9",
+      "lines": 193,
+      "words": 895,
+      "lexicalMarkers": 49
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/glyphs.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/glyphs.ts",
+      "bytes": 2578,
+      "sha256": "b5602c24d8b03b9e70e16b5ed6937eae292854390a9a571611f8ab560ec2aa6e",
+      "lines": 62,
+      "words": 404,
+      "lexicalMarkers": 6
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/labeled-rule.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/labeled-rule.ts",
+      "bytes": 2495,
+      "sha256": "13666f8b9a30292afdfd8a5a732e075d027432ff7ec882dc05a6b35a850a2151",
+      "lines": 54,
+      "words": 375,
+      "lexicalMarkers": 7
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/notification-renderer.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/notification-renderer.ts",
+      "bytes": 6033,
+      "sha256": "d9085e00e214bf45323080567607ff7d67592167e5aaa3d0727fa2827f2f0e80",
+      "lines": 162,
+      "words": 736,
+      "lexicalMarkers": 33
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigation.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigation.ts",
+      "bytes": 9212,
+      "sha256": "5e46e6316f6fb5188ee2eb9d737428f348dc797b49ecbc9c8c23a93688081f5e",
+      "lines": 199,
+      "words": 1131,
+      "lexicalMarkers": 20
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigator.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/session-navigator.ts",
+      "bytes": 17303,
+      "sha256": "6365e926de5f5eb0c86b41114ae414be19968dfd92642576ee0a28b7f9f8f763",
+      "lines": 428,
+      "words": 2173,
+      "lexicalMarkers": 50
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/subagents-settings.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/subagents-settings.ts",
+      "bytes": 6813,
+      "sha256": "3f1a5b11faa32652ea5e07c57d0181cc53081947aafc5d91471eebfabbde9be3",
+      "lines": 179,
+      "words": 717,
+      "lexicalMarkers": 14
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/transcript-content.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/transcript-content.ts",
+      "bytes": 15035,
+      "sha256": "24a957c3ad011cdf59c276f548fe3945ccbee0aa2db6cc4108551a00d1e80863",
+      "lines": 374,
+      "words": 1654,
+      "lexicalMarkers": 45
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/widget-renderer.ts": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/src/ui/widget-renderer.ts",
+      "bytes": 13035,
+      "sha256": "cf43c2654155b1ef5e399b0a06b270103b1991e0262b3fbcc85aa3981d2aee30",
+      "lines": 350,
+      "words": 1520,
+      "lexicalMarkers": 55
+    },
+    ".pi/agent/subagents.json": {
+      "path": ".pi/agent/subagents.json",
+      "bytes": 134,
+      "sha256": "7f8487036b718ae5d21521a24189923234f49597c259c699f48fc599d96def08",
+      "lines": 7,
+      "words": 10,
+      "lexicalMarkers": null
+    },
+    ".pi/agent/extensions/subagent-steering-notice.ts": {
+      "path": ".pi/agent/extensions/subagent-steering-notice.ts",
+      "bytes": 2253,
+      "sha256": "c7b8de26856d6de3114517be8ac63d503cc8423358c493106301414bea06e627",
+      "lines": 56,
+      "words": 260,
+      "lexicalMarkers": 13
+    },
+    ".pi/agent/extensions/__tests__/subagent-steering-notice.test.ts": {
+      "path": ".pi/agent/extensions/__tests__/subagent-steering-notice.test.ts",
+      "bytes": 5381,
+      "sha256": "7c1dffd26437aae47e90e1a1dce4b3644d8af139281793a1dff3b5885303e466",
+      "lines": 140,
+      "words": 575,
+      "lexicalMarkers": 7
+    }
+  },
+  "configurationFingerprints": {
+    ".pi/agent/extensions/subagent-steering-notice.ts": {
+      "bytes": 2253,
+      "sha256": "c7b8de26856d6de3114517be8ac63d503cc8423358c493106301414bea06e627"
+    },
+    ".pi/agent/extensions/__tests__/subagent-steering-notice.test.ts": {
+      "bytes": 5381,
+      "sha256": "7c1dffd26437aae47e90e1a1dce4b3644d8af139281793a1dff3b5885303e466"
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/package.json": {
+      "bytes": 2356,
+      "sha256": "888f1d87c30b34de250b9d8623b28d2a9789125c1e65e40c29cf8e4eea2e6463"
+    },
+    ".pi/agent/extensions/model-presets.ts": {
+      "bytes": 8092,
+      "sha256": "2853c8e82e1a4f693141d7972af725627cc4e45c53502c7c0f11b990cfc0210e"
+    },
+    ".pi/agent/settings.json": {
+      "bytes": 4335,
+      "sha256": "37676e32bf72bb3c6bab0431e66468a66d046dcb004b263b5e94654bd469b673"
+    },
+    "AGENTS.md": {
+      "bytes": 2258,
+      "sha256": "4299e76693eee3453d0346da9249d24553047e20f13ddc461444a50d4a353e8d"
+    },
+    ".pi/agent/AGENTS.md": {
+      "bytes": 3848,
+      "sha256": "7cb07be7bf16b5d0f3a9ab0f9494e45e5625dc8ed7a805e8ea676b2c52c5ce5c"
+    }
+  },
+  "totals": {
+    "installed_source": {
+      "files": 74,
+      "bytes": 494486,
+      "lines": 12682,
+      "words": 62737,
+      "lexicalMarkers": 1721
+    },
+    "installed_tests": {
+      "files": 0,
+      "bytes": 0,
+      "lines": 0,
+      "words": 0,
+      "lexicalMarkers": 0
+    },
+    "local_glue": {
+      "files": 8,
+      "bytes": 66396,
+      "lines": 1928,
+      "words": 6563,
+      "lexicalMarkers": 413
+    },
+    "local_tests": {
+      "files": 5,
+      "bytes": 77927,
+      "lines": 2276,
+      "words": 7473,
+      "lexicalMarkers": 86
+    },
+    "agents": {
+      "files": 20,
+      "bytes": 61186,
+      "lines": 1014,
+      "words": 8361,
+      "lexicalMarkers": 0
+    },
+    "orchestration": {
+      "files": 5,
+      "bytes": 19599,
+      "lines": 105,
+      "words": 2770,
+      "lexicalMarkers": 0
+    }
+  },
+  "complexity": {
+    "kind": "lexical proxy, NOT cyclomatic or cognitive complexity",
+    "pattern": "\\b(?:if|for|while|do|switch|catch)\\b|&&=?|\\|\\|=?|\\?\\?=?|\\?(?!\\.)",
+    "includesCommentsAndStrings": true
+  },
+  "runtime": {
+    "protocol": {
+      "agent": "quick",
+      "modelPreset": "presets/routine",
+      "configuredModel": "openai-codex/gpt-6-luna-fast",
+      "configuredThinking": "low",
+      "maxTurns": 4,
+      "inheritContext": false,
+      "minimal": "This is a bounded runtime measurement. Do not use tools, inspect files, delegate, or ask questions. Return exactly PROBE_OK and nothing else.",
+      "inspection": "This is a bounded read-only runtime measurement in /Users/fbb/dotfiles. Use the read tool to read only .pi/agent/npm/node_modules/@gotgenes/pi-subagents/package.json. Do not run commands, read other files, modify files, delegate, or ask questions. Return exactly: name=<name>; version=<version>; node=<engines.node>. Replace placeholders with the values read from that file. Return no other text."
+    },
+    "warmupPolicy": "One unmeasured fresh-child run per workload; existing warm parent process; no provider-cache flush; serial new children; no concurrent active benchmark worker. Earlier idle sessions may remain retained.",
+    "clock": "Date.now milliseconds in parent codemode; wall clock, not monotonic",
+    "samples": [
+      {
+        "workload": "minimal",
+        "sample": 0,
+        "warmup": true,
+        "id": "3bc0fb36-1946-47e",
+        "startUtc": "2026-10-22T15:46:05.388Z",
+        "launchReturnMs": 10,
+        "observedCompletionMs": 8930,
+        "reportedDurationSeconds": 8.8,
+        "reportedTokenLabel": "12.8k token",
+        "reportedContextPercent": 5,
+        "toolUses": 0,
+        "reportedModel": "presets/routine",
+        "result": "PROBE_OK",
+        "correct": true
+      },
+      {
+        "workload": "minimal",
+        "sample": 1,
+        "warmup": false,
+        "id": "faa40fb0-93ec-43d",
+        "startUtc": "2026-10-22T15:46:27.420Z",
+        "launchReturnMs": 10,
+        "observedCompletionMs": 6557,
+        "reportedDurationSeconds": 6.5,
+        "reportedTokenLabel": "12.8k token",
+        "reportedContextPercent": 5,
+        "toolUses": 0,
+        "reportedModel": "presets/routine",
+        "result": "PROBE_OK",
+        "correct": true
+      },
+      {
+        "workload": "minimal",
+        "sample": 2,
+        "warmup": false,
+        "id": "b5a1e477-a4c2-4bb",
+        "startUtc": "2026-10-22T15:46:33.978Z",
+        "launchReturnMs": 134,
+        "observedCompletionMs": 16022,
+        "reportedDurationSeconds": 15.9,
+        "reportedTokenLabel": "158 token",
+        "reportedContextPercent": 5,
+        "toolUses": 0,
+        "reportedModel": "presets/routine",
+        "result": "PROBE_OK",
+        "correct": true
+      },
+      {
+        "workload": "minimal",
+        "sample": 3,
+        "warmup": false,
+        "id": "b09c8dc5-2533-4cc",
+        "startUtc": "2026-10-22T15:46:50.001Z",
+        "launchReturnMs": 140,
+        "observedCompletionMs": 7790,
+        "reportedDurationSeconds": 7.6,
+        "reportedTokenLabel": "12.8k token",
+        "reportedContextPercent": 5,
+        "toolUses": 0,
+        "reportedModel": "presets/routine",
+        "result": "PROBE_OK",
+        "correct": true
+      },
+      {
+        "workload": "inspection",
+        "sample": 0,
+        "warmup": true,
+        "id": "58fdafe5-2cf4-4ab",
+        "startUtc": "2026-10-22T15:47:08.012Z",
+        "launchReturnMs": 11,
+        "observedCompletionMs": 7509,
+        "reportedDurationSeconds": 7.4,
+        "reportedTokenLabel": "1.4k token",
+        "reportedContextPercent": 5,
+        "toolUses": 1,
+        "reportedModel": "presets/routine",
+        "result": "name=@gotgenes/pi-subagents; version=25.0.1; node=>=22",
+        "correct": true
+      },
+      {
+        "workload": "inspection",
+        "sample": 1,
+        "warmup": false,
+        "id": "6c0f78c3-6c34-4a3",
+        "startUtc": "2026-10-22T15:47:15.522Z",
+        "launchReturnMs": 130,
+        "observedCompletionMs": 10259,
+        "reportedDurationSeconds": 10.1,
+        "reportedTokenLabel": "14.1k token",
+        "reportedContextPercent": 5,
+        "toolUses": 1,
+        "reportedModel": "presets/routine",
+        "result": "name=@gotgenes/pi-subagents; version=25.0.1; node=>=22",
+        "correct": true
+      },
+      {
+        "workload": "inspection",
+        "sample": 2,
+        "warmup": false,
+        "id": "adb42dbd-acfe-4d4",
+        "startUtc": "2026-10-22T15:47:25.782Z",
+        "launchReturnMs": 125,
+        "observedCompletionMs": 8972,
+        "reportedDurationSeconds": 8.8,
+        "reportedTokenLabel": "14.1k token",
+        "reportedContextPercent": 5,
+        "toolUses": 1,
+        "reportedModel": "presets/routine",
+        "result": "name=@gotgenes/pi-subagents; version=25.0.1; node=>=22",
+        "correct": true
+      },
+      {
+        "workload": "inspection",
+        "sample": 3,
+        "warmup": false,
+        "id": "7862396e-6d73-4f4",
+        "startUtc": "2026-10-22T15:47:34.754Z",
+        "launchReturnMs": 113,
+        "observedCompletionMs": 7265,
+        "reportedDurationSeconds": 7.1,
+        "reportedTokenLabel": "1.4k token",
+        "reportedContextPercent": 5,
+        "toolUses": 1,
+        "reportedModel": "presets/routine",
+        "result": "name=@gotgenes/pi-subagents; version=25.0.1; node=>=22",
+        "correct": true
+      }
+    ],
+    "summary": {
+      "minimal": {
+        "launchReturnMs": {
+          "n": 3,
+          "min": 10,
+          "median": 134,
+          "max": 140
+        },
+        "observedCompletionMs": {
+          "n": 3,
+          "min": 6557,
+          "median": 7790,
+          "max": 16022
+        },
+        "correct": 3
+      },
+      "inspection": {
+        "launchReturnMs": {
+          "n": 3,
+          "min": 113,
+          "median": 125,
+          "max": 130
+        },
+        "observedCompletionMs": {
+          "n": 3,
+          "min": 7265,
+          "median": 8972,
+          "max": 10259
+        },
+        "correct": 3
+      }
+    },
+    "tokenSemantics": "Native label is rounded input + output + cacheWrite; cacheRead excluded. Not full input/context tokens.",
+    "unmeasured": [
+      "isolated child-ready latency",
+      "CPU",
+      "RSS/heap/allocations",
+      "exact serialized system prompt/tool-schema tokens",
+      "per-call input/output/cacheRead/cacheWrite/cost",
+      "concurrent queue saturation",
+      "inherited-context workload"
+    ]
+  },
+  "failures": [
+    {
+      "command": "pi --version",
+      "exitCode": 1,
+      "reason": "Sandbox launcher rejected inherited GitHub-token environment variables. No credential changes or bypass attempted; Pi package version read from installed package metadata."
+    }
+  ]
+}
