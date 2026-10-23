@@ -64,7 +64,7 @@ export function registerParentTools(pi: Pick<ExtensionAPI, "registerTool">, getR
   });
   pi.registerTool({
     name: "subagent_result", label: "Inspect specialist",
-    description: "Inspect parent-owned worker status, retrieve a complete report, read a bounded transcript page, or wait for an assignment. Interrupting or timing out a background wait does not cancel the worker.",
+    description: "Inspect parent-owned worker status, retrieve a complete report, or read a bounded transcript page. Background workers send completion notifications; normally return control instead of waiting. Use wait only for explicitly synchronous workflows: it blocks the parent turn and delays handling queued user messages. Interrupting or timing out a wait does not cancel the worker.",
     parameters: Type.Object({ request: inspection }),
     renderShell: "self",
     renderCall: (args, theme, context) => {

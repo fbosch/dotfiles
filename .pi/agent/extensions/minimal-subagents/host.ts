@@ -1,6 +1,6 @@
 import { getAgentDir, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { resolveNamedSpecialist } from "./catalog";
-import { WorkerDelivery, workerStatus } from "./delivery";
+import { WorkerDelivery, workerStatus, type WorkerNotice } from "./delivery";
 import { PiChildDriver } from "./driver";
 import { processCleanupHealth } from "./health";
 import { parentHistory, restoreHistory } from "./history";
@@ -33,6 +33,8 @@ export function registerSubagentHost(pi: ExtensionAPI, options: { agentDir?: str
   let shuttingDown = false;
   let unsubscribeCards = () => {};
   let appearance: AgentAppearance = new Map();
+  let updateDeliverySequence = 0;
+  const pendingUpdateDeliveries = new Map<string, { parentId: string; notice: Extract<WorkerNotice, { type: "update" }> }>();
 
   const getRuntime = (ctx: ExtensionContext): ParentRuntime => {
     if (shuttingDown) throw new Error("Subagent runtime is shutting down");
@@ -70,6 +72,15 @@ export function registerSubagentHost(pi: ExtensionAPI, options: { agentDir?: str
       const assignment = notice.type === "completion" || notice.type === "storage-failure"
         ? owner.inspect(notice.worker.workerId).assignments.find((item) => item.id === notice.assignment.assignmentId) : undefined;
       const preview = (assignment?.report ?? assignment?.partialReport ?? "").split("\n").slice(0, 30).join("\n").slice(0, 4000);
+      if (notice.type === "update") {
+        const updateDeliveryId = `${parentId}:${++updateDeliverySequence}`;
+        pendingUpdateDeliveries.set(updateDeliveryId, { parentId, notice });
+        pi.sendMessage({
+          customType: "minimal-subagents.notice", content: JSON.stringify(notice),
+          details: { preview, updateDeliveryId }, display: !cards.has(workerTarget(notice)),
+        }, { triggerTurn: true, deliverAs: "followUp" });
+        return;
+      }
       pi.sendMessage({ customType: "minimal-subagents.notice", content: JSON.stringify(notice), details: { preview }, display: !cards.has(workerTarget(notice)) }, { triggerTurn: true, deliverAs: "followUp" });
     }, (error) => { ctx.ui.notify(`Subagent notification failed: ${String(error)}`, "error"); });
     const runtime = new ParentRuntime(delivery, {
@@ -111,6 +122,26 @@ export function registerSubagentHost(pi: ExtensionAPI, options: { agentDir?: str
       handleMouse: (event) => cards.has(target) ? undefined : component.handleMouse?.(event),
     };
   });
+  pi.on("context", (event) => {
+    let changed = false;
+    const messages = event.messages.map((message) => {
+      if (message.role !== "custom" || message.customType !== "minimal-subagents.notice"
+        || typeof message.details !== "object" || message.details === null
+        || !("updateDeliveryId" in message.details) || typeof message.details.updateDeliveryId !== "string") return message;
+      const pending = pendingUpdateDeliveries.get(message.details.updateDeliveryId);
+      if (!pending) return message;
+      pendingUpdateDeliveries.delete(message.details.updateDeliveryId);
+      const active = current;
+      if (!active || active.parentId !== pending.parentId) return message;
+      const worker = active.runtime.delivery.owner.inspect(pending.notice.workerId);
+      const assignment = worker.assignments.find((item) => item.id === pending.notice.assignmentId);
+      const state = assignment?.outcome ?? pending.notice.state;
+      if (state === pending.notice.state) return message;
+      changed = true;
+      return { ...message, content: JSON.stringify({ ...pending.notice, state }) };
+    });
+    return changed ? { messages } : undefined;
+  });
   pi.registerCommand("subagents", {
     description: "Inspect workers, reports, and transcripts; confirm cancellation",
     async handler(_args, ctx) {
@@ -136,9 +167,15 @@ export function registerSubagentHost(pi: ExtensionAPI, options: { agentDir?: str
     const confirmed = await ctx.ui.confirm("Cancel workers and fork the session?", "Active assignments will be stopped. The fork will not inherit live workers.");
     if (!confirmed) return { cancel: true };
   });
-  pi.on("session_shutdown", async () => {
+  pi.on("session_shutdown", async (event, shutdownContext) => {
     shuttingDown = true;
     const previous = current;
+    const interrupted = previous?.runtime.delivery.owner.list().filter((worker) =>
+      worker.status === "queued" || worker.status === "running" || worker.status === "waiting-question"
+      || worker.status === "stopping" || worker.status === "cleanup-unknown" || worker.status === "releasing").length ?? 0;
+    if (event.reason === "reload" && interrupted > 0) {
+      shutdownContext.ui.notify(`Pi is reloading; ${interrupted} subagent worker(s) will be stopped and will not resume.`, "warning");
+    }
     try {
       unsubscribeCards();
       cards.clear();

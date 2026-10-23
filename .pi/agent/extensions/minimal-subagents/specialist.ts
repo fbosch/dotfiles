@@ -6,6 +6,7 @@ import { parseFrontmatter } from "@earendil-works/pi-coding-agent";
 const THINKING_LEVELS = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
 type ThinkingLevel = (typeof THINKING_LEVELS)[number];
 const PARENT_TOOLS = ["subagent", "subagent_result", "subagent_control", "get_subagent_result", "steer_subagent"];
+const SHARED_TOOLS = ["codemode"] as const;
 
 export interface CapabilityBundle {
   readonly extensions: readonly string[];
@@ -97,10 +98,11 @@ export async function resolveSpecialist(
   const selectedThinking = overrides.thinking === undefined ? configuredThinking : thinking(overrides.thinking);
   const configuredTurns = positiveTurns(fields.max_turns);
   const maxTurns = overrides.maxTurns === undefined ? configuredTurns : positiveTurns(overrides.maxTurns);
-  const tools = list(fields.tools, "tools");
-  if (tools.some((tool) => PARENT_TOOLS.includes(tool) || tool === "*" || /^[+-]/.test(tool))) {
+  const configuredTools = list(fields.tools, "tools");
+  if (configuredTools.some((tool) => PARENT_TOOLS.includes(tool) || tool === "*" || /^[+-]/.test(tool))) {
     throw new Error("Child tools must be an explicit allowlist without parent delegation tools or modifiers");
   }
+  const tools = [...new Set([...configuredTools, ...SHARED_TOOLS])];
   const bundles = list(fields.bundles, "bundles").map((bundle) => {
     const resolved = catalog.bundles.get(bundle);
     if (!resolved) throw new Error(`Required capability bundle is unavailable: ${bundle}`);

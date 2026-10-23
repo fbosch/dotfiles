@@ -117,8 +117,17 @@ test("actual child loadout must satisfy required patterns without additional cal
   const available = await catalog();
   const resolved = await resolveSpecialist("explore", definition({ tools: ["read", "mcp__docs__*"] }), available);
   expect(resolved.excludeTools).not.toContain("mcp__*");
-  expect(() => verifyChildCapabilities(resolved, ["read", "mcp__docs__lookup"])).not.toThrow();
+  expect(() => verifyChildCapabilities(resolved, ["read", "codemode", "mcp__docs__lookup"])).not.toThrow();
   expect(() => verifyChildCapabilities(resolved, ["read"])).toThrow("Required child tool");
-  expect(() => verifyChildCapabilities(resolved, ["read", "mcp__docs__lookup", "bash"])).toThrow("Unexpected callable child tool");
-  expect(() => verifyChildCapabilities(resolved, ["read", "mcp__docs__lookup", "subagent"])).toThrow("Unexpected callable child tool");
+  expect(() => verifyChildCapabilities(resolved, ["read", "codemode", "mcp__docs__lookup", "bash"])).toThrow("Unexpected callable child tool");
+  expect(() => verifyChildCapabilities(resolved, ["read", "codemode", "mcp__docs__lookup", "subagent"])).toThrow("Unexpected callable child tool");
+});
+
+test("codemode is shared with specialists and deduplicated when explicitly listed", async () => {
+  const available = await catalog();
+  const implicit = await resolveSpecialist("explore", definition({ tools: ["read"] }), available);
+  expect(implicit.tools).toEqual(["read", "codemode"]);
+
+  const explicit = await resolveSpecialist("explore", definition({ tools: ["read", "codemode", "codemode"] }), available);
+  expect(explicit.tools).toEqual(["read", "codemode"]);
 });

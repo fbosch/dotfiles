@@ -22,7 +22,7 @@ test("documented specialist configuration resolves through the production parser
   const resolved = await resolveSpecialist("fixture", definition, { baseline: { extensions: [baseline] }, bundles: new Map(), skills: new Map(), availableModels: new Set(["fixture/model"]) });
   expect(resolved.model).toBe("fixture/model");
   expect(resolved.maxTurns).toBe(12);
-  expect(resolved.tools).toEqual(["read"]);
+  expect(resolved.tools).toEqual(["read", "codemode"]);
   expect(resolved.prompt).toContain("report what you checked");
 });
 

@@ -65,6 +65,17 @@ test("historical, released, stopping, and cancelled workers do not expose cancel
   for (const state of ["historical", "released", "stopping", "cancelled", "cleanup-unknown"] as const) expect(cancellable(worker(state, state))).toBe(false);
 });
 
+test("widget prompt truncation keeps a Unicode ellipsis inside the gray foreground", () => {
+  const base = worker("active", "running");
+  const prompt = "æøå".repeat(100);
+  const rows = widgetLines({ ...defaults,
+    workers: [{ ...base, assignments: [{ ...base.assignments[0]!, prompt }] }],
+    theme: { bold: (text) => text, fg: (color, text) => color === "muted" ? `\u001b[90m${text}\u001b[39m` : text },
+  });
+  expect(rows[1]).toContain(`\u001b[90m${prompt.slice(0, 32)}…\u001b[39m`);
+  expect(rows.every((line) => visibleWidth(line) <= defaults.width)).toBe(true);
+});
+
 test("terminal content strips control sequences while preserving Danish text and line breaks", () => {
   const esc = String.fromCharCode(27);
   const bell = String.fromCharCode(7);

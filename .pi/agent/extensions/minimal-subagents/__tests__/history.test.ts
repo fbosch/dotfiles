@@ -1,12 +1,13 @@
 import { afterEach, expect, test } from "bun:test";
 import { appendFileSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { HISTORY_ENTRY, parentHistory, restoreHistory } from "../history";
 import { WorkerOwner, type ChildDriver, type WorkerPersistence } from "../owner";
 import type { ResolvedSpecialist } from "../specialist";
 
+const sdk: typeof import("@earendil-works/pi-coding-agent") = await import(process.env.PI_SUBAGENT_TEST_SDK ?? "@earendil-works/pi-coding-agent");
 const directories: string[] = [];
 afterEach(async () => { for (const path of directories.splice(0)) await rm(path, { recursive: true, force: true }); });
 const report = "report ".repeat(12_000) + "LAST_CAVEAT";
@@ -16,8 +17,8 @@ const driver: ChildDriver = {
   async prompt() { return { kind: "completed", turnsUsed: 1, report }; },
   async steer() {}, async abort() {}, async close() { return { confirmed: true }; },
 };
-function owner(persistence: WorkerPersistence) {
-  return new WorkerOwner({ parentSessionId: "parent", driver, persistence, cleanupHealth: { isBlocked: () => false, markUncertain() {} } });
+function owner(persistence: WorkerPersistence, parentSessionId = "parent") {
+  return new WorkerOwner({ parentSessionId, driver, persistence, cleanupHealth: { isBlocked: () => false, markUncertain() {} } });
 }
 async function fixture() {
   const path = await mkdtemp(join(tmpdir(), "pi-worker-history-"));
@@ -76,4 +77,48 @@ test("restored running records are inspectable but cannot wait on a nonexistent 
 test("malformed worker history is rejected instead of silently reviving or dropping evidence", () => {
   expect(() => restoreHistory([{ type: "custom", customType: HISTORY_ENTRY, data: { version: 1, worker: {} } }], "parent")).toThrow("Invalid saved");
   expect(restoreHistory([{ type: "custom", customType: "unrelated", data: {} }], "parent")).toEqual([]);
+});
+
+async function sessionFixture() {
+  const path = await mkdtemp(join(tmpdir(), "pi-worker-session-history-"));
+  directories.push(path);
+  const manager = sdk.SessionManager.create(path, path);
+  manager.appendMessage({ role: "user", content: "Parent", timestamp: 0 });
+  const file = manager.getSessionFile();
+  if (!file) throw new Error("Expected a persisted parent session");
+  const persistence = parentHistory({
+    parentSessionId: manager.getSessionId(),
+    currentParentId: () => manager.getSessionId(),
+    parentFile: () => file,
+    append(customType, data) { manager.appendCustomEntry(customType, data); },
+    observation: () => undefined,
+  });
+  return { manager, file, persistence };
+}
+
+test("failed SessionManager appends stay failed after an in-process history reload", async () => {
+  const f = await sessionFixture();
+  await rm(f.file);
+  await mkdir(f.file);
+  const live = owner(f.persistence, f.manager.getSessionId());
+  const launched = await live.launch({ config, prompt: "Investigate" });
+  await live.wait(launched.workerId, launched.assignmentId);
+
+  const restored = restoreHistory(f.manager.getEntries(), f.manager.getSessionId());
+  expect(restored[0]?.worker.assignments[0]?.persistence).toBe("failed");
+  expect(restored[0]?.worker.assignments[0]?.persistenceError).toContain("EISDIR");
+  await live.shutdown();
+});
+
+test("successful SessionManager writes restore as durable history", async () => {
+  const f = await sessionFixture();
+  const live = owner(f.persistence, f.manager.getSessionId());
+  const launched = await live.launch({ config, prompt: "Investigate" });
+  await live.wait(launched.workerId, launched.assignmentId);
+
+  const entries: unknown[] = (await readFile(f.file, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+  const restored = restoreHistory(entries, f.manager.getSessionId());
+  expect(restored[0]?.worker.assignments[0]?.persistence).toBe("saved");
+  expect(restored[0]?.worker.assignments[0]?.report).toBe(report);
+  await live.shutdown();
 });

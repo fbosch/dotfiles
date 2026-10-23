@@ -1,0 +1,1139 @@
+{
+  "schemaVersion": 1,
+  "measuredAtUtc": "2026-10-23T12:59:05.883Z",
+  "candidateHead": "f736cc3a505bf83bb1f20ee2182cca332956dc01",
+  "worktree": "Clean immediately before and after sampling. HEAD advanced during preparation from 3f30a4bc6c89e34dbc1455104dbc41d6e68a0ad9 to f736cc3a505bf83bb1f20ee2182cca332956dc01 outside this agent's actions. No revision or fingerprint changed during sampling.",
+  "environment": {
+    "os": "Darwin",
+    "release": "27.0.0",
+    "arch": "arm64",
+    "pi": "1.3.0",
+    "node": "v24.20.0",
+    "bun": "1.4.2"
+  },
+  "baseline": "baseline.json",
+  "previousCandidate": "candidate-rerun-2026-10-23.json",
+  "fingerprints": "83f9f35137af78c698ce056655d578f3c0fa28cbe1d3d97de0338fc6a22be985  .pi/agent/extensions/minimal-subagents/catalog.ts\nf37c3d38cc74fe17999c3c468e1002b94890dd4ba4fd86655ce88d4fa60babd9  .pi/agent/extensions/minimal-subagents/child-session.ts\na3bbc899d7d3413a4dd269478eeb42899383ab21675c313724754fe4643d65ce  .pi/agent/extensions/minimal-subagents/context.ts\n38e99916856f2d9fcc67cfe2887d53f8e20ed262cf461b97c8614dbd7fbe2fe9  .pi/agent/extensions/minimal-subagents/delivery.ts\n313d2e18cb3fb9a1b1e8c2be132fc53d09318e0071bdb5fd00067dd8bf61ef0d  .pi/agent/extensions/minimal-subagents/driver.ts\na8b03892c961d44d7ed3f0241fcababd81da29a6581e6ebd7a2b615d99dfee40  .pi/agent/extensions/minimal-subagents/git-read.ts\n2f5727e4d39047432894f2e62a0a7422e9ca5f10e3d14cf07c943a40e6a04d73  .pi/agent/extensions/minimal-subagents/health.ts\n53a53a204a6703de713c5d1b14085ee53decf83c9c1004ad6cf25971350e840e  .pi/agent/extensions/minimal-subagents/history.ts\nbf7065a155725504fe1fc5b9a8ec71d73ea7477fc84f1be4405214501c458fa4  .pi/agent/extensions/minimal-subagents/host.ts\ned152ac8d3b1c23d5f4a73493c196ec6cd07da9695fd5b68ebb459cf16430310  .pi/agent/extensions/minimal-subagents/index.ts\n701b8830a45db2672127da7fc422fdc2bd1526724df8153a09c60eab819c0d12  .pi/agent/extensions/minimal-subagents/interaction.ts\n634d555a8c4891ff3ca3965ae63b43f91d904703e2a392e30dc645d6db3e65c7  .pi/agent/extensions/minimal-subagents/launch-cards.ts\n35070b458f566078d21767283abe700611d4099070774fa5cb612f349293fd67  .pi/agent/extensions/minimal-subagents/main-window-renderers.ts\n12851dd24120b67f37a345a96f2a6be92d7058a48d5d1ccbf2a7a7f6e95251ef  .pi/agent/extensions/minimal-subagents/mcp.ts\n4099fb3905b5ebc6ebec2bcace343606d74f8607fbe9f1bef12899ae43b3866f  .pi/agent/extensions/minimal-subagents/metadata.ts\ndeae8d6592e57f71b4540f71a2ded2dd1609bab48adf66c75c82c04f283b3251  .pi/agent/extensions/minimal-subagents/overlay.ts\nbdf4d5d3976eb7a1f3f11a595eca964bafe54fa30f61009eb0b753b573024e68  .pi/agent/extensions/minimal-subagents/owner.ts\n075204e974a3cd7ffd9b62d9bb1d2a22878d84c44f576dbdea34adaabaea3f25  .pi/agent/extensions/minimal-subagents/parent-runtime.ts\n5665f72b6095b603751ef40bddac60b18ac144343ebb8b8ab9eb5781323911f0  .pi/agent/extensions/minimal-subagents/presentation.ts\n60e058ca357b2c63ec7cbae1aa2d33ff4f02450b7f69aad2ca6a985266ac8c57  .pi/agent/extensions/minimal-subagents/production.ts\n1f77cf48d5fde75ebcefbcda07da625675779b85d3f98a88de94061d0f435b52  .pi/agent/extensions/minimal-subagents/rendering.ts\nf4c4dcc0c7bd20e035b2f5865741d162341fed5209d14cc738ae1c3d53255748  .pi/agent/extensions/minimal-subagents/specialist.ts\na18723708b2cba1a12cb5cb9927c584f18ef9eb17823b94e2a7103a3cf826848  .pi/agent/extensions/minimal-subagents/tools.ts\n0972dbd2d8869f6e756e408c5597876a51d4e55a1b5aed3724dea4b5aa8efd7f  .pi/agent/extensions/minimal-subagents/ui.ts\n054e6fd425beff58aa47f81de426287b6e43a994593085534e1247aaee20082f  .pi/agent/extensions/minimal-subagents/widget.ts\n1f852ae85c31ff62b3d8ee80bc827b174423f67b33e06dd36c5a10a0fcbd3d9f  .pi/agent/agents/quick.md\n2853c8e82e1a4f693141d7972af725627cc4e45c53502c7c0f11b990cfc0210e  .pi/agent/extensions/model-presets.ts\n888f1d87c30b34de250b9d8623b28d2a9789125c1e65e40c29cf8e4eea2e6463  .pi/agent/npm/node_modules/@gotgenes/pi-subagents/package.json\nb8da1adfa92b0027cdd275273a407ebd418edf80ce3273739f27c4df1462bbc5  .pi/agent/settings.json\n4299e76693eee3453d0346da9249d24553047e20f13ddc461444a50d4a353e8d  AGENTS.md\n7cb07be7bf16b5d0f3a9ab0f9494e45e5625dc8ed7a805e8ea676b2c52c5ce5c  .pi/agent/AGENTS.md\n",
+  "postSamplingProvenance": "f736cc3a505bf83bb1f20ee2182cca332956dc01\n83f9f35137af78c698ce056655d578f3c0fa28cbe1d3d97de0338fc6a22be985  .pi/agent/extensions/minimal-subagents/catalog.ts\nf37c3d38cc74fe17999c3c468e1002b94890dd4ba4fd86655ce88d4fa60babd9  .pi/agent/extensions/minimal-subagents/child-session.ts\na3bbc899d7d3413a4dd269478eeb42899383ab21675c313724754fe4643d65ce  .pi/agent/extensions/minimal-subagents/context.ts\n38e99916856f2d9fcc67cfe2887d53f8e20ed262cf461b97c8614dbd7fbe2fe9  .pi/agent/extensions/minimal-subagents/delivery.ts\n313d2e18cb3fb9a1b1e8c2be132fc53d09318e0071bdb5fd00067dd8bf61ef0d  .pi/agent/extensions/minimal-subagents/driver.ts\na8b03892c961d44d7ed3f0241fcababd81da29a6581e6ebd7a2b615d99dfee40  .pi/agent/extensions/minimal-subagents/git-read.ts\n2f5727e4d39047432894f2e62a0a7422e9ca5f10e3d14cf07c943a40e6a04d73  .pi/agent/extensions/minimal-subagents/health.ts\n53a53a204a6703de713c5d1b14085ee53decf83c9c1004ad6cf25971350e840e  .pi/agent/extensions/minimal-subagents/history.ts\nbf7065a155725504fe1fc5b9a8ec71d73ea7477fc84f1be4405214501c458fa4  .pi/agent/extensions/minimal-subagents/host.ts\ned152ac8d3b1c23d5f4a73493c196ec6cd07da9695fd5b68ebb459cf16430310  .pi/agent/extensions/minimal-subagents/index.ts\n701b8830a45db2672127da7fc422fdc2bd1526724df8153a09c60eab819c0d12  .pi/agent/extensions/minimal-subagents/interaction.ts\n634d555a8c4891ff3ca3965ae63b43f91d904703e2a392e30dc645d6db3e65c7  .pi/agent/extensions/minimal-subagents/launch-cards.ts\n35070b458f566078d21767283abe700611d4099070774fa5cb612f349293fd67  .pi/agent/extensions/minimal-subagents/main-window-renderers.ts\n12851dd24120b67f37a345a96f2a6be92d7058a48d5d1ccbf2a7a7f6e95251ef  .pi/agent/extensions/minimal-subagents/mcp.ts\n4099fb3905b5ebc6ebec2bcace343606d74f8607fbe9f1bef12899ae43b3866f  .pi/agent/extensions/minimal-subagents/metadata.ts\ndeae8d6592e57f71b4540f71a2ded2dd1609bab48adf66c75c82c04f283b3251  .pi/agent/extensions/minimal-subagents/overlay.ts\nbdf4d5d3976eb7a1f3f11a595eca964bafe54fa30f61009eb0b753b573024e68  .pi/agent/extensions/minimal-subagents/owner.ts\n075204e974a3cd7ffd9b62d9bb1d2a22878d84c44f576dbdea34adaabaea3f25  .pi/agent/extensions/minimal-subagents/parent-runtime.ts\n5665f72b6095b603751ef40bddac60b18ac144343ebb8b8ab9eb5781323911f0  .pi/agent/extensions/minimal-subagents/presentation.ts\n60e058ca357b2c63ec7cbae1aa2d33ff4f02450b7f69aad2ca6a985266ac8c57  .pi/agent/extensions/minimal-subagents/production.ts\n1f77cf48d5fde75ebcefbcda07da625675779b85d3f98a88de94061d0f435b52  .pi/agent/extensions/minimal-subagents/rendering.ts\nf4c4dcc0c7bd20e035b2f5865741d162341fed5209d14cc738ae1c3d53255748  .pi/agent/extensions/minimal-subagents/specialist.ts\na18723708b2cba1a12cb5cb9927c584f18ef9eb17823b94e2a7103a3cf826848  .pi/agent/extensions/minimal-subagents/tools.ts\n0972dbd2d8869f6e756e408c5597876a51d4e55a1b5aed3724dea4b5aa8efd7f  .pi/agent/extensions/minimal-subagents/ui.ts\n054e6fd425beff58aa47f81de426287b6e43a994593085534e1247aaee20082f  .pi/agent/extensions/minimal-subagents/widget.ts\n1f852ae85c31ff62b3d8ee80bc827b174423f67b33e06dd36c5a10a0fcbd3d9f  .pi/agent/agents/quick.md\n2853c8e82e1a4f693141d7972af725627cc4e45c53502c7c0f11b990cfc0210e  .pi/agent/extensions/model-presets.ts\n888f1d87c30b34de250b9d8623b28d2a9789125c1e65e40c29cf8e4eea2e6463  .pi/agent/npm/node_modules/@gotgenes/pi-subagents/package.json\nb8da1adfa92b0027cdd275273a407ebd418edf80ce3273739f27c4df1462bbc5  .pi/agent/settings.json\n4299e76693eee3453d0346da9249d24553047e20f13ddc461444a50d4a353e8d  AGENTS.md\n7cb07be7bf16b5d0f3a9ab0f9494e45e5625dc8ed7a805e8ea676b2c52c5ce5c  .pi/agent/AGENTS.md\n",
+  "protocol": {
+    "agent": "quick",
+    "modelPreset": "presets/routine",
+    "configuredModel": "openai-codex/gpt-6-luna-fast",
+    "configuredThinking": "low",
+    "maxTurns": 4,
+    "inheritContext": false,
+    "minimal": "This is a bounded runtime measurement. Do not use tools, inspect files, delegate, or ask questions. Return exactly PROBE_OK and nothing else.",
+    "inspection": "This is a bounded read-only runtime measurement in /Users/fbb/dotfiles. Use the read tool to read only .pi/agent/npm/node_modules/@gotgenes/pi-subagents/package.json. Do not run commands, read other files, modify files, delegate, or ask questions. Return exactly: name=<name>; version=<version>; node=<engines.node>. Replace placeholders with the values read from that file. Return no other text.",
+    "foreground": false,
+    "warmupsPerWorkload": 1,
+    "measuredSamplesPerWorkload": 3,
+    "waitTimeoutMs": 120000,
+    "clock": "Date.now milliseconds in parent codemode; wall clock, not monotonic",
+    "warmupPolicy": "One warmup then three measured fresh children per workload, minimal then inspection. Warm existing parent; caches not reset; serial launches. 33 historical workers and one idle retained smoke-test child before sampling. No active analysis/visualization workers during sampling.",
+    "timing": "Date.now() immediately before native tools.subagent; record acknowledgement on return; immediately tools.subagent_result mode=wait with exact returned workerId and assignmentId; record completion on return. Transcript and status checks follow outside the timed interval.",
+    "correctness": "Exact report; minimal has zero calls; inspection has one successful read of the original fixture, accepting equivalent absolute and cwd-relative paths; every response resolves openai-codex/gpt-6-luna-fast, thinking low.",
+    "stoppingRule": "Stop at first incorrect output, unexpected tool use, timeout, or model drift. No retries, discarded samples, or extended sampling.",
+    "practicalThreshold": null,
+    "thresholdRationale": "Historical descriptive rerun only, matching the baseline scope; no pass/fail performance or causal claim.",
+    "transcriptCollection": "Native subagent_result transcript offset=2 limit=100, excluding initial system/user context. Decode JSON or tab-delimited TOON rows, then JSON.parse entry.text. Record response usage, model, thinking, calls, and tool-result errors outside timing.",
+    "collector": "const start=Date.now(); const launch=JSON.parse(await tools.subagent({specialist:'quick',prompt:protocol[workload],maxTurns:4,inheritContext:false,foreground:false})); const ack=Date.now(); const wait=JSON.parse(await tools.subagent_result({request:{mode:'wait',workerId:launch.workerId,assignmentId:launch.assignmentId,timeoutMs:120000}})); const end=Date.now(); // acknowledgement=ack-start; completion=end-start"
+  },
+  "samples": [
+    {
+      "workload": "minimal",
+      "sample": 0,
+      "warmup": true,
+      "startUtc": null,
+      "launchReturnMs": 161,
+      "observedCompletionMs": 4644,
+      "workerId": "f138ae15-84a1-4abe-8bc5-ca0f7f8f2211",
+      "assignmentId": "4f3eded9-8801-44c1-ae63-7bcdfa3c9f70",
+      "report": "PROBE_OK",
+      "evidence": {
+        "responses": [
+          {
+            "provider": "openai-codex",
+            "model": "gpt-6-luna-fast",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 6740,
+              "output": 7,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 6747,
+              "cost": {
+                "input": 0.000674,
+                "output": 0.0000035,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0.0006775
+              }
+            },
+            "durationMs": 1337,
+            "toolCalls": []
+          }
+        ],
+        "toolResults": []
+      },
+      "correct": true,
+      "finalStatus": {
+        "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+        "workerId": "f138ae15-84a1-4abe-8bc5-ca0f7f8f2211",
+        "specialist": "quick",
+        "state": "idle",
+        "liveSession": "available",
+        "currentAssignmentId": "4f3eded9-8801-44c1-ae63-7bcdfa3c9f70",
+        "assignments": [
+          {
+            "assignmentId": "4f3eded9-8801-44c1-ae63-7bcdfa3c9f70",
+            "outcome": "completed",
+            "turnsUsed": 1,
+            "maxTurns": 4,
+            "remainingTurns": 3,
+            "persistence": "saved"
+          }
+        ]
+      },
+      "collectionNote": "Warmup timestamp/launch receipt were lost when an oversized transcript store rolled back codemode state. Timing and IDs recovered from emitted tool output; transcript and final status recovered through native tools. Not rerun."
+    },
+    {
+      "workload": "minimal",
+      "sample": 1,
+      "warmup": false,
+      "startUtc": "2026-10-23T12:57:09.540Z",
+      "launchReturnMs": 230,
+      "workerId": "a2640326-c428-4325-9988-3998b39da803",
+      "assignmentId": "0045027e-3c9b-499b-955f-26ae63547bfc",
+      "launch": {
+        "kind": "launched",
+        "workerId": "a2640326-c428-4325-9988-3998b39da803",
+        "assignmentId": "0045027e-3c9b-499b-955f-26ae63547bfc",
+        "worker": {
+          "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+          "workerId": "a2640326-c428-4325-9988-3998b39da803",
+          "specialist": "quick",
+          "state": "running",
+          "liveSession": "available",
+          "currentAssignmentId": "0045027e-3c9b-499b-955f-26ae63547bfc",
+          "assignments": [
+            {
+              "assignmentId": "0045027e-3c9b-499b-955f-26ae63547bfc",
+              "outcome": "running",
+              "turnsUsed": 0,
+              "maxTurns": 4,
+              "remainingTurns": 4,
+              "persistence": "not-attempted"
+            }
+          ]
+        }
+      },
+      "observedCompletionMs": 5168,
+      "wait": {
+        "kind": "completed",
+        "worker": {
+          "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+          "workerId": "a2640326-c428-4325-9988-3998b39da803",
+          "specialist": "quick",
+          "state": "idle",
+          "liveSession": "available",
+          "currentAssignmentId": "0045027e-3c9b-499b-955f-26ae63547bfc",
+          "assignments": [
+            {
+              "assignmentId": "0045027e-3c9b-499b-955f-26ae63547bfc",
+              "outcome": "completed",
+              "turnsUsed": 1,
+              "maxTurns": 4,
+              "remainingTurns": 3,
+              "persistence": "not-attempted"
+            }
+          ]
+        },
+        "assignment": {
+          "assignmentId": "0045027e-3c9b-499b-955f-26ae63547bfc",
+          "outcome": "completed",
+          "turnsUsed": 1,
+          "maxTurns": 4,
+          "remainingTurns": 3,
+          "persistence": "not-attempted"
+        },
+        "report": "PROBE_OK"
+      },
+      "report": "PROBE_OK",
+      "evidence": {
+        "responses": [
+          {
+            "provider": "openai-codex",
+            "model": "gpt-6-luna-fast",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 6740,
+              "output": 7,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 6747,
+              "cost": {
+                "input": 0.000674,
+                "output": 0.0000035,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0.0006775
+              }
+            },
+            "durationMs": 1304,
+            "toolCalls": []
+          }
+        ],
+        "toolResults": []
+      },
+      "correct": true,
+      "finalStatus": {
+        "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+        "workerId": "a2640326-c428-4325-9988-3998b39da803",
+        "specialist": "quick",
+        "state": "idle",
+        "liveSession": "available",
+        "currentAssignmentId": "0045027e-3c9b-499b-955f-26ae63547bfc",
+        "assignments": [
+          {
+            "assignmentId": "0045027e-3c9b-499b-955f-26ae63547bfc",
+            "outcome": "completed",
+            "turnsUsed": 1,
+            "maxTurns": 4,
+            "remainingTurns": 3,
+            "persistence": "saved"
+          }
+        ]
+      }
+    },
+    {
+      "workload": "minimal",
+      "sample": 2,
+      "warmup": false,
+      "startUtc": "2026-10-23T12:57:14.840Z",
+      "launchReturnMs": 127,
+      "workerId": "b019c9d7-8f1b-4c47-8d76-ec7f927fdf1b",
+      "assignmentId": "59d28dbc-ebae-4484-a63e-3c8a168c0e8d",
+      "launch": {
+        "kind": "launched",
+        "workerId": "b019c9d7-8f1b-4c47-8d76-ec7f927fdf1b",
+        "assignmentId": "59d28dbc-ebae-4484-a63e-3c8a168c0e8d",
+        "worker": {
+          "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+          "workerId": "b019c9d7-8f1b-4c47-8d76-ec7f927fdf1b",
+          "specialist": "quick",
+          "state": "running",
+          "liveSession": "available",
+          "currentAssignmentId": "59d28dbc-ebae-4484-a63e-3c8a168c0e8d",
+          "assignments": [
+            {
+              "assignmentId": "59d28dbc-ebae-4484-a63e-3c8a168c0e8d",
+              "outcome": "running",
+              "turnsUsed": 0,
+              "maxTurns": 4,
+              "remainingTurns": 4,
+              "persistence": "not-attempted"
+            }
+          ]
+        }
+      },
+      "observedCompletionMs": 4938,
+      "wait": {
+        "kind": "completed",
+        "worker": {
+          "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+          "workerId": "b019c9d7-8f1b-4c47-8d76-ec7f927fdf1b",
+          "specialist": "quick",
+          "state": "idle",
+          "liveSession": "available",
+          "currentAssignmentId": "59d28dbc-ebae-4484-a63e-3c8a168c0e8d",
+          "assignments": [
+            {
+              "assignmentId": "59d28dbc-ebae-4484-a63e-3c8a168c0e8d",
+              "outcome": "completed",
+              "turnsUsed": 1,
+              "maxTurns": 4,
+              "remainingTurns": 3,
+              "persistence": "not-attempted"
+            }
+          ]
+        },
+        "assignment": {
+          "assignmentId": "59d28dbc-ebae-4484-a63e-3c8a168c0e8d",
+          "outcome": "completed",
+          "turnsUsed": 1,
+          "maxTurns": 4,
+          "remainingTurns": 3,
+          "persistence": "not-attempted"
+        },
+        "report": "PROBE_OK"
+      },
+      "report": "PROBE_OK",
+      "evidence": {
+        "responses": [
+          {
+            "provider": "openai-codex",
+            "model": "gpt-6-luna-fast",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 6740,
+              "output": 7,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 6747,
+              "cost": {
+                "input": 0.000674,
+                "output": 0.0000035,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0.0006775
+              }
+            },
+            "durationMs": 1959,
+            "toolCalls": []
+          }
+        ],
+        "toolResults": []
+      },
+      "correct": true,
+      "finalStatus": {
+        "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+        "workerId": "b019c9d7-8f1b-4c47-8d76-ec7f927fdf1b",
+        "specialist": "quick",
+        "state": "idle",
+        "liveSession": "available",
+        "currentAssignmentId": "59d28dbc-ebae-4484-a63e-3c8a168c0e8d",
+        "assignments": [
+          {
+            "assignmentId": "59d28dbc-ebae-4484-a63e-3c8a168c0e8d",
+            "outcome": "completed",
+            "turnsUsed": 1,
+            "maxTurns": 4,
+            "remainingTurns": 3,
+            "persistence": "saved"
+          }
+        ]
+      }
+    },
+    {
+      "workload": "minimal",
+      "sample": 3,
+      "warmup": false,
+      "startUtc": "2026-10-23T12:57:19.928Z",
+      "launchReturnMs": 128,
+      "workerId": "ecf6e376-cd3f-4966-8c09-9ff7f5138226",
+      "assignmentId": "e6c24f27-d08f-4069-b513-39565dfc22f6",
+      "launch": {
+        "kind": "launched",
+        "workerId": "ecf6e376-cd3f-4966-8c09-9ff7f5138226",
+        "assignmentId": "e6c24f27-d08f-4069-b513-39565dfc22f6",
+        "worker": {
+          "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+          "workerId": "ecf6e376-cd3f-4966-8c09-9ff7f5138226",
+          "specialist": "quick",
+          "state": "running",
+          "liveSession": "available",
+          "currentAssignmentId": "e6c24f27-d08f-4069-b513-39565dfc22f6",
+          "assignments": [
+            {
+              "assignmentId": "e6c24f27-d08f-4069-b513-39565dfc22f6",
+              "outcome": "running",
+              "turnsUsed": 0,
+              "maxTurns": 4,
+              "remainingTurns": 4,
+              "persistence": "not-attempted"
+            }
+          ]
+        }
+      },
+      "observedCompletionMs": 4008,
+      "wait": {
+        "kind": "completed",
+        "worker": {
+          "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+          "workerId": "ecf6e376-cd3f-4966-8c09-9ff7f5138226",
+          "specialist": "quick",
+          "state": "idle",
+          "liveSession": "available",
+          "currentAssignmentId": "e6c24f27-d08f-4069-b513-39565dfc22f6",
+          "assignments": [
+            {
+              "assignmentId": "e6c24f27-d08f-4069-b513-39565dfc22f6",
+              "outcome": "completed",
+              "turnsUsed": 1,
+              "maxTurns": 4,
+              "remainingTurns": 3,
+              "persistence": "not-attempted"
+            }
+          ]
+        },
+        "assignment": {
+          "assignmentId": "e6c24f27-d08f-4069-b513-39565dfc22f6",
+          "outcome": "completed",
+          "turnsUsed": 1,
+          "maxTurns": 4,
+          "remainingTurns": 3,
+          "persistence": "not-attempted"
+        },
+        "report": "PROBE_OK"
+      },
+      "report": "PROBE_OK",
+      "evidence": {
+        "responses": [
+          {
+            "provider": "openai-codex",
+            "model": "gpt-6-luna-fast",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 6740,
+              "output": 7,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 6747,
+              "cost": {
+                "input": 0.000674,
+                "output": 0.0000035,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0.0006775
+              }
+            },
+            "durationMs": 1543,
+            "toolCalls": []
+          }
+        ],
+        "toolResults": []
+      },
+      "correct": true,
+      "finalStatus": {
+        "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+        "workerId": "ecf6e376-cd3f-4966-8c09-9ff7f5138226",
+        "specialist": "quick",
+        "state": "idle",
+        "liveSession": "available",
+        "currentAssignmentId": "e6c24f27-d08f-4069-b513-39565dfc22f6",
+        "assignments": [
+          {
+            "assignmentId": "e6c24f27-d08f-4069-b513-39565dfc22f6",
+            "outcome": "completed",
+            "turnsUsed": 1,
+            "maxTurns": 4,
+            "remainingTurns": 3,
+            "persistence": "saved"
+          }
+        ]
+      }
+    },
+    {
+      "workload": "inspection",
+      "sample": 0,
+      "warmup": true,
+      "startUtc": "2026-10-23T12:57:24.053Z",
+      "launchReturnMs": 123,
+      "workerId": "53f3d719-6211-42ff-9fb6-cb903078e47d",
+      "assignmentId": "33725c7f-183b-4580-9351-dbb99b551bb2",
+      "launch": {
+        "kind": "launched",
+        "workerId": "53f3d719-6211-42ff-9fb6-cb903078e47d",
+        "assignmentId": "33725c7f-183b-4580-9351-dbb99b551bb2",
+        "worker": {
+          "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+          "workerId": "53f3d719-6211-42ff-9fb6-cb903078e47d",
+          "specialist": "quick",
+          "state": "running",
+          "liveSession": "available",
+          "currentAssignmentId": "33725c7f-183b-4580-9351-dbb99b551bb2",
+          "assignments": [
+            {
+              "assignmentId": "33725c7f-183b-4580-9351-dbb99b551bb2",
+              "outcome": "running",
+              "turnsUsed": 0,
+              "maxTurns": 4,
+              "remainingTurns": 4,
+              "persistence": "not-attempted"
+            }
+          ]
+        }
+      },
+      "observedCompletionMs": 4867,
+      "wait": {
+        "kind": "completed",
+        "worker": {
+          "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+          "workerId": "53f3d719-6211-42ff-9fb6-cb903078e47d",
+          "specialist": "quick",
+          "state": "idle",
+          "liveSession": "available",
+          "currentAssignmentId": "33725c7f-183b-4580-9351-dbb99b551bb2",
+          "assignments": [
+            {
+              "assignmentId": "33725c7f-183b-4580-9351-dbb99b551bb2",
+              "outcome": "completed",
+              "turnsUsed": 2,
+              "maxTurns": 4,
+              "remainingTurns": 2,
+              "persistence": "not-attempted"
+            }
+          ]
+        },
+        "assignment": {
+          "assignmentId": "33725c7f-183b-4580-9351-dbb99b551bb2",
+          "outcome": "completed",
+          "turnsUsed": 2,
+          "maxTurns": 4,
+          "remainingTurns": 2,
+          "persistence": "not-attempted"
+        },
+        "report": "name=@gotgenes/pi-subagents; version=25.0.1; node=>=22"
+      },
+      "report": "name=@gotgenes/pi-subagents; version=25.0.1; node=>=22",
+      "evidence": {
+        "responses": [
+          {
+            "provider": "openai-codex",
+            "model": "gpt-6-luna-fast",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 272,
+              "output": 38,
+              "cacheRead": 6528,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 6838,
+              "cost": {
+                "input": 0.000027200000000000004,
+                "output": 0.000018999999999999998,
+                "cacheRead": 0.00006528,
+                "cacheWrite": 0,
+                "total": 0.00011148
+              }
+            },
+            "durationMs": 1861,
+            "toolCalls": [
+              {
+                "type": "toolCall",
+                "id": "call_cde9d22cbc4a44eaad2530f46a497a85|fc_02e81d43813df018016adb59b73b6081918ab7f5047adf4256",
+                "name": "read",
+                "arguments": {
+                  "path": "/Users/fbb/dotfiles/.pi/agent/npm/node_modules/@gotgenes/pi-subagents/package.json"
+                }
+              }
+            ]
+          },
+          {
+            "provider": "openai-codex",
+            "model": "gpt-6-luna-fast",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 1230,
+              "output": 24,
+              "cacheRead": 6656,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 7910,
+              "cost": {
+                "input": 0.000123,
+                "output": 0.000012,
+                "cacheRead": 0.00006656,
+                "cacheWrite": 0,
+                "total": 0.00020156
+              }
+            },
+            "durationMs": 1254,
+            "toolCalls": []
+          }
+        ],
+        "toolResults": [
+          {
+            "toolName": "read",
+            "isError": false,
+            "toolCallId": "call_cde9d22cbc4a44eaad2530f46a497a85|fc_02e81d43813df018016adb59b73b6081918ab7f5047adf4256"
+          }
+        ]
+      },
+      "correct": true,
+      "finalStatus": {
+        "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+        "workerId": "53f3d719-6211-42ff-9fb6-cb903078e47d",
+        "specialist": "quick",
+        "state": "idle",
+        "liveSession": "available",
+        "currentAssignmentId": "33725c7f-183b-4580-9351-dbb99b551bb2",
+        "assignments": [
+          {
+            "assignmentId": "33725c7f-183b-4580-9351-dbb99b551bb2",
+            "outcome": "completed",
+            "turnsUsed": 2,
+            "maxTurns": 4,
+            "remainingTurns": 2,
+            "persistence": "saved"
+          }
+        ]
+      }
+    },
+    {
+      "workload": "inspection",
+      "sample": 1,
+      "warmup": false,
+      "startUtc": "2026-10-23T12:57:29.049Z",
+      "launchReturnMs": 112,
+      "workerId": "0a60c366-4d19-46de-96de-c36de5c4e196",
+      "assignmentId": "4d9f4a69-38be-4a58-8d16-4e50301fb8b0",
+      "launch": {
+        "kind": "launched",
+        "workerId": "0a60c366-4d19-46de-96de-c36de5c4e196",
+        "assignmentId": "4d9f4a69-38be-4a58-8d16-4e50301fb8b0",
+        "worker": {
+          "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+          "workerId": "0a60c366-4d19-46de-96de-c36de5c4e196",
+          "specialist": "quick",
+          "state": "running",
+          "liveSession": "available",
+          "currentAssignmentId": "4d9f4a69-38be-4a58-8d16-4e50301fb8b0",
+          "assignments": [
+            {
+              "assignmentId": "4d9f4a69-38be-4a58-8d16-4e50301fb8b0",
+              "outcome": "running",
+              "turnsUsed": 0,
+              "maxTurns": 4,
+              "remainingTurns": 4,
+              "persistence": "not-attempted"
+            }
+          ]
+        }
+      },
+      "observedCompletionMs": 3646,
+      "wait": {
+        "kind": "completed",
+        "worker": {
+          "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+          "workerId": "0a60c366-4d19-46de-96de-c36de5c4e196",
+          "specialist": "quick",
+          "state": "idle",
+          "liveSession": "available",
+          "currentAssignmentId": "4d9f4a69-38be-4a58-8d16-4e50301fb8b0",
+          "assignments": [
+            {
+              "assignmentId": "4d9f4a69-38be-4a58-8d16-4e50301fb8b0",
+              "outcome": "completed",
+              "turnsUsed": 2,
+              "maxTurns": 4,
+              "remainingTurns": 2,
+              "persistence": "not-attempted"
+            }
+          ]
+        },
+        "assignment": {
+          "assignmentId": "4d9f4a69-38be-4a58-8d16-4e50301fb8b0",
+          "outcome": "completed",
+          "turnsUsed": 2,
+          "maxTurns": 4,
+          "remainingTurns": 2,
+          "persistence": "not-attempted"
+        },
+        "report": "name=@gotgenes/pi-subagents; version=25.0.1; node=>=22"
+      },
+      "report": "name=@gotgenes/pi-subagents; version=25.0.1; node=>=22",
+      "evidence": {
+        "responses": [
+          {
+            "provider": "openai-codex",
+            "model": "gpt-6-luna-fast",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 6800,
+              "output": 38,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 6838,
+              "cost": {
+                "input": 0.00068,
+                "output": 0.000018999999999999998,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0.0006990000000000001
+              }
+            },
+            "durationMs": 1293,
+            "toolCalls": [
+              {
+                "type": "toolCall",
+                "id": "call_53e3170a0da24cb1a7276db3a88e13b6|fc_01481b94ceb9a879016adb59bbab808191a4acc7f237aa2316",
+                "name": "read",
+                "arguments": {
+                  "path": "/Users/fbb/dotfiles/.pi/agent/npm/node_modules/@gotgenes/pi-subagents/package.json"
+                }
+              }
+            ]
+          },
+          {
+            "provider": "openai-codex",
+            "model": "gpt-6-luna-fast",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 1230,
+              "output": 24,
+              "cacheRead": 6656,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 7910,
+              "cost": {
+                "input": 0.000123,
+                "output": 0.000012,
+                "cacheRead": 0.00006656,
+                "cacheWrite": 0,
+                "total": 0.00020156
+              }
+            },
+            "durationMs": 753,
+            "toolCalls": []
+          }
+        ],
+        "toolResults": [
+          {
+            "toolName": "read",
+            "isError": false,
+            "toolCallId": "call_53e3170a0da24cb1a7276db3a88e13b6|fc_01481b94ceb9a879016adb59bbab808191a4acc7f237aa2316"
+          }
+        ]
+      },
+      "correct": true,
+      "finalStatus": {
+        "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+        "workerId": "0a60c366-4d19-46de-96de-c36de5c4e196",
+        "specialist": "quick",
+        "state": "idle",
+        "liveSession": "available",
+        "currentAssignmentId": "4d9f4a69-38be-4a58-8d16-4e50301fb8b0",
+        "assignments": [
+          {
+            "assignmentId": "4d9f4a69-38be-4a58-8d16-4e50301fb8b0",
+            "outcome": "completed",
+            "turnsUsed": 2,
+            "maxTurns": 4,
+            "remainingTurns": 2,
+            "persistence": "saved"
+          }
+        ]
+      }
+    },
+    {
+      "workload": "inspection",
+      "sample": 2,
+      "warmup": false,
+      "startUtc": "2026-10-23T12:57:32.832Z",
+      "launchReturnMs": 111,
+      "workerId": "6de936b9-0643-43f0-98e5-21eaf851c168",
+      "assignmentId": "4e7d2a21-eb42-431b-9aac-1908ff4431b0",
+      "launch": {
+        "kind": "launched",
+        "workerId": "6de936b9-0643-43f0-98e5-21eaf851c168",
+        "assignmentId": "4e7d2a21-eb42-431b-9aac-1908ff4431b0",
+        "worker": {
+          "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+          "workerId": "6de936b9-0643-43f0-98e5-21eaf851c168",
+          "specialist": "quick",
+          "state": "running",
+          "liveSession": "available",
+          "currentAssignmentId": "4e7d2a21-eb42-431b-9aac-1908ff4431b0",
+          "assignments": [
+            {
+              "assignmentId": "4e7d2a21-eb42-431b-9aac-1908ff4431b0",
+              "outcome": "running",
+              "turnsUsed": 0,
+              "maxTurns": 4,
+              "remainingTurns": 4,
+              "persistence": "not-attempted"
+            }
+          ]
+        }
+      },
+      "observedCompletionMs": 4962,
+      "wait": {
+        "kind": "completed",
+        "worker": {
+          "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+          "workerId": "6de936b9-0643-43f0-98e5-21eaf851c168",
+          "specialist": "quick",
+          "state": "idle",
+          "liveSession": "available",
+          "currentAssignmentId": "4e7d2a21-eb42-431b-9aac-1908ff4431b0",
+          "assignments": [
+            {
+              "assignmentId": "4e7d2a21-eb42-431b-9aac-1908ff4431b0",
+              "outcome": "completed",
+              "turnsUsed": 2,
+              "maxTurns": 4,
+              "remainingTurns": 2,
+              "persistence": "not-attempted"
+            }
+          ]
+        },
+        "assignment": {
+          "assignmentId": "4e7d2a21-eb42-431b-9aac-1908ff4431b0",
+          "outcome": "completed",
+          "turnsUsed": 2,
+          "maxTurns": 4,
+          "remainingTurns": 2,
+          "persistence": "not-attempted"
+        },
+        "report": "name=@gotgenes/pi-subagents; version=25.0.1; node=>=22"
+      },
+      "report": "name=@gotgenes/pi-subagents; version=25.0.1; node=>=22",
+      "evidence": {
+        "responses": [
+          {
+            "provider": "openai-codex",
+            "model": "gpt-6-luna-fast",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 6800,
+              "output": 38,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 6838,
+              "cost": {
+                "input": 0.00068,
+                "output": 0.000018999999999999998,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0.0006990000000000001
+              }
+            },
+            "durationMs": 1425,
+            "toolCalls": [
+              {
+                "type": "toolCall",
+                "id": "call_cddcdff9a3514e6fb16bce258edfaa37|fc_0ffa1613af7baf03016adb59c03544819190107d8959029e49",
+                "name": "read",
+                "arguments": {
+                  "path": "/Users/fbb/dotfiles/.pi/agent/npm/node_modules/@gotgenes/pi-subagents/package.json"
+                }
+              }
+            ]
+          },
+          {
+            "provider": "openai-codex",
+            "model": "gpt-6-luna-fast",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 1230,
+              "output": 24,
+              "cacheRead": 6656,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 7910,
+              "cost": {
+                "input": 0.000123,
+                "output": 0.000012,
+                "cacheRead": 0.00006656,
+                "cacheWrite": 0,
+                "total": 0.00020156
+              }
+            },
+            "durationMs": 1228,
+            "toolCalls": []
+          }
+        ],
+        "toolResults": [
+          {
+            "toolName": "read",
+            "isError": false,
+            "toolCallId": "call_cddcdff9a3514e6fb16bce258edfaa37|fc_0ffa1613af7baf03016adb59c03544819190107d8959029e49"
+          }
+        ]
+      },
+      "correct": true,
+      "finalStatus": {
+        "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+        "workerId": "6de936b9-0643-43f0-98e5-21eaf851c168",
+        "specialist": "quick",
+        "state": "idle",
+        "liveSession": "available",
+        "currentAssignmentId": "4e7d2a21-eb42-431b-9aac-1908ff4431b0",
+        "assignments": [
+          {
+            "assignmentId": "4e7d2a21-eb42-431b-9aac-1908ff4431b0",
+            "outcome": "completed",
+            "turnsUsed": 2,
+            "maxTurns": 4,
+            "remainingTurns": 2,
+            "persistence": "saved"
+          }
+        ]
+      }
+    },
+    {
+      "workload": "inspection",
+      "sample": 3,
+      "warmup": false,
+      "startUtc": "2026-10-23T12:57:37.914Z",
+      "launchReturnMs": 118,
+      "workerId": "b919ce94-ed8f-4558-ad5a-a8d5f03a4683",
+      "assignmentId": "e59acacc-0541-4ea1-b79b-d8dff47d1a7b",
+      "launch": {
+        "kind": "launched",
+        "workerId": "b919ce94-ed8f-4558-ad5a-a8d5f03a4683",
+        "assignmentId": "e59acacc-0541-4ea1-b79b-d8dff47d1a7b",
+        "worker": {
+          "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+          "workerId": "b919ce94-ed8f-4558-ad5a-a8d5f03a4683",
+          "specialist": "quick",
+          "state": "running",
+          "liveSession": "available",
+          "currentAssignmentId": "e59acacc-0541-4ea1-b79b-d8dff47d1a7b",
+          "assignments": [
+            {
+              "assignmentId": "e59acacc-0541-4ea1-b79b-d8dff47d1a7b",
+              "outcome": "running",
+              "turnsUsed": 0,
+              "maxTurns": 4,
+              "remainingTurns": 4,
+              "persistence": "not-attempted"
+            }
+          ]
+        }
+      },
+      "observedCompletionMs": 4802,
+      "wait": {
+        "kind": "completed",
+        "worker": {
+          "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+          "workerId": "b919ce94-ed8f-4558-ad5a-a8d5f03a4683",
+          "specialist": "quick",
+          "state": "idle",
+          "liveSession": "available",
+          "currentAssignmentId": "e59acacc-0541-4ea1-b79b-d8dff47d1a7b",
+          "assignments": [
+            {
+              "assignmentId": "e59acacc-0541-4ea1-b79b-d8dff47d1a7b",
+              "outcome": "completed",
+              "turnsUsed": 2,
+              "maxTurns": 4,
+              "remainingTurns": 2,
+              "persistence": "not-attempted"
+            }
+          ]
+        },
+        "assignment": {
+          "assignmentId": "e59acacc-0541-4ea1-b79b-d8dff47d1a7b",
+          "outcome": "completed",
+          "turnsUsed": 2,
+          "maxTurns": 4,
+          "remainingTurns": 2,
+          "persistence": "not-attempted"
+        },
+        "report": "name=@gotgenes/pi-subagents; version=25.0.1; node=>=22"
+      },
+      "report": "name=@gotgenes/pi-subagents; version=25.0.1; node=>=22",
+      "evidence": {
+        "responses": [
+          {
+            "provider": "openai-codex",
+            "model": "gpt-6-luna-fast",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 272,
+              "output": 31,
+              "cacheRead": 6528,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 6831,
+              "cost": {
+                "input": 0.000027200000000000004,
+                "output": 0.0000155,
+                "cacheRead": 0.00006528,
+                "cacheWrite": 0,
+                "total": 0.00010798
+              }
+            },
+            "durationMs": 2090,
+            "toolCalls": [
+              {
+                "type": "toolCall",
+                "id": "call_fa7601ce978c4ea589bd69da40327ba5|fc_0435da23ed454163016adb59c5a70481919476bf71d1724c26",
+                "name": "read",
+                "arguments": {
+                  "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/package.json"
+                }
+              }
+            ]
+          },
+          {
+            "provider": "openai-codex",
+            "model": "gpt-6-luna-fast",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 7879,
+              "output": 24,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 7903,
+              "cost": {
+                "input": 0.0007879,
+                "output": 0.000012,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0.0007999
+              }
+            },
+            "durationMs": 818,
+            "toolCalls": []
+          }
+        ],
+        "toolResults": [
+          {
+            "toolName": "read",
+            "isError": false,
+            "toolCallId": "call_fa7601ce978c4ea589bd69da40327ba5|fc_0435da23ed454163016adb59c5a70481919476bf71d1724c26"
+          }
+        ]
+      },
+      "correct": true,
+      "finalStatus": {
+        "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+        "workerId": "b919ce94-ed8f-4558-ad5a-a8d5f03a4683",
+        "specialist": "quick",
+        "state": "idle",
+        "liveSession": "available",
+        "currentAssignmentId": "e59acacc-0541-4ea1-b79b-d8dff47d1a7b",
+        "assignments": [
+          {
+            "assignmentId": "e59acacc-0541-4ea1-b79b-d8dff47d1a7b",
+            "outcome": "completed",
+            "turnsUsed": 2,
+            "maxTurns": 4,
+            "remainingTurns": 2,
+            "persistence": "saved"
+          }
+        ]
+      }
+    }
+  ],
+  "comparison": {
+    "minimal": {
+      "baseline": {
+        "launchReturnMs": {
+          "n": 3,
+          "min": 10,
+          "median": 134,
+          "max": 140
+        },
+        "observedCompletionMs": {
+          "n": 3,
+          "min": 6557,
+          "median": 7790,
+          "max": 16022
+        },
+        "correct": 3
+      },
+      "previous": {
+        "launchReturnMs": {
+          "n": 3,
+          "min": 191,
+          "median": 226,
+          "max": 247
+        },
+        "observedCompletionMs": {
+          "n": 3,
+          "min": 4222,
+          "median": 4691,
+          "max": 5059
+        }
+      },
+      "current": {
+        "launchReturnMs": {
+          "n": 3,
+          "min": 127,
+          "median": 128,
+          "max": 230
+        },
+        "observedCompletionMs": {
+          "n": 3,
+          "min": 4008,
+          "median": 4938,
+          "max": 5168
+        }
+      },
+      "completionVsPrevious": {
+        "deltaMs": 247,
+        "deltaPercent": 5.2654018332978
+      },
+      "completionVsBaseline": {
+        "deltaMs": -2852,
+        "deltaPercent": -36.611039794608466
+      }
+    },
+    "inspection": {
+      "baseline": {
+        "launchReturnMs": {
+          "n": 3,
+          "min": 113,
+          "median": 125,
+          "max": 130
+        },
+        "observedCompletionMs": {
+          "n": 3,
+          "min": 7265,
+          "median": 8972,
+          "max": 10259
+        },
+        "correct": 3
+      },
+      "previous": {
+        "launchReturnMs": {
+          "n": 3,
+          "min": 180,
+          "median": 191,
+          "max": 205
+        },
+        "observedCompletionMs": {
+          "n": 3,
+          "min": 5293,
+          "median": 5522,
+          "max": 6063
+        }
+      },
+      "current": {
+        "launchReturnMs": {
+          "n": 3,
+          "min": 111,
+          "median": 112,
+          "max": 118
+        },
+        "observedCompletionMs": {
+          "n": 3,
+          "min": 3646,
+          "median": 4802,
+          "max": 4962
+        }
+      },
+      "completionVsPrevious": {
+        "deltaMs": -720,
+        "deltaPercent": -13.038754074610647
+      },
+      "completionVsBaseline": {
+        "deltaMs": -4170,
+        "deltaPercent": -46.47793134195274
+      }
+    }
+  },
+  "verdict": "inconclusive for causal performance change",
+  "limitations": [
+    "Three measured samples per workload; uncontrolled provider/cache state and historical comparison. No stable latency or significance claim.",
+    "No comparable original-baseline token usage; token savings remain unmeasured. Raw current response usage is retained.",
+    "Completion ends at native wait return, not durable-storage confirmation. Later all eight workers report saved.",
+    "CPU, memory, allocations, cold start, throughput, queue saturation, source footprint, UI frame cost, and representative coding/review workflows were not measured."
+  ],
+  "collectionNotes": [
+    "Minimal warmup completed correctly at 161 ms acknowledgement and 4644 ms completion. Storing the full transcript exceeded codemode's 1048576-character state limit and rolled back that script's state. Emitted timing/IDs were retained; original warmup start timestamp and launch receipt are unavailable. Native transcript/status recovered output/model/tool evidence; no workload rerun or discarded sample.",
+    "Two recovery attempts failed before any new workload: missing rolled-back sample state, then JSON parsing a TOON-formatted transcript. Collector was corrected to exclude initial context and handle both formats. All seven subsequent launches and checks completed without collector failures.",
+    "The pi --version wrapper warned that one PATH entry was sandbox-writable; it exited 0 and reported Pi 1.3.0."
+  ]
+}

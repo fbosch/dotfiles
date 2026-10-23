@@ -29,13 +29,25 @@ async function fixture() {
     tools: ["read", "codemode", "tool_search"], excludeTools: ["subagent", "mcp__*"],
     extensions: [join(cwd, "policy.ts")], skills: [{ name: "selected-skill", path: join(skillDir, "SKILL.md") }],
   };
+  const calls = { allowed: 0, forbidden: 0, parent: 0 };
   const protocol: Pi.ExtensionFactory = (pi) => {
     for (const name of [...CHILD_PROTOCOL_TOOLS, "forbidden", "subagent"]) pi.registerTool({
       name, label: name, description: name, parameters: Type.Object({}),
-      async execute() { return { content: [{ type: "text", text: "fixture" }], details: undefined }; },
+      async execute() {
+        if (name === "forbidden") calls.forbidden++;
+        if (name === "subagent") calls.parent++;
+        return { content: [{ type: "text", text: "FIXTURE_TOOL_RESULT" }], details: undefined };
+      },
+    });
+    pi.registerTool({
+      name: "allowed_probe", label: "allowed_probe", description: "Permitted fixture probe", parameters: Type.Object({}),
+      async execute() {
+        calls.allowed++;
+        return { content: [{ type: "text", text: "ALLOWED_PROBE_OK" }], details: undefined };
+      },
     });
   };
-  return { cwd, model, config, protocol };
+  return { cwd, model, config, protocol, calls };
 }
 
 test("explicit child tools remain callable when an extension lazily deactivates them at startup", async () => {
@@ -135,3 +147,53 @@ test("native MCP connects only the selected server and registers required tools 
   expect(child.session.getCallableToolNames().some((name) => name.startsWith("mcp__ambient__"))).toBe(false);
   expect(failures).toEqual([]);
 }, 15_000);
+
+
+test("codemode executes permitted tools only and discovery respects the child loadout", async () => {
+  const f = await fixture();
+  await writeFile(join(f.cwd, "mcp.json"), JSON.stringify({ mcpServers: {
+    ambient: { command: "/MUST_NOT_START_AMBIENT_SERVER" },
+  } }));
+  const child = await createChildSession({ ...f,
+    config: { ...f.config, tools: [...f.config.tools, "allowed_probe"] },
+    agentDir: f.cwd, sdk, onUncertainStartup: () => {},
+  });
+  cleanups.push(child.close);
+
+  const discovery = child.session.agent.state.tools.find((tool) => tool.name === "tool_search");
+  expect(discovery).toBeDefined();
+  const discoveryResult = await discovery!.execute("discover-forbidden", { query: "forbidden", limit: 5 });
+  expect(discoveryResult.details).toMatchObject({ loaded: [] });
+  expect(child.session.getActiveToolNames()).not.toContain("forbidden");
+
+  child.session.agent.state.messages = [{
+    role: "assistant", content: [], api: "openai-completions", provider: "fixture", model: "fixture",
+    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
+    stopReason: "toolUse", timestamp: Date.now(),
+  }];
+  const codemode = child.session.agent.state.tools.find((tool) => tool.name === "codemode");
+  expect(codemode).toBeDefined();
+  const context = child.session.extensionRunner.createToolContext("codemode-permissions", undefined);
+  const input = { code: [
+    'text(await tools.allowed_probe({}));',
+    'text(ALL_TOOLS.some((tool) => tool.name === "forbidden") ? "FORBIDDEN_DISCOVERED" : "FORBIDDEN_HIDDEN");',
+    'text((await searchTools("forbidden")).some((tool) => tool.name === "forbidden") ? "FORBIDDEN_SEARCHED" : "FORBIDDEN_UNSEARCHABLE");',
+    'try { await tools.forbidden({}); text("FORBIDDEN_EXECUTED"); } catch { text("FORBIDDEN_BLOCKED"); }',
+    'try { await tools.subagent({}); text("PARENT_EXECUTED"); } catch { text("PARENT_BLOCKED"); }',
+    'try { await tools.mcp__ambient__lookup({}); text("MCP_EXECUTED"); } catch { text("MCP_BLOCKED"); }',
+    'text(typeof models);',
+  ].join("\n") };
+  // The runtime target is Pi 1.3.0; the development SDK types do not yet include its session context argument.
+  // @ts-expect-error Pi 0.99.1 has a four-argument AgentTool.execute signature.
+  const result = await codemode!.execute("codemode-permissions", input, undefined, undefined, context);
+  const output = result.content.map((part) => part.type === "text" ? part.text : "").join("\n");
+  expect(output).toContain("ALLOWED_PROBE_OK");
+  expect(output).toContain("FORBIDDEN_HIDDEN");
+  expect(output).toContain("FORBIDDEN_UNSEARCHABLE");
+  expect(output).toContain("FORBIDDEN_BLOCKED");
+  expect(output).toContain("PARENT_BLOCKED");
+  expect(output).toContain("MCP_BLOCKED");
+  expect(output).toContain("undefined");
+  expect(f.calls).toEqual({ allowed: 1, forbidden: 0, parent: 0 });
+});

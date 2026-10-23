@@ -540,6 +540,8 @@ export default function agentMentions(pi: ExtensionAPI): void {
   });
 
   pi.on("before_agent_start", async (event, ctx) => {
+    // Custom-message starts have no user prompt and cannot explicitly invoke an agent.
+    if ("messageType" in event && event.messageType === "custom") return;
     if (pi.getActiveTools().includes("subagent") === false) return;
 
     const includeProjectAgents = ctx.isProjectTrusted?.() ?? false;

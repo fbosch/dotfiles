@@ -147,6 +147,45 @@ describe("agent mentions", () => {
     expect(formatted.split(color)).toHaveLength(3);
   });
 
+  test("ignores custom-message starts without treating notification mentions as user intent", async () => {
+    let handler:
+      | ((event: BeforeAgentStartEvent, ctx: ExtensionContext) => Promise<unknown>)
+      | undefined;
+    agentMentions({
+      on(name: string, callback: typeof handler) {
+        if (name === "before_agent_start") handler = callback;
+      },
+      getActiveTools: () => ["subagent"],
+      registerMarkdownTransformer() {},
+    } as unknown as ExtensionAPI);
+    if (!handler) throw new Error("before_agent_start handler missing");
+    const event = {
+      type: "before_agent_start",
+      messageType: "custom",
+      message: {
+        role: "custom",
+        customType: "task-review-request",
+        content: "Task review requested · classifier decision @explore",
+        display: true,
+        timestamp: 1,
+      },
+      systemPrompt: "role and project instructions",
+      systemPromptOptions: { sections: { role: "Role", project: "Project" } },
+    };
+    const original = structuredClone(event);
+    expect("prompt" in event).toBe(false);
+    expect(
+      await handler(
+        event as unknown as BeforeAgentStartEvent,
+        {
+          cwd: temporaryDirectory(),
+          isProjectTrusted: () => true,
+        } as ExtensionContext,
+      ),
+    ).toBeUndefined();
+    expect(event).toEqual(original);
+  });
+
   test("adds the routing instruction only when the subagent tool is active", async () => {
     let handler:
       | ((
@@ -165,10 +204,11 @@ describe("agent mentions", () => {
 
     const event = {
       type: "before_agent_start",
+      messageType: "user",
       prompt: "@explore inspect autocomplete",
       systemPrompt: "base prompt",
       systemPromptOptions: {},
-    } as BeforeAgentStartEvent;
+    } as unknown as BeforeAgentStartEvent;
     const result = await handler?.(event, { cwd: "/tmp" } as ExtensionContext);
 
     expect(result?.systemPrompt).toBeUndefined();
@@ -205,11 +245,12 @@ describe("agent mentions", () => {
 
     const result = await handler?.(
       {
+        messageType: "user",
         type: "before_agent_start",
         prompt: "@explore inspect autocomplete",
         systemPrompt: "base prompt",
         systemPromptOptions: {},
-      } as BeforeAgentStartEvent,
+      } as unknown as BeforeAgentStartEvent,
       { cwd: temporaryDirectory() } as ExtensionContext,
     );
 

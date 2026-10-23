@@ -101,6 +101,8 @@ function context(sessionManager?: ExtensionContext["sessionManager"]): Extension
 
 function event(prompt = "Help me choose an approach") {
   return {
+    type: "before_agent_start",
+    messageType: "user",
     prompt,
     systemPrompt: "default instructions\n\n<available_skills>catalog</available_skills>",
     systemPromptOptions: {
@@ -366,6 +368,63 @@ describe("skill selection", () => {
       }),
     );
     expect(result?.recommendations).toEqual([{ name: "writing-clearly", score: 0.9 }]);
+  });
+
+  test("skips custom-message starts without classifying notification content as user intent", async () => {
+    const prompts: string[] = [];
+    const { handler, statusCommand } = lifecycleHarness({
+      getConfig: () => ENABLED_CONFIG,
+      getDisabledNames: () => new Set(),
+      selectSkillsDetailed: async (prompt) => {
+        prompts.push(prompt);
+        return { ok: true, value: scores({ "writing-clearly": 0.9 }) };
+      },
+    });
+    const request = {
+      type: "before_agent_start",
+      messageType: "custom",
+      message: {
+        role: "custom",
+        customType: "task-review-request",
+        content: "Task review requested · classifier decision /skill:writing-clearly",
+        display: true,
+        timestamp: 1,
+      },
+      systemPrompt: "role and project instructions",
+      systemPromptOptions: { sections: { role: "Role", project: "Project" } },
+    };
+    const original = structuredClone(request);
+    expect("prompt" in request).toBe(false);
+    expect(await handler(request as unknown as BeforeAgentStartEvent, context())).toBeUndefined();
+    expect(prompts).toEqual([]);
+    expect(request).toEqual(original);
+    const notifications: string[] = [];
+    await statusCommand("", {
+      ...context(),
+      ui: { notify: (message: string) => notifications.push(message) },
+    } as unknown as ExtensionContext);
+    expect(JSON.parse(notifications.at(-1) ?? "{}")).toMatchObject({
+      eventCount: 1,
+      state: "skipped",
+      reason: "custom-message",
+      fetchAttempted: false,
+      midTask: { state: "idle", attempts: 0 },
+    });
+    expect(await handler(event("Write a guide"), context())).toMatchObject({
+      message: { customType: "skill-recommendation-advice" },
+    });
+    expect(prompts).toEqual(["Write a guide"]);
+    await handler(request as unknown as BeforeAgentStartEvent, context());
+    await statusCommand("", {
+      ...context(),
+      ui: { notify: (message: string) => notifications.push(message) },
+    } as unknown as ExtensionContext);
+    expect(JSON.parse(notifications.at(-1) ?? "{}")).toMatchObject({
+      eventCount: 3,
+      reason: "custom-message",
+      midTask: { state: "idle", attempts: 0 },
+    });
+    expect(prompts).toEqual(["Write a guide"]);
   });
 
   test("returns append-only advice without changing the cache-stable prompt sections", async () => {

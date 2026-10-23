@@ -100,7 +100,7 @@ export function widgetLines(options: {
     const stats = [assignment ? `↻${assignment.turnsUsed}≤${assignment.maxTurns}` : "", elapsed(observation?.startedAt ?? worker.createdAt, observation?.endedAt ?? now)].filter(Boolean).join(" · ");
     const branch = last ? "└─" : "├─";
     options.onWorkerRows?.(worker.id, rows.length, rows.length + 2);
-    rows.push(`${theme.fg("dim", branch)} ${worker.status === "running" ? theme.fg("accent", (options.activityFrame ?? 0) % 2 === 0 ? "◍" : "●") : statusGlyph(worker.status, theme)} ${name(worker.specialist)} ${theme.fg("dim", `[${singleLine(worker.config.model)}]`)}  ${theme.fg("muted", truncateToWidth(singleLine(assignment?.prompt ?? ""), Math.min(50, Math.floor(width / 3))))} ${theme.fg("dim", `· ${stats} · ${worker.status}`)}`);
+    rows.push(`${theme.fg("dim", branch)} ${worker.status === "running" ? theme.fg("accent", (options.activityFrame ?? 0) % 2 === 0 ? "◍" : "●") : statusGlyph(worker.status, theme)} ${name(worker.specialist)} ${theme.fg("dim", `[${singleLine(worker.config.model)}]`)}  ${theme.fg("muted", terminalText(truncateToWidth(singleLine(assignment?.prompt ?? ""), Math.min(50, Math.floor(width / 3)), "…")))} ${theme.fg("dim", `· ${stats} · ${worker.status}`)}`);
     rows.push(theme.fg("dim", `${last ? " " : "│"}    ⎿  ${singleLine(activity)}`));
     remaining -= 2;
     shown++;

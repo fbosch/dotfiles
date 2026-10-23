@@ -1,4 +1,3 @@
-import { stat } from "node:fs/promises";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 import type { ChildObservation } from "./driver";
@@ -70,15 +69,33 @@ export function parentHistory(options: {
       if (options.currentParentId() !== options.parentSessionId || evidence.parentSessionId !== options.parentSessionId) {
         throw new Error("Parent changed before subagent evidence could be saved");
       }
+      if (!options.parentFile()) throw new Error("Parent session evidence is not persisted");
       const observation = options.observation(evidence.workerId);
-      const worker: WorkerSnapshot = {
+      const workerWithPersistence = (persistence: "pending" | "saved" | "failed", persistenceError?: string): WorkerSnapshot => ({
         ...evidence.worker,
         assignments: evidence.worker.assignments.map((assignment) => assignment.id === evidence.assignment.id
-          ? { ...assignment, persistence: "saved" } : assignment),
+          ? { ...assignment, persistence, ...(persistenceError ? { persistenceError } : {}) } : assignment),
+      });
+      const appendStatus = (persistence: "pending" | "saved" | "failed", persistenceError?: string) => {
+        options.append(HISTORY_ENTRY, {
+          version: 1,
+          worker: workerWithPersistence(persistence, persistenceError),
+          ...(observation ? { observation } : {}),
+        });
       };
-      options.append(HISTORY_ENTRY, { version: 1, worker, ...(observation ? { observation } : {}) });
-      const file = options.parentFile();
-      if (!file || !(await stat(file)).isFile()) throw new Error("Parent session evidence is not persisted");
+
+      // SessionManager retains failed appends in memory, so only append "saved" after the pending write returns.
+      try {
+        appendStatus("pending");
+        appendStatus("saved");
+      } catch (error) {
+        try {
+          appendStatus("failed", error instanceof Error ? error.message : String(error));
+        } catch {
+          // Keep the original persistence error; a failed marker is best effort.
+        }
+        throw error;
+      }
     },
   };
 }

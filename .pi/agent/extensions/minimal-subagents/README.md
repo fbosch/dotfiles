@@ -35,7 +35,7 @@ Inspect the assigned evidence and report what you checked.
 
 Production definitions must name an available model and the bundles backing their requested tools. Model and thinking overrides require separate permission in `allow_overrides: [model, thinking]`. A launch may supply a positive safe-integer `maxTurns`; otherwise it uses the specialist's required `max_turns`. The migrated definitions use 12/24-turn budgets and preserve lower limits. Only `general` permits model and thinking overrides.
 
-`catalog.ts` defines the available bundles: `files`, `file-search`, `structural`, `git-read`, `web`, `browser`, `classifier`, `commands`, `charts`, `docs-mcp`, `github-mcp`, `chrome-mcp`, and `firefox-mcp`. Bundles select backing extensions and MCP servers; the `tools` list grants callable capabilities. Include `codemode` and `tool_search` explicitly if the role needs them.
+`catalog.ts` defines the available bundles: `files`, `file-search`, `structural`, `git-read`, `web`, `browser`, `classifier`, `commands`, `charts`, `docs-mcp`, `github-mcp`, `chrome-mcp`, and `firefox-mcp`. Bundles select backing extensions and MCP servers; the `tools` list grants callable capabilities. `codemode` is shared by every specialist; include `tool_search` explicitly only when the role needs discovery.
 
 Every child retains the central authentication, model, classifier, command-policy, and instruction baseline. Skills load only from the names explicitly selected for that specialist. Missing models, bundles, skills, extension files, MCP servers, or required callable tools fail preflight. Unexpected callable tools also fail preflight.
 

@@ -162,7 +162,7 @@ test("production launch requests share the native runtime and resolve configured
   const input = f.controlled.starts[0];
   expect(input?.config.model).toBe("fixture/fixture");
   expect(input?.config.maxTurns).toBe(12);
-  expect(input?.config.tools).toEqual(["read"]);
+  expect(input?.config.tools).toEqual(["read", "codemode"]);
   expect(input?.config.skills).toEqual([]);
   expect(input?.config.extensions).toEqual([
     ...baselineFiles.map((path) => join(f.root, path)),

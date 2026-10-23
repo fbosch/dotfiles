@@ -493,6 +493,8 @@ export function createSkillSelectionExtension(
         status = { enabled, eventCount, state: "skipped", reason, fetchAttempted: false };
       };
 
+      // Custom-message starts have no user goal for input or mid-task skill selection.
+      if ("messageType" in event && event.messageType === "custom") return skip("custom-message");
       if (event.images !== undefined && event.images.length > 0) return skip("images");
       if (isExplicitSkillInvocation(event.prompt)) return skip("explicit-skill");
       if (event.systemPrompt.includes(SKILL_RECOMMENDATIONS_START)) {

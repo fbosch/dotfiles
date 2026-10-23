@@ -88,6 +88,7 @@ test("fork-copied evidence does not grant control over the originating parent's 
 
 function controlledDriver(options: { holdClose?: boolean; uncertainClose?: boolean } = {}) {
   const runs = new Map<string, (outcome: ChildExecutionOutcome) => void>();
+  const updates = new Map<string, (text: string) => void>();
   const aborted: string[] = [];
   let releaseClose = () => {};
   const gate = new Promise<void>((resolve) => { releaseClose = resolve; });
@@ -95,6 +96,7 @@ function controlledDriver(options: { holdClose?: boolean; uncertainClose?: boole
   const driver: ChildDriver & { observation: () => undefined } = {
     start(input, callbacks) {
       starts++;
+      updates.set(input.workerId, callbacks.onUpdate);
       callbacks.onTranscript({ role: "tool", text: "PARTIAL_LIFECYCLE_EVIDENCE" });
       return new Promise((finish) => { runs.set(input.workerId, finish); });
     },
@@ -109,7 +111,11 @@ function controlledDriver(options: { holdClose?: boolean; uncertainClose?: boole
   };
   const health = processCleanupHealth({});
   const dependencies: HostDependencies = { createDriver: () => driver, resolve: async () => saved("fixture").worker.config, health };
-  return { dependencies, health, aborted, releaseClose, starts: () => starts, finish: (id: string, outcome: ChildExecutionOutcome) => runs.get(id)?.(outcome) };
+  return {
+    dependencies, health, aborted, releaseClose, starts: () => starts,
+    finish: (id: string, outcome: ChildExecutionOutcome) => runs.get(id)?.(outcome),
+    update: (id: string, text: string) => updates.get(id)?.(text),
+  };
 }
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
@@ -142,6 +148,8 @@ test("declining a native switch preserves active work; confirmation defers teard
 test("native reload waits for six active children, cancels the queue, and restores partial evidence as history", async () => {
   const controlled = controlledDriver({ holdClose: true });
   const { session, errors } = await fixture(undefined, controlled.dependencies);
+  const reloadWarnings: string[] = [];
+  session.extensionRunner.setUIContext({ ...session.extensionRunner.createContext().ui, notify: (message) => { reloadWarnings.push(message); } }, "rpc");
   cleanup.push(async () => { controlled.releaseClose(); });
   const ids: string[] = [];
   for (let index = 0; index < 7; index++) ids.push(workerId(await call(session, "subagent", { specialist: "fixture", prompt: `Assignment ${index}` })));
@@ -153,6 +161,8 @@ test("native reload waits for six active children, cancels the queue, and restor
   expect(controlled.aborted).toHaveLength(6);
   controlled.releaseClose();
   await reload;
+  expect(reloadWarnings).toHaveLength(1);
+  expect(reloadWarnings[0]).toContain("7");
   expect(controlled.starts()).toBe(6);
   const status = await call(session, "subagent_result", { request: { mode: "status", workerId: ids[0]! } });
   expect(JSON.stringify(status)).toContain("historical");
@@ -208,4 +218,47 @@ test("completion updates the mounted worker card while retaining a hidden model 
   expect(notice.content).toContain(id);
   expect(notice.content).toContain('"outcome":"completed"');
   expect(session.sessionManager.buildSessionProjection().messages.some((message) => message.role === "custom" && message.customType === "minimal-subagents.notice")).toBe(true);
+});
+test("a delayed worker update reflects completion at model delivery without losing attribution or text", async () => {
+  const controlled = controlledDriver();
+  const { session } = await fixture(undefined, controlled.dependencies);
+  const id = workerId(await call(session, "subagent", { specialist: "fixture", prompt: "Task" }));
+  await tick();
+  controlled.update(id, "FIRST_MATERIAL_FINDING");
+  controlled.update(id, "SECOND_MATERIAL_FINDING");
+  controlled.finish(id, { kind: "completed", turnsUsed: 1, report: "DONE" });
+  await tick();
+
+  const entries = session.sessionManager.getEntries().filter((entry) =>
+    entry.type === "custom_message" && entry.customType === "minimal-subagents.notice"
+    && typeof entry.content === "string" && entry.content.includes('"type":"update"'));
+  expect(entries).toHaveLength(2);
+  const pending = entries.map((entry) => {
+    if (entry.type !== "custom_message") throw new Error("Expected a custom update message");
+    return { role: "custom" as const, customType: entry.customType, content: entry.content, display: entry.display, details: entry.details, timestamp: 0 };
+  });
+  const delivered = await session.extensionRunner.emitContext(pending);
+
+  expect(JSON.stringify(delivered)).toContain('"state":"completed"');
+  expect(JSON.stringify(delivered)).toContain('"workerId":"' + id + '"');
+  expect(JSON.stringify(delivered)).toContain('"assignmentId":');
+  expect(JSON.stringify(delivered)).toContain("FIRST_MATERIAL_FINDING");
+  expect(JSON.stringify(delivered)).toContain("SECOND_MATERIAL_FINDING");
+  expect(JSON.stringify(entries.map((entry) => entry.type === "custom_message" ? entry.content : "")).toLowerCase()).toContain('"state":"running"');
+});
+
+test("idle reload and ordinary shutdown do not disclose interrupted work", async () => {
+  const idle = await fixture();
+  const idleWarnings: string[] = [];
+  idle.session.extensionRunner.setUIContext({ ...idle.session.extensionRunner.createContext().ui, notify: (message) => { idleWarnings.push(message); } }, "rpc");
+  await idle.session.reload();
+  expect(idleWarnings).toEqual([]);
+
+  const controlled = controlledDriver();
+  const active = await fixture(undefined, controlled.dependencies);
+  const warnings: string[] = [];
+  active.session.extensionRunner.setUIContext({ ...active.session.extensionRunner.createContext().ui, notify: (message) => { warnings.push(message); } }, "rpc");
+  await call(active.session, "subagent", { specialist: "fixture", prompt: "Task" });
+  await active.session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
+  expect(warnings).toEqual([]);
 });
