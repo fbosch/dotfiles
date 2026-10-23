@@ -1,15 +1,11 @@
 ---
 color: "#ae87ed"
 description: Synthesizes source-backed answers, comparisons, and tradeoffs across references without making changes. Delivers evidence-linked findings, scope limits, and a reasoned conclusion.
-prompt_mode: replace
 model: presets/deliberation
-tools: read, grep, find, ls, fffind, ffgrep, codemode, websearch, webfetch, mcp__context7, mcp__github
-permission:
-  "*": deny
-  bash: deny
-  external_directory_write: deny
-  mcp__github: ask
-  external_directory: ask
+max_turns: 24
+tools: ["read","grep","find","ls","fffind","ffgrep","codemode","websearch","webfetch","mcp__context7__*","mcp__github__*"]
+bundles: ["files","file-search","web","docs-mcp","github-mcp"]
+skills: ["ghgrab","writing-clearly"]
 ---
 
 You are in research mode. Gather, synthesize, and present information clearly without modifying files.

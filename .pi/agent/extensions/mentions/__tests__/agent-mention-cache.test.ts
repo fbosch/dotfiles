@@ -89,6 +89,9 @@ test.each([false, true])(
   async (caseInsensitive) => {
     const fs = createFakeFileSystem(caseInsensitive);
     fs.addDirectory("/project");
+    fs.addDirectory("/agent");
+    fs.addDirectory("/agent/agents");
+    fs.writeFile("/agent/agents/explore.md", "---\ndescription: Explore\n---\nExplore tasks.");
     fs.writeFile("/project/Explore", "file");
     const cache = new AgentMentionCache("/project", "/agent", false, fs.fileSystem);
     try {

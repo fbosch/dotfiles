@@ -414,17 +414,20 @@ describe("Delta execution", () => {
 describe("Delta extension", () => {
   test("default factory returns synchronously without registering hashline tools", () => {
     const registeredTools: string[] = [];
+    let rendererRegistrations = 0;
     const pi = {
+      registerToolRenderer: () => { rendererRegistrations++; },
       registerEntryRenderer: () => {},
       on: () => {},
       registerTool(tool: ToolDefinition) {
         registeredTools.push(tool.name);
       },
       registerCommand: () => {},
-    } as unknown as ExtensionAPI;
+    } as unknown as Parameters<typeof deltaExtension>[0];
 
     expect(deltaExtension(pi)).toBeUndefined();
     expect(registeredTools).toEqual(["git_diff"]);
+    expect(rendererRegistrations).toBe(2);
   });
 
   test("defers hashline loading until the first agent turn and registers once per session", async () => {
@@ -582,30 +585,6 @@ describe("Delta extension", () => {
     expect(emptyRendered).toEqual([""]);
   });
 
-  test("normalizes hashline details through the tool result hook", () => {
-    let toolResultHandler: ((event: { toolName: string; details: unknown }) => unknown) | undefined;
-    const pi = {
-      registerEntryRenderer: () => {},
-      on(event: string, handler: (event: { toolName: string; details: unknown }) => unknown) {
-        if (event === "tool_result") toolResultHandler = handler;
-      },
-      registerTool: () => {},
-      registerCommand: () => {},
-    } as unknown as ExtensionAPI;
-    registerDeltaExtension(pi, { run: async () => diffResult });
-    if (toolResultHandler === undefined) throw new Error("tool_result handler was not registered");
-
-    const details = {
-      diff: " MSos│done\n+IPal│grep -Fq 'runtime/desktop/waybar-monitor.sh'",
-      diffLineNumbers: [65, 66],
-    };
-    expect(toolResultHandler({ toolName: "replace", details })).toEqual({
-      details: {
-        diff: " done\n+grep -Fq 'runtime/desktop/waybar-monitor.sh'",
-        diffLineNumbers: details.diffLineNumbers,
-      },
-    });
-  });
 
   test("rerenders full unified context when a diff is expanded", async () => {
     let tool: ToolDefinition | undefined;

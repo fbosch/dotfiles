@@ -8,21 +8,16 @@ import {
   type SlashCommandInfo,
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
+import { requestSubagentLaunch } from "./minimal-subagents/production";
+import type { ParentLaunch } from "./minimal-subagents/parent-runtime";
 
 const ROUTED_PROMPT_MESSAGE = "routed-prompt";
-const SUBAGENTS_SERVICE_KEY = Symbol.for("@gotgenes/pi-subagents:service");
-
 interface SpawnOptions {
-  description?: string;
   model?: string;
+  thinking?: NonNullable<ParentLaunch["thinking"]>;
   maxTurns?: number;
-  thinkingLevel?: string;
   inheritContext?: boolean;
   foreground?: boolean;
-}
-
-interface SubagentsService {
-  spawn(type: string, prompt: string, options?: SpawnOptions): string;
 }
 
 interface RoutedPromptFrontmatter extends Record<string, unknown> {
@@ -44,7 +39,7 @@ export interface RoutedPrompt {
 }
 
 interface RoutedPromptsDependencies {
-  getSubagentsService?: () => SubagentsService | undefined;
+  launch?: (request: ParentLaunch) => Promise<unknown>;
   readPrompt?: (path: string) => string;
 }
 
@@ -213,22 +208,20 @@ export async function expandRoutedPromptShell(
 }
 
 function routeOptions(
-  command: SlashCommandInfo,
   frontmatter: RoutedPromptFrontmatter,
 ): SpawnOptions {
-  const options: SpawnOptions = {
-    description: command.description ?? `Run /${command.name}`,
-    // Service spawns are asynchronous. Force background mode so pi-subagents owns
-    // progress and completion delivery even when an agent file defaults to foreground.
-    foreground: false,
-  };
+  const options: SpawnOptions = { foreground: false };
   const model = optionalString(frontmatter, "model");
   const thinkingLevel = optionalString(frontmatter, "thinking");
   const maxTurns = optionalPositiveInteger(frontmatter, "max_turns");
   const inheritContext = optionalBoolean(frontmatter, "inherit_context");
 
   if (model !== undefined) options.model = model;
-  if (thinkingLevel !== undefined) options.thinkingLevel = thinkingLevel;
+  if (thinkingLevel !== undefined) {
+    const level = (["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const).find((value) => value === thinkingLevel);
+    if (level === undefined) throw new Error("Unknown thinking level");
+    options.thinking = level;
+  }
   if (maxTurns !== undefined) options.maxTurns = maxTurns;
   if (inheritContext !== undefined) options.inheritContext = inheritContext;
   return options;
@@ -265,17 +258,10 @@ export function resolveRoutedPrompt(
       ? parsed.body
       : substitutePromptArgs(parsed.body, invocation.args),
     ...(usage === undefined || invocation.args.length > 0 ? {} : { usage }),
-    options: routeOptions(command, parsed.frontmatter),
+    options: routeOptions(parsed.frontmatter),
   };
 }
 
-function getSubagentsService(): SubagentsService | undefined {
-  // pi-subagents documents this Symbol.for key as its cross-extension service contract.
-  // Importing the accessor is not viable because Pi isolates package module roots.
-  return (globalThis as Record<symbol, unknown>)[SUBAGENTS_SERVICE_KEY] as
-    | SubagentsService
-    | undefined;
-}
 
 function renderMessageContent(content: unknown): string {
   if (typeof content === "string") return content;
@@ -293,9 +279,9 @@ export function createRoutedPromptsExtension(
   dependencies: RoutedPromptsDependencies = {},
 ): (pi: ExtensionAPI) => void {
   const readPrompt = dependencies.readPrompt ?? ((path: string) => readFileSync(path, "utf8"));
-  const getService = dependencies.getSubagentsService ?? getSubagentsService;
 
   return (pi) => {
+    const launch = dependencies.launch ?? ((request: ParentLaunch) => requestSubagentLaunch(pi.events, request));
     pi.registerMessageRenderer(
       ROUTED_PROMPT_MESSAGE,
       (message) => new Text(renderMessageContent(message.content), 0, 0),
@@ -339,17 +325,9 @@ export function createRoutedPromptsExtension(
         return { action: "handled" };
       }
 
-      const service = getService();
-      if (service === undefined) {
-        ctx.ui.notify(
-          `Cannot run /${routedPrompt.command}: the pi-subagents service is unavailable.`,
-          "error",
-        );
-        return { action: "handled" };
-      }
 
       try {
-        service.spawn(routedPrompt.agent, routedPrompt.prompt, routedPrompt.options);
+        await launch({ specialist: routedPrompt.agent, prompt: routedPrompt.prompt, ...routedPrompt.options });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         ctx.ui.notify(`Cannot run /${routedPrompt.command}: ${message}`, "error");

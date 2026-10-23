@@ -342,6 +342,22 @@ in
       bun run typecheck
     '';
 
+    "test:pi-agent-mentions".exec = ''
+      set -euo pipefail
+      cd .pi/agent
+      bun test extensions/mentions extensions/prompt-ui/__tests__/autocomplete.test.ts extensions/prompt-ui/__tests__/autocomplete-dismissal.test.ts
+    '';
+    "test:pi-subagents".exec = ''
+      set -euo pipefail
+      cd .pi/agent
+      bun test extensions/minimal-subagents extensions/prompt-ui/__tests__/subagent-transcript-frame.test.ts
+    '';
+    "test:pi-delta".exec = ''
+      set -euo pipefail
+      cd .pi/agent
+      bun test extensions/delta
+      bun run typecheck
+    '';
     "test:pi-extensions".exec = ''
       set -euo pipefail
       cd .pi/agent

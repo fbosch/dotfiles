@@ -1,5 +1,5 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
-import { type Component, stripTerminalSequences } from "@earendil-works/pi-tui";
+import { type Component, type TuiMouseEvent, type TuiMouseEventResult, stripTerminalSequences } from "@earendil-works/pi-tui";
 import { foregroundToBackground, paintDockRow } from "./dock-rendering";
 import { hexForegroundAnsi } from "./terminal-color";
 
@@ -50,6 +50,17 @@ export class SubagentTranscriptFrame implements Component {
       ...content.map((line) => paintDockRow(` ${line}`, width, side, background, side)),
       border(`╰${horizontal}╯`),
     ];
+  }
+
+  handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
+    if (event.x < 0 || event.x >= event.width || event.y < 0 || event.y >= event.height) return;
+    const width = Math.max(0, event.width - 4);
+    const height = Math.max(0, event.height - 2);
+    if (event.x < 2 || event.x >= width + 2 || event.y < 1 || event.y >= height + 1) {
+      // Wheel input over the frame must not scroll the conversation behind it.
+      return event.type === "wheel" ? { handled: true, render: false } : undefined;
+    }
+    return this.pane.handleMouse?.({ ...event, x: event.x - 2, y: event.y - 1, width, height });
   }
 
   handleInput(data: string): void {

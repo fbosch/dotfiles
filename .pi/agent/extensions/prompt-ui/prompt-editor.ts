@@ -44,7 +44,6 @@ import {
   paintDockRow,
 } from "./dock-rendering";
 import { colorizeFooterIcon, type FooterCustomization } from "./footer-config";
-import { installClickableSubagentSessions } from "./subagent-session-links";
 import { colorizeHex } from "./terminal-color";
 
 const EDITOR_PADDING_X = 1;
@@ -257,7 +256,6 @@ export class PromptEditor extends CustomEditor {
   private readonly ctx: ExtensionContext;
   private readonly promptState: PromptEditorState;
   private readonly autocompleteOverlay: AutocompleteOverlay;
-  private readonly disposeSubagentSessionLinks: () => void;
   private readonly typoRules: TypoCorrectionRules;
   private readonly agentMentionCache: AgentMentionCache;
   private readonly unsubscribeAgentMentions: () => void;
@@ -303,7 +301,6 @@ export class PromptEditor extends CustomEditor {
     } catch {
       // The project-references extension reports the same configuration error during startup.
     }
-    this.disposeSubagentSessionLinks = installClickableSubagentSessions(tui, ctx);
     this.autocompleteOverlay = new AutocompleteOverlay(tui);
     this.unsubscribeAgentMentions = agentMentionCache.subscribe(() => {
       this.agentMentions = this.availableAgentMentions();
@@ -335,7 +332,6 @@ export class PromptEditor extends CustomEditor {
   dispose(): void {
     this.unsubscribeAgentMentions();
     this.autocompleteProviderRevision += 1;
-    this.disposeSubagentSessionLinks();
     this.autocompleteOverlay.dispose();
   }
 

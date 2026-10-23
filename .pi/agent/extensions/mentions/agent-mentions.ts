@@ -22,21 +22,7 @@ export interface AgentMention {
   displayName?: string;
 }
 
-const BUILTIN_AGENT_MENTIONS: readonly AgentMention[] = [
-  {
-    name: "general",
-    description: "General-purpose agent for complex, multi-step tasks",
-  },
-  {
-    name: "Explore",
-    description: "Read-only codebase explorer",
-  },
-  {
-    name: "Plan",
-    description: "Creates implementation plans",
-  },
-];
-const AGENT_MENTION_PATTERN = /(^|\s)@([a-z0-9][a-z0-9-]*)(?=\s|$)/gi;
+const AGENT_MENTION_PATTERN = /(^|\s)@([a-z0-9][a-z0-9_-]*)(?=\s|$)/gi;
 const ESCAPE = String.fromCharCode(27);
 const BELL = String.fromCharCode(7);
 // Biome rejects control characters in regex literals, so build the ANSI matcher from code points.
@@ -59,7 +45,7 @@ function applyAgentMentionFile(
 ): void {
   const name = basename(file, ".md");
   const { frontmatter } = parseFrontmatter(contents);
-  if (frontmatter.enabled === false) {
+  if (frontmatter.enabled !== undefined && frontmatter.enabled !== true) {
     mentions.delete(name.toLowerCase());
     return;
   }
@@ -101,9 +87,7 @@ export function loadAgentMentions(
   agentDirectory = getAgentDir(),
   includeProjectAgents = true,
 ): AgentMention[] {
-  const mentions = new Map(
-    BUILTIN_AGENT_MENTIONS.map((mention) => [mention.name.toLowerCase(), mention]),
-  );
+  const mentions = new Map<string, AgentMention>();
   loadAgentDirectory(join(agentDirectory, "agents"), mentions);
   if (includeProjectAgents) {
     loadAgentDirectory(join(cwd, CONFIG_DIR_NAME, "agents"), mentions);
@@ -157,7 +141,7 @@ export class AgentMentionCache {
   readonly includeProjectAgents: boolean;
   private readonly globalAgentDirectory: string;
   private readonly fileSystem: AgentMentionCacheFileSystem;
-  private mentions = [...BUILTIN_AGENT_MENTIONS];
+  private mentions: AgentMention[] = [];
   private shadowedPaths = new Set<string>();
   private readonly watchers = new Map<string, () => void>();
   private caseInsensitivePaths = new Set<string>();
@@ -253,9 +237,7 @@ export class AgentMentionCache {
 
   private async refreshMetadata(): Promise<void> {
     await this.updateWatchers();
-    const mentions = new Map(
-      BUILTIN_AGENT_MENTIONS.map((mention) => [mention.name.toLowerCase(), mention]),
-    );
+    const mentions = new Map<string, AgentMention>();
     await this.loadDirectory(join(this.globalAgentDirectory, "agents"), mentions);
     if (this.includeProjectAgents) {
       await this.loadDirectory(join(this.cwd, CONFIG_DIR_NAME, "agents"), mentions);
@@ -516,7 +498,7 @@ export function agentMentionInstruction(mentions: readonly AgentMention[]): stri
     "<explicit-subagent-invocation>",
     `The user explicitly invoked ${names}.`,
     "This selection applies only to the current user request, not later requests.",
-    "For each invoked agent, use the user message and context to create a focused prompt, then call the subagent tool with that exact subagent_type.",
+    "For each invoked agent, use the user message and context to create a focused prompt, then call the subagent tool with that exact specialist.",
     "Do not handle the delegated task directly or substitute another agent.",
     "</explicit-subagent-invocation>",
   ].join("\n");

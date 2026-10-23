@@ -1,3 +1,4 @@
+import { registerHashlineRendering } from "./hashline-rendering";
 import { join, resolve } from "node:path";
 import { StringEnum } from "@earendil-works/pi-ai";
 import {
@@ -26,9 +27,8 @@ import {
   FULL_CONTEXT_LINES,
   type GitDiffRequest,
   type GitDiffRunner,
-  HASHLINE_DIFF_TOOLS,
+  isDeltaDetails,
   MAX_PATHS,
-  normalizeHashlineDiffDetails,
   type RunOptions,
   safeInput,
 } from "./shared";
@@ -232,17 +232,6 @@ async function readHashlineFile(path: string, cwd: string): Promise<string | und
   }
 }
 
-function isDeltaDetails(value: unknown): value is DeltaDetails {
-  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
-  const record = value as Record<string, unknown>;
-  return (
-    (record.display === "inline" || record.display === "side-by-side") &&
-    typeof record.noChanges === "boolean" &&
-    typeof record.output === "string" &&
-    typeof record.scope === "string" &&
-    typeof record.width === "number"
-  );
-}
 
 function wrapHashlineTool(tool: ToolDefinition, runEdit: EditDiffRunner): ToolDefinition {
   const originalExecute = tool.execute;
@@ -250,6 +239,8 @@ function wrapHashlineTool(tool: ToolDefinition, runEdit: EditDiffRunner): ToolDe
   if (originalExecute === undefined || originalRenderResult === undefined) return tool;
 
   const execute: HashlineToolExecute = async (toolCallId, params, signal, onUpdate, ctx) => {
+    // Transfer results carry the actual destination (and source for moves); a single-path snapshot loses that evidence.
+    if (tool.name === "copy" || tool.name === "move") return originalExecute(toolCallId, params, signal, onUpdate, ctx);
     const cwd = ctx.cwd;
     const path = hashlinePath(params);
     const oldContent = path === undefined ? undefined : await readHashlineFile(path, cwd);
@@ -491,14 +482,6 @@ export function registerDeltaExtension(
     }
     return session.hashlineRegistration;
   };
-  pi.on("tool_result", (event) => {
-    if (!HASHLINE_DIFF_TOOLS.has(event.toolName)) return;
-    // Auto-read consumes diff after this hook; Delta-backed results need no UI normalization here.
-    if (isDeltaDetails((event.details as HashlineDeltaDetails | undefined)?.delta)) return;
-    const details = normalizeHashlineDiffDetails(event.details);
-    if (details === event.details) return;
-    return { details };
-  });
 
   pi.on("session_shutdown", () => {
     activeSession = undefined;
@@ -657,6 +640,7 @@ export async function runDeltaEditDiff(
   return run(executeDelta, request, cwd, options);
 }
 
-export default function deltaExtension(pi: ExtensionAPI): void {
+export default function deltaExtension(pi: ExtensionAPI & Parameters<typeof registerHashlineRendering>[0]): void {
+  registerHashlineRendering(pi);
   registerDeltaExtension(pi);
 }

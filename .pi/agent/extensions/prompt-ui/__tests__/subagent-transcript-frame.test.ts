@@ -189,3 +189,24 @@ describe("subagent transcript frame", () => {
     expect(disposals).toBe(1);
   });
 });
+
+test("transcript frame translates wheel coordinates and contains border scrolling", () => {
+  const events: import("@earendil-works/pi-tui").TuiMouseEvent[] = [];
+  const frame = new SubagentTranscriptFrame({
+    render: () => ["title", "first", "second", "hint", "actions"],
+    invalidate() {},
+    handleMouse(event) { events.push(event); return { handled: true, render: true }; },
+  }, theme, "explore");
+  frame.render(40);
+  const event: import("@earendil-works/pi-tui").TuiMouseEvent = {
+    type: "wheel", button: "none", x: 8, y: 3, screenX: 18, screenY: 13,
+    width: 40, height: 7, shift: false, alt: false, ctrl: false, wheelDelta: -3,
+  };
+  expect(frame.handleMouse(event)).toEqual({ handled: true, render: true });
+  expect(events).toEqual([{ ...event, x: 6, y: 2, width: 36, height: 5 }]);
+  for (const point of [{ x: 0, y: 3 }, { x: 8, y: 0 }, { x: 39, y: 3 }, { x: 8, y: 6 }]) {
+    expect(frame.handleMouse({ ...event, ...point })).toEqual({ handled: true, render: false });
+  }
+  expect(events).toHaveLength(1);
+  expect(frame.handleMouse({ ...event, x: -1 })).toBeUndefined();
+});

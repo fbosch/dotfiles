@@ -1,0 +1,1839 @@
+{
+  "laterStorageVerification": [{"workerId":"f5dce02b-2364-49e1-94fc-9dfaebe0b9b0","assignmentId":"bbfc6e93-a523-4234-a49e-0bb5cf718838","persistence":"saved"},{"workerId":"19fda9f7-85b0-48ae-ba27-a409004b9b71","assignmentId":"937a7a6d-f4b9-4a88-8272-64735b41b63a","persistence":"saved"},{"workerId":"14fd5e5a-4ef1-4d17-a107-ff4a62c71d6a","assignmentId":"6dece945-b79b-4af6-b3b9-211700219646","persistence":"saved"},{"workerId":"2c3bb567-65ba-47ab-bc40-f1f373bf5448","assignmentId":"a5488d63-4c70-4908-a038-f9e7c58fb76a","persistence":"saved"},{"workerId":"55763d1c-7a1c-4524-b4cf-abc56ed483a6","assignmentId":"b42cd159-e2a8-448b-a6f7-539e194d86dc","persistence":"saved"},{"workerId":"77d7d65a-fed8-4281-b991-7973764c0a4b","assignmentId":"46067d6a-faee-4f64-b1bc-47bf7fcf05f2","persistence":"saved"},{"workerId":"e72f238b-ffa0-4326-92da-df2b9aa859d7","assignmentId":"65095fb0-11d3-4038-83ba-afb98f94464e","persistence":"saved"},{"workerId":"da097241-6d7f-4b46-a544-6d3e1e7d1cc4","assignmentId":"765ff9b5-44a2-40cc-9b28-e005ac3e7807","persistence":"saved"}],
+  "schemaVersion": 1,
+  "measuredAtUtc": "2026-10-23T07:43:26.385Z",
+  "baseline": "baseline.json",
+  "provenance": {
+    "head": "7b54b734726759e3729aa8db19805a0e3be76cac",
+    "worktree": "Migration and unrelated changes present; relevant candidate files individually fingerprinted",
+    "platform": "Darwin",
+    "release": "27.0.0",
+    "arch": "arm64",
+    "node": "v24.20.0",
+    "bun": "1.4.2",
+    "python": "3.14.8",
+    "pi": "1.3.0"
+  },
+  "scope": {
+    "production": [
+      ".pi/agent/extensions/minimal-subagents/catalog.ts",
+      ".pi/agent/extensions/minimal-subagents/child-session.ts",
+      ".pi/agent/extensions/minimal-subagents/context.ts",
+      ".pi/agent/extensions/minimal-subagents/delivery.ts",
+      ".pi/agent/extensions/minimal-subagents/driver.ts",
+      ".pi/agent/extensions/minimal-subagents/git-read.ts",
+      ".pi/agent/extensions/minimal-subagents/health.ts",
+      ".pi/agent/extensions/minimal-subagents/history.ts",
+      ".pi/agent/extensions/minimal-subagents/host.ts",
+      ".pi/agent/extensions/minimal-subagents/index.ts",
+      ".pi/agent/extensions/minimal-subagents/interaction.ts",
+      ".pi/agent/extensions/minimal-subagents/mcp.ts",
+      ".pi/agent/extensions/minimal-subagents/overlay.ts",
+      ".pi/agent/extensions/minimal-subagents/owner.ts",
+      ".pi/agent/extensions/minimal-subagents/parent-runtime.ts",
+      ".pi/agent/extensions/minimal-subagents/presentation.ts",
+      ".pi/agent/extensions/minimal-subagents/production.ts",
+      ".pi/agent/extensions/minimal-subagents/rendering.ts",
+      ".pi/agent/extensions/minimal-subagents/specialist.ts",
+      ".pi/agent/extensions/minimal-subagents/tools.ts",
+      ".pi/agent/extensions/minimal-subagents/ui.ts",
+      ".pi/agent/extensions/minimal-subagents/widget.ts"
+    ],
+    "local_glue": [
+      ".pi/agent/extensions/routed-prompts.ts",
+      ".pi/agent/extensions/prompt-ui/subagent-session-links.ts",
+      ".pi/agent/extensions/prompt-ui/subagent-session-target.ts",
+      ".pi/agent/extensions/prompt-ui/subagent-transcript-frame.ts",
+      ".pi/agent/extensions/prompt-ui/subagent-transcript-records.ts",
+      ".pi/agent/extensions/prompt-ui/subagent-widget-frame.ts",
+      ".pi/agent/subagents.json",
+      ".pi/agent/extensions/subagent-steering-notice.ts"
+    ],
+    "tests": [
+      ".pi/agent/extensions/minimal-subagents/__tests__/child-session.test.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/context.test.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/delivery.test.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/driver.test.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/fixtures/mcp-server.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/git-read.test.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/health.test.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/history.test.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/host-feasibility.test.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/host.test.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/interaction.test.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/mcp.test.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/native-interaction.test.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/overlay.test.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/owner.test.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/parent-runtime.test.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/presentation.test.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/production.test.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/readme.test.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/rendering.test.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/specialist.test.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/tools.test.ts",
+      ".pi/agent/extensions/minimal-subagents/__tests__/widget.test.ts"
+    ],
+    "local_tests": [
+      ".pi/agent/extensions/__tests__/routed-prompts.test.ts",
+      ".pi/agent/extensions/prompt-ui/__tests__/subagent-session-links.test.ts",
+      ".pi/agent/extensions/prompt-ui/__tests__/subagent-transcript-frame.test.ts",
+      ".pi/agent/extensions/prompt-ui/__tests__/subagent-widget-frame.test.ts",
+      ".pi/agent/extensions/__tests__/subagent-steering-notice.test.ts"
+    ],
+    "agents": [
+      ".pi/agent/agents/adversarial.md",
+      ".pi/agent/agents/analyze.md",
+      ".pi/agent/agents/backlog-planning.md",
+      ".pi/agent/agents/benchmark.md",
+      ".pi/agent/agents/debug.md",
+      ".pi/agent/agents/docs.md",
+      ".pi/agent/agents/explore.md",
+      ".pi/agent/agents/general.md",
+      ".pi/agent/agents/ideate.md",
+      ".pi/agent/agents/lookup.md",
+      ".pi/agent/agents/patterns.md",
+      ".pi/agent/agents/pr-feedback.md",
+      ".pi/agent/agents/quick.md",
+      ".pi/agent/agents/refactor.md",
+      ".pi/agent/agents/research.md",
+      ".pi/agent/agents/review.md",
+      ".pi/agent/agents/spec.md",
+      ".pi/agent/agents/test.md",
+      ".pi/agent/agents/validate.md",
+      ".pi/agent/agents/visualizer.md"
+    ],
+    "orchestration": [
+      ".pi/agent/instructions/orchestration/assignments.md",
+      ".pi/agent/instructions/orchestration/coordination.md",
+      ".pi/agent/instructions/orchestration/index.md",
+      ".pi/agent/instructions/orchestration/routing.md",
+      ".pi/agent/instructions/orchestration/supervision.md"
+    ]
+  },
+  "scopePolicy": "Production = every non-test TypeScript file under minimal-subagents. Local glue/tests retain ALL baseline manifest paths, including inactive leftovers. Shared infrastructure and mentions excluded on both sides; this is source inventory, not disk removal or full dependency closure.",
+  "files": {
+    ".pi/agent/extensions/minimal-subagents/catalog.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/catalog.ts",
+      "bytes": 3296,
+      "lines": 65,
+      "words": 298,
+      "lexicalMarkers": 10,
+      "sha256": "83f9f35137af78c698ce056655d578f3c0fa28cbe1d3d97de0338fc6a22be985"
+    },
+    ".pi/agent/extensions/minimal-subagents/child-session.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/child-session.ts",
+      "bytes": 5454,
+      "lines": 109,
+      "words": 542,
+      "lexicalMarkers": 23,
+      "sha256": "05226963139a0f833530aa157afbad7320ceae7787de4d6e9745ad1f4c27366a"
+    },
+    ".pi/agent/extensions/minimal-subagents/context.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/context.ts",
+      "bytes": 1557,
+      "lines": 39,
+      "words": 168,
+      "lexicalMarkers": 15,
+      "sha256": "a3bbc899d7d3413a4dd269478eeb42899383ab21675c313724754fe4643d65ce"
+    },
+    ".pi/agent/extensions/minimal-subagents/delivery.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/delivery.ts",
+      "bytes": 8261,
+      "lines": 163,
+      "words": 769,
+      "lexicalMarkers": 50,
+      "sha256": "38e99916856f2d9fcc67cfe2887d53f8e20ed262cf461b97c8614dbd7fbe2fe9"
+    },
+    ".pi/agent/extensions/minimal-subagents/driver.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/driver.ts",
+      "bytes": 13185,
+      "lines": 276,
+      "words": 1298,
+      "lexicalMarkers": 95,
+      "sha256": "5b7931b2d7759b8d3db77ca42632bbfdef696a24456d036f6744afd5c62940c1"
+    },
+    ".pi/agent/extensions/minimal-subagents/git-read.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/git-read.ts",
+      "bytes": 1095,
+      "lines": 23,
+      "words": 130,
+      "lexicalMarkers": 5,
+      "sha256": "a8b03892c961d44d7ed3f0241fcababd81da29a6581e6ebd7a2b615d99dfee40"
+    },
+    ".pi/agent/extensions/minimal-subagents/health.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/health.ts",
+      "bytes": 1685,
+      "lines": 46,
+      "words": 193,
+      "lexicalMarkers": 11,
+      "sha256": "2f5727e4d39047432894f2e62a0a7422e9ca5f10e3d14cf07c943a40e6a04d73"
+    },
+    ".pi/agent/extensions/minimal-subagents/history.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/history.ts",
+      "bytes": 5141,
+      "lines": 82,
+      "words": 483,
+      "lexicalMarkers": 18,
+      "sha256": "e5520408dbf0c6f941f8516377447ed7c432bdc3b38ef4c7d2da707c618d7920"
+    },
+    ".pi/agent/extensions/minimal-subagents/host.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/host.ts",
+      "bytes": 7823,
+      "lines": 140,
+      "words": 754,
+      "lexicalMarkers": 47,
+      "sha256": "23606225d61e49429526119b004d8e4bafcc9cd56231cd8736a9d61304f12295"
+    },
+    ".pi/agent/extensions/minimal-subagents/index.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/index.ts",
+      "bytes": 40,
+      "lines": 1,
+      "words": 6,
+      "lexicalMarkers": 0,
+      "sha256": "ed152ac8d3b1c23d5f4a73493c196ec6cd07da9695fd5b68ebb459cf16430310"
+    },
+    ".pi/agent/extensions/minimal-subagents/interaction.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/interaction.ts",
+      "bytes": 1881,
+      "lines": 37,
+      "words": 230,
+      "lexicalMarkers": 22,
+      "sha256": "fedcfea641084677c6ac664a67dfcc05669bf9a64a05f59a9d439c11910aec03"
+    },
+    ".pi/agent/extensions/minimal-subagents/mcp.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/mcp.ts",
+      "bytes": 4569,
+      "lines": 99,
+      "words": 515,
+      "lexicalMarkers": 35,
+      "sha256": "12851dd24120b67f37a345a96f2a6be92d7058a48d5d1ccbf2a7a7f6e95251ef"
+    },
+    ".pi/agent/extensions/minimal-subagents/overlay.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/overlay.ts",
+      "bytes": 7878,
+      "lines": 152,
+      "words": 824,
+      "lexicalMarkers": 51,
+      "sha256": "d9827c1db64d8efad17e9431853835c84dc4bdf6840c4698b242473f50c3ff40"
+    },
+    ".pi/agent/extensions/minimal-subagents/owner.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/owner.ts",
+      "bytes": 42067,
+      "lines": 975,
+      "words": 3959,
+      "lexicalMarkers": 224,
+      "sha256": "bdf4d5d3976eb7a1f3f11a595eca964bafe54fa30f61009eb0b753b573024e68"
+    },
+    ".pi/agent/extensions/minimal-subagents/parent-runtime.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/parent-runtime.ts",
+      "bytes": 4503,
+      "lines": 85,
+      "words": 464,
+      "lexicalMarkers": 32,
+      "sha256": "075204e974a3cd7ffd9b62d9bb1d2a22878d84c44f576dbdea34adaabaea3f25"
+    },
+    ".pi/agent/extensions/minimal-subagents/presentation.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/presentation.ts",
+      "bytes": 8492,
+      "lines": 135,
+      "words": 903,
+      "lexicalMarkers": 82,
+      "sha256": "e642bd61c99cb4d57f0a5686e8a774e9ff5a791ac1e59f010ba940b96bd82a84"
+    },
+    ".pi/agent/extensions/minimal-subagents/production.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/production.ts",
+      "bytes": 4241,
+      "lines": 102,
+      "words": 449,
+      "lexicalMarkers": 38,
+      "sha256": "60e058ca357b2c63ec7cbae1aa2d33ff4f02450b7f69aad2ca6a985266ac8c57"
+    },
+    ".pi/agent/extensions/minimal-subagents/rendering.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/rendering.ts",
+      "bytes": 9945,
+      "lines": 124,
+      "words": 1064,
+      "lexicalMarkers": 99,
+      "sha256": "4f483fdf0c3dfb2b42322e40570fca6d38a7b17260fffffaec55c4a248adcadc"
+    },
+    ".pi/agent/extensions/minimal-subagents/specialist.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/specialist.ts",
+      "bytes": 7329,
+      "lines": 155,
+      "words": 787,
+      "lexicalMarkers": 52,
+      "sha256": "f4c4dcc0c7bd20e035b2f5865741d162341fed5209d14cc738ae1c3d53255748"
+    },
+    ".pi/agent/extensions/minimal-subagents/tools.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/tools.ts",
+      "bytes": 5202,
+      "lines": 67,
+      "words": 548,
+      "lexicalMarkers": 6,
+      "sha256": "70195607bd4448f64c45f3a7499d1005067be64ce1b9ee14a4d3e5f291813c1a"
+    },
+    ".pi/agent/extensions/minimal-subagents/ui.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/ui.ts",
+      "bytes": 3144,
+      "lines": 69,
+      "words": 322,
+      "lexicalMarkers": 11,
+      "sha256": "1e3db2b874efcb3ee02a4d9f790e095fed5e6874260246d5c60589e30e1f7c36"
+    },
+    ".pi/agent/extensions/minimal-subagents/widget.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/widget.ts",
+      "bytes": 1176,
+      "lines": 34,
+      "words": 144,
+      "lexicalMarkers": 4,
+      "sha256": "2b1d01953936e8ea37a7b4c8fcd45b67c6ee04f70ba8f3aa54c6a75ebfb5a70d"
+    },
+    ".pi/agent/extensions/routed-prompts.ts": {
+      "path": ".pi/agent/extensions/routed-prompts.ts",
+      "bytes": 11332,
+      "lines": 340,
+      "words": 1203,
+      "lexicalMarkers": 91,
+      "sha256": "b0c1c890a16c90ab2f6e6235bc25709c58004c1a392fbe52368d84bfd5a875c5"
+    },
+    ".pi/agent/extensions/prompt-ui/subagent-session-links.ts": {
+      "path": ".pi/agent/extensions/prompt-ui/subagent-session-links.ts",
+      "bytes": 29182,
+      "lines": 849,
+      "words": 2812,
+      "lexicalMarkers": 162,
+      "sha256": "b6d1f8254698da29aba3bb661a26761cb074ad2b2c979d94df9acded336422a7"
+    },
+    ".pi/agent/extensions/prompt-ui/subagent-session-target.ts": {
+      "path": ".pi/agent/extensions/prompt-ui/subagent-session-target.ts",
+      "bytes": 1745,
+      "lines": 55,
+      "words": 168,
+      "lexicalMarkers": 20,
+      "sha256": "ed770b84a1cac7b9e8dfd282217dc25c3f239347940719c04622028661c4134f"
+    },
+    ".pi/agent/extensions/prompt-ui/subagent-transcript-frame.ts": {
+      "path": ".pi/agent/extensions/prompt-ui/subagent-transcript-frame.ts",
+      "bytes": 2474,
+      "lines": 66,
+      "words": 240,
+      "lexicalMarkers": 9,
+      "sha256": "5ade79f5bc33ef48b16a8bc670e4acb91a8653a9d5df192307773652186dd3bd"
+    },
+    ".pi/agent/extensions/prompt-ui/subagent-transcript-records.ts": {
+      "path": ".pi/agent/extensions/prompt-ui/subagent-transcript-records.ts",
+      "bytes": 2093,
+      "lines": 73,
+      "words": 200,
+      "lexicalMarkers": 11,
+      "sha256": "550fd9f6b5c93ae70b1a423cec75d1291d7189dcc59af9c38647fc784c9ea417"
+    },
+    ".pi/agent/extensions/prompt-ui/subagent-widget-frame.ts": {
+      "path": ".pi/agent/extensions/prompt-ui/subagent-widget-frame.ts",
+      "bytes": 16513,
+      "lines": 460,
+      "words": 1602,
+      "lexicalMarkers": 102,
+      "sha256": "9c20263323a3715987244d59af877fc20ac3acad8b87f36dc3e16bc345288326"
+    },
+    ".pi/agent/subagents.json": {
+      "path": ".pi/agent/subagents.json",
+      "bytes": 134,
+      "lines": 7,
+      "words": 10,
+      "lexicalMarkers": 0,
+      "sha256": "7f8487036b718ae5d21521a24189923234f49597c259c699f48fc599d96def08"
+    },
+    ".pi/agent/extensions/subagent-steering-notice.ts": {
+      "path": ".pi/agent/extensions/subagent-steering-notice.ts",
+      "bytes": 2253,
+      "lines": 56,
+      "words": 260,
+      "lexicalMarkers": 13,
+      "sha256": "c7b8de26856d6de3114517be8ac63d503cc8423358c493106301414bea06e627"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/child-session.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/child-session.test.ts",
+      "bytes": 5439,
+      "lines": 91,
+      "words": 523,
+      "lexicalMarkers": 4,
+      "sha256": "7f85e309fc3c5af1b0a0bad192c292f739cda9260169c634ce01d0a1b0c6e00a"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/context.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/context.test.ts",
+      "bytes": 1535,
+      "lines": 23,
+      "words": 184,
+      "lexicalMarkers": 1,
+      "sha256": "4fe0559e3117e979a142c90a859590b1a1e410b319bf276455f03f00449b7133"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/delivery.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/delivery.test.ts",
+      "bytes": 7175,
+      "lines": 137,
+      "words": 690,
+      "lexicalMarkers": 8,
+      "sha256": "53b5492cb75a9a009fc9121a596dccac11e031f4155297502e5045816d8e3c4a"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/driver.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/driver.test.ts",
+      "bytes": 9594,
+      "lines": 157,
+      "words": 1031,
+      "lexicalMarkers": 12,
+      "sha256": "d6c0fbc1ceeed748994b3307d879239d632f038879dddc5a8d5d2b43ba753897"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/fixtures/mcp-server.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/fixtures/mcp-server.ts",
+      "bytes": 847,
+      "lines": 16,
+      "words": 116,
+      "lexicalMarkers": 8,
+      "sha256": "503e869861d8d536ef240f70c8d2bf003eff83539391bec6ee8a9e4eed3b32a2"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/git-read.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/git-read.test.ts",
+      "bytes": 986,
+      "lines": 17,
+      "words": 115,
+      "lexicalMarkers": 1,
+      "sha256": "037c26a69dcf581652525cd6c53ef762e68b7aceacc6dd8a3b864508afb4ed46"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/health.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/health.test.ts",
+      "bytes": 722,
+      "lines": 14,
+      "words": 62,
+      "lexicalMarkers": 0,
+      "sha256": "6b91bc621c8260d74a596fb1cd5b07f6d210716988b60fde20c25eaba3875c5d"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/history.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/history.test.ts",
+      "bytes": 5011,
+      "lines": 79,
+      "words": 521,
+      "lexicalMarkers": 1,
+      "sha256": "ff52dad490f07818afcca51a8a7257702ae5bdb911a9ae7c59771fd7262cd102"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/host-feasibility.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/host-feasibility.test.ts",
+      "bytes": 10270,
+      "lines": 226,
+      "words": 922,
+      "lexicalMarkers": 14,
+      "sha256": "79bf2e2d55289a0c9558d60d2c11d2a50c80ed040f14bd05cfc4a35de24349d6"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/host.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/host.test.ts",
+      "bytes": 11352,
+      "lines": 175,
+      "words": 1194,
+      "lexicalMarkers": 16,
+      "sha256": "14e988ce7eabe7cf2615dd71ce09971dd6ec3f0004e4426fb424661183cea883"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/interaction.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/interaction.test.ts",
+      "bytes": 2590,
+      "lines": 35,
+      "words": 283,
+      "lexicalMarkers": 1,
+      "sha256": "a146cb77da18e6a56916df92315dfc73a595dc23d069eeca39f3e6c3ff4755bd"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/mcp.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/mcp.test.ts",
+      "bytes": 2220,
+      "lines": 41,
+      "words": 254,
+      "lexicalMarkers": 0,
+      "sha256": "1de53b1964c5e79454377c0866af2798cbdd351a5ea042087d2e96f55516fe03"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/native-interaction.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/native-interaction.test.ts",
+      "bytes": 3021,
+      "lines": 45,
+      "words": 321,
+      "lexicalMarkers": 3,
+      "sha256": "dee4dea6a3856582834e7a4d88634c49ce7542ea21eec0bf07230a77ed454039"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/overlay.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/overlay.test.ts",
+      "bytes": 7237,
+      "lines": 139,
+      "words": 718,
+      "lexicalMarkers": 5,
+      "sha256": "2ef328499566d800e12db415da55331aed72fdf329cbec69f1e7732b916f7660"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/owner.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/owner.test.ts",
+      "bytes": 18146,
+      "lines": 398,
+      "words": 1600,
+      "lexicalMarkers": 20,
+      "sha256": "e41b313a11d9e67c3c6856ed8fe6f9f23bd145f735f26e95a374e7fb08455946"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/parent-runtime.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/parent-runtime.test.ts",
+      "bytes": 6409,
+      "lines": 112,
+      "words": 659,
+      "lexicalMarkers": 6,
+      "sha256": "629494e2263e1827a1a5852376f5757267e1ee48645756fbc674a97d944128bb"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/presentation.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/presentation.test.ts",
+      "bytes": 4611,
+      "lines": 72,
+      "words": 461,
+      "lexicalMarkers": 6,
+      "sha256": "5bb6ff6c9b030aca7ffae6c73b78321a4f427c4558a42d40fd4e70e359753444"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/production.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/production.test.ts",
+      "bytes": 9315,
+      "lines": 222,
+      "words": 879,
+      "lexicalMarkers": 13,
+      "sha256": "11450b9cfbf8a61cdf63dc1e0f0b5edf06786bc596e96e8420ddb40fc0141d93"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/readme.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/readme.test.ts",
+      "bytes": 2316,
+      "lines": 43,
+      "words": 249,
+      "lexicalMarkers": 7,
+      "sha256": "73044c6c762046fdb20ff62f45be99ace8d78138b99eafd90efb8fba3198b0ff"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/rendering.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/rendering.test.ts",
+      "bytes": 6418,
+      "lines": 85,
+      "words": 667,
+      "lexicalMarkers": 5,
+      "sha256": "6ad55eacd469846fc61c58af34632d44aa57df6defb95fc080d16fcccffb1ffd"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/specialist.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/specialist.test.ts",
+      "bytes": 6762,
+      "lines": 124,
+      "words": 583,
+      "lexicalMarkers": 3,
+      "sha256": "2cf1e1cda6f190e04b92124fa1c234910f519592fdae5797fa27c7f1c3d309b4"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/tools.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/tools.test.ts",
+      "bytes": 2515,
+      "lines": 36,
+      "words": 276,
+      "lexicalMarkers": 0,
+      "sha256": "c3fa7d8f9cb8d94cb106e13a6cc41c47fba4897841ac84cbcfe459ccc084ece3"
+    },
+    ".pi/agent/extensions/minimal-subagents/__tests__/widget.test.ts": {
+      "path": ".pi/agent/extensions/minimal-subagents/__tests__/widget.test.ts",
+      "bytes": 2266,
+      "lines": 37,
+      "words": 246,
+      "lexicalMarkers": 2,
+      "sha256": "70bf6273d9535fcd1fafbcd00d177de04bf887b0ba1c5f5f3a8c5f1f1a24994b"
+    },
+    ".pi/agent/extensions/__tests__/routed-prompts.test.ts": {
+      "path": ".pi/agent/extensions/__tests__/routed-prompts.test.ts",
+      "bytes": 8110,
+      "lines": 269,
+      "words": 807,
+      "lexicalMarkers": 8,
+      "sha256": "c5834829a7e05bd9ab4a5741d28911fd8ae033975d525dd43ea57b04a0e4c5a7"
+    },
+    ".pi/agent/extensions/prompt-ui/__tests__/subagent-session-links.test.ts": {
+      "path": ".pi/agent/extensions/prompt-ui/__tests__/subagent-session-links.test.ts",
+      "bytes": 40846,
+      "lines": 1163,
+      "words": 3895,
+      "lexicalMarkers": 37,
+      "sha256": "806a5a43ddcdda2035675652cb82cf1eea8c8c1c2337b1464a611a4c0ab8b063"
+    },
+    ".pi/agent/extensions/prompt-ui/__tests__/subagent-transcript-frame.test.ts": {
+      "path": ".pi/agent/extensions/prompt-ui/__tests__/subagent-transcript-frame.test.ts",
+      "bytes": 6825,
+      "lines": 191,
+      "words": 599,
+      "lexicalMarkers": 10,
+      "sha256": "c1cf07691c1ca76fc5f907248b11ffc2708c7062519cc42f5116e198780df494"
+    },
+    ".pi/agent/extensions/prompt-ui/__tests__/subagent-widget-frame.test.ts": {
+      "path": ".pi/agent/extensions/prompt-ui/__tests__/subagent-widget-frame.test.ts",
+      "bytes": 16609,
+      "lines": 494,
+      "words": 1607,
+      "lexicalMarkers": 24,
+      "sha256": "f209cf9aa03f34192681944666307f23ad67eab9eeedf8c00b4962b3ed2c5b21"
+    },
+    ".pi/agent/extensions/__tests__/subagent-steering-notice.test.ts": {
+      "path": ".pi/agent/extensions/__tests__/subagent-steering-notice.test.ts",
+      "bytes": 5381,
+      "lines": 140,
+      "words": 575,
+      "lexicalMarkers": 7,
+      "sha256": "7c1dffd26437aae47e90e1a1dce4b3644d8af139281793a1dff3b5885303e466"
+    },
+    ".pi/agent/agents/adversarial.md": {
+      "path": ".pi/agent/agents/adversarial.md",
+      "bytes": 2153,
+      "lines": 34,
+      "words": 276,
+      "lexicalMarkers": 0,
+      "sha256": "074ce26480c90a253bc3e96daae80160137acacfceb830331840764d8fe07ffe"
+    },
+    ".pi/agent/agents/analyze.md": {
+      "path": ".pi/agent/agents/analyze.md",
+      "bytes": 2769,
+      "lines": 58,
+      "words": 391,
+      "lexicalMarkers": 0,
+      "sha256": "12268a6d34601da88f0bb00ef867217b3b3894a4ef4d9ac059ae435fde546064"
+    },
+    ".pi/agent/agents/backlog-planning.md": {
+      "path": ".pi/agent/agents/backlog-planning.md",
+      "bytes": 4348,
+      "lines": 74,
+      "words": 603,
+      "lexicalMarkers": 0,
+      "sha256": "9728098eab279cebb6cacde974146761526eddac53f5e2258f5475e592b19826"
+    },
+    ".pi/agent/agents/benchmark.md": {
+      "path": ".pi/agent/agents/benchmark.md",
+      "bytes": 1746,
+      "lines": 15,
+      "words": 196,
+      "lexicalMarkers": 0,
+      "sha256": "3e5d92d79f0528c8e486d6b88864b0f982da77a2b249c6232fc7486d7d050273"
+    },
+    ".pi/agent/agents/debug.md": {
+      "path": ".pi/agent/agents/debug.md",
+      "bytes": 3984,
+      "lines": 69,
+      "words": 543,
+      "lexicalMarkers": 0,
+      "sha256": "c0ed731470fd78c5edff5ebd7bd893e2dbf4469d8fc3e358ce98562672561cf1"
+    },
+    ".pi/agent/agents/docs.md": {
+      "path": ".pi/agent/agents/docs.md",
+      "bytes": 2522,
+      "lines": 54,
+      "words": 326,
+      "lexicalMarkers": 0,
+      "sha256": "957e2cbf695ffa93c71fb287f3178474757c97002b398785e1f426d81ef15e61"
+    },
+    ".pi/agent/agents/explore.md": {
+      "path": ".pi/agent/agents/explore.md",
+      "bytes": 483,
+      "lines": 11,
+      "words": 53,
+      "lexicalMarkers": 0,
+      "sha256": "0ae08dfa4b37e4466060a31e6671945e552f50fdab57d355cb371312e1e5b2a2"
+    },
+    ".pi/agent/agents/general.md": {
+      "path": ".pi/agent/agents/general.md",
+      "bytes": 1291,
+      "lines": 16,
+      "words": 133,
+      "lexicalMarkers": 0,
+      "sha256": "1e4ac1b1eb471bcd13928475420ff5e2831884ea484e54893d63a8ae62517426"
+    },
+    ".pi/agent/agents/ideate.md": {
+      "path": ".pi/agent/agents/ideate.md",
+      "bytes": 2705,
+      "lines": 49,
+      "words": 387,
+      "lexicalMarkers": 0,
+      "sha256": "9f34e132518e5192b3e079c672782255a1d702dcaf828df8be31f3d03b3e941a"
+    },
+    ".pi/agent/agents/lookup.md": {
+      "path": ".pi/agent/agents/lookup.md",
+      "bytes": 1749,
+      "lines": 35,
+      "words": 229,
+      "lexicalMarkers": 0,
+      "sha256": "7af9fd85e08110d8df3ad554065d662f4ef886b3997fefdfbcfc0b224fe23f43"
+    },
+    ".pi/agent/agents/patterns.md": {
+      "path": ".pi/agent/agents/patterns.md",
+      "bytes": 2068,
+      "lines": 52,
+      "words": 293,
+      "lexicalMarkers": 0,
+      "sha256": "a677a9d46d784e391d0ea6c68406658b5aa2feddb15be281ba28b3b1e9cd13f5"
+    },
+    ".pi/agent/agents/pr-feedback.md": {
+      "path": ".pi/agent/agents/pr-feedback.md",
+      "bytes": 5110,
+      "lines": 81,
+      "words": 684,
+      "lexicalMarkers": 0,
+      "sha256": "29bcbb4a01db5e5d6ca386543970d309966cfe4907e627d93e42ad4ed31382a8"
+    },
+    ".pi/agent/agents/quick.md": {
+      "path": ".pi/agent/agents/quick.md",
+      "bytes": 1960,
+      "lines": 43,
+      "words": 260,
+      "lexicalMarkers": 0,
+      "sha256": "1f852ae85c31ff62b3d8ee80bc827b174423f67b33e06dd36c5a10a0fcbd3d9f"
+    },
+    ".pi/agent/agents/refactor.md": {
+      "path": ".pi/agent/agents/refactor.md",
+      "bytes": 1418,
+      "lines": 28,
+      "words": 170,
+      "lexicalMarkers": 0,
+      "sha256": "defc54a1c32308adefc850504e03bda9c512c008b993b209e125fac400951380"
+    },
+    ".pi/agent/agents/research.md": {
+      "path": ".pi/agent/agents/research.md",
+      "bytes": 2956,
+      "lines": 53,
+      "words": 363,
+      "lexicalMarkers": 0,
+      "sha256": "dd1b93746f8c982c02b9f77ff675f786b4b971d1a3af92b25cb35844372640f8"
+    },
+    ".pi/agent/agents/review.md": {
+      "path": ".pi/agent/agents/review.md",
+      "bytes": 3567,
+      "lines": 58,
+      "words": 448,
+      "lexicalMarkers": 0,
+      "sha256": "9b61ae6259333e2bd3cc9d3010aad3e61d1e56fcc60845469e2928a0edd68569"
+    },
+    ".pi/agent/agents/spec.md": {
+      "path": ".pi/agent/agents/spec.md",
+      "bytes": 2710,
+      "lines": 47,
+      "words": 349,
+      "lexicalMarkers": 0,
+      "sha256": "9c0f3c0c6e99359be4f694a16c6cddb0fe4f45e5cd93aa4abe03381f9e021e48"
+    },
+    ".pi/agent/agents/test.md": {
+      "path": ".pi/agent/agents/test.md",
+      "bytes": 4381,
+      "lines": 55,
+      "words": 613,
+      "lexicalMarkers": 0,
+      "sha256": "28ca0f77e96d956de67d32995be6b92063bcec676e1b69f3b48976702abfd6c0"
+    },
+    ".pi/agent/agents/validate.md": {
+      "path": ".pi/agent/agents/validate.md",
+      "bytes": 1573,
+      "lines": 36,
+      "words": 208,
+      "lexicalMarkers": 0,
+      "sha256": "1d18576eccbdb39f93e69dec38b1cb8dfd49b2769d81bb2223fa43cdc76bb0ec"
+    },
+    ".pi/agent/agents/visualizer.md": {
+      "path": ".pi/agent/agents/visualizer.md",
+      "bytes": 12478,
+      "lines": 92,
+      "words": 1591,
+      "lexicalMarkers": 0,
+      "sha256": "653e91c31b8ab343d86f1296ea19427d5bdb0fe6118fb4706c4cdbc50e22a937"
+    },
+    ".pi/agent/instructions/orchestration/assignments.md": {
+      "path": ".pi/agent/instructions/orchestration/assignments.md",
+      "bytes": 3386,
+      "lines": 13,
+      "words": 491,
+      "lexicalMarkers": 0,
+      "sha256": "58918a866a65396d45b2c385644b1046beb9b2ec363fee19503ef2a8e42e6e00"
+    },
+    ".pi/agent/instructions/orchestration/coordination.md": {
+      "path": ".pi/agent/instructions/orchestration/coordination.md",
+      "bytes": 2063,
+      "lines": 10,
+      "words": 304,
+      "lexicalMarkers": 0,
+      "sha256": "85b492766d603f195252366bb2c33dd2f6c797724c30a80d67ef7154e810b901"
+    },
+    ".pi/agent/instructions/orchestration/index.md": {
+      "path": ".pi/agent/instructions/orchestration/index.md",
+      "bytes": 3482,
+      "lines": 25,
+      "words": 421,
+      "lexicalMarkers": 0,
+      "sha256": "340e42f51c062be59eb532afdd7b97c5be3f98c2e0316a21b81e02dd4c51394d"
+    },
+    ".pi/agent/instructions/orchestration/routing.md": {
+      "path": ".pi/agent/instructions/orchestration/routing.md",
+      "bytes": 4230,
+      "lines": 30,
+      "words": 600,
+      "lexicalMarkers": 0,
+      "sha256": "a4159a9dbf4a0f3ea0ae49c451839eace51a9bb0a143b634994646cf8b21e568"
+    },
+    ".pi/agent/instructions/orchestration/supervision.md": {
+      "path": ".pi/agent/instructions/orchestration/supervision.md",
+      "bytes": 7576,
+      "lines": 37,
+      "words": 1116,
+      "lexicalMarkers": 0,
+      "sha256": "96ae243da9ad06d3da481f1bd24252ee0f6f35cfe3aebd4646ebc7d806cb45a9"
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/package.json": {
+      "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/package.json",
+      "bytes": 2356,
+      "lines": 89,
+      "words": 189,
+      "lexicalMarkers": 0,
+      "sha256": "888f1d87c30b34de250b9d8623b28d2a9789125c1e65e40c29cf8e4eea2e6463"
+    },
+    ".pi/agent/extensions/model-presets.ts": {
+      "path": ".pi/agent/extensions/model-presets.ts",
+      "bytes": 8092,
+      "lines": 211,
+      "words": 788,
+      "lexicalMarkers": 42,
+      "sha256": "2853c8e82e1a4f693141d7972af725627cc4e45c53502c7c0f11b990cfc0210e"
+    },
+    ".pi/agent/settings.json": {
+      "path": ".pi/agent/settings.json",
+      "bytes": 4341,
+      "lines": 197,
+      "words": 297,
+      "lexicalMarkers": 0,
+      "sha256": "b8da1adfa92b0027cdd275273a407ebd418edf80ce3273739f27c4df1462bbc5"
+    },
+    "AGENTS.md": {
+      "path": "AGENTS.md",
+      "bytes": 2258,
+      "lines": 49,
+      "words": 279,
+      "lexicalMarkers": 0,
+      "sha256": "4299e76693eee3453d0346da9249d24553047e20f13ddc461444a50d4a353e8d"
+    },
+    ".pi/agent/AGENTS.md": {
+      "path": ".pi/agent/AGENTS.md",
+      "bytes": 3848,
+      "lines": 65,
+      "words": 517,
+      "lexicalMarkers": 0,
+      "sha256": "7cb07be7bf16b5d0f3a9ab0f9494e45e5625dc8ed7a805e8ea676b2c52c5ce5c"
+    }
+  },
+  "totals": {
+    "production": {
+      "files": 22,
+      "bytes": 147964,
+      "lines": 2978,
+      "words": 14850,
+      "lexicalMarkers": 930
+    },
+    "local_glue": {
+      "files": 8,
+      "bytes": 65726,
+      "lines": 1906,
+      "words": 6495,
+      "lexicalMarkers": 408
+    },
+    "tests": {
+      "files": 23,
+      "bytes": 126757,
+      "lines": 2324,
+      "words": 12554,
+      "lexicalMarkers": 136
+    },
+    "local_tests": {
+      "files": 5,
+      "bytes": 77771,
+      "lines": 2257,
+      "words": 7483,
+      "lexicalMarkers": 86
+    },
+    "agents": {
+      "files": 20,
+      "bytes": 61971,
+      "lines": 960,
+      "words": 8116,
+      "lexicalMarkers": 0
+    },
+    "orchestration": {
+      "files": 5,
+      "bytes": 20737,
+      "lines": 115,
+      "words": 2932,
+      "lexicalMarkers": 0
+    }
+  },
+  "complexity": {
+    "kind": "lexical proxy, NOT cyclomatic or cognitive complexity",
+    "pattern": "\\b(?:if|for|while|do|switch|catch)\\b|&&=?|\\|\\|=?|\\?\\?=?|\\?(?!\\.)",
+    "includesCommentsAndStrings": true
+  },
+  "comparison": {
+    "productionBytes": {
+      "baseline": 494486,
+      "candidate": 147964,
+      "delta": -346522,
+      "deltaPercent": -70.07721148829289
+    },
+    "productionAndGlueBytes": {
+      "baseline": 560882,
+      "candidate": 213690,
+      "delta": -347192,
+      "deltaPercent": -61.90107723193115
+    },
+    "instructionBytes": {
+      "baseline": 80785,
+      "candidate": 82708,
+      "delta": 1923,
+      "deltaPercent": 2.380392399579123
+    }
+  },
+  "configurationChanges": {
+    ".pi/agent/extensions/subagent-steering-notice.ts": {
+      "baseline": "c7b8de26856d6de3114517be8ac63d503cc8423358c493106301414bea06e627",
+      "candidate": "c7b8de26856d6de3114517be8ac63d503cc8423358c493106301414bea06e627",
+      "changed": false
+    },
+    ".pi/agent/extensions/__tests__/subagent-steering-notice.test.ts": {
+      "baseline": "7c1dffd26437aae47e90e1a1dce4b3644d8af139281793a1dff3b5885303e466",
+      "candidate": "7c1dffd26437aae47e90e1a1dce4b3644d8af139281793a1dff3b5885303e466",
+      "changed": false
+    },
+    ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/package.json": {
+      "baseline": "888f1d87c30b34de250b9d8623b28d2a9789125c1e65e40c29cf8e4eea2e6463",
+      "candidate": "888f1d87c30b34de250b9d8623b28d2a9789125c1e65e40c29cf8e4eea2e6463",
+      "changed": false
+    },
+    ".pi/agent/extensions/model-presets.ts": {
+      "baseline": "2853c8e82e1a4f693141d7972af725627cc4e45c53502c7c0f11b990cfc0210e",
+      "candidate": "2853c8e82e1a4f693141d7972af725627cc4e45c53502c7c0f11b990cfc0210e",
+      "changed": false
+    },
+    ".pi/agent/settings.json": {
+      "baseline": "37676e32bf72bb3c6bab0431e66468a66d046dcb004b263b5e94654bd469b673",
+      "candidate": "b8da1adfa92b0027cdd275273a407ebd418edf80ce3273739f27c4df1462bbc5",
+      "changed": true
+    },
+    "AGENTS.md": {
+      "baseline": "4299e76693eee3453d0346da9249d24553047e20f13ddc461444a50d4a353e8d",
+      "candidate": "4299e76693eee3453d0346da9249d24553047e20f13ddc461444a50d4a353e8d",
+      "changed": false
+    },
+    ".pi/agent/AGENTS.md": {
+      "baseline": "7cb07be7bf16b5d0f3a9ab0f9494e45e5625dc8ed7a805e8ea676b2c52c5ce5c",
+      "candidate": "7cb07be7bf16b5d0f3a9ab0f9494e45e5625dc8ed7a805e8ea676b2c52c5ce5c",
+      "changed": false
+    }
+  },
+  "runtime": {
+    "protocol": {
+      "agent": "quick",
+      "modelPreset": "presets/routine",
+      "configuredModel": "openai-codex/gpt-6-luna-fast",
+      "configuredThinking": "low",
+      "maxTurns": 4,
+      "inheritContext": false,
+      "minimal": "This is a bounded runtime measurement. Do not use tools, inspect files, delegate, or ask questions. Return exactly PROBE_OK and nothing else.",
+      "inspection": "This is a bounded read-only runtime measurement in /Users/fbb/dotfiles. Use the read tool to read only .pi/agent/npm/node_modules/@gotgenes/pi-subagents/package.json. Do not run commands, read other files, modify files, delegate, or ask questions. Return exactly: name=<name>; version=<version>; node=<engines.node>. Replace placeholders with the values read from that file. Return no other text."
+    },
+    "apiMapping": {
+      "launch": {
+        "specialist": "quick",
+        "foreground": false,
+        "inheritContext": false,
+        "maxTurns": 4
+      },
+      "wait": {
+        "mode": "wait",
+        "timeoutMs": 120000
+      }
+    },
+    "warmupPolicy": "One unmeasured fresh-child run per workload; existing warm parent process; no provider-cache flush; serial new children; no concurrent active benchmark worker. Earlier idle sessions may remain retained.",
+    "clock": "Date.now milliseconds in parent codemode; wall clock, not monotonic",
+    "samples": [
+      {
+        "workload": "minimal",
+        "sample": 0,
+        "warmup": true,
+        "workerId": "f5dce02b-2364-49e1-94fc-9dfaebe0b9b0",
+        "assignmentId": "bbfc6e93-a523-4234-a49e-0bb5cf718838",
+        "startUtc": "2026-10-23T07:37:52.983Z",
+        "launchReturnMs": 145,
+        "observedCompletionMs": 3725,
+        "launch": {
+          "kind": "launched",
+          "workerId": "f5dce02b-2364-49e1-94fc-9dfaebe0b9b0",
+          "assignmentId": "bbfc6e93-a523-4234-a49e-0bb5cf718838",
+          "worker": {
+            "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+            "workerId": "f5dce02b-2364-49e1-94fc-9dfaebe0b9b0",
+            "specialist": "quick",
+            "state": "running",
+            "liveSession": "available",
+            "currentAssignmentId": "bbfc6e93-a523-4234-a49e-0bb5cf718838",
+            "assignments": [
+              {
+                "assignmentId": "bbfc6e93-a523-4234-a49e-0bb5cf718838",
+                "outcome": "running",
+                "turnsUsed": 0,
+                "maxTurns": 4,
+                "remainingTurns": 4,
+                "persistence": "not-attempted"
+              }
+            ]
+          }
+        },
+        "wait": {
+          "kind": "completed",
+          "worker": {
+            "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+            "workerId": "f5dce02b-2364-49e1-94fc-9dfaebe0b9b0",
+            "specialist": "quick",
+            "state": "idle",
+            "liveSession": "available",
+            "currentAssignmentId": "bbfc6e93-a523-4234-a49e-0bb5cf718838",
+            "assignments": [
+              {
+                "assignmentId": "bbfc6e93-a523-4234-a49e-0bb5cf718838",
+                "outcome": "completed",
+                "turnsUsed": 1,
+                "maxTurns": 4,
+                "remainingTurns": 3,
+                "persistence": "not-attempted"
+              }
+            ]
+          },
+          "assignment": {
+            "assignmentId": "bbfc6e93-a523-4234-a49e-0bb5cf718838",
+            "outcome": "completed",
+            "turnsUsed": 1,
+            "maxTurns": 4,
+            "remainingTurns": 3,
+            "persistence": "not-attempted"
+          },
+          "report": "PROBE_OK"
+        },
+        "toolUses": 0,
+        "calls": [],
+        "usage": [
+          {
+            "model": "gpt-6-luna-fast",
+            "provider": "openai-codex",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 6740,
+              "output": 7,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 6747,
+              "cost": {
+                "input": 0.000674,
+                "output": 0.0000035,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0.0006775
+              }
+            },
+            "durationMs": 1199
+          }
+        ],
+        "correct": true
+      },
+      {
+        "workload": "minimal",
+        "sample": 1,
+        "warmup": false,
+        "workerId": "19fda9f7-85b0-48ae-ba27-a409004b9b71",
+        "assignmentId": "937a7a6d-f4b9-4a88-8272-64735b41b63a",
+        "startUtc": "2026-10-23T07:38:44.782Z",
+        "launchReturnMs": 124,
+        "observedCompletionMs": 4676,
+        "launch": {
+          "kind": "launched",
+          "workerId": "19fda9f7-85b0-48ae-ba27-a409004b9b71",
+          "assignmentId": "937a7a6d-f4b9-4a88-8272-64735b41b63a",
+          "worker": {
+            "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+            "workerId": "19fda9f7-85b0-48ae-ba27-a409004b9b71",
+            "specialist": "quick",
+            "state": "running",
+            "liveSession": "available",
+            "currentAssignmentId": "937a7a6d-f4b9-4a88-8272-64735b41b63a",
+            "assignments": [
+              {
+                "assignmentId": "937a7a6d-f4b9-4a88-8272-64735b41b63a",
+                "outcome": "running",
+                "turnsUsed": 0,
+                "maxTurns": 4,
+                "remainingTurns": 4,
+                "persistence": "not-attempted"
+              }
+            ]
+          }
+        },
+        "wait": {
+          "kind": "completed",
+          "worker": {
+            "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+            "workerId": "19fda9f7-85b0-48ae-ba27-a409004b9b71",
+            "specialist": "quick",
+            "state": "idle",
+            "liveSession": "available",
+            "currentAssignmentId": "937a7a6d-f4b9-4a88-8272-64735b41b63a",
+            "assignments": [
+              {
+                "assignmentId": "937a7a6d-f4b9-4a88-8272-64735b41b63a",
+                "outcome": "completed",
+                "turnsUsed": 1,
+                "maxTurns": 4,
+                "remainingTurns": 3,
+                "persistence": "not-attempted"
+              }
+            ]
+          },
+          "assignment": {
+            "assignmentId": "937a7a6d-f4b9-4a88-8272-64735b41b63a",
+            "outcome": "completed",
+            "turnsUsed": 1,
+            "maxTurns": 4,
+            "remainingTurns": 3,
+            "persistence": "not-attempted"
+          },
+          "report": "PROBE_OK"
+        },
+        "toolUses": 0,
+        "calls": [],
+        "usage": [
+          {
+            "model": "gpt-6-luna-fast",
+            "provider": "openai-codex",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 6740,
+              "output": 7,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 6747,
+              "cost": {
+                "input": 0.000674,
+                "output": 0.0000035,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0.0006775
+              }
+            },
+            "durationMs": 1651
+          }
+        ],
+        "correct": true
+      },
+      {
+        "workload": "minimal",
+        "sample": 2,
+        "warmup": false,
+        "workerId": "14fd5e5a-4ef1-4d17-a107-ff4a62c71d6a",
+        "assignmentId": "6dece945-b79b-4af6-b3b9-211700219646",
+        "startUtc": "2026-10-23T07:38:49.587Z",
+        "launchReturnMs": 130,
+        "observedCompletionMs": 3179,
+        "launch": {
+          "kind": "launched",
+          "workerId": "14fd5e5a-4ef1-4d17-a107-ff4a62c71d6a",
+          "assignmentId": "6dece945-b79b-4af6-b3b9-211700219646",
+          "worker": {
+            "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+            "workerId": "14fd5e5a-4ef1-4d17-a107-ff4a62c71d6a",
+            "specialist": "quick",
+            "state": "running",
+            "liveSession": "available",
+            "currentAssignmentId": "6dece945-b79b-4af6-b3b9-211700219646",
+            "assignments": [
+              {
+                "assignmentId": "6dece945-b79b-4af6-b3b9-211700219646",
+                "outcome": "running",
+                "turnsUsed": 0,
+                "maxTurns": 4,
+                "remainingTurns": 4,
+                "persistence": "not-attempted"
+              }
+            ]
+          }
+        },
+        "wait": {
+          "kind": "completed",
+          "worker": {
+            "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+            "workerId": "14fd5e5a-4ef1-4d17-a107-ff4a62c71d6a",
+            "specialist": "quick",
+            "state": "idle",
+            "liveSession": "available",
+            "currentAssignmentId": "6dece945-b79b-4af6-b3b9-211700219646",
+            "assignments": [
+              {
+                "assignmentId": "6dece945-b79b-4af6-b3b9-211700219646",
+                "outcome": "completed",
+                "turnsUsed": 1,
+                "maxTurns": 4,
+                "remainingTurns": 3,
+                "persistence": "not-attempted"
+              }
+            ]
+          },
+          "assignment": {
+            "assignmentId": "6dece945-b79b-4af6-b3b9-211700219646",
+            "outcome": "completed",
+            "turnsUsed": 1,
+            "maxTurns": 4,
+            "remainingTurns": 3,
+            "persistence": "not-attempted"
+          },
+          "report": "PROBE_OK"
+        },
+        "toolUses": 0,
+        "calls": [],
+        "usage": [
+          {
+            "model": "gpt-6-luna-fast",
+            "provider": "openai-codex",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 6740,
+              "output": 7,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 6747,
+              "cost": {
+                "input": 0.000674,
+                "output": 0.0000035,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0.0006775
+              }
+            },
+            "durationMs": 1729
+          }
+        ],
+        "correct": true
+      },
+      {
+        "workload": "minimal",
+        "sample": 3,
+        "warmup": false,
+        "workerId": "2c3bb567-65ba-47ab-bc40-f1f373bf5448",
+        "assignmentId": "a5488d63-4c70-4908-a038-f9e7c58fb76a",
+        "startUtc": "2026-10-23T07:38:52.894Z",
+        "launchReturnMs": 119,
+        "observedCompletionMs": 2495,
+        "launch": {
+          "kind": "launched",
+          "workerId": "2c3bb567-65ba-47ab-bc40-f1f373bf5448",
+          "assignmentId": "a5488d63-4c70-4908-a038-f9e7c58fb76a",
+          "worker": {
+            "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+            "workerId": "2c3bb567-65ba-47ab-bc40-f1f373bf5448",
+            "specialist": "quick",
+            "state": "running",
+            "liveSession": "available",
+            "currentAssignmentId": "a5488d63-4c70-4908-a038-f9e7c58fb76a",
+            "assignments": [
+              {
+                "assignmentId": "a5488d63-4c70-4908-a038-f9e7c58fb76a",
+                "outcome": "running",
+                "turnsUsed": 0,
+                "maxTurns": 4,
+                "remainingTurns": 4,
+                "persistence": "not-attempted"
+              }
+            ]
+          }
+        },
+        "wait": {
+          "kind": "completed",
+          "worker": {
+            "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+            "workerId": "2c3bb567-65ba-47ab-bc40-f1f373bf5448",
+            "specialist": "quick",
+            "state": "idle",
+            "liveSession": "available",
+            "currentAssignmentId": "a5488d63-4c70-4908-a038-f9e7c58fb76a",
+            "assignments": [
+              {
+                "assignmentId": "a5488d63-4c70-4908-a038-f9e7c58fb76a",
+                "outcome": "completed",
+                "turnsUsed": 1,
+                "maxTurns": 4,
+                "remainingTurns": 3,
+                "persistence": "not-attempted"
+              }
+            ]
+          },
+          "assignment": {
+            "assignmentId": "a5488d63-4c70-4908-a038-f9e7c58fb76a",
+            "outcome": "completed",
+            "turnsUsed": 1,
+            "maxTurns": 4,
+            "remainingTurns": 3,
+            "persistence": "not-attempted"
+          },
+          "report": "PROBE_OK"
+        },
+        "toolUses": 0,
+        "calls": [],
+        "usage": [
+          {
+            "model": "gpt-6-luna-fast",
+            "provider": "openai-codex",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 6740,
+              "output": 7,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 6747,
+              "cost": {
+                "input": 0.000674,
+                "output": 0.0000035,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0.0006775
+              }
+            },
+            "durationMs": 1263
+          }
+        ],
+        "correct": true
+      },
+      {
+        "workload": "inspection",
+        "sample": 0,
+        "warmup": true,
+        "workerId": "55763d1c-7a1c-4524-b4cf-abc56ed483a6",
+        "assignmentId": "b42cd159-e2a8-448b-a6f7-539e194d86dc",
+        "startUtc": "2026-10-23T07:39:03.059Z",
+        "launchReturnMs": 136,
+        "observedCompletionMs": 5272,
+        "launch": {
+          "kind": "launched",
+          "workerId": "55763d1c-7a1c-4524-b4cf-abc56ed483a6",
+          "assignmentId": "b42cd159-e2a8-448b-a6f7-539e194d86dc",
+          "worker": {
+            "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+            "workerId": "55763d1c-7a1c-4524-b4cf-abc56ed483a6",
+            "specialist": "quick",
+            "state": "running",
+            "liveSession": "available",
+            "currentAssignmentId": "b42cd159-e2a8-448b-a6f7-539e194d86dc",
+            "assignments": [
+              {
+                "assignmentId": "b42cd159-e2a8-448b-a6f7-539e194d86dc",
+                "outcome": "running",
+                "turnsUsed": 0,
+                "maxTurns": 4,
+                "remainingTurns": 4,
+                "persistence": "not-attempted"
+              }
+            ]
+          }
+        },
+        "wait": {
+          "kind": "completed",
+          "worker": {
+            "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+            "workerId": "55763d1c-7a1c-4524-b4cf-abc56ed483a6",
+            "specialist": "quick",
+            "state": "idle",
+            "liveSession": "available",
+            "currentAssignmentId": "b42cd159-e2a8-448b-a6f7-539e194d86dc",
+            "assignments": [
+              {
+                "assignmentId": "b42cd159-e2a8-448b-a6f7-539e194d86dc",
+                "outcome": "completed",
+                "turnsUsed": 2,
+                "maxTurns": 4,
+                "remainingTurns": 2,
+                "persistence": "not-attempted"
+              }
+            ]
+          },
+          "assignment": {
+            "assignmentId": "b42cd159-e2a8-448b-a6f7-539e194d86dc",
+            "outcome": "completed",
+            "turnsUsed": 2,
+            "maxTurns": 4,
+            "remainingTurns": 2,
+            "persistence": "not-attempted"
+          },
+          "report": "name=@gotgenes/pi-subagents; version=25.0.1; node=>=22"
+        },
+        "toolUses": 1,
+        "calls": [
+          {
+            "name": "read",
+            "arguments": {
+              "path": ".pi/agent/npm/node_modules/@gotgenes/pi-subagents/package.json"
+            }
+          }
+        ],
+        "usage": [
+          {
+            "model": "gpt-6-luna-fast",
+            "provider": "openai-codex",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 6800,
+              "output": 31,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 6831,
+              "cost": {
+                "input": 0.00068,
+                "output": 0.0000155,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0.0006955
+              }
+            },
+            "durationMs": 1739
+          },
+          {
+            "model": "gpt-6-luna-fast",
+            "provider": "openai-codex",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 1223,
+              "output": 24,
+              "cacheRead": 6656,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 7903,
+              "cost": {
+                "input": 0.00012230000000000002,
+                "output": 0.000012,
+                "cacheRead": 0.00006656,
+                "cacheWrite": 0,
+                "total": 0.00020086000000000003
+              }
+            },
+            "durationMs": 1069
+          }
+        ],
+        "correct": true
+      },
+      {
+        "workload": "inspection",
+        "sample": 1,
+        "warmup": false,
+        "workerId": "77d7d65a-fed8-4281-b991-7973764c0a4b",
+        "assignmentId": "46067d6a-faee-4f64-b1bc-47bf7fcf05f2",
+        "startUtc": "2026-10-23T07:39:08.437Z",
+        "launchReturnMs": 119,
+        "observedCompletionMs": 4086,
+        "launch": {
+          "kind": "launched",
+          "workerId": "77d7d65a-fed8-4281-b991-7973764c0a4b",
+          "assignmentId": "46067d6a-faee-4f64-b1bc-47bf7fcf05f2",
+          "worker": {
+            "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+            "workerId": "77d7d65a-fed8-4281-b991-7973764c0a4b",
+            "specialist": "quick",
+            "state": "running",
+            "liveSession": "available",
+            "currentAssignmentId": "46067d6a-faee-4f64-b1bc-47bf7fcf05f2",
+            "assignments": [
+              {
+                "assignmentId": "46067d6a-faee-4f64-b1bc-47bf7fcf05f2",
+                "outcome": "running",
+                "turnsUsed": 0,
+                "maxTurns": 4,
+                "remainingTurns": 4,
+                "persistence": "not-attempted"
+              }
+            ]
+          }
+        },
+        "wait": {
+          "kind": "completed",
+          "worker": {
+            "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+            "workerId": "77d7d65a-fed8-4281-b991-7973764c0a4b",
+            "specialist": "quick",
+            "state": "idle",
+            "liveSession": "available",
+            "currentAssignmentId": "46067d6a-faee-4f64-b1bc-47bf7fcf05f2",
+            "assignments": [
+              {
+                "assignmentId": "46067d6a-faee-4f64-b1bc-47bf7fcf05f2",
+                "outcome": "completed",
+                "turnsUsed": 2,
+                "maxTurns": 4,
+                "remainingTurns": 2,
+                "persistence": "not-attempted"
+              }
+            ]
+          },
+          "assignment": {
+            "assignmentId": "46067d6a-faee-4f64-b1bc-47bf7fcf05f2",
+            "outcome": "completed",
+            "turnsUsed": 2,
+            "maxTurns": 4,
+            "remainingTurns": 2,
+            "persistence": "not-attempted"
+          },
+          "report": "name=@gotgenes/pi-subagents; version=25.0.1; node=>=22"
+        },
+        "toolUses": 1,
+        "calls": [
+          {
+            "name": "read",
+            "arguments": {
+              "path": "/Users/fbb/dotfiles/.pi/agent/npm/node_modules/@gotgenes/pi-subagents/package.json"
+            }
+          }
+        ],
+        "usage": [
+          {
+            "model": "gpt-6-luna-fast",
+            "provider": "openai-codex",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 272,
+              "output": 38,
+              "cacheRead": 6528,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 6838,
+              "cost": {
+                "input": 0.000027200000000000004,
+                "output": 0.000018999999999999998,
+                "cacheRead": 0.00006528,
+                "cacheWrite": 0,
+                "total": 0.00011148
+              }
+            },
+            "durationMs": 1765
+          },
+          {
+            "model": "gpt-6-luna-fast",
+            "provider": "openai-codex",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 1230,
+              "output": 24,
+              "cacheRead": 6656,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 7910,
+              "cost": {
+                "input": 0.000123,
+                "output": 0.000012,
+                "cacheRead": 0.00006656,
+                "cacheWrite": 0,
+                "total": 0.00020156
+              }
+            },
+            "durationMs": 992
+          }
+        ],
+        "correct": true
+      },
+      {
+        "workload": "inspection",
+        "sample": 2,
+        "warmup": false,
+        "workerId": "e72f238b-ffa0-4326-92da-df2b9aa859d7",
+        "assignmentId": "65095fb0-11d3-4038-83ba-afb98f94464e",
+        "startUtc": "2026-10-23T07:39:12.654Z",
+        "launchReturnMs": 121,
+        "observedCompletionMs": 3865,
+        "launch": {
+          "kind": "launched",
+          "workerId": "e72f238b-ffa0-4326-92da-df2b9aa859d7",
+          "assignmentId": "65095fb0-11d3-4038-83ba-afb98f94464e",
+          "worker": {
+            "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+            "workerId": "e72f238b-ffa0-4326-92da-df2b9aa859d7",
+            "specialist": "quick",
+            "state": "running",
+            "liveSession": "available",
+            "currentAssignmentId": "65095fb0-11d3-4038-83ba-afb98f94464e",
+            "assignments": [
+              {
+                "assignmentId": "65095fb0-11d3-4038-83ba-afb98f94464e",
+                "outcome": "running",
+                "turnsUsed": 0,
+                "maxTurns": 4,
+                "remainingTurns": 4,
+                "persistence": "not-attempted"
+              }
+            ]
+          }
+        },
+        "wait": {
+          "kind": "completed",
+          "worker": {
+            "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+            "workerId": "e72f238b-ffa0-4326-92da-df2b9aa859d7",
+            "specialist": "quick",
+            "state": "idle",
+            "liveSession": "available",
+            "currentAssignmentId": "65095fb0-11d3-4038-83ba-afb98f94464e",
+            "assignments": [
+              {
+                "assignmentId": "65095fb0-11d3-4038-83ba-afb98f94464e",
+                "outcome": "completed",
+                "turnsUsed": 2,
+                "maxTurns": 4,
+                "remainingTurns": 2,
+                "persistence": "not-attempted"
+              }
+            ]
+          },
+          "assignment": {
+            "assignmentId": "65095fb0-11d3-4038-83ba-afb98f94464e",
+            "outcome": "completed",
+            "turnsUsed": 2,
+            "maxTurns": 4,
+            "remainingTurns": 2,
+            "persistence": "not-attempted"
+          },
+          "report": "name=@gotgenes/pi-subagents; version=25.0.1; node=>=22"
+        },
+        "toolUses": 1,
+        "calls": [
+          {
+            "name": "read",
+            "arguments": {
+              "path": "/Users/fbb/dotfiles/.pi/agent/npm/node_modules/@gotgenes/pi-subagents/package.json"
+            }
+          }
+        ],
+        "usage": [
+          {
+            "model": "gpt-6-luna-fast",
+            "provider": "openai-codex",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 6800,
+              "output": 38,
+              "cacheRead": 0,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 6838,
+              "cost": {
+                "input": 0.00068,
+                "output": 0.000018999999999999998,
+                "cacheRead": 0,
+                "cacheWrite": 0,
+                "total": 0.0006990000000000001
+              }
+            },
+            "durationMs": 1635
+          },
+          {
+            "model": "gpt-6-luna-fast",
+            "provider": "openai-codex",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 1230,
+              "output": 24,
+              "cacheRead": 6656,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 7910,
+              "cost": {
+                "input": 0.000123,
+                "output": 0.000012,
+                "cacheRead": 0.00006656,
+                "cacheWrite": 0,
+                "total": 0.00020156
+              }
+            },
+            "durationMs": 985
+          }
+        ],
+        "correct": true
+      },
+      {
+        "workload": "inspection",
+        "sample": 3,
+        "warmup": false,
+        "workerId": "da097241-6d7f-4b46-a544-6d3e1e7d1cc4",
+        "assignmentId": "765ff9b5-44a2-40cc-9b28-e005ac3e7807",
+        "startUtc": "2026-10-23T07:39:16.661Z",
+        "launchReturnMs": 136,
+        "observedCompletionMs": 3934,
+        "launch": {
+          "kind": "launched",
+          "workerId": "da097241-6d7f-4b46-a544-6d3e1e7d1cc4",
+          "assignmentId": "765ff9b5-44a2-40cc-9b28-e005ac3e7807",
+          "worker": {
+            "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+            "workerId": "da097241-6d7f-4b46-a544-6d3e1e7d1cc4",
+            "specialist": "quick",
+            "state": "running",
+            "liveSession": "available",
+            "currentAssignmentId": "765ff9b5-44a2-40cc-9b28-e005ac3e7807",
+            "assignments": [
+              {
+                "assignmentId": "765ff9b5-44a2-40cc-9b28-e005ac3e7807",
+                "outcome": "running",
+                "turnsUsed": 0,
+                "maxTurns": 4,
+                "remainingTurns": 4,
+                "persistence": "not-attempted"
+              }
+            ]
+          }
+        },
+        "wait": {
+          "kind": "completed",
+          "worker": {
+            "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+            "workerId": "da097241-6d7f-4b46-a544-6d3e1e7d1cc4",
+            "specialist": "quick",
+            "state": "idle",
+            "liveSession": "available",
+            "currentAssignmentId": "765ff9b5-44a2-40cc-9b28-e005ac3e7807",
+            "assignments": [
+              {
+                "assignmentId": "765ff9b5-44a2-40cc-9b28-e005ac3e7807",
+                "outcome": "completed",
+                "turnsUsed": 2,
+                "maxTurns": 4,
+                "remainingTurns": 2,
+                "persistence": "not-attempted"
+              }
+            ]
+          },
+          "assignment": {
+            "assignmentId": "765ff9b5-44a2-40cc-9b28-e005ac3e7807",
+            "outcome": "completed",
+            "turnsUsed": 2,
+            "maxTurns": 4,
+            "remainingTurns": 2,
+            "persistence": "not-attempted"
+          },
+          "report": "name=@gotgenes/pi-subagents; version=25.0.1; node=>=22"
+        },
+        "toolUses": 1,
+        "calls": [
+          {
+            "name": "read",
+            "arguments": {
+              "path": "/Users/fbb/dotfiles/.pi/agent/npm/node_modules/@gotgenes/pi-subagents/package.json"
+            }
+          }
+        ],
+        "usage": [
+          {
+            "model": "gpt-6-luna-fast",
+            "provider": "openai-codex",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 272,
+              "output": 38,
+              "cacheRead": 6528,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 6838,
+              "cost": {
+                "input": 0.000027200000000000004,
+                "output": 0.000018999999999999998,
+                "cacheRead": 0.00006528,
+                "cacheWrite": 0,
+                "total": 0.00011148
+              }
+            },
+            "durationMs": 1683
+          },
+          {
+            "model": "gpt-6-luna-fast",
+            "provider": "openai-codex",
+            "thinkingLevel": "low",
+            "usage": {
+              "input": 206,
+              "output": 24,
+              "cacheRead": 7680,
+              "cacheWrite": 0,
+              "reasoning": 0,
+              "totalTokens": 7910,
+              "cost": {
+                "input": 0.000020600000000000003,
+                "output": 0.000012,
+                "cacheRead": 0.0000768,
+                "cacheWrite": 0,
+                "total": 0.0001094
+              }
+            },
+            "durationMs": 926
+          }
+        ],
+        "correct": true
+      }
+    ],
+    "summary": {
+      "minimal": {
+        "launchReturnMs": {
+          "n": 3,
+          "min": 119,
+          "median": 124,
+          "max": 130,
+          "baselineMedian": 134,
+          "delta": -10,
+          "deltaPercent": -7.462686567164178
+        },
+        "observedCompletionMs": {
+          "n": 3,
+          "min": 2495,
+          "median": 3179,
+          "max": 4676,
+          "baselineMedian": 7790,
+          "delta": -4611,
+          "deltaPercent": -59.191270860077026
+        }
+      },
+      "inspection": {
+        "launchReturnMs": {
+          "n": 3,
+          "min": 119,
+          "median": 121,
+          "max": 136,
+          "baselineMedian": 125,
+          "delta": -4,
+          "deltaPercent": -3.200000000000003
+        },
+        "observedCompletionMs": {
+          "n": 3,
+          "min": 3865,
+          "median": 3934,
+          "max": 4086,
+          "baselineMedian": 8972,
+          "delta": -5038,
+          "deltaPercent": -56.15247436469015
+        }
+      }
+    },
+    "practicalThreshold": null,
+    "verdict": "Descriptive historical comparison only; causal improvement inconclusive",
+    "limitations": [
+      "Three measured samples per workload; no statistical significance, p95 or isolated overhead estimate.",
+      "Provider/cache state uncontrolled; current child tool/context loading intentionally differs; config fingerprints changed.",
+      "Wait returns execution report before storage save. All eight sampled receipts said not-attempted; later native status confirmed saved. Durability latency not measured.",
+      "Exact baseline usage unavailable. Candidate usage from native transcripts is supplemental, not token savings evidence.",
+      "Old package and inactive integration remain on disk; no installed-disk reduction claim.",
+      "No CPU, memory, allocations, cold start, concurrent saturation or real coding workload measured."
+    ]
+  },
+  "collectionNotes": [
+    "Initial baseline JSON parse hit read output truncation; corrected by paging before any runtime measurements.",
+    "Native transcript tool returned tab-delimited TOON, not JSON; parser corrected during warm-up checking, before measured samples.",
+    "Initial static collector stopped at page limits and omitted final newlines. Corrected by following nextOffset to EOF, preserving line boundaries and using os.stat bytes. Every final content byte count matched stat allowing only omitted final newline.",
+    "GNU stat rejected BSD -f syntax with exit 1; Python os.stat succeeded.",
+    "One artifact-writing script had a syntax error before tool calls; corrected without file effects.",
+    "No failed runtime samples, retries, discarded outliers, source modifications or dependency changes."
+  ]
+}

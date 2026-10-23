@@ -1,12 +1,10 @@
 # kind<TAB>package<TAB>patch filename<TAB>package-relative path<TAB>preimage SHA-256 or - if absent<TAB>postimage SHA-256 or - if absent
 package	@ff-labs/pi-fff	@ff-labs+pi-fff+0.11.0.patch	src/file-picker.ts	33bf924dea61e8f6977e1d73691570dd1c6808423780d72d2ab5ab4b31a36fe3	5b42c2bf337dbb3d37284df6c8f20ffa83d05d6bb37f3120ad670852febadd08
 package	@ff-labs/pi-fff	@ff-labs+pi-fff+0.11.0.patch	src/index.ts	cc34d7d15f9887de3e9efe61a8306e64a89d83e2f9099c3d53830cc2ae1257e7	4942d228ab75ddba8d7d7a3e9756b01d56dc9c5b05c397a5a4d196f0d8ae655b
-package	pi-hashline-edit-pro	pi-hashline-edit-pro+6.0.1.patch	src/anchor-registry.ts	c938c0fb8253390980700440b5303a6ece209de8c8c91e95faf71aaa8b30723e	277c15bdf28e49fcefcada8b9c0a9d5a7cdb22310b842d4d730175d3db5674e8
-package	pi-hashline-edit-pro	pi-hashline-edit-pro+6.0.1.patch	src/hashline/apply.ts	769fdde4b34df994be8b8986ad0706a3d2991d758b50251a10d23e9cf7faa030	d96748480bf531d7dbda9e7550d6d0052be5483bf1f5cf368cf049775164175f
+package	pi-hashline-edit-pro	pi-hashline-edit-pro+6.0.1.patch	src/anchor-registry.ts	1580d57b82044c9a6ae50b1e402648fdcf2be0eb69d3da819d31ba2274b4549b	2d7ab2e2b27e89ef63caab66ec901fbbcc431ae7f00c65e5a940e1049b883c8d
+package	pi-hashline-edit-pro	pi-hashline-edit-pro+6.0.1.patch	src/hashline/apply.ts	2d8f14796bd5db57ee87139e7f42ae2a41040e19c3ab14a7867e68495a8e4b7f	ea6dc25d5f66066a75afa04ff32f6b38ebdfcaff1124394ffe94732069488011
 package	pi-hashline-edit-pro	pi-hashline-edit-pro+6.0.1.patch	src/hashline/hash.ts	65154cfcbba6f005b3f084fe4901a1ee2924890a783dc24b43bdb5fe528d2b5d	a78f1f2705a1ee9bba546eec5830e66f0dff3a9f4769ade757f73811c7f551d6
-package	pi-hashline-edit-pro	pi-hashline-edit-pro+6.0.1.patch	src/hashline/resolve.ts	4b1ee9e1bef81143164eecee834673c1ad3b71aa2414a96ccd224eeb4d97ac00	b674a51dbcbd33d235478a1c296cef964f1a4bcc5857b31c6c9b3d511103842e
-package	pi-hashline-edit-pro	pi-hashline-edit-pro+6.0.1.patch	src/read.ts	38e34daebf1641b2f18b00623b1998fe9f1d16c06f5dee4c3d7dbf2368a6005f	e6be9c43242427a0d301d10d6f9c923ed367534ff6d227c60d26a483d3c9a1c5
-package	pi-hashline-edit-pro	pi-hashline-edit-pro+6.0.1.patch	src/structured.ts	a4ba6940efd8ff1be0a8cf6895e0ca14c66c169a66172262badd127b8d5ed15f	bbeb1a37aeca32ca3a11a9010753547a6e5f6a857fede245429019359f28364e
+package	pi-hashline-edit-pro	pi-hashline-edit-pro+6.0.1.patch	src/hashline/resolve.ts	eed37cb1cf99b2da0dbaafc2a0631d81ca191030934eddbf06fe415e9d248a13	d1206fc6cadf44973bd1ebe16b7adf3c478a8a28cbd386c3ac0a909c1a951ac9
 package	pi-lens	pi-lens+4.3.0.patch	dist/index.js	192098c6d5297f633206a01adfa60bafe2e73aa4f2ec1cae0faa097a9bfa5e67	ce487e08fe01984291e305d7e5a3b9351659cf16cde7e202c3bf911482b700bc
 package	pi-worktrunk	pi-worktrunk+0.8.0.patch	reference-cache.ts	-	5543cf671a00b9074345340657ea4279b9256805bded4f940941c348569d77c5
 package	pi-worktrunk	pi-worktrunk+0.8.0.patch	worktrunk.ts	b6773d882a3333c450ff6ee825a023b475dc3cd4542cd3aacf46db335045837d	0c6a7ea37c7e62011f8383be73c019bae61493c95605a996bde5e532e06c86b2

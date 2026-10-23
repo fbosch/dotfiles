@@ -1,8 +1,11 @@
 ---
 description: Handles complex, multi-step implementation or mixed tasks. Delivers the assigned change and focused checks within stated ownership, constraints, and handoff requirements.
-prompt_mode: append
 model: presets/focused-execution
 max_turns: 24
+tools: ["read","grep","find","ls","fffind","ffgrep","write","replace","replace_match","insert","copy","move","undo_last_change","bash","codemode","tool_search","typesafe_question","dekit","websearch","webfetch"]
+bundles: ["files","file-search","classifier","web","commands"]
+skills: ["bun","diagnosing-bugs","security-and-hardening","tdd","writing-clearly"]
+allow_overrides: [model, thinking]
 ---
 
 ## Bounded assignments

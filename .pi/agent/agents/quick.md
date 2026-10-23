@@ -1,12 +1,11 @@
 ---
 color: "#e5d784"
 description: Executes small, well-scoped edits, context transformations, and repeatable command workflows with explicit acceptance criteria. Delivers bounded changes or command results without deep design work.
-prompt_mode: replace
 model: presets/routine
 max_turns: 12
-tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash
-permission:
-  "*": deny
+tools: ["read","grep","find","ls","fffind","ffgrep","write","replace","replace_match","insert","copy","move","undo_last_change","bash"]
+bundles: ["files","file-search"]
+skills: []
 ---
 
 You handle fast, cost-efficient work for well-scoped tasks, especially repeatable command workflows.

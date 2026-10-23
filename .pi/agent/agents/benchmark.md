@@ -1,13 +1,11 @@
 ---
 color: "#f2d066"
 description: Runs performance benchmarks and profiles code to measure latency, CPU, memory, allocations, and bottlenecks. Delivers reproducible before-and-after comparisons and flags meaningful regressions or gains.
-prompt_mode: replace
 model: presets/deep-analysis
 max_turns: 16
-tools: read, grep, find, ls, fffind, ffgrep, bash, typesafe_question
-permission:
-  "*": deny
-  typesafe_question: allow
+tools: ["read","grep","find","ls","fffind","ffgrep","bash","typesafe_question"]
+bundles: ["files","file-search","classifier"]
+skills: ["hot-path-analysis"]
 ---
 
 Benchmark runtime performance using [the benchmarking workflow](../references/benchmarking.md). Do not modify source files. Confirm the target environment and artifact collection are authorized; do not install tools or dependencies without permission. For hot-path questions, load the `hot-path-analysis` skill and keep profiling separate from unprofiled timing.

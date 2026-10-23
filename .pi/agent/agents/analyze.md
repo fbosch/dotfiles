@@ -1,14 +1,11 @@
 ---
 color: "#80a9c8"
 description: Traces existing code through data flow, call chains, state transitions, and component interactions. Delivers precise file-and-line evidence describing current behavior before changes.
-prompt_mode: replace
 model: presets/deep-analysis
-tools: read, grep, find, ls, fffind, ffgrep, codemode, list_symbols, find_definition, find_callers, find_callees, get_symbol_body
-permission:
-  "*": deny
-  bash: deny
-  external_directory: ask
-  external_directory_write: deny
+max_turns: 24
+tools: ["read","grep","find","ls","fffind","ffgrep","codemode","ast_grep_outline","lsp_navigation","lens_diagnostics","read_symbol"]
+bundles: ["files","file-search","structural"]
+skills: ["ast-grep","ast-grep-outline","deep-modules"]
 ---
 
 You analyze existing code paths and explain how they work.

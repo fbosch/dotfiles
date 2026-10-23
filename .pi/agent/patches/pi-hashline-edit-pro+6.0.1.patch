@@ -1,8 +1,8 @@
 diff --git a/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts b/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts
-index a8c8f3c..5febcea 100644
+index f8ebfee5..f47dbed3 100644
 --- a/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts
 +++ b/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts
-@@ -171,6 +171,8 @@ const sessionFileByKey = new Map<string, string>();
+@@ -187,6 +187,8 @@ const sessionFileByKey = new Map<string, string>();
  const pendingInits = new Map<string, Promise<void>>();
  const loadTokens = new Map<string, object>();
  const registries = new Map<string, SessionState>();
@@ -11,7 +11,7 @@ index a8c8f3c..5febcea 100644
  const sessionScope = new AsyncLocalStorage<string>();
  
  function newSessionState(seed?: string): SessionState {
-@@ -336,7 +338,7 @@ async function compactSidecarIfNeeded(sidecar: string, raw: string, sessionFile:
+@@ -369,7 +371,7 @@ async function compactSidecarIfNeeded(sidecar: string, raw: string, sessionFile:
  }
  
  async function loadRegistryState(key: string, sessionFile: string, token: object): Promise<void> {
@@ -20,7 +20,7 @@ index a8c8f3c..5febcea 100644
    let events: RegistryEvent[] = [];
    let rawLog = "";
    try {
-@@ -367,9 +369,57 @@ async function loadRegistryState(key: string, sessionFile: string, token: object
+@@ -400,9 +402,57 @@ async function loadRegistryState(key: string, sessionFile: string, token: object
    }
  }
  
@@ -79,7 +79,7 @@ index a8c8f3c..5febcea 100644
    const pending = pendingInits.get(key);
    if (pending) {
      await pending;
-@@ -406,10 +456,25 @@ export async function initRegistry(sessionFile: string | undefined): Promise<str
+@@ -439,10 +489,25 @@ export async function initRegistry(sessionFile: string | undefined): Promise<str
  }
  
  export function sessionKeyFor(ctx: AnchorSessionContext | undefined): string | undefined {
@@ -108,7 +108,7 @@ index a8c8f3c..5febcea 100644
    return undefined;
  }
  
-@@ -738,7 +803,11 @@ function computeParts(
+@@ -808,7 +873,11 @@ function computeParts(
    const parts: ArrayPart[] = [];
    if (prefix > 0) parts.push({ count: prefix });
    for (const part of Diff.diffArrays(prevMid, newMid) as unknown as Array<{ count?: number; added?: boolean; removed?: boolean }>) {
@@ -121,7 +121,7 @@ index a8c8f3c..5febcea 100644
    }
    if (suffix > 0) parts.push({ count: suffix });
    return parts;
-@@ -994,6 +1063,8 @@ export function resetRegistryForTests(): void {
+@@ -1075,6 +1144,8 @@ export function resetRegistryForTests(): void {
    sessionFileByKey.clear();
    pendingInits.clear();
    loadTokens.clear();
@@ -130,7 +130,7 @@ index a8c8f3c..5febcea 100644
    registries.clear();
  }
  
-@@ -1033,6 +1104,12 @@ export async function readSidecarSessionFile(sidecar: string): Promise<string |
+@@ -1118,6 +1189,12 @@ export async function readSidecarSessionFile(sidecar: string): Promise<string |
  
  export function releaseRegistrySession(key: string): void {
    loadTokens.delete(key);
@@ -144,7 +144,7 @@ index a8c8f3c..5febcea 100644
    pendingInits.delete(key);
    sidecarByKey.delete(key);
 diff --git a/node_modules/pi-hashline-edit-pro/src/hashline/apply.ts b/node_modules/pi-hashline-edit-pro/src/hashline/apply.ts
-index f7ff129..4adb494 100644
+index 303bf2f7..63f1dd78 100644
 --- a/node_modules/pi-hashline-edit-pro/src/hashline/apply.ts
 +++ b/node_modules/pi-hashline-edit-pro/src/hashline/apply.ts
 @@ -223,7 +223,12 @@ export function applyEdit(
@@ -162,7 +162,7 @@ index f7ff129..4adb494 100644
    const warnings = planned.warnings;
    const resolved = planned.resolved;
 diff --git a/node_modules/pi-hashline-edit-pro/src/hashline/hash.ts b/node_modules/pi-hashline-edit-pro/src/hashline/hash.ts
-index e17801f..0bddfeb 100644
+index e17801fa..0bddfeb4 100644
 --- a/node_modules/pi-hashline-edit-pro/src/hashline/hash.ts
 +++ b/node_modules/pi-hashline-edit-pro/src/hashline/hash.ts
 @@ -51,11 +51,18 @@ export function stripRowPrefix(line: string): StrippedRow {
@@ -200,10 +200,10 @@ index e17801f..0bddfeb 100644
  }
  
 diff --git a/node_modules/pi-hashline-edit-pro/src/hashline/resolve.ts b/node_modules/pi-hashline-edit-pro/src/hashline/resolve.ts
-index f1339dd..85c7392 100644
+index 1ad809c1..0b2e2e22 100644
 --- a/node_modules/pi-hashline-edit-pro/src/hashline/resolve.ts
 +++ b/node_modules/pi-hashline-edit-pro/src/hashline/resolve.ts
-@@ -292,6 +292,14 @@ export function preserveDeletionSeparators(edit: HEdit, fileLines: string[], fil
+@@ -305,6 +305,14 @@ export function preserveDeletionSeparators(edit: HEdit, fileLines: string[], fil
  	return { ...edit, hash_bounds: [{ hash: fileHashes[start]! }, { hash: fileHashes[end]! }] };
  }
  
@@ -218,7 +218,7 @@ index f1339dd..85c7392 100644
  export function valEdit(
  	edit: HEdit,
  	fileLines: string[],
-@@ -324,10 +332,10 @@ export function valEdit(
+@@ -337,10 +345,10 @@ export function valEdit(
  	const endResolved = tryResolve(edit.hash_bounds[1]);
  	if (!startResolved || !endResolved) {
  		if (!startResolved && endResolved) {
@@ -231,54 +231,3 @@ index f1339dd..85c7392 100644
  			if (endMismatch && endMismatch.kind === "not_found") endMismatch.context = startResolved;
  		}
  		return { resolved: undefined, mismatches };
-diff --git a/node_modules/pi-hashline-edit-pro/src/read.ts b/node_modules/pi-hashline-edit-pro/src/read.ts
-index e16ab2e0..620b506e 100644
---- a/node_modules/pi-hashline-edit-pro/src/read.ts
-+++ b/node_modules/pi-hashline-edit-pro/src/read.ts
-@@ -346,7 +346,21 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
- 						context: typeof ctx,
- 					) => ReturnType<typeof builtinRead.execute>;
- 					const imageResult = await executeBuiltinRead(_toolCallId, params, signal, _onUpdate, ctx);
--					const imageStructured: ReadResult = { ok: true, kind: "image", path: rawPath, mimeType: file.mimeType };
-+					const imageBlock = imageResult.content.find((block) => block.type === "image");
-+					const note = imageResult.content.filter((block) => block.type === "text").map((block) => block.text).join("\n");
-+					if (!imageBlock || imageBlock.data.length === 0) {
-+						throw new Error(`[E_IMAGE_READ] ${note || "Read did not return an image payload."}`);
-+					}
-+					// Codemode consumes structuredContent; use the processed payload and MIME type, not the source file.
-+					const imageStructured: ReadResult = {
-+						ok: true,
-+						kind: "image",
-+						path: rawPath,
-+						type: "image",
-+						data: imageBlock.data,
-+						mimeType: imageBlock.mimeType,
-+						note,
-+					};
- 					return { ...imageResult, structuredContent: imageStructured };
- 				}
- 	      const { normalized, fileHashes, hadUtf8DecodeErrors, absolutePath: resolvedPath } = await readNormFile(
-diff --git a/node_modules/pi-hashline-edit-pro/src/structured.ts b/node_modules/pi-hashline-edit-pro/src/structured.ts
-index c74c53e7..54caa1db 100644
---- a/node_modules/pi-hashline-edit-pro/src/structured.ts
-+++ b/node_modules/pi-hashline-edit-pro/src/structured.ts
-@@ -50,6 +50,9 @@ export type ReadImageResult = {
- 	ok: true;
- 	kind: "image";
- 	path: string;
-+	type: "image";
-+	data: string;
-+	note: string;
- 	mimeType: string;
- };
- 
-@@ -73,6 +76,9 @@ export const readResultSchema = Type.Union([
- 		ok: Type.Literal(true),
- 		kind: Type.Literal("image"),
- 		path: Type.String(),
-+		type: Type.Literal("image"),
-+		data: Type.String({ minLength: 1 }),
-+		note: Type.String(),
- 		mimeType: Type.String(),
- 	}),
- 	structuredErrorSchema,

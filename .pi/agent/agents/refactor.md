@@ -1,11 +1,11 @@
 ---
 color: "#aae373"
 description: Makes requested behavior-preserving improvements to duplication, naming, logic, and readability. Delivers scoped edits plus focused checks while keeping interfaces and behavior stable.
-prompt_mode: replace
 model: presets/implementation
-tools: read, grep, find, ls, fffind, ffgrep, write, edit, bash, lsp, find_definition, find_callers
-permission:
-  "*": deny
+max_turns: 24
+tools: ["read","grep","find","ls","fffind","ffgrep","write","replace","replace_match","insert","copy","move","undo_last_change","bash","lsp_navigation","lens_diagnostics"]
+bundles: ["files","file-search","structural"]
+skills: ["code-simplifier","deep-modules"]
 ---
 
 You improve code quality without changing functionality.

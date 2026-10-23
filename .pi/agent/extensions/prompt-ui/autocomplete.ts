@@ -290,7 +290,7 @@ export function createAliasAutocompleteProvider(
     getSuggestions: async (lines, cursorLine, cursorCol, options) => {
       const suggestions = await provider.getSuggestions(lines, cursorLine, cursorCol, options);
       const textBeforeCursor = lines[cursorLine]?.slice(0, cursorCol) ?? "";
-      const agentPrefix = /(?:^|\s)(@[a-z0-9-]*)$/i.exec(textBeforeCursor)?.[1];
+      const agentPrefix = /(?:^|\s)(@[a-z0-9_-]*)$/i.exec(textBeforeCursor)?.[1];
       const matchingAgents =
         agentPrefix === undefined
           ? []

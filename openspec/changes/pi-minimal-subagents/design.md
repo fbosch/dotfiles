@@ -30,13 +30,13 @@ The user confirmed the feature contract after comparing the current setup with [
 
 ### 1. Verify three host integrations before runtime implementation
 
-The confirmed contract is the target, but feasibility is not yet established. The first task group must produce checked evidence for:
+The host API feasibility audit passed against Pi 1.3.0; see `references/feasibility.md` for source evidence, offline probes, and remaining implementation checks. The gate covers:
 
 1. **Selective child loading.** Verify supported child-session/resource APIs can resolve the mandatory baseline and selected bundles while retaining hashline, codemode, required provider hooks, tool discovery, applicable project instructions, and safety policy enforcement. Check actual callable tools, including codemode-dispatched tools, not just catalog text. Establish which existing permission declarations are enforced and which are merely instructions.
 2. **Native inspection.** Verify supported Pi APIs can implement the overlay, transcript rendering, scroll/follow behavior, cancellation confirmation, and bounded widget without importing gotgenes internals or patching Pi's private UI. Check `/subagents` command collisions and standard key handling.
 3. **Session lifecycle.** Verify interrupt attribution, switch confirmation, reload teardown, parent deletion, child disposal, and event delivery ordering. Establish how a cleanup-unknown block survives extension reload and how lack of shutdown confirmation is detected without an arbitrary worker execution deadline.
 
-Record findings in `references/feasibility.md` when this task is performed. An absent host API is a blocker, not permission to weaken the spec or add a Pi patch. Stop and obtain a revised decision if the agreed behavior cannot be delivered through supported APIs. No integration check is claimed complete by these planning artifacts.
+The audit establishes supported implementation paths, not production acceptance. An absent host API discovered during implementation remains a blocker, not permission to weaken the spec or patch Pi. Stop and obtain a revised decision if the agreed behavior cannot be delivered through supported APIs.
 
 ### 2. One session owner and one shared scheduler
 
@@ -142,4 +142,4 @@ Reuse supported components rather than copying gotgenes' widget or importing its
 
 ## Deferred implementation details
 
-Exact tool names, frontmatter keys, bundle membership, typed event envelopes, and storage layout can be finalized after the feasibility gate without changing the specified behavior. All three integration risks remain unverified; they are explicit blocking tasks, not assumptions of host support. No further feature expansion is implied by resolving these details.
+Exact tool names, frontmatter keys, bundle membership, and typed event envelopes remain implementation details. The feasibility audit selects embedded parent-session custom entries for history and process-scoped state for cleanup health. Production lifecycle and interactive acceptance checks remain incomplete. No further feature expansion is implied by resolving these details.

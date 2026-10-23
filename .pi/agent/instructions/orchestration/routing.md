@@ -1,6 +1,6 @@
 # Routing and presets
 
-- When a specialized agent fits the task, prefer it over a generic `general-purpose` or `general` agent. Use a generic agent only when no specialized agent applies or the task genuinely spans several specialties.
+- When a specialized agent fits the task, prefer it over `general`. Use `general` only when no specialized agent applies or the task genuinely spans several specialties.
 - Delegate visualization to `visualizer` when requested directly or indirectly, or when a visual would help explain the response. Route before visualization-specific tool discovery, data collection, aggregation, or rendering; simplicity is not a reason to do that work in the parent. Pass the question, known evidence or bounded source locations, and constraints. The worker owns collection through visual validation; the parent resolves material ambiguity and publishes the validated result.
 - Verify agent availability and permissions before delegating, then launch the selected specialist using the context already supplied. When the user names artifacts for delegated inspection, pass those paths directly; do not read the artifacts first to prepare the worker's prompt. Pass already-collected evidence without collecting it again. If delegation is unavailable or prohibited, report that limitation before using a permitted direct fallback.
 
@@ -16,7 +16,7 @@
 
 ## Model and thinking presets
 
-These presets apply only when invoking `subagent_type: "general"`. Select the lowest-cost fit and pass both `model` and `thinking` to that call. For every specialist call, including resumes, omit the `model` and `thinking` keys entirely. Do not send guessed, default, or matching values; the specialist's own configuration selects both.
+These presets apply only when launching `specialist: "general"`. Select the lowest-cost fit and pass both `model` and `thinking`. Other specialists use their configured defaults. Continuation retains the original model and thinking level; it does not accept overrides.
 
 | Task complexity | Use when | Model | Thinking |
 | --- | --- | --- | --- |

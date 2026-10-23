@@ -67,14 +67,14 @@ async function setup() {
     "copy",
     "move",
     "read",
-    "anchor_grep",
+    "grep",
     "undo_last_change",
   ]);
   for (const tool of loadedHashlineTools.filter(({ name }) => ["replace", "insert", "replace_match", "copy", "move"].includes(name))) {
     expect((tool.parameters as { required?: string[] }).required).toContain("path");
   }
   expect(loadedHashlineTools.find(({ name }) => name === "read")?.renderResult).toBeDefined();
-  expect(loadedHashlineTools.find(({ name }) => name === "anchor_grep")?.renderResult).toBeDefined();
+  expect(loadedHashlineTools.find(({ name }) => name === "grep")?.renderResult).toBeDefined();
   const hashlineTools = loadedHashlineTools.map(({ name }) => {
     const tool = tools.get(name);
     if (tool === undefined) throw new Error(`${name} was not registered`);

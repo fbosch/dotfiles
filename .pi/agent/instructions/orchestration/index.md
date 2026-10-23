@@ -19,7 +19,7 @@ Pass each reference path below literally to `read`, including its `~/` prefix; t
 Before EVERY `subagent` call, check arguments, not just the plan:
 
 - The `prompt` names the actual target, required result, and constraints.
-- Explicit `max_turns` is at most 12 for discovery/routine work or 24 for implementation/deep analysis, respecting lower specialist caps. Reduce oversized scope, never inflate budgets.
-- Specialist calls, including resumes, omit `model` and `thinking` entirely. Only `subagent_type: "general"` uses explicit presets from `routing.md`.
-- Set `run_in_background: true` for substantial work and EVERY independent batch member; launch all before waiting. Foreground permits only one bounded task or strictly sequential dependency without peer synchronization.
-- Continuations use the exact returned ID in `resume`, never reconstructed IDs or fresh spawns. Resume with a bounded step, budget, authorized phase, persistent constraints, and full output contract. After two unsuccessful bounded attempts at the same deliverable, stop and diagnose directly or ask the user.
+- Explicit `maxTurns` is at most 12 for discovery/routine work or 24 for implementation/deep analysis, respecting lower specialist caps. Reduce oversized scope, never inflate budgets.
+- Specialist launches omit `model` and `thinking` entirely. Only `specialist: "general"` uses explicit presets from `routing.md`. Continuations retain the worker's resolved model and capabilities.
+- Use `foreground: false` for substantial work and EVERY independent batch member; launch all before waiting. Foreground permits only one bounded task or strictly sequential dependency without peer synchronization.
+- Continue through `subagent_control` with `request: { action: "continue", workerId, prompt, maxTurns }`, copying the returned worker ID exactly. Keep the step bounded, with its authorized phase, persistent constraints, and full output contract. After two unsuccessful bounded attempts at the same deliverable, stop and diagnose directly or ask the user.

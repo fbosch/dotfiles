@@ -14,7 +14,7 @@ export const SIDE_BY_SIDE_MIN_WIDTH = 96;
 export const COLLAPSED_LINES = 24;
 export const MAX_PATHS = 100;
 export const ENTRY_TYPE = "delta-git-diff";
-export const HASHLINE_DIFF_TOOLS = new Set(["replace", "insert", "undo_last_change"]);
+export const HASHLINE_DIFF_TOOLS = new Set(["replace", "insert", "replace_match", "copy", "move", "undo_last_change"]);
 // Hashline metadata addresses tool edits but should not appear in the renderer's source view.
 export const HASHLINE_DIFF_ROW_PATTERN = /^([ +-])(?:[A-Za-z0-9]{4}| {4})│/mu;
 export const HASHLINE_DIFF_ROW_REPLACEMENT = /^([ +-])(?:[A-Za-z0-9]{4}| {4})│/gmu;
@@ -54,6 +54,18 @@ export interface DeltaDetails {
   readonly truncation?: DiffTruncation;
   readonly warning?: string;
   readonly width: number;
+}
+
+export function isDeltaDetails(value: unknown): value is DeltaDetails {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return (
+    (record.display === "inline" || record.display === "side-by-side") &&
+    typeof record.noChanges === "boolean" &&
+    typeof record.output === "string" &&
+    typeof record.scope === "string" &&
+    typeof record.width === "number"
+  );
 }
 
 export interface DeltaResult {

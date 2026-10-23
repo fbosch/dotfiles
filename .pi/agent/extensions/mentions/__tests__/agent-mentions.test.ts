@@ -41,6 +41,8 @@ describe("agent mentions", () => {
     const cwd = join(root, "project");
     mkdirSync(join(agentDirectory, "agents"), { recursive: true });
     mkdirSync(join(cwd, ".pi", "agents"), { recursive: true });
+    writeFileSync(join(agentDirectory, "agents", "general.md"), "---\ndescription: General\n---\nGeneral tasks.");
+    writeFileSync(join(agentDirectory, "agents", "Plan.md"), "---\ndescription: Plan\n---\nPlan tasks.");
     writeFileSync(
       join(agentDirectory, "agents", "review.md"),
       '---\ndescription: Global reviewer\ncolor: "#a8d0e6"\n---\nReview globally.',
@@ -105,7 +107,7 @@ describe("agent mentions", () => {
 
   test("builds an explicit tool-routing instruction", () => {
     expect(agentMentionInstruction([{ name: "explore", description: "Explore" }])).toContain(
-      "exact subagent_type",
+      "exact specialist",
     );
   });
 

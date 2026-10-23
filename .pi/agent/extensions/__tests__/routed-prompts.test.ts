@@ -33,9 +33,7 @@ const promptCommand: SlashCommandInfo = {
 
 function createHarness(options: {
   content: string;
-  service?: {
-    spawn(type: string, prompt: string, spawnOptions?: object): string;
-  };
+  launch?: (request: object) => Promise<unknown>;
 }) {
   let inputHandler: InputHandler | undefined;
   const messages: Array<{ customType: string; content: string; display: boolean }> = [];
@@ -59,7 +57,7 @@ function createHarness(options: {
   } as unknown as ExtensionContext;
 
   createRoutedPromptsExtension({
-    getSubagentsService: () => options.service,
+    launch: options.launch ?? (async () => { throw new Error("Minimal subagents launch handler is unavailable"); }),
     readPrompt: () => options.content,
   })(pi);
 
@@ -170,10 +168,9 @@ Tail: ${slicePlaceholder}
       description: "Create an architecture decision",
       prompt: "Topic: use postgres\nAll: use postgres accepted\nTail: accepted",
       options: {
-        description: "Create an architecture decision",
         foreground: false,
         model: "openai-codex/gpt-5.6-terra",
-        thinkingLevel: "medium",
+        thinking: "medium",
         maxTurns: 8,
         inheritContext: true,
       },
@@ -189,11 +186,9 @@ Tail: ${slicePlaceholder}
     let spawnCount = 0;
     const injected = createHarness({
       content: "---\nagent: general\n---\nHandle $ARGUMENTS",
-      service: {
-        spawn() {
-          spawnCount += 1;
-          return "agent-1";
-        },
+      launch: async () => {
+        spawnCount += 1;
+        return { workerId: "worker-1" };
       },
     });
     expect(await injected.input("/decision topic", undefined, "extension")).toEqual({
@@ -203,28 +198,18 @@ Tail: ${slicePlaceholder}
   });
 
   test("dispatches a routed prompt through the named subagent", async () => {
-    const spawns: unknown[][] = [];
+    const spawns: object[] = [];
     const harness = createHarness({
       content: "---\nagent: docs\ninherit_context: true\n---\nWrite $ARGUMENTS",
-      service: {
-        spawn(...args) {
-          spawns.push(args);
-          return "agent-1";
-        },
+      launch: async (request) => {
+        spawns.push(request);
+        return { workerId: "worker-1" };
       },
     });
 
     expect(await harness.input("/decision concise ADR")).toEqual({ action: "handled" });
     expect(spawns).toEqual([
-      [
-        "docs",
-        "Write concise ADR",
-        {
-          description: "Create an architecture decision",
-          foreground: false,
-          inheritContext: true,
-        },
-      ],
+      { specialist: "docs", prompt: "Write concise ADR", foreground: false, inheritContext: true },
     ]);
   });
 
@@ -233,11 +218,9 @@ Tail: ${slicePlaceholder}
     const harness = createHarness({
       content:
         '---\nagent: general\nusage: "Usage: /decision <short decision statement>"\n---\nTopic: $ARGUMENTS',
-      service: {
-        spawn() {
-          spawnCount += 1;
-          return "agent-1";
-        },
+      launch: async () => {
+        spawnCount += 1;
+        return { workerId: "worker-1" };
       },
     });
 
@@ -258,17 +241,15 @@ Tail: ${slicePlaceholder}
     });
     expect(await unavailable.input("/decision topic")).toEqual({ action: "handled" });
     expect(unavailable.notifications).toEqual([
-      ["Cannot run /decision: the pi-subagents service is unavailable.", "error"],
+      ["Cannot run /decision: Minimal subagents launch handler is unavailable", "error"],
     ]);
 
     let spawnCount = 0;
     const withImage = createHarness({
       content: "---\nagent: general\n---\nTopic: $ARGUMENTS",
-      service: {
-        spawn() {
-          spawnCount += 1;
-          return "agent-1";
-        },
+      launch: async () => {
+        spawnCount += 1;
+        return { workerId: "worker-1" };
       },
     });
     expect(

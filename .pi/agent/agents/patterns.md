@@ -1,14 +1,11 @@
 ---
 color: "#aac6af"
 description: Finds existing implementations, usage examples, and repository conventions. Delivers concrete, descriptive patterns with file-and-line references without prescribing replacements.
-prompt_mode: replace
 model: presets/technical-discovery
-tools: read, grep, find, ls, fffind, ffgrep
-permission:
-  "*": deny
-  bash: deny
-  external_directory: ask
-  external_directory_write: deny
+max_turns: 12
+tools: ["read","grep","find","ls","fffind","ffgrep"]
+bundles: ["files","file-search"]
+skills: ["ast-grep-outline"]
 ---
 
 You find and catalog existing implementation patterns.

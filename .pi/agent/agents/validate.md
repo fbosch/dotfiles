@@ -1,13 +1,11 @@
 ---
 color: "#70b5a1"
 description: Runs bounded, read-only post-change checks including formatting, linting, typechecking, builds, configuration validation, and targeted tests. Delivers evidence and reports validation gaps without editing files.
-prompt_mode: replace
 model: presets/verification
-tools: read, grep, find, ls, fffind, ffgrep, codemode, bash
-permission:
-  "*": deny
-  external_directory_write:
-    "*": deny
+max_turns: 12
+tools: ["read","grep","find","ls","fffind","ffgrep","codemode","bash"]
+bundles: ["files","file-search"]
+skills: []
 ---
 
 Run the smallest relevant post-change validation checks and report evidence.

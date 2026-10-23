@@ -1,7 +1,6 @@
 import { type ExtensionAPI, getAgentDir } from "@earendil-works/pi-coding-agent";
 import { getKeybindings, type TUI } from "@earendil-works/pi-tui";
 import { getSandboxLaunchMode } from "../../lib/sandbox-mode";
-import { resolvedPresetModelIds } from "../model-presets";
 import { installFloatingDialogs } from "./floating-dialogs";
 import {
   type FooterCustomization,
@@ -9,7 +8,6 @@ import {
   loadFooterCustomization,
   renderSandboxFooterStatus,
 } from "./footer-config";
-import { installSubagentWidgetFrame } from "./subagent-widget-frame";
 
 const WORKING_PULSE_FRAMES = ["·", "•", "●", "•"] as const;
 const WORKING_PULSE_INTERVAL_MS = 120;
@@ -26,7 +24,6 @@ export default function promptUi(pi: ExtensionAPI): void {
   let disposeAgentMentionCache = () => {};
   let invalidateContextUsage = () => {};
   let disposeMentionListener = () => {};
-  let disposeSubagentWidgetFrame = () => {};
   let getBranch = (): string | null => null;
   let getProfileName = (): string | undefined => undefined;
   let getStatuses = (): readonly string[] => [];
@@ -86,8 +83,6 @@ export default function promptUi(pi: ExtensionAPI): void {
     disposeMentionListener = () => {};
     disposeAgentMentionCache();
     disposeAgentMentionCache = () => {};
-    disposeSubagentWidgetFrame();
-    disposeSubagentWidgetFrame = () => {};
     activeTui = undefined;
   });
 
@@ -141,13 +136,6 @@ export default function promptUi(pi: ExtensionAPI): void {
     }
 
     installFloatingDialogs(ctx.ui);
-    disposeSubagentWidgetFrame();
-    disposeSubagentWidgetFrame = installSubagentWidgetFrame(ctx.ui, {
-      resolvedPresetModels: resolvedPresetModelIds(ctx.modelRegistry),
-      cwd: ctx.cwd,
-      includeProjectAgents: ctx.isProjectTrusted(),
-      sessionId: ctx.sessionManager.getSessionId(),
-    });
     ctx.ui.setWorkingVisible(false);
     ctx.ui.setFooter((tui, theme, footerData) => {
       const keybindings = getKeybindings();

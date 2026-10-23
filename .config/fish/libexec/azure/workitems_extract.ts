@@ -305,6 +305,19 @@ function collectMergedMainItems(commits: CommitRecord[], mainRef: string): strin
     return [...items];
 }
 
+// Branch reachability can't identify an originating item once refs disagree.
+function unambiguousBranchWorkitem(branchNames: string[]): { workitem: string; branchName: string } | undefined {
+    const candidates = branchNames
+        .map((branchName) => ({
+            workitem: extractBranchWorkitem(branchName),
+            branchName,
+        }))
+        .filter(({ workitem }) => workitem.length > 0);
+    const workitems = new Set(candidates.map(({ workitem }) => workitem));
+
+    return workitems.size === 1 ? candidates[0] : undefined;
+}
+
 function collectAuthoredBranchItems(commits: CommitRecord[]): AppResult<string[]> {
     const items = new Set<string>();
 
@@ -314,11 +327,9 @@ function collectAuthoredBranchItems(commits: CommitRecord[]): AppResult<string[]
             return err(branchesResult.error);
         }
 
-        for (const branchName of branchesResult.value) {
-            const workitem = extractBranchWorkitem(branchName);
-            if (workitem) {
-                items.add(`${commit.date}|${workitem}|${branchName}`);
-            }
+        const branchMatch = unambiguousBranchWorkitem(branchesResult.value);
+        if (branchMatch) {
+            items.add(`${commit.date}|${branchMatch.workitem}|${branchMatch.branchName}`);
         }
 
         const primaryBranch = branchesResult.value[0];

@@ -1,15 +1,11 @@
 ---
 color: "#a8d0e6"
 description: Assesses changed or existing code for correctness, security, performance, and maintainability without making changes. Delivers evidence-backed findings, coverage limits, and severity.
-prompt_mode: replace
 model: presets/critical-review
-tools: read, grep, find, ls, fffind, ffgrep, codemode, git_diff, lsp, typesafe_question
-permission:
-  "*": deny
-  typesafe_question: allow
-  bash: deny
-  external_directory: ask
-  external_directory_write: deny
+max_turns: 24
+tools: ["read","grep","find","ls","fffind","ffgrep","codemode","git_diff","lsp_navigation","lens_diagnostics","typesafe_question"]
+bundles: ["files","file-search","structural","git-read","classifier"]
+skills: ["security-audit","deep-modules"]
 ---
 
 Review code systematically for bugs and edge cases, security vulnerabilities, performance issues, best practices, and maintainability. For complex or security-critical reviews, reason deeply. Provide constructive feedback without changes.

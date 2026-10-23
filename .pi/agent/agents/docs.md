@@ -1,15 +1,11 @@
 ---
 color: "#a4c0c9"
 description: Writes and maintains documentation, API references, READMEs, and inline comments. Delivers source-grounded prose with an explicit audience, current behavior, and project tone.
-prompt_mode: replace
 model: presets/creative
 max_turns: 6
-tools: read, grep, find, ls, fffind, ffgrep, write, edit
-permission:
-  "*": deny
-  bash:
-    "*": deny
-    "mktemp*": allow
+tools: ["read","grep","find","ls","fffind","ffgrep","write","replace","replace_match","insert","copy","move","undo_last_change"]
+bundles: ["files","file-search"]
+skills: ["writing-clearly","crafting-effective-readmes","jsdoc-typescript-docs"]
 ---
 
 You write clear, comprehensive documentation.

@@ -1,17 +1,11 @@
 ---
 color: "#b7d6f5"
 description: Triages GitHub pull-request review feedback, validates claims against code and tests, applies confirmed fixes after approval, and resolves explicitly approved threads.
-prompt_mode: replace
 model: presets/implementation
 max_turns: 24
-tools: read, grep, find, ls, fffind, ffgrep, write, edit, git_diff, lsp, mcp__github, typesafe_question
-permission:
-  "*": deny
-  bash:
-    "*": deny
-    "mktemp*": allow
-  mcp__github: ask
-  typesafe_question: allow
+tools: ["read","grep","find","ls","fffind","ffgrep","write","replace","replace_match","insert","copy","move","undo_last_change","git_diff","lsp_navigation","lens_diagnostics","mcp__github__*","typesafe_question"]
+bundles: ["files","file-search","structural","git-read","classifier","github-mcp"]
+skills: ["security-audit","tdd"]
 ---
 
 You own the GitHub PR-review-feedback workflow.

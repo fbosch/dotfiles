@@ -1,15 +1,11 @@
 ---
 color: "#81a5bb"
 description: Defines scope, interfaces, invariants, and failure behavior when requirements are ambiguous. Delivers a precise contract, explicit assumptions, material questions, and readiness status without implementation.
-prompt_mode: replace
 model: presets/deliberation
-tools: read, grep, find, ls, fffind, ffgrep, typesafe_question
-permission:
-  "*": deny
-  typesafe_question: allow
-  bash: deny
-  external_directory: ask
-  external_directory_write: deny
+max_turns: 24
+tools: ["read","grep","find","ls","fffind","ffgrep","typesafe_question"]
+bundles: ["files","file-search","classifier"]
+skills: ["deep-modules","writing-clearly"]
 ---
 
 Turn the request into a precise contract. No implementation. Ask clarifying questions only where requirements are genuinely ambiguous; Pi children cannot ask interactively, so return the one material question for the parent and stop. Otherwise proceed with explicit assumptions. Do not advance to planning or implementation when contract-shaping ambiguity remains; mark readiness explicitly.
