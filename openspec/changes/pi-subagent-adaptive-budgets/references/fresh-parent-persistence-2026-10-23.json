@@ -1,0 +1,96 @@
+{
+  "version": 1,
+  "observedAt": "2026-10-23T21:51:49.087Z",
+  "acceptance": "failed: saved acknowledgement precedes any parent file write",
+  "baseline": "2d0f7222d956e73bb57f69b337ef30adf7e73868",
+  "source": ".pi/agent/extensions/subagents/history.ts",
+  "scope": "Public SessionManager and parentHistory boundary only; no AgentSession, model, classifier, UI, or shutdown acceptance.",
+  "cases": [
+    {
+      "sdkLabel": "development",
+      "moduleLabel": "working-tree",
+      "exitCode": 0,
+      "observation": {
+        "sdk": "0.99.1",
+        "before": {
+          "fileExists": false,
+          "persistence": "saved",
+          "conversationMessages": 0
+        },
+        "after": {
+          "fileExists": true,
+          "persistence": "saved",
+          "completeReportRetained": true,
+          "completeToolDetailsRetained": true
+        }
+      }
+    },
+    {
+      "sdkLabel": "installed",
+      "moduleLabel": "working-tree",
+      "exitCode": 0,
+      "observation": {
+        "sdk": "1.3.0",
+        "before": {
+          "fileExists": false,
+          "persistence": "saved",
+          "conversationMessages": 0
+        },
+        "after": {
+          "fileExists": true,
+          "persistence": "saved",
+          "completeReportRetained": true,
+          "completeToolDetailsRetained": true
+        }
+      }
+    },
+    {
+      "sdkLabel": "development",
+      "moduleLabel": "baseline",
+      "exitCode": 0,
+      "observation": {
+        "sdk": "0.99.1",
+        "before": {
+          "fileExists": false,
+          "persistence": "saved",
+          "conversationMessages": 0
+        },
+        "after": {
+          "fileExists": true,
+          "persistence": "saved",
+          "completeReportRetained": true,
+          "completeToolDetailsRetained": true
+        }
+      }
+    },
+    {
+      "sdkLabel": "installed",
+      "moduleLabel": "baseline",
+      "exitCode": 0,
+      "observation": {
+        "sdk": "1.3.0",
+        "before": {
+          "fileExists": false,
+          "persistence": "saved",
+          "conversationMessages": 0
+        },
+        "after": {
+          "fileExists": true,
+          "persistence": "saved",
+          "completeReportRetained": true,
+          "completeToolDetailsRetained": true
+        }
+      }
+    }
+  ],
+  "productionSourceChanges": false,
+  "notes": [
+    "All four cases return from save and restore persistence=saved while fileExists=false and conversationMessages=0.",
+    "Appending the first user-role fixture message subsequently creates the file; the complete report and serialized tool-result details survive.",
+    "The baseline module was taken unchanged from the recorded Git revision and used the existing project dependency tree.",
+    "The first installed-baseline attempt failed to resolve typebox/value in the private directory. Linking existing node_modules resolved it; no dependencies changed.",
+    "The codemode scratch store was full after a successful probe; evidence was retained through command output and this artifact instead.",
+    "Temporary files outside the workspace have no pi-lens static-analysis coverage. Runtime observations are not a static-analysis or full-project pass.",
+    "Persistence repair remains outside the adaptive-budget authorization and awaits an explicit scope decision."
+  ]
+}

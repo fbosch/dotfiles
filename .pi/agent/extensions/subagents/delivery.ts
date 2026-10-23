@@ -162,8 +162,8 @@ export class WorkerDelivery {
     };
   }
 
-  async continue(workerId: string, prompt: string, maxTurns?: number) {
-    const launched = await this.owner.continue(workerId, prompt, maxTurns);
+  async continue(workerId: string, prompt: string, maxTurns?: number, hardMaxTurns?: number) {
+    const launched = await this.owner.continue(workerId, prompt, maxTurns, hardMaxTurns);
     this.track(launched.assignmentId);
     this.flush(workerId, launched.assignmentId);
     return {

@@ -1,4 +1,5 @@
 import { match } from "ts-pattern";
+import { budgetMetadata } from "./budget-metadata";
 import type { ChildObservation } from "./driver";
 import type { WorkerSnapshot } from "./owner";
 import { singleLine } from "./presentation";
@@ -62,6 +63,14 @@ export function workerMetadata(
   );
   lines.push(row("Cost", observation?.cost === undefined ? "—" : String(observation.cost)));
   if (expanded) {
+    if (assignment) {
+      lines.push(
+        "",
+        ...budgetMetadata(assignment.budget, assignment.maxTurns).map(([name, value]) =>
+          row(name, value),
+        ),
+      );
+    }
     lines.push(
       "",
       row("Worker ID", worker.id),

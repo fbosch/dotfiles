@@ -1,0 +1,7 @@
+{
+  "extends": "../tsconfig.json",
+  "include": [
+    "subagent-budget*.ts",
+    "__tests__/subagent-budget*.test.ts"
+  ]
+}

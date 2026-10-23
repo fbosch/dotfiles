@@ -1,0 +1,482 @@
+{
+  "version": 1,
+  "workload": "Subagent-runner maintenance (Recommended)",
+  "verdict": "inconclusive: microfixture trials finish before admission; no threshold can be calibrated",
+  "limits": {
+    "maximumTrials": 26,
+    "overallDeadlineMs": 1792790744178,
+    "maximumOverallMs": 900000,
+    "maximumTrialMs": 120000
+  },
+  "totals": {
+    "attemptedTrials": 6,
+    "measurementInvalidTrials": 3,
+    "correctedMeasurementTrials": 3,
+    "correctedCheckedCompletions": 3,
+    "workerSdkPhysicalRequests": 12,
+    "workerObservedFetchCalls": 0,
+    "workerTotalProviderAttempts": null,
+    "classifierProviderDispatches": 0,
+    "classifierProviderAttempts": 0,
+    "automaticGrants": 0,
+    "manualTurns": 0,
+    "deterministicViolations": 0,
+    "sdkCleanupConfirmed": true,
+    "workerInputTokens": 31447,
+    "workerOutputTokens": 1800,
+    "sdkEstimatedCost": 0.00425206
+  },
+  "interpretation": [
+    "The first three attempts are retained but have invalid measurement because the pilot reader consumed serialized SDK history rather than visible text.",
+    "The report prompt also omitted its fixture ID and allowed blocker encoding; both were corrected before the second trio.",
+    "The retry used the original deadline and reduced the remaining trial allowance from 26 to 23.",
+    "All corrected outputs passed the independent fact checker, but all jobs finished in two turns with no eligible admission checkpoint.",
+    "No classifier call, reference extension, automatic grant, recommendation-quality estimate, calibrated threshold, or savings claim is supported.",
+    "Actual direct read observations remained unknown under the reviewed versioned-envelope policy; isError:false is not treated as task advancement.",
+    "SDK physical requests are not complete provider-attempt counts. Fetch-only observations do not cover websocket/CLI transports.",
+    "Worker input/output are the runner's observed SDK counters. Cached input is not separately reported. Cost is an SDK estimate, not a billing receipt."
+  ],
+  "runs": [
+    {
+      "measurementRevision": "invalid-sdk-history-reader",
+      "startedAt": "2026-10-23T21:10:44.178Z",
+      "deadline": 1792790744178,
+      "elapsedMs": 47122.081625,
+      "environment": {
+        "platform": "darwin",
+        "arch": "arm64",
+        "bun": "1.4.2",
+        "sdk": "1.3.0",
+        "cachePolicy": "as-found; no paid warmups"
+      },
+      "limits": {
+        "maxTrials": 26,
+        "maximumTrialMs": 120000,
+        "overallMs": 900000,
+        "initialTurns": 4,
+        "fixtureCeiling": 8
+      },
+      "sourceHashes": {
+        "benchmarks/subagent-budget-fixtures.ts": "7138bda8206574751322331c2e8a356c57162bb1f77526769b585fcb8204a1e8",
+        "benchmarks/subagent-budget-trial.ts": "45b8646d41b84eba694cc8308b097acb0b2a3a3c7105042b6819f6344c9d2682",
+        "benchmarks/subagent-budget-trial-cli.ts": "5910f193aed87be29063c648b1794a3dbc97be1cd7a03ea49c2eccac91fec48c",
+        "benchmarks/subagent-budget-pilot.ts": "6a2aa5009366aee35b3c1bb9a79c730b89a378cbb37274629fbb14ab00004e0c",
+        "extensions/subagents/budget.ts": "c8ee4a454561b2043c43bf44195c0e5a1215cacb594a3d22ba8c6f554ebc5e3b",
+        "extensions/subagents/budget-advisor.ts": "249e2566f0945b030d9ed2035eee6c565f12500add55bf07c67ff28a00e4a17c",
+        "extensions/subagents/owner.ts": "1eeec7ef7a3e02a5c74368751b3b23355b693f61484989552b1a8c3480b9d4c6",
+        "extensions/subagents/driver.ts": "4c59816f749877fd6ea9c465d0809cde46b382801d2f7255fab7abe0087cd5ae",
+        "extensions/subagents/child-session.ts": "f37c3d38cc74fe17999c3c468e1002b94890dd4ba4fd86655ce88d4fa60babd9"
+      },
+      "stopReason": "no-checkpoint-in-first-case",
+      "plannedTrials": 26,
+      "completedTrials": 3,
+      "failedTrials": 0,
+      "measurementScope": {
+        "sdkRequests": "physical-model ModelRuntime.streamSimple invocations; not HTTP retry totals",
+        "observedFetches": "fetch calls observed through supplied transports; websocket/CLI coverage is unknown",
+        "providerAttempts": "classifier shared-requester telemetry; worker provider-attempt totals unavailable",
+        "reportedCost": "SDK-reported estimates, not billing receipts",
+        "clocks": "trial/suite monotonic performance.now; kernel decision durations Date.now"
+      },
+      "quality": {
+        "scoredPairs": 0,
+        "productivePairs": 0,
+        "stalledPairs": 0,
+        "brierScore": null,
+        "threshold": null,
+        "calibration": "not-calibrated"
+      },
+      "samples": [
+        {
+          "block": 0,
+          "fixtureId": "runner-trace",
+          "arm": "fixed",
+          "checked": {
+            "verifiedFacts": [],
+            "invalidClaims": 0,
+            "complete": false,
+            "blocker": null
+          },
+          "checkpoint": null,
+          "label": null,
+          "outcome": "completed",
+          "turnsUsed": 2,
+          "waitingForParent": false,
+          "workerDurationMs": 13342.392042,
+          "totalDurationMs": 17692.393125,
+          "timedOut": false,
+          "manualTurns": 0,
+          "cleanupConfirmed": true,
+          "storageFailed": false,
+          "workerSdkRequests": 2,
+          "workerObservedFetches": 0,
+          "classifierProviderDispatches": 0,
+          "classifierObservedFetches": 0,
+          "physicalModels": [
+            "openai-codex/gpt-6-luna"
+          ],
+          "budget": {
+            "version": 1,
+            "initialTurns": 4,
+            "grantedTurns": 4,
+            "hardMaxTurns": 8,
+            "mode": "fixed",
+            "automaticGrants": 0,
+            "checks": 0,
+            "revision": 0,
+            "progress": {
+              "completedTools": 1,
+              "verifiedSuccesses": 0,
+              "failures": 0,
+              "unknownOutcomes": 1,
+              "consecutiveFailures": 0
+            },
+            "decisions": []
+          },
+          "workerUsage": {
+            "inputTokens": 4569,
+            "outputTokens": 388,
+            "reportedCost": 0.0006918600000000001
+          },
+          "violations": [],
+          "classifierInputs": []
+        },
+        {
+          "block": 0,
+          "fixtureId": "runner-trace",
+          "arm": "advisory",
+          "checked": {
+            "verifiedFacts": [],
+            "invalidClaims": 0,
+            "complete": false,
+            "blocker": null
+          },
+          "checkpoint": null,
+          "label": null,
+          "outcome": "completed",
+          "turnsUsed": 2,
+          "waitingForParent": false,
+          "workerDurationMs": 12044.802333,
+          "totalDurationMs": 14305.869708000002,
+          "timedOut": false,
+          "manualTurns": 0,
+          "cleanupConfirmed": true,
+          "storageFailed": false,
+          "workerSdkRequests": 2,
+          "workerObservedFetches": 0,
+          "classifierProviderDispatches": 0,
+          "classifierObservedFetches": 0,
+          "physicalModels": [
+            "openai-codex/gpt-6-luna"
+          ],
+          "budget": {
+            "version": 1,
+            "initialTurns": 4,
+            "grantedTurns": 4,
+            "hardMaxTurns": 8,
+            "mode": "advisory",
+            "automaticGrants": 0,
+            "checks": 0,
+            "revision": 0,
+            "progress": {
+              "completedTools": 1,
+              "verifiedSuccesses": 0,
+              "failures": 0,
+              "unknownOutcomes": 1,
+              "consecutiveFailures": 0
+            },
+            "decisions": []
+          },
+          "workerUsage": {
+            "inputTokens": 4583,
+            "outputTokens": 403,
+            "reportedCost": 0.0007007600000000001
+          },
+          "violations": [],
+          "classifierInputs": []
+        },
+        {
+          "block": 0,
+          "fixtureId": "runner-trace",
+          "arm": "reference",
+          "checked": {
+            "verifiedFacts": [],
+            "invalidClaims": 0,
+            "complete": false,
+            "blocker": null
+          },
+          "checkpoint": null,
+          "label": "unscorable",
+          "outcome": "completed",
+          "turnsUsed": 2,
+          "waitingForParent": false,
+          "workerDurationMs": 12783.782125000002,
+          "totalDurationMs": 15106.718583000005,
+          "timedOut": false,
+          "manualTurns": 0,
+          "cleanupConfirmed": true,
+          "storageFailed": false,
+          "workerSdkRequests": 2,
+          "workerObservedFetches": 0,
+          "classifierProviderDispatches": 0,
+          "classifierObservedFetches": 0,
+          "physicalModels": [
+            "openai-codex/gpt-6-luna"
+          ],
+          "budget": {
+            "version": 1,
+            "initialTurns": 4,
+            "grantedTurns": 4,
+            "hardMaxTurns": 8,
+            "mode": "advisory",
+            "automaticGrants": 0,
+            "checks": 0,
+            "revision": 0,
+            "progress": {
+              "completedTools": 1,
+              "verifiedSuccesses": 0,
+              "failures": 0,
+              "unknownOutcomes": 1,
+              "consecutiveFailures": 0
+            },
+            "decisions": []
+          },
+          "workerUsage": {
+            "inputTokens": 4576,
+            "outputTokens": 363,
+            "reportedCost": 0.00068006
+          },
+          "violations": [],
+          "classifierInputs": []
+        }
+      ],
+      "failures": []
+    },
+    {
+      "measurementRevision": "visible-sdk-text-reader",
+      "startedAt": "2026-10-23T21:17:19.346Z",
+      "deadline": 1792790744178,
+      "elapsedMs": 29941.931875,
+      "environment": {
+        "platform": "darwin",
+        "arch": "arm64",
+        "bun": "1.4.2",
+        "sdk": "1.3.0",
+        "cachePolicy": "as-found; no paid warmups"
+      },
+      "limits": {
+        "maxTrials": 23,
+        "maximumTrialMs": 120000,
+        "overallMs": 900000,
+        "initialTurns": 4,
+        "fixtureCeiling": 8
+      },
+      "sourceHashes": {
+        "benchmarks/subagent-budget-fixtures.ts": "c07ed0622b0c21d15918ffdf5d2bf57da860bc7ccad03c3ace64297d9a20597b",
+        "benchmarks/subagent-budget-trial.ts": "dda9df50466e212353b9defdc3301bb2b104e715a3e676774c42c3de3a1c466e",
+        "benchmarks/subagent-budget-trial-cli.ts": "d089a18642a1d0734a4dbcb31e583975c6a0440c52bfd011261e4402b5a14953",
+        "benchmarks/subagent-budget-pilot.ts": "d5da3d69c6ea9c582cec871c293795c4a64fdd30be14888fda56e768054719dd",
+        "extensions/subagents/budget.ts": "c8ee4a454561b2043c43bf44195c0e5a1215cacb594a3d22ba8c6f554ebc5e3b",
+        "extensions/subagents/budget-advisor.ts": "249e2566f0945b030d9ed2035eee6c565f12500add55bf07c67ff28a00e4a17c",
+        "extensions/subagents/owner.ts": "1eeec7ef7a3e02a5c74368751b3b23355b693f61484989552b1a8c3480b9d4c6",
+        "extensions/subagents/driver.ts": "4c59816f749877fd6ea9c465d0809cde46b382801d2f7255fab7abe0087cd5ae",
+        "extensions/subagents/child-session.ts": "f37c3d38cc74fe17999c3c468e1002b94890dd4ba4fd86655ce88d4fa60babd9"
+      },
+      "stopReason": "no-checkpoint-in-first-case",
+      "plannedTrials": 23,
+      "completedTrials": 3,
+      "failedTrials": 0,
+      "measurementScope": {
+        "sdkRequests": "physical-model ModelRuntime.streamSimple invocations; not HTTP retry totals",
+        "observedFetches": "fetch calls observed through supplied transports; websocket/CLI coverage is unknown",
+        "providerAttempts": "classifier shared-requester telemetry; worker provider-attempt totals unavailable",
+        "reportedCost": "SDK-reported estimates, not billing receipts",
+        "clocks": "trial/suite monotonic performance.now; kernel decision durations Date.now"
+      },
+      "quality": {
+        "scoredPairs": 0,
+        "productivePairs": 0,
+        "stalledPairs": 0,
+        "brierScore": null,
+        "threshold": null,
+        "calibration": "not-calibrated"
+      },
+      "samples": [
+        {
+          "block": 0,
+          "fixtureId": "runner-trace",
+          "arm": "fixed",
+          "checked": {
+            "verifiedFacts": [
+              "checkpoint-window",
+              "completed-tool-gate"
+            ],
+            "invalidClaims": 0,
+            "complete": true,
+            "blocker": null
+          },
+          "checkpoint": null,
+          "label": null,
+          "outcome": "completed",
+          "turnsUsed": 2,
+          "waitingForParent": false,
+          "workerDurationMs": 9409.680792000001,
+          "totalDurationMs": 11294.570125,
+          "timedOut": false,
+          "manualTurns": 0,
+          "cleanupConfirmed": true,
+          "storageFailed": false,
+          "workerSdkRequests": 2,
+          "workerObservedFetches": 0,
+          "classifierProviderDispatches": 0,
+          "classifierObservedFetches": 0,
+          "physicalModels": [
+            "openai-codex/gpt-6-luna"
+          ],
+          "budget": {
+            "version": 1,
+            "initialTurns": 4,
+            "grantedTurns": 4,
+            "hardMaxTurns": 8,
+            "mode": "fixed",
+            "automaticGrants": 0,
+            "checks": 0,
+            "revision": 0,
+            "progress": {
+              "completedTools": 1,
+              "verifiedSuccesses": 0,
+              "failures": 0,
+              "unknownOutcomes": 1,
+              "consecutiveFailures": 0
+            },
+            "decisions": []
+          },
+          "workerUsage": {
+            "inputTokens": 4491,
+            "outputTokens": 244,
+            "reportedCost": 0.0006133400000000001
+          },
+          "violations": [],
+          "classifierInputs": []
+        },
+        {
+          "block": 0,
+          "fixtureId": "runner-trace",
+          "arm": "advisory",
+          "checked": {
+            "verifiedFacts": [
+              "checkpoint-window",
+              "completed-tool-gate"
+            ],
+            "invalidClaims": 0,
+            "complete": true,
+            "blocker": null
+          },
+          "checkpoint": null,
+          "label": null,
+          "outcome": "completed",
+          "turnsUsed": 2,
+          "waitingForParent": false,
+          "workerDurationMs": 8422.151458,
+          "totalDurationMs": 9484.702917,
+          "timedOut": false,
+          "manualTurns": 0,
+          "cleanupConfirmed": true,
+          "storageFailed": false,
+          "workerSdkRequests": 2,
+          "workerObservedFetches": 0,
+          "classifierProviderDispatches": 0,
+          "classifierObservedFetches": 0,
+          "physicalModels": [
+            "openai-codex/gpt-6-luna"
+          ],
+          "budget": {
+            "version": 1,
+            "initialTurns": 4,
+            "grantedTurns": 4,
+            "hardMaxTurns": 8,
+            "mode": "advisory",
+            "automaticGrants": 0,
+            "checks": 0,
+            "revision": 0,
+            "progress": {
+              "completedTools": 1,
+              "verifiedSuccesses": 0,
+              "failures": 0,
+              "unknownOutcomes": 1,
+              "consecutiveFailures": 0
+            },
+            "decisions": []
+          },
+          "workerUsage": {
+            "inputTokens": 8726,
+            "outputTokens": 201,
+            "reportedCost": 0.0009731000000000002
+          },
+          "violations": [],
+          "classifierInputs": []
+        },
+        {
+          "block": 0,
+          "fixtureId": "runner-trace",
+          "arm": "reference",
+          "checked": {
+            "verifiedFacts": [
+              "checkpoint-window",
+              "completed-tool-gate"
+            ],
+            "invalidClaims": 0,
+            "complete": true,
+            "blocker": null
+          },
+          "checkpoint": null,
+          "label": "unscorable",
+          "outcome": "completed",
+          "turnsUsed": 2,
+          "waitingForParent": false,
+          "workerDurationMs": 7483.80975,
+          "totalDurationMs": 9135.689959,
+          "timedOut": false,
+          "manualTurns": 0,
+          "cleanupConfirmed": true,
+          "storageFailed": false,
+          "workerSdkRequests": 2,
+          "workerObservedFetches": 0,
+          "classifierProviderDispatches": 0,
+          "classifierObservedFetches": 0,
+          "physicalModels": [
+            "openai-codex/gpt-6-luna"
+          ],
+          "budget": {
+            "version": 1,
+            "initialTurns": 4,
+            "grantedTurns": 4,
+            "hardMaxTurns": 8,
+            "mode": "advisory",
+            "automaticGrants": 0,
+            "checks": 0,
+            "revision": 0,
+            "progress": {
+              "completedTools": 1,
+              "verifiedSuccesses": 0,
+              "failures": 0,
+              "unknownOutcomes": 1,
+              "consecutiveFailures": 0
+            },
+            "decisions": []
+          },
+          "workerUsage": {
+            "inputTokens": 4502,
+            "outputTokens": 201,
+            "reportedCost": 0.00059294
+          },
+          "violations": [],
+          "classifierInputs": []
+        }
+      ],
+      "failures": []
+    }
+  ],
+  "threshold": null,
+  "productionAutomaticModeEnabled": false
+}

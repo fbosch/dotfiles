@@ -17,7 +17,13 @@ export type ParentInspection =
   | { mode: "wait"; workerId: string; assignmentId: string; timeoutMs?: number };
 
 export type ParentControl =
-  | { action: "continue"; workerId: string; prompt: string; maxTurns?: number }
+  | {
+      action: "continue";
+      workerId: string;
+      prompt: string;
+      maxTurns?: number;
+      hardMaxTurns?: number;
+    }
   | { action: "reply"; workerId: string; assignmentId: string; questionId: string; text: string }
   | { action: "steer"; workerId: string; assignmentId: string; text: string }
   | { action: "extend-budget"; workerId: string; assignmentId: string; additionalTurns: number }
@@ -43,6 +49,7 @@ export class ParentRuntime {
       ...(request.model === undefined ? {} : { model: request.model }),
       ...(request.thinking === undefined ? {} : { thinking: request.thinking }),
       ...(request.maxTurns === undefined ? {} : { maxTurns: request.maxTurns }),
+      ...(request.hardMaxTurns === undefined ? {} : { hardMaxTurns: request.hardMaxTurns }),
     };
     const config = await this.context.resolve(request.specialist, overrides);
     if (signal?.aborted) throw new Error("Launch interrupted during preflight");
@@ -51,7 +58,12 @@ export class ParentRuntime {
       request.inheritContext ? parentNarrative(this.context.messages()) : undefined,
     );
     return this.delivery.launch(
-      { config, prompt, ...(request.maxTurns === undefined ? {} : { maxTurns: request.maxTurns }) },
+      {
+        config,
+        prompt,
+        ...(request.maxTurns === undefined ? {} : { maxTurns: request.maxTurns }),
+        ...(request.hardMaxTurns === undefined ? {} : { hardMaxTurns: request.hardMaxTurns }),
+      },
       {
         ...(request.foreground === undefined ? {} : { foreground: request.foreground }),
         ...(onProgress ? { onProgress } : {}),
@@ -92,8 +104,8 @@ export class ParentRuntime {
       throw new Error("Control refers to a non-current assignment");
     }
     return match(request)
-      .with({ action: "continue" }, ({ workerId, prompt, maxTurns }) =>
-        this.delivery.continue(workerId, prompt, maxTurns),
+      .with({ action: "continue" }, ({ workerId, prompt, maxTurns, hardMaxTurns }) =>
+        this.delivery.continue(workerId, prompt, maxTurns, hardMaxTurns),
       )
       .with({ action: "reply" }, async ({ workerId, questionId, text }) =>
         workerStatus(await owner.reply(workerId, questionId, text)),

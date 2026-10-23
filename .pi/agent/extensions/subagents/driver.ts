@@ -5,6 +5,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { match, P } from "ts-pattern";
 import { Type } from "typebox";
+import { budgetToolOutcome } from "./budget-progress";
 import { type ChildSessionOptions, createChildSession } from "./child-session";
 import {
   type ChildDriver,
@@ -34,6 +35,7 @@ export interface ChildObservation {
 interface Segment {
   readonly input: ChildRunInput;
   readonly callbacks: ChildDriverCallbacks;
+  maxTurns: number;
   used: number;
   exhausted: boolean;
   question: boolean;
@@ -278,7 +280,7 @@ export class PiChildDriver implements ChildDriver {
           ctx.abort();
           return;
         }
-        const ceiling = segment.input.turnsAlreadyUsed + segment.input.turnBudget;
+        const ceiling = segment.maxTurns;
         if (segment.used >= ceiling || segment.question || record.cancelled) {
           segment.exhausted = !segment.question && !record.cancelled;
           ctx.abort();
@@ -288,12 +290,24 @@ export class PiChildDriver implements ChildDriver {
         segment.used++;
         segment.callbacks.onTurn(segment.used);
       });
+      pi.on("turn_end", async (event, ctx) => {
+        const segment = record.segment;
+        if (
+          !segment ||
+          segment.question ||
+          record.cancelled ||
+          event.message.role !== "assistant" ||
+          event.message.stopReason !== "toolUse"
+        )
+          return;
+        // This awaited boundary follows completed tools; an async turn_start handler is not admission.
+        if (!(await this.admit(record, segment))) ctx.abort();
+      });
       pi.on("context", (event) => {
         const segment = record.segment;
         if (!segment?.warn) return;
         segment.warn = false;
-        const remaining =
-          segment.input.turnsAlreadyUsed + segment.input.turnBudget - segment.used + 1;
+        const remaining = segment.maxTurns - segment.used + 1;
         const warning = `${remaining} turn(s) remain, including this one. Finish the bounded assignment and return findings, checks, and unfinished work.`;
         segment.callbacks.onTranscript({ role: "system", text: warning });
         return {
@@ -330,6 +344,9 @@ export class PiChildDriver implements ChildDriver {
         .with({ type: "tool_execution_start" }, ({ toolName }) =>
           this.change(workerId, { activity: toolName }),
         )
+        .with({ type: "tool_execution_end" }, ({ toolName, result, isError }) => {
+          segment.callbacks.onToolOutcome?.(budgetToolOutcome(toolName, result, isError));
+        })
         .with({ type: "message_end" }, ({ message }) =>
           this.recordMessage(workerId, segment, session, message),
         )
@@ -374,6 +391,44 @@ export class PiChildDriver implements ChildDriver {
     this.change(workerId, { liveText: "" });
   }
 
+  private async admit(record: LiveChild, segment: Segment): Promise<boolean> {
+    const checkpoint = segment.callbacks.onBeforeModel;
+    if (!checkpoint) return true;
+    try {
+      const admission = await checkpoint();
+      if (
+        record.segment !== segment ||
+        record.cancelled ||
+        record.uncertain ||
+        record.closing ||
+        segment.question
+      ) {
+        segment.error = "Worker is no longer eligible for model admission";
+        return false;
+      }
+      if (
+        !Number.isSafeInteger(admission.maxTurns) ||
+        admission.maxTurns < segment.maxTurns ||
+        (admission.maxTurns > segment.maxTurns &&
+          (segment.input.config.hardMaxTurns === undefined ||
+            admission.maxTurns > segment.input.config.hardMaxTurns))
+      ) {
+        segment.error = "Invalid turn allowance at budget admission";
+        return false;
+      }
+      if (!admission.admitted) {
+        if (segment.used >= admission.maxTurns) segment.exhausted = true;
+        else segment.error = "Worker is no longer eligible for model admission";
+        return false;
+      }
+      segment.maxTurns = admission.maxTurns;
+      return true;
+    } catch {
+      segment.error = "Budget admission failed";
+      return false;
+    }
+  }
+
   private run(
     record: LiveChild,
     input: ChildRunInput,
@@ -385,6 +440,7 @@ export class PiChildDriver implements ChildDriver {
     const segment: Segment = {
       input,
       callbacks,
+      maxTurns: input.turnsAlreadyUsed + input.turnBudget,
       used: input.turnsAlreadyUsed,
       exhausted: false,
       question: false,
@@ -399,7 +455,7 @@ export class PiChildDriver implements ChildDriver {
     });
     record.running = (async (): Promise<ChildExecutionOutcome> => {
       try {
-        if (!record.cancelled)
+        if (!record.cancelled && (await this.admit(record, segment)))
           await child.session.sendUserMessage(input.prompt, { expandPromptTemplates: false });
         await child.session.agent.waitForIdle();
         return match({

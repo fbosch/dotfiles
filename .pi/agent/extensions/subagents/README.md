@@ -13,6 +13,7 @@ The extension directory is `subagents`. Existing `minimal-subagents` history, no
 | `specialist.ts`, `catalog.ts`, `mcp.ts` | Resolve explicit capabilities and reject incomplete configurations |
 | `child-session.ts`, `driver.ts` | Create isolated Pi sessions, run assignments, and confirm shutdown |
 | `owner.ts`, `health.ts` | Own worker identities, queue capacity, budgets, and cleanup uncertainty |
+| `budget*.ts` | Own budget policy, optional advice, structural outcomes, and budget evidence |
 | `history.ts` | Save complete evidence with the owning parent |
 | `delivery.ts` | Coordinate full-result waits, receipts, and tracked update delivery |
 | `parent-runtime.ts`, `tools.ts`, `host.ts` | Share launch/inspection/control behavior across parent integrations |
@@ -29,6 +30,7 @@ Required frontmatter fields are `description`, `model`, `max_turns`, `tools`, `b
 description: Fixture specialist
 model: fixture/model
 max_turns: 12
+hard_max_turns: 24
 tools: [read]
 bundles: []
 skills: []
@@ -36,7 +38,7 @@ skills: []
 Inspect the assigned evidence and report what you checked.
 ```
 
-Production definitions must name an available model and the bundles backing their requested tools. Model and thinking overrides require separate permission in `allow_overrides: [model, thinking]`. A launch may supply a positive safe-integer `maxTurns`; otherwise it uses the specialist's required `max_turns`. The migrated definitions use 12/24-turn budgets and preserve lower limits. Only `general` permits model and thinking overrides.
+Production definitions must name an available model and the bundles backing their requested tools. Model and thinking overrides require separate permission in `allow_overrides: [model, thinking]`. A launch may supply a positive safe-integer `maxTurns`; otherwise it uses the specialist's required `max_turns`. Only `general` permits model and thinking overrides.
 
 `catalog.ts` defines the available bundles: `files`, `file-search`, `structural`, `git-read`, `web`, `browser`, `classifier`, `commands`, `charts`, `docs-mcp`, `github-mcp`, `chrome-mcp`, and `firefox-mcp`. Bundles select backing extensions and MCP servers; the `tools` list grants callable capabilities. `codemode` is shared by every specialist; include `tool_search` explicitly only when the role needs discovery.
 
@@ -84,9 +86,21 @@ Control with `subagent_control`:
 
 Replies require the current correlated question. Steering requires running work and the current assignment. Budget extension is for queued or question-waiting assignments. Continuation starts a new bounded assignment on an eligible idle session; it does not reload specialist configuration. Cancelled, released, historical, and cleanup-unknown workers cannot continue.
 
+## Assignment budgets
+
+`max_turns` and `maxTurns` set the initial allowance. Optional specialist `hard_max_turns` freezes a ceiling for the live worker. A launch or explicit continuation may lower it with `hardMaxTurns`, but cannot raise it or introduce a ceiling for an uncapped role. The initial allowance must fit. For the fixture above, `maxTurns: 12, hardMaxTurns: 20` is valid under its 24-turn role ceiling.
+
+Usable shared classifier setup makes advice available, not automatic spending. Missing, disabled, unsupported, or unusable setup preserves fixed/manual execution. Setup detection makes no startup network or credential-refresh probes. Production automatic grants remain disabled pending pilot calibration, reviewed role ceilings, and live acceptance. Test thresholds and ceilings are not rollout defaults.
+
+An assignment can make at most two application-level advice invocations, once per allowance revision. Automatic policy requires an explicit confidence threshold, verified progress, and a configured ceiling. It permits at most two increments of up to four turns, clamped to that ceiling. Questions, replies, and manual extensions preserve consumed checks and grants. Only explicit continuation creates a fresh assignment.
+
+The driver awaits admission before starting or resuming a segment and at SDK `turn_end` after completed tools. Its `turn_start` guard stays synchronous. Fake-provider fixtures verify this boundary on the development SDK 0.99.1 and installed Pi 1.3.0, including delayed advice, cancellation, and no tool replay. A pending check retains its execution reservation. Advice cannot change tool permissions or approve an operation.
+
+The two-turn wrap-up instruction requests a handoff; it cannot guarantee one. Short assignments receive no hidden reserve turns, and failures retain observed partial evidence without replaying the assignment. Classifier judgments and worker completion claims are not independent task verification.
+
 ## Queue and lifecycle
 
-Foreground work, background work, replies, and continuations share six execution slots. The seventh assignment waits. A question releases its slot only after the execution segment settles; its answer re-enters the queue with the remaining assignment budget. The driver warns with two turns remaining and enforces the hard ceiling. There is no ordinary assignment wall-clock deadline or automatic assignment replay.
+Foreground work, background work, replies, and continuations share six execution slots. The seventh assignment waits. A question releases its slot only after the execution segment settles; its answer re-enters the queue with the remaining assignment budget. The driver warns with two turns remaining and stops at the currently granted allowance. There is no ordinary assignment wall-clock deadline or automatic assignment replay.
 
 A `stopping` result means cancellation was requested, not that execution ended. Capacity remains reserved until shutdown is confirmed. Uncertain cleanup retains ownership and blocks further delegation through a versioned process cell that survives extension reload. Restarting Pi ends the process; reopening saved history does not revive workers.
 
@@ -109,6 +123,8 @@ Worker records are custom entries in the parent session file, not model-context 
 `/subagents` opens the native overlay. Use arrows to select, Enter to inspect, and Escape to return to the list or close it. In a transcript, arrows and Page Up/Down scroll; Home/End move to its bounds. Tab selects labeled actions and Enter activates one. Manual upward scrolling pauses following; **Follow latest** resumes it. Returning to a worker preserves its scroll state within the open overlay.
 
 Cancellation is available through labeled cancel-one and cancel-all actions, both with confirmation. There is no child chat editor or session takeover. Missing usage metrics display as unavailable. Execution failures, storage failures, and cleanup uncertainty remain distinct.
+
+Choose **Show details** in a worker transcript to inspect its initial allowance, granted allowance, optional ceiling, check/grant counts, and typed decisions. Advisory candidates and applied grants have separate labels. Classifier timing and reported usage stay separate from child usage. Attempts count observed registry `classify` dispatches; opaque transport retries are not measured. Missing metrics and older records' unknown initial allowances or ceilings remain unavailable. Inspection never requests advice or revives a historical worker.
 
 The background widget shows up to four worker rows by default, plus overflow and separate warnings. Questions precede running and queued work; launch order stays stable within each state. The host factory's `widgetRows` option changes the row limit. Foreground progress stays inline rather than duplicating its worker in the background widget. Rendering is event-driven, not polled.
 

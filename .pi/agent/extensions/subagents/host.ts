@@ -5,6 +5,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { match, P } from "ts-pattern";
 import { loadAgentMentions } from "../mentions/agent-mentions";
+import { createBudgetAdvisor } from "./budget-advisor";
 import { resolveNamedSpecialist } from "./catalog";
 import { WorkerDelivery, workerStatus } from "./delivery";
 import { PiChildDriver } from "./driver";
@@ -98,6 +99,12 @@ export function registerSubagentHost(
       parentSessionId: parentId,
       driver,
       persistence,
+      budget: {
+        advisor: createBudgetAdvisor(ctx.modelRegistry, {
+          agentDirectory: agentDir,
+          settingsContext: ctx,
+        }),
+      },
       historicalWorkers: saved.map((entry) => entry.worker),
       cleanupHealth: {
         isBlocked: () => health.isBlocked(),

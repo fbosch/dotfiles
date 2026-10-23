@@ -3,15 +3,17 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { AgentSession, ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
-import { createProductionExtension, requestSubagentLaunch } from "../production";
-import type { ChildDriver, ChildExecutionOutcome, ChildRunInput } from "../owner";
 import type { PiChildDriver } from "../driver";
+import type { ChildDriver, ChildExecutionOutcome, ChildRunInput } from "../owner";
+import { createProductionExtension, requestSubagentLaunch } from "../production";
 
 const sdk: typeof import("@earendil-works/pi-coding-agent") = await import(
   process.env.PI_SUBAGENT_TEST_SDK ?? "@earendil-works/pi-coding-agent"
 );
 const cleanups: Array<() => Promise<void>> = [];
-afterEach(async () => { for (const cleanup of cleanups.splice(0).reverse()) await cleanup(); });
+afterEach(async () => {
+  for (const cleanup of cleanups.splice(0).reverse()) await cleanup();
+});
 
 const baselineFiles = [
   "extensions/auth-profiles/index.ts",
@@ -32,7 +34,9 @@ function controlledDriver() {
   const finishers = new Map<string, (outcome: ChildExecutionOutcome) => void>();
   let resolveModel: ModelResolver | undefined;
   let signalStarted = () => {};
-  const started = new Promise<void>((resolve) => { signalStarted = resolve; });
+  const started = new Promise<void>((resolve) => {
+    signalStarted = resolve;
+  });
   const finish = (workerId: string) => {
     finishers.get(workerId)?.({ kind: "failed", turnsUsed: 0, error: "Fixture stopped" });
   };
@@ -41,21 +45,39 @@ function controlledDriver() {
       starts.push(input);
       resolvedModels.push(resolveModel?.(input.config));
       signalStarted();
-      return new Promise((resolve) => { finishers.set(input.workerId, resolve); });
+      return new Promise((resolve) => {
+        finishers.set(input.workerId, resolve);
+      });
     },
-    prompt(input, callbacks) { return this.start(input, callbacks); },
+    prompt(input, callbacks) {
+      return this.start(input, callbacks);
+    },
     async steer() {},
-    async abort(workerId) { finish(workerId); },
+    async abort(workerId) {
+      finish(workerId);
+    },
     async close(workerId) {
       finish(workerId);
       return { confirmed: true };
     },
-    observation() { return undefined; },
+    observation() {
+      return undefined;
+    },
   };
-  return { driver, starts, resolvedModels, started, setResolveModel(value: ModelResolver) { resolveModel = value; } };
+  return {
+    driver,
+    starts,
+    resolvedModels,
+    started,
+    setResolveModel(value: ModelResolver) {
+      resolveModel = value;
+    },
+  };
 }
 
-async function fixture(options: { model?: string; missingPolicy?: string } = {}) {
+async function fixture(
+  options: { model?: string; missingPolicy?: string; hardMaxTurns?: number } = {},
+) {
   const root = await mkdtemp(join(tmpdir(), "pi-minimal-subagents-production-"));
   cleanups.push(() => rm(root, { recursive: true, force: true }));
   for (const path of [...baselineFiles, hashline]) {
@@ -65,16 +87,19 @@ async function fixture(options: { model?: string; missingPolicy?: string } = {})
     await writeFile(absolute, "export default function () {}\n");
   }
   await mkdir(join(root, "agents"), { recursive: true });
-  await writeFile(join(root, "agents", "fixture.md"), `---
+  await writeFile(
+    join(root, "agents", "fixture.md"),
+    `---
 description: Fixture role
 model: ${options.model ?? "fixture/fixture"}
 max_turns: 12
-tools: [read]
+${options.hardMaxTurns === undefined ? "" : `hard_max_turns: ${options.hardMaxTurns}\n`}tools: [read]
 bundles: [files]
 skills: []
 ---
 Inspect the assignment and return evidence.
-`);
+`,
+  );
 
   const settingsManager = sdk.SettingsManager.inMemory({ cacheWarming: "off" });
   const modelRuntime = await sdk.ModelRuntime.create({
@@ -91,25 +116,30 @@ Inspect the assignment and return evidence.
       api: "openai-completions",
       baseUrl: "https://fixture.invalid",
       apiKey: "fixture-only",
-      models: [{
-        id: "fixture",
-        name: "Fixture",
-        input: ["text"],
-        reasoning: false,
-        contextWindow: 32_000,
-        maxTokens: 1_000,
-        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-      }],
+      models: [
+        {
+          id: "fixture",
+          name: "Fixture",
+          input: ["text"],
+          reasoning: false,
+          contextWindow: 32_000,
+          maxTokens: 1_000,
+          cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+        },
+      ],
     });
   };
   const subagents: ExtensionFactory = (pi) => {
     events = pi.events;
-    createProductionExtension({ agentDir: root }, {
-      createDriver: (driverOptions) => {
-        controlled.setResolveModel(driverOptions.resolveModel);
-        return controlled.driver;
+    createProductionExtension(
+      { agentDir: root },
+      {
+        createDriver: (driverOptions) => {
+          controlled.setResolveModel(driverOptions.resolveModel);
+          return controlled.driver;
+        },
       },
-    })(pi);
+    )(pi);
   };
   const loader = new sdk.DefaultResourceLoader({
     cwd: root,
@@ -140,7 +170,11 @@ Inspect the assignment and return evidence.
     session.dispose();
   });
   const errors: string[] = [];
-  await session.bindExtensions({ onError: (error) => { errors.push(error.error); } });
+  await session.bindExtensions({
+    onError: (error) => {
+      errors.push(error.error);
+    },
+  });
   expect(errors).toEqual([]);
   if (!events) throw new Error("Production event bus was not captured");
   return { root, session, events, controlled };
@@ -154,7 +188,10 @@ function tool(session: AgentSession, name: string) {
 
 test("production launch requests share the native runtime and resolve configured models and capabilities", async () => {
   const f = await fixture();
-  const launch = await requestSubagentLaunch(f.events, { specialist: "fixture", prompt: "Check the files" });
+  const launch = await requestSubagentLaunch(f.events, {
+    specialist: "fixture",
+    prompt: "Check the files",
+  });
   expect(launch.kind).toBe("launched");
   if (launch.kind !== "launched") throw new Error("Expected a background launch");
   await f.controlled.started;
@@ -178,26 +215,94 @@ test("production launch requests share the native runtime and resolve configured
   expect(JSON.stringify(status.content)).toContain(launch.workerId);
 });
 
+test("production launch requests retain a lowered assignment ceiling", async () => {
+  const f = await fixture({ hardMaxTurns: 20 });
+  const launch = await requestSubagentLaunch(f.events, {
+    specialist: "fixture",
+    prompt: "Check the files",
+    maxTurns: 6,
+    hardMaxTurns: 18,
+  });
+  expect(launch.kind).toBe("launched");
+  if (launch.kind !== "launched") throw new Error("Expected a background launch");
+  await f.controlled.started;
+  expect(f.controlled.starts[0]?.config.hardMaxTurns).toBe(20);
+  expect(f.controlled.starts[0]?.turnBudget).toBe(6);
+  await expect(
+    requestSubagentLaunch(f.events, {
+      specialist: "fixture",
+      prompt: "Must not exceed the lowered ceiling",
+      maxTurns: 19,
+      hardMaxTurns: 18,
+    }),
+  ).rejects.toThrow("maxTurns");
+  expect(f.controlled.starts).toHaveLength(1);
+});
+
+test("production launch requests reject invalid or unconfigured ceilings before child startup", async () => {
+  const f = await fixture({ hardMaxTurns: 20 });
+  for (const hardMaxTurns of [
+    0,
+    -1,
+    1.5,
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.MAX_SAFE_INTEGER + 1,
+  ]) {
+    await expect(
+      requestSubagentLaunch(f.events, {
+        specialist: "fixture",
+        prompt: "Must not start",
+        maxTurns: 6,
+        hardMaxTurns,
+      }),
+    ).rejects.toThrow("Invalid minimal subagents launch request");
+  }
+  await expect(
+    requestSubagentLaunch(f.events, {
+      specialist: "fixture",
+      prompt: "Must not start",
+      maxTurns: 6,
+      hardMaxTurns: 21,
+    }),
+  ).rejects.toThrow("hard_max_turns");
+  expect(f.controlled.starts).toEqual([]);
+  const unconfigured = await fixture();
+  await expect(
+    requestSubagentLaunch(unconfigured.events, {
+      specialist: "fixture",
+      prompt: "Must not start",
+      maxTurns: 6,
+      hardMaxTurns: 18,
+    }),
+  ).rejects.toThrow("requires");
+  expect(unconfigured.controlled.starts).toEqual([]);
+});
 test("production preflight rejects unavailable models and missing mandatory policy files before launch", async () => {
   const unavailable = await fixture({ model: "fixture/not-configured" });
-  await expect(requestSubagentLaunch(unavailable.events, { specialist: "fixture", prompt: "Must not start" }))
-    .rejects.toThrow("Required model is unavailable: fixture/not-configured");
+  await expect(
+    requestSubagentLaunch(unavailable.events, { specialist: "fixture", prompt: "Must not start" }),
+  ).rejects.toThrow("Required model is unavailable: fixture/not-configured");
   expect(unavailable.controlled.starts).toEqual([]);
 
   const missingPolicy = baselineFiles[3];
   const missing = await fixture({ missingPolicy });
-  await expect(requestSubagentLaunch(missing.events, { specialist: "fixture", prompt: "Must not start" }))
-    .rejects.toThrow("Required capability file is unavailable");
+  await expect(
+    requestSubagentLaunch(missing.events, { specialist: "fixture", prompt: "Must not start" }),
+  ).rejects.toThrow("Required capability file is unavailable");
   expect(missing.controlled.starts).toEqual([]);
 });
 
 test("native launch requests fail immediately when the production bridge is absent", async () => {
   const noListener: ExtensionAPI["events"] = {
     emit() {},
-    on() { return () => {}; },
+    on() {
+      return () => {};
+    },
   };
-  await expect(requestSubagentLaunch(noListener, { specialist: "fixture", prompt: "Task" }))
-    .rejects.toThrow("Minimal subagents launch handler is unavailable");
+  await expect(
+    requestSubagentLaunch(noListener, { specialist: "fixture", prompt: "Task" }),
+  ).rejects.toThrow("Minimal subagents launch handler is unavailable");
 });
 
 test("production specialist definitions resolve explicit capabilities and preserve read-only roles", async () => {
@@ -207,15 +312,28 @@ test("production specialist definitions resolve explicit capabilities and preser
   const { MODEL_PRESETS } = await import("../../model-presets");
   const agentDir = resolve(import.meta.dir, "../../..");
   const availableModels = new Set(Object.keys(MODEL_PRESETS).map((name) => `presets/${name}`));
-  const definitions = (await readdir(join(agentDir, "agents"))).filter((name) => name.endsWith(".md"));
+  const definitions = (await readdir(join(agentDir, "agents"))).filter((name) =>
+    name.endsWith(".md"),
+  );
   for (const file of definitions) {
     const name = file.slice(0, -3);
-    const config = await resolveNamedSpecialist({ name, agentDir, cwd: resolve(agentDir, "../.."), projectTrusted: true, availableModels });
+    const config = await resolveNamedSpecialist({
+      name,
+      agentDir,
+      cwd: resolve(agentDir, "../.."),
+      projectTrusted: true,
+      availableModels,
+    });
     expect(config.name).toBe(name);
     expect(config.maxTurns).toBeGreaterThan(0);
     expect(config.tools.length).toBeGreaterThan(0);
-    if (["explore", "analyze", "patterns", "backlog-planning", "review", "spec", "research"].includes(name)) {
-      for (const tool of ["bash", "write", "replace", "insert"]) expect(config.tools).not.toContain(tool);
+    if (
+      ["explore", "analyze", "patterns", "backlog-planning", "review", "spec", "research"].includes(
+        name,
+      )
+    ) {
+      for (const tool of ["bash", "write", "replace", "insert"])
+        expect(config.tools).not.toContain(tool);
     }
   }
   expect(definitions.length).toBe(20);

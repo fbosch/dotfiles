@@ -1,0 +1,42 @@
+{
+  "version": 1,
+  "observedAt": "2026-10-23T22:17:29.956Z",
+  "stage": "post-fix",
+  "source": ".pi/agent/extensions/subagents/history.ts",
+  "beforeArtifact": "fresh-parent-persistence-2026-10-23.json",
+  "observations": [
+    {
+      "sdk": "0.99.1",
+      "saveOutcome": "rejected",
+      "before": {
+        "fileExists": false,
+        "persistence": "failed",
+        "conversationMessages": 0
+      },
+      "after": {
+        "fileExists": true,
+        "persistence": "failed",
+        "completeReportRetained": true,
+        "completeToolDetailsRetained": true
+      }
+    },
+    {
+      "sdk": "1.3.0",
+      "saveOutcome": "rejected",
+      "before": {
+        "fileExists": false,
+        "persistence": "failed",
+        "conversationMessages": 0
+      },
+      "after": {
+        "fileExists": true,
+        "persistence": "failed",
+        "completeReportRetained": true,
+        "completeToolDetailsRetained": true
+      }
+    }
+  ],
+  "scope": "Synchronous single-writer SDK appends; confirms file growth, not fsync durability or hostile concurrent writes.",
+  "productionAutomaticGrantsChanged": false,
+  "newCalibrationTrials": 0
+}

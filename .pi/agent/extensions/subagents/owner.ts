@@ -1,5 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { match, P } from "ts-pattern";
+import {
+  AssignmentBudget,
+  assignmentCeiling,
+  type BudgetDecision,
+  type BudgetOptions,
+  type BudgetSnapshot,
+  type BudgetToolOutcome,
+  budgetTaskKind,
+} from "./budget";
 import type { ResolvedSpecialist } from "./specialist";
 
 export type WorkerId = string;
@@ -49,6 +58,7 @@ export interface AssignmentSnapshot {
   readonly maxTurns: number;
   readonly turnsUsed: number;
   readonly remainingTurns: number;
+  readonly budget?: BudgetSnapshot;
   readonly report?: string;
   readonly partialReport?: string;
   readonly error?: string;
@@ -165,6 +175,8 @@ export interface ChildDriverCallbacks {
   onTranscript(entry: Omit<TranscriptEntry, "timestamp"> & { readonly timestamp?: number }): void;
   /** Called before a child turn; turnsUsed is cumulative and one-based within the assignment. */
   onTurn(turnsUsed: number): void;
+  onBeforeModel?(): Promise<{ readonly maxTurns: number; readonly admitted: boolean }>;
+  onToolOutcome?(outcome: BudgetToolOutcome): void;
 }
 
 /**
@@ -214,6 +226,7 @@ export interface LaunchRequest {
   readonly config: ResolvedSpecialist;
   readonly prompt: string;
   readonly maxTurns?: number;
+  readonly hardMaxTurns?: number;
 }
 
 export interface LaunchReceipt {
@@ -259,6 +272,7 @@ export interface WorkerOwnerOptions {
   readonly persistence: WorkerPersistence;
   readonly cleanupHealth: ProcessCleanupHealth;
   readonly capacity?: number;
+  readonly budget?: Omit<BudgetOptions, "hardMaxTurns" | "taskKind">;
   /** Parent-loaded records are made read-only; they never recreate executable child sessions. */
   readonly historicalWorkers?: readonly WorkerSnapshot[];
 }
@@ -267,7 +281,7 @@ interface MutableAssignment {
   id: AssignmentId;
   prompt: string;
   outcome: AssignmentOutcome;
-  maxTurns: number;
+  budget: AssignmentBudget;
   turnsUsed: number;
   report?: string;
   partialReport?: string;
@@ -337,13 +351,16 @@ function freezeConfig(config: ResolvedSpecialist): ResolvedSpecialist {
 function freezeAssignmentStatus(
   assignment: MutableAssignment,
 ): Omit<AssignmentSnapshot, "transcript"> {
+  const maxTurns = assignment.budget.maxTurns;
+  const budget = assignment.budget.snapshot();
   return Object.freeze({
     id: assignment.id,
     prompt: assignment.prompt,
     outcome: assignment.outcome,
-    maxTurns: assignment.maxTurns,
+    maxTurns,
     turnsUsed: assignment.turnsUsed,
-    remainingTurns: Math.max(0, assignment.maxTurns - assignment.turnsUsed),
+    remainingTurns: Math.max(0, maxTurns - assignment.turnsUsed),
+    ...(budget === undefined ? {} : { budget }),
     ...(assignment.report === undefined ? {} : { report: assignment.report }),
     ...(assignment.partialReport === undefined ? {} : { partialReport: assignment.partialReport }),
     ...(assignment.error === undefined ? {} : { error: assignment.error }),
@@ -367,6 +384,9 @@ export class WorkerOwner {
   private readonly persistence: WorkerPersistence;
   private readonly cleanupHealth: ProcessCleanupHealth;
   private readonly capacity: number;
+  private readonly budgetOptions: Omit<BudgetOptions, "hardMaxTurns" | "taskKind">;
+  private readonly notifiedBudgetGrants = new Set<string>();
+  private readonly notifiedBudgetDiagnostics = new Set<string>();
   private readonly workers = new Map<WorkerId, MutableWorker>();
   private readonly queue: QueueJob[] = [];
   private readonly listeners = new Set<(event: OwnerEvent) => void>();
@@ -384,6 +404,7 @@ export class WorkerOwner {
     this.cleanupHealth = options.cleanupHealth;
     this.capacity = options.capacity ?? DEFAULT_CAPACITY;
     positiveSafeInteger(this.capacity, "capacity");
+    this.budgetOptions = { ...(options.budget ?? {}) };
     for (const historical of options.historicalWorkers ?? []) this.restoreHistorical(historical);
   }
 
@@ -395,12 +416,18 @@ export class WorkerOwner {
   async launch(request: LaunchRequest): Promise<LaunchReceipt> {
     this.assertAdmissionOpen();
     if (!request.prompt.trim()) throw new Error("assignment prompt must be non-empty");
-    const maxTurns = request.maxTurns ?? request.config.maxTurns;
-    positiveSafeInteger(maxTurns, "maxTurns");
     const config = freezeConfig(request.config);
+    const initialTurns = request.maxTurns ?? config.maxTurns;
+    const ceiling = assignmentCeiling(initialTurns, config.hardMaxTurns, request.hardMaxTurns);
     const id = randomUUID();
     const assignmentId = randomUUID();
-    const assignment = this.newAssignment(assignmentId, request.prompt, maxTurns);
+    const assignment = this.newAssignment(
+      assignmentId,
+      request.prompt,
+      initialTurns,
+      ceiling,
+      config.name,
+    );
     const worker: MutableWorker = {
       parentSessionId: this.parentSessionId,
       id,
@@ -557,7 +584,7 @@ export class WorkerOwner {
     }
     if (!text.trim()) throw new Error("question reply must be non-empty");
     const assignment = this.requireAssignment(worker, question.assignmentId);
-    if (assignment.maxTurns - assignment.turnsUsed < 1) {
+    if (assignment.budget.maxTurns - assignment.turnsUsed < 1) {
       throw new Error("No turns remain; explicitly extend the assignment budget before replying");
     }
     delete worker.pendingQuestion;
@@ -605,15 +632,17 @@ export class WorkerOwner {
     if (!canExtend) {
       throw new Error(`Cannot extend assignment budget in ${worker.status} state`);
     }
-    const extendedBudget = assignment.maxTurns + additionalTurns;
-    if (!Number.isSafeInteger(extendedBudget))
-      throw new Error("Extended assignment budget exceeds the safe integer limit");
-    assignment.maxTurns = extendedBudget;
+    assignment.budget.extend(additionalTurns);
     this.emitState(worker);
     return this.snapshot(worker);
   }
 
-  async continue(workerId: WorkerId, prompt: string, maxTurns?: number): Promise<LaunchReceipt> {
+  async continue(
+    workerId: WorkerId,
+    prompt: string,
+    maxTurns?: number,
+    hardMaxTurns?: number,
+  ): Promise<LaunchReceipt> {
     this.assertAdmissionOpen();
     if (!prompt.trim()) throw new Error("continuation prompt must be non-empty");
     const worker = this.requireWorker(workerId);
@@ -635,10 +664,18 @@ export class WorkerOwner {
         },
       )
       .exhaustive();
-    const budget = maxTurns ?? worker.config.maxTurns;
-    positiveSafeInteger(budget, "maxTurns");
+    const initialTurns = maxTurns ?? worker.config.maxTurns;
+    const ceiling = assignmentCeiling(initialTurns, worker.config.hardMaxTurns, hardMaxTurns);
     const assignmentId = randomUUID();
-    const assignment = this.newAssignment(assignmentId, prompt, budget);
+    const assignment = this.newAssignment(
+      assignmentId,
+      prompt,
+      initialTurns,
+      ceiling,
+      worker.config.name,
+    );
+    previous.budget.invalidate();
+    previous.budget.invalidate();
     worker.assignments.set(assignmentId, assignment);
     worker.currentAssignmentId = assignmentId;
     worker.status = "queued";
@@ -664,6 +701,8 @@ export class WorkerOwner {
   private cancelQueued(worker: MutableWorker): WorkerSnapshot {
     this.removeQueued(worker.id);
     const assignment = this.requireAssignment(worker, worker.currentAssignmentId);
+    assignment.budget.invalidate();
+    assignment.budget.invalidate();
     delete worker.pendingQuestion;
     if (worker.sessionStarted) {
       worker.status = "stopping";
@@ -685,6 +724,8 @@ export class WorkerOwner {
     worker.status = "stopping";
     delete worker.pendingQuestion;
     const assignment = this.requireAssignment(worker, worker.currentAssignmentId);
+    assignment.budget.invalidate();
+    assignment.budget.invalidate();
     assignment.outcome = "stopping";
     this.emitState(worker);
     void this.closeCancelledIdle(worker, assignment);
@@ -696,6 +737,8 @@ export class WorkerOwner {
     if (!active) throw new Error(`Cannot cancel worker in ${worker.status} state`);
     worker.status = "stopping";
     const assignment = this.requireAssignment(worker, active.assignmentId);
+    assignment.budget.invalidate();
+    assignment.budget.invalidate();
     assignment.outcome = "stopping";
     this.emitState(worker);
     try {
@@ -714,6 +757,8 @@ export class WorkerOwner {
       return this.snapshot(worker);
     if (worker.status !== "idle" && worker.status !== "cancelled")
       throw new Error(`Cannot release worker in ${worker.status} state`);
+    for (const assignment of worker.assignments.values()) assignment.budget.invalidate();
+    for (const assignment of worker.assignments.values()) assignment.budget.invalidate();
     worker.status = "releasing";
     this.emitState(worker);
     let result: { readonly confirmed: boolean; readonly diagnostic?: string };
@@ -743,6 +788,12 @@ export class WorkerOwner {
   shutdown(): Promise<void> {
     if (this.shutdownPromise) return this.shutdownPromise;
     this.shuttingDown = true;
+    for (const worker of this.workers.values()) {
+      for (const assignment of worker.assignments.values()) assignment.budget.invalidate();
+    }
+    for (const worker of this.workers.values()) {
+      for (const assignment of worker.assignments.values()) assignment.budget.invalidate();
+    }
     this.shutdownPromise = this.performShutdown();
     return this.shutdownPromise;
   }
@@ -834,7 +885,7 @@ export class WorkerOwner {
         id: item.id,
         prompt: item.prompt,
         outcome: item.outcome,
-        maxTurns: item.maxTurns,
+        budget: AssignmentBudget.fromHistory(item.maxTurns, item.budget),
         turnsUsed: item.turnsUsed,
         ...(item.report === undefined ? {} : { report: item.report }),
         ...(item.partialReport === undefined ? {} : { partialReport: item.partialReport }),
@@ -866,12 +917,22 @@ export class WorkerOwner {
     this.emitState(worker);
   }
 
-  private newAssignment(id: AssignmentId, prompt: string, maxTurns: number): MutableAssignment {
+  private newAssignment(
+    id: AssignmentId,
+    prompt: string,
+    initialTurns: number,
+    hardMaxTurns: number | undefined,
+    specialist: string,
+  ): MutableAssignment {
     return {
       id,
       prompt,
       outcome: "queued",
-      maxTurns,
+      budget: new AssignmentBudget(initialTurns, {
+        ...this.budgetOptions,
+        taskKind: budgetTaskKind(specialist),
+        ...(hardMaxTurns === undefined ? {} : { hardMaxTurns }),
+      }),
       turnsUsed: 0,
       persistence: "not-attempted",
       transcript: [],
@@ -953,11 +1014,50 @@ export class WorkerOwner {
     }
   }
 
+  private emitBudgetDecision(
+    worker: MutableWorker,
+    assignment: MutableAssignment,
+    decision: BudgetDecision,
+  ): void {
+    if (decision.kind === "granted" && decision.grantedTurns > 0) {
+      const ceiling = assignment.budget.snapshot()?.hardMaxTurns;
+      const key = `${assignment.id}:${decision.revision}`;
+      if (ceiling === undefined || this.notifiedBudgetGrants.has(key)) return;
+      this.notifiedBudgetGrants.add(key);
+      this.emit({
+        type: "update",
+        workerId: worker.id,
+        assignmentId: assignment.id,
+        text: `Granted ${decision.grantedTurns} additional turns; allowance ${assignment.budget.maxTurns}, ceiling ${ceiling}.`,
+        state: worker.status,
+      });
+      return;
+    }
+    if (
+      decision.diagnostic !== true ||
+      decision.reason === "unsupported" ||
+      this.notifiedBudgetDiagnostics.has(decision.reason)
+    ) {
+      return;
+    }
+    this.notifiedBudgetDiagnostics.add(decision.reason);
+    this.emit({
+      type: "update",
+      workerId: worker.id,
+      assignmentId: assignment.id,
+      text:
+        decision.reason === "automatic-not-ready"
+          ? `Automatic budget grants need a reviewed confidence threshold; turn allowance remains ${assignment.budget.maxTurns}.`
+          : `Budget advice unavailable (${decision.reason}); turn allowance remains ${assignment.budget.maxTurns}.`,
+      state: worker.status,
+    });
+  }
+
   private startSegment(worker: MutableWorker, assignment: MutableAssignment, job: QueueJob): void {
     this.reservations++;
     worker.status = "running";
     assignment.outcome = "running";
-    const remaining = assignment.maxTurns - assignment.turnsUsed;
+    const remaining = assignment.budget.maxTurns - assignment.turnsUsed;
     const token = randomUUID();
     const questionText: { value?: string } = {};
     const observedTurns = { value: assignment.turnsUsed };
@@ -971,6 +1071,19 @@ export class WorkerOwner {
     this.emitState(worker);
 
     const isCurrent = () => worker.active?.token === token;
+    const isBudgetEligible = () =>
+      worker.parentSessionId === this.parentSessionId &&
+      this.workers.get(worker.id) === worker &&
+      worker.assignments.get(assignment.id) === assignment &&
+      worker.currentAssignmentId === assignment.id &&
+      worker.active?.token === token &&
+      worker.active.assignmentId === assignment.id &&
+      worker.status === "running" &&
+      assignment.outcome === "running" &&
+      questionText.value === undefined &&
+      worker.pendingQuestion === undefined &&
+      !this.shuttingDown &&
+      !this.cleanupHealth.isBlocked();
     const callbacks: ChildDriverCallbacks = {
       onQuestion: (text) => {
         if (!isCurrent() || worker.status === "stopping" || worker.status === "cleanup-unknown")
@@ -980,6 +1093,7 @@ export class WorkerOwner {
           return;
         }
         questionText.value = text.trim();
+        assignment.budget.invalidate();
       },
       onUpdate: (text) => {
         if (isCurrent() && worker.status === "running") {
@@ -1004,12 +1118,12 @@ export class WorkerOwner {
           worker.status === "cleanup-unknown" ||
           !Number.isSafeInteger(turnsUsed) ||
           turnsUsed < 1 ||
-          turnsUsed > assignment.maxTurns
+          turnsUsed > assignment.budget.maxTurns
         )
           return;
         observedTurns.value = Math.max(observedTurns.value, turnsUsed);
         assignment.turnsUsed = Math.max(assignment.turnsUsed, turnsUsed);
-        const remainingTurns = Math.max(0, assignment.maxTurns - turnsUsed);
+        const remainingTurns = Math.max(0, assignment.budget.maxTurns - turnsUsed);
         this.emit({
           type: "turn",
           workerId: worker.id,
@@ -1018,6 +1132,25 @@ export class WorkerOwner {
           remainingTurns,
           wrapUp: remainingTurns <= 2,
         });
+        this.emitState(worker);
+      },
+      onBeforeModel: async () => {
+        const nextTurn = assignment.turnsUsed + 1;
+        const admission = await assignment.budget.beforeModel(nextTurn, isBudgetEligible);
+        const eligible = isBudgetEligible();
+        if (eligible && admission.decision !== undefined) {
+          this.emitState(worker);
+          this.emitBudgetDecision(worker, assignment, admission.decision);
+        }
+        const maxTurns = assignment.budget.maxTurns;
+        return {
+          maxTurns,
+          admitted: eligible && Number.isSafeInteger(nextTurn) && nextTurn <= maxTurns,
+        };
+      },
+      onToolOutcome: (outcome) => {
+        if (!isBudgetEligible()) return;
+        assignment.budget.observe(outcome);
         this.emitState(worker);
       },
     };
@@ -1066,6 +1199,8 @@ export class WorkerOwner {
     error: unknown,
   ): void {
     if (worker.active?.token !== token) return;
+    assignment.budget.invalidate();
+    assignment.budget.invalidate();
     assignment.turnsUsed = Math.max(assignment.turnsUsed, worker.active.observedTurns.value);
     if (error instanceof UnconfirmedChildStartupError) {
       this.markCleanupUnknown(worker, assignment, error.message);
@@ -1103,10 +1238,12 @@ export class WorkerOwner {
   ): void {
     const active = worker.active;
     if (!active || active.token !== token) return;
+    assignment.budget.invalidate();
+    assignment.budget.invalidate();
     if (
       !Number.isSafeInteger(result.turnsUsed) ||
       result.turnsUsed < assignment.turnsUsed ||
-      result.turnsUsed > assignment.maxTurns
+      result.turnsUsed > assignment.budget.maxTurns
     ) {
       this.settleSegmentFailure(
         worker,
@@ -1258,6 +1395,8 @@ export class WorkerOwner {
     assignment: MutableAssignment,
     diagnostic: string,
   ): void {
+    assignment.budget.invalidate();
+    assignment.budget.invalidate();
     worker.status = "cleanup-unknown";
     assignment.outcome = "cleanup-unknown";
     assignment.error = diagnostic;

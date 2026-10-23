@@ -31,6 +31,7 @@ export interface AssignmentOverrides {
   readonly model?: string;
   readonly thinking?: ThinkingLevel;
   readonly maxTurns?: number;
+  readonly hardMaxTurns?: number;
 }
 
 export interface ResolvedSpecialist {
@@ -40,6 +41,7 @@ export interface ResolvedSpecialist {
   readonly model: string;
   readonly thinking?: ThinkingLevel;
   readonly maxTurns: number;
+  readonly hardMaxTurns?: number;
   readonly tools: readonly string[];
   readonly excludeTools: readonly string[];
   readonly extensions: readonly string[];
@@ -63,9 +65,9 @@ function list(value: unknown, field: string): string[] {
   return [...new Set(entries.map((entry) => requiredString(entry, field)))];
 }
 
-function positiveTurns(value: unknown): number {
+function positiveTurns(value: unknown, field = "max_turns"): number {
   if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 1) {
-    throw new Error("max_turns must be a positive safe integer");
+    throw new Error(`${field} must be a positive safe integer`);
   }
   return value;
 }
@@ -116,8 +118,30 @@ export async function resolveSpecialist(
   const selectedThinking =
     overrides.thinking === undefined ? configuredThinking : thinking(overrides.thinking);
   const configuredTurns = positiveTurns(fields.max_turns);
+  const configuredHardMaxTurns =
+    fields.hard_max_turns === undefined
+      ? undefined
+      : positiveTurns(fields.hard_max_turns, "hard_max_turns");
   const maxTurns =
     overrides.maxTurns === undefined ? configuredTurns : positiveTurns(overrides.maxTurns);
+  const requestedHardMaxTurns =
+    overrides.hardMaxTurns === undefined
+      ? undefined
+      : positiveTurns(overrides.hardMaxTurns, "hardMaxTurns");
+  if (requestedHardMaxTurns !== undefined && configuredHardMaxTurns === undefined) {
+    throw new Error("hardMaxTurns override requires specialist hard_max_turns");
+  }
+  if (
+    requestedHardMaxTurns !== undefined &&
+    configuredHardMaxTurns !== undefined &&
+    requestedHardMaxTurns > configuredHardMaxTurns
+  ) {
+    throw new Error("hardMaxTurns override exceeds specialist hard_max_turns");
+  }
+  const assignmentHardMaxTurns = requestedHardMaxTurns ?? configuredHardMaxTurns;
+  if (assignmentHardMaxTurns !== undefined && maxTurns > assignmentHardMaxTurns) {
+    throw new Error("maxTurns exceeds assignment hardMaxTurns");
+  }
   const configuredTools = list(fields.tools, "tools");
   if (
     configuredTools.some(
@@ -163,6 +187,7 @@ export async function resolveSpecialist(
     prompt,
     model,
     maxTurns,
+    ...(configuredHardMaxTurns === undefined ? {} : { hardMaxTurns: configuredHardMaxTurns }),
     ...(selectedThinking === undefined ? {} : { thinking: selectedThinking }),
     tools: Object.freeze(tools),
     excludeTools: Object.freeze(excludeTools),

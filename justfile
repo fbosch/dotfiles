@@ -131,6 +131,11 @@ bun-benchmark $target="runtime":
 pi-benchmark $target="breakdown":
     bun run --cwd .pi/agent benchmark:startup "$target"
 
+# Run the opt-in bounded subagent budget pilot; keep raw evidence in private temporary storage.
+[group('development')]
+pi-subagent-budget-pilot $sdk_root $max_trials="26" $deadline_ms="":
+    bun run --cwd .pi/agent benchmarks/subagent-budget-pilot.ts --sdk-root "$sdk_root" --max-trials "$max_trials" --deadline-ms "$deadline_ms"
+
 # Run Storybook for the design system.
 [group('development')]
 storybook:

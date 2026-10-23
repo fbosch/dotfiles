@@ -11,3 +11,5 @@
 - When a task requests an evidence identifier, explicitly ask the worker for the identifier already present in the source, copied exactly. Do not suggest invented labels such as E1. If the source contains no identifier, report that absence rather than manufacturing one.
 - Always pass `maxTurns`: use at most 12 for discovery or routine work and 24 for implementation or deep analysis. Preserve a specialist's lower configured cap. These are per-assignment review boundaries, not guarantees of elapsed time or tool-call count.
 - If the assignment cannot reasonably fit that budget, reduce its scope before launching. Do not raise the budget merely to finish an oversized prompt.
+- Treat `maxTurns` as an initial allowance. A specialist's optional `hard_max_turns` supplies the ceiling; assignment `hardMaxTurns` may only lower it. Missing ceilings do not imply automatic reserve turns.
+- Do not assume advice grants more turns or guarantees a final handoff. Preserve observed partial evidence and use explicit continuation only for a new bounded assignment. Classifier advice does not change tool permissions or grant approval.

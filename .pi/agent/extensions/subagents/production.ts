@@ -1,5 +1,5 @@
 import type { ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
-import { registerSubagentHost, type HostDependencies } from "./host";
+import { type HostDependencies, registerSubagentHost } from "./host";
 import type { ParentLaunch, ParentRuntime } from "./parent-runtime";
 
 export const MINIMAL_SUBAGENTS_LAUNCH_EVENT = "minimal-subagents:launch";
@@ -21,21 +21,59 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isParentLaunch(value: unknown): value is ParentLaunch {
-  if (!isRecord(value) || typeof value.specialist !== "string" || !value.specialist.trim()
-    || typeof value.prompt !== "string" || !value.prompt.trim()) return false;
-  const allowed = new Set(["specialist", "prompt", "foreground", "inheritContext", "maxTurns", "model", "thinking"]);
+  if (
+    !isRecord(value) ||
+    typeof value.specialist !== "string" ||
+    !value.specialist.trim() ||
+    typeof value.prompt !== "string" ||
+    !value.prompt.trim()
+  )
+    return false;
+  const allowed = new Set([
+    "specialist",
+    "prompt",
+    "foreground",
+    "inheritContext",
+    "maxTurns",
+    "hardMaxTurns",
+    "model",
+    "thinking",
+  ]);
   if (Object.keys(value).some((key) => !allowed.has(key))) return false;
   if (value.foreground !== undefined && typeof value.foreground !== "boolean") return false;
   if (value.inheritContext !== undefined && typeof value.inheritContext !== "boolean") return false;
-  if (value.maxTurns !== undefined && (typeof value.maxTurns !== "number" || !Number.isSafeInteger(value.maxTurns) || value.maxTurns < 1)) return false;
-  if (value.model !== undefined && (typeof value.model !== "string" || !value.model.trim())) return false;
-  if (value.thinking !== undefined && (typeof value.thinking !== "string" || !THINKING_LEVELS.has(value.thinking))) return false;
+  if (
+    value.maxTurns !== undefined &&
+    (typeof value.maxTurns !== "number" ||
+      !Number.isSafeInteger(value.maxTurns) ||
+      value.maxTurns < 1)
+  )
+    return false;
+  if (
+    value.hardMaxTurns !== undefined &&
+    (typeof value.hardMaxTurns !== "number" ||
+      !Number.isSafeInteger(value.hardMaxTurns) ||
+      value.hardMaxTurns < 1)
+  )
+    return false;
+  if (value.model !== undefined && (typeof value.model !== "string" || !value.model.trim()))
+    return false;
+  if (
+    value.thinking !== undefined &&
+    (typeof value.thinking !== "string" || !THINKING_LEVELS.has(value.thinking))
+  )
+    return false;
   return true;
 }
 
 function isLaunchRequestEvent(value: unknown): value is LaunchRequestEvent {
-  return isRecord(value) && value.version === 1 && typeof value.claim === "function"
-    && typeof value.resolve === "function" && typeof value.reject === "function";
+  return (
+    isRecord(value) &&
+    value.version === 1 &&
+    typeof value.claim === "function" &&
+    typeof value.resolve === "function" &&
+    typeof value.reject === "function"
+  );
 }
 
 /** Request a launch through Pi's shared event bus; rejects immediately when the runner is not loaded. */
@@ -78,7 +116,9 @@ export function createProductionExtension(
     let runtime: ParentRuntime | undefined;
     registerSubagentHost(pi, options, {
       ...dependencies,
-      runtimeChanged(next) { runtime = next; },
+      runtimeChanged(next) {
+        runtime = next;
+      },
     });
 
     const unsubscribe = pi.events.on(MINIMAL_SUBAGENTS_LAUNCH_EVENT, (value) => {

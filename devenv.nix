@@ -352,6 +352,12 @@ in
       cd .pi/agent
       bun test extensions/subagents extensions/prompt-ui/__tests__/subagent-transcript-frame.test.ts
     '';
+    "test:pi-subagent-budget-fixtures".exec = ''
+      set -euo pipefail
+      cd .pi/agent
+      bun test benchmarks/__tests__/subagent-budget*.test.ts
+      node_modules/.bin/tsc --project benchmarks/tsconfig.subagent-budgets.json
+    '';
     "test:pi-delta".exec = ''
       set -euo pipefail
       cd .pi/agent
