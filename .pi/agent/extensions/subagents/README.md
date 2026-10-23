@@ -13,7 +13,8 @@ The extension directory is `subagents`. Existing `minimal-subagents` history, no
 | `specialist.ts`, `catalog.ts`, `mcp.ts` | Resolve explicit capabilities and reject incomplete configurations |
 | `child-session.ts`, `driver.ts` | Create isolated Pi sessions, run assignments, and confirm shutdown |
 | `owner.ts`, `health.ts` | Own worker identities, queue capacity, budgets, and cleanup uncertainty |
-| `history.ts`, `delivery.ts` | Save complete evidence and coordinate receipts with full-result waits |
+| `history.ts` | Save complete evidence with the owning parent |
+| `delivery.ts` | Coordinate full-result waits, receipts, and tracked update delivery |
 | `parent-runtime.ts`, `tools.ts`, `host.ts` | Share launch/inspection/control behavior across parent integrations |
 | `presentation.ts`, `overlay.ts`, `ui.ts` | Render progress and read-only inspection with confirmed cancellation |
 
@@ -67,6 +68,8 @@ Inspect with `subagent_result`:
 Omit `workerId` only for the status list. Status excludes report text, configuration prompts, and investigation transcripts. Report retrieval returns the complete report without a summarizer or arbitrary character cap. Transcript pages accept 1–500 entries and return `nextOffset` when more entries remain.
 
 Background completion sends a structural receipt, not the report body. A foreground result or explicit wait returns available full evidence and consumes the concurrent completion notice. A timeout or interrupted background wait leaves its worker alive and preserves later notice delivery. A report is worker evidence, not a verified conclusion.
+
+`WorkerDelivery` owns pending worker updates and their opaque delivery IDs. The host carries those IDs through Pi messages and asks the delivery module to refresh settled assignment state when building model context. Update text, attribution, and saved messages remain unchanged. Active updates stay eligible for a later refresh; settled updates refresh once. Shutdown discards pending delivery state, and IDs from another parent or a previous runtime cannot recreate it.
 
 Control with `subagent_control`:
 

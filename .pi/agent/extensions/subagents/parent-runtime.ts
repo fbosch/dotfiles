@@ -1,5 +1,6 @@
+import { match } from "ts-pattern";
 import { assignmentPrompt, parentNarrative } from "./context";
-import { WorkerDelivery, workerStatus } from "./delivery";
+import { type WorkerDelivery, workerStatus } from "./delivery";
 import type { AssignmentOverrides, ResolvedSpecialist } from "./specialist";
 
 export interface ParentLaunch extends AssignmentOverrides {
@@ -24,12 +25,19 @@ export type ParentControl =
 
 /** Tools, routed commands, and UI controls share this parent-scoped interface. */
 export class ParentRuntime {
-  constructor(readonly delivery: WorkerDelivery, private readonly context: {
-    resolve: (name: string, overrides: AssignmentOverrides) => Promise<ResolvedSpecialist>;
-    messages: () => readonly unknown[];
-  }) {}
+  constructor(
+    readonly delivery: WorkerDelivery,
+    private readonly context: {
+      resolve: (name: string, overrides: AssignmentOverrides) => Promise<ResolvedSpecialist>;
+      messages: () => readonly unknown[];
+    },
+  ) {}
 
-  async launch(request: ParentLaunch, signal?: AbortSignal, onProgress?: (status: ReturnType<typeof workerStatus>) => void) {
+  async launch(
+    request: ParentLaunch,
+    signal?: AbortSignal,
+    onProgress?: (status: ReturnType<typeof workerStatus>) => void,
+  ) {
     if (signal?.aborted) throw new Error("Launch interrupted before preflight");
     const overrides: AssignmentOverrides = {
       ...(request.model === undefined ? {} : { model: request.model }),
@@ -38,29 +46,43 @@ export class ParentRuntime {
     };
     const config = await this.context.resolve(request.specialist, overrides);
     if (signal?.aborted) throw new Error("Launch interrupted during preflight");
-    const prompt = assignmentPrompt(request.prompt, request.inheritContext ? parentNarrative(this.context.messages()) : undefined);
-    return this.delivery.launch({ config, prompt, ...(request.maxTurns === undefined ? {} : { maxTurns: request.maxTurns }) }, {
-      ...(request.foreground === undefined ? {} : { foreground: request.foreground }),
-      ...(onProgress ? { onProgress } : {}),
-      ...(signal ? { signal } : {}),
-    });
+    const prompt = assignmentPrompt(
+      request.prompt,
+      request.inheritContext ? parentNarrative(this.context.messages()) : undefined,
+    );
+    return this.delivery.launch(
+      { config, prompt, ...(request.maxTurns === undefined ? {} : { maxTurns: request.maxTurns }) },
+      {
+        ...(request.foreground === undefined ? {} : { foreground: request.foreground }),
+        ...(onProgress ? { onProgress } : {}),
+        ...(signal ? { signal } : {}),
+      },
+    );
   }
 
   inspect(request: ParentInspection, signal?: AbortSignal) {
     const owner = this.delivery.owner;
-    switch (request.mode) {
-      case "status": return request.workerId ? workerStatus(owner.inspect(request.workerId)) : owner.list().map(workerStatus);
-      case "report": return owner.report(request.workerId, request.assignmentId);
-      case "transcript": return owner.transcript(request.workerId, {
-        ...(request.assignmentId === undefined ? {} : { assignmentId: request.assignmentId }),
-        ...(request.offset === undefined ? {} : { offset: request.offset }),
-        ...(request.limit === undefined ? {} : { limit: request.limit }),
-      });
-      case "wait": return this.delivery.wait(request.workerId, request.assignmentId, {
-        ...(request.timeoutMs === undefined ? {} : { timeoutMs: request.timeoutMs }),
-        ...(signal ? { signal } : {}),
-      });
-    }
+    return match(request)
+      .with({ mode: "status" }, ({ workerId }) =>
+        workerId ? workerStatus(owner.inspect(workerId)) : owner.list().map(workerStatus),
+      )
+      .with({ mode: "report" }, ({ workerId, assignmentId }) =>
+        owner.report(workerId, assignmentId),
+      )
+      .with({ mode: "transcript" }, ({ workerId, assignmentId, offset, limit }) =>
+        owner.transcript(workerId, {
+          ...(assignmentId === undefined ? {} : { assignmentId }),
+          ...(offset === undefined ? {} : { offset }),
+          ...(limit === undefined ? {} : { limit }),
+        }),
+      )
+      .with({ mode: "wait" }, ({ workerId, assignmentId, timeoutMs }) =>
+        this.delivery.wait(workerId, assignmentId, {
+          ...(timeoutMs === undefined ? {} : { timeoutMs }),
+          ...(signal ? { signal } : {}),
+        }),
+      )
+      .exhaustive();
   }
 
   async control(request: ParentControl) {
@@ -69,17 +91,30 @@ export class ParentRuntime {
     if ("assignmentId" in request && request.assignmentId !== worker.currentAssignmentId) {
       throw new Error("Control refers to a non-current assignment");
     }
-    switch (request.action) {
-      case "continue": return this.delivery.continue(request.workerId, request.prompt, request.maxTurns);
-      case "reply": return workerStatus(await owner.reply(request.workerId, request.questionId, request.text));
-      case "steer":
-        await owner.steer(request.workerId, request.text);
-        return workerStatus(owner.inspect(request.workerId));
-      case "extend-budget": return workerStatus(await owner.extendBudget(request.workerId, request.assignmentId, request.additionalTurns));
-      case "cancel": return workerStatus(await owner.cancel(request.workerId));
-      case "release": return workerStatus(await owner.release(request.workerId));
-    }
+    return match(request)
+      .with({ action: "continue" }, ({ workerId, prompt, maxTurns }) =>
+        this.delivery.continue(workerId, prompt, maxTurns),
+      )
+      .with({ action: "reply" }, async ({ workerId, questionId, text }) =>
+        workerStatus(await owner.reply(workerId, questionId, text)),
+      )
+      .with({ action: "steer" }, async ({ workerId, text }) => {
+        await owner.steer(workerId, text);
+        return workerStatus(owner.inspect(workerId));
+      })
+      .with({ action: "extend-budget" }, async ({ workerId, assignmentId, additionalTurns }) =>
+        workerStatus(await owner.extendBudget(workerId, assignmentId, additionalTurns)),
+      )
+      .with({ action: "cancel" }, async ({ workerId }) =>
+        workerStatus(await owner.cancel(workerId)),
+      )
+      .with({ action: "release" }, async ({ workerId }) =>
+        workerStatus(await owner.release(workerId)),
+      )
+      .exhaustive();
   }
 
-  shutdown(): Promise<void> { return this.delivery.shutdown(); }
+  shutdown(): Promise<void> {
+    return this.delivery.shutdown();
+  }
 }
