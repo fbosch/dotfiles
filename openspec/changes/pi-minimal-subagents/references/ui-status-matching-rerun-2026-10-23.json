@@ -1,0 +1,1015 @@
+{
+  "schemaVersion": 1,
+  "benchmark": "minimal-subagents-ui-status",
+  "scope": "Synthetic status-card/widget rendering only",
+  "comparison": {
+    "baseline": {
+      "revision": "e3e242415dd56bad8c7271418cfa7a09fcb58793",
+      "workingTreeDirty": false,
+      "workingTreeStatus": "",
+      "sourceSha256": {
+        ".pi/agent/extensions/subagents/owner.ts": "c9cca71188e400660ffc24cc7bf967bd6ceec2b6eced6cf978a02f81996ed0c1",
+        ".pi/agent/extensions/subagents/host.ts": "3c56d434aac1d24b8ce2de67951f01ecf98f2ce0085601d85e12ac5bc4e1a8dd",
+        ".pi/agent/extensions/subagents/ui.ts": "82c9f7cde3b3a4d849ad22631e484ba305053d2aed053fa70bf3b42506a4388a",
+        ".pi/agent/extensions/subagents/widget.ts": "054e6fd425beff58aa47f81de426287b6e43a994593085534e1247aaee20082f",
+        ".pi/agent/extensions/subagents/presentation.ts": "8d5514b8bd3cb92673a6a058b4b4fb04704e99e4abdac6b12b5f0c2044638d63",
+        ".pi/agent/extensions/subagents/tools.ts": "3bd7a5466501783989f1e4102ea3ec26e9fc1339b52077a8fc4a6371664432ea",
+        ".pi/agent/extensions/subagents/launch-cards.ts": "634d555a8c4891ff3ca3965ae63b43f91d904703e2a392e30dc645d6db3e65c7",
+        ".pi/agent/extensions/subagents/rendering.ts": "1f77cf48d5fde75ebcefbcda07da625675779b85d3f98a88de94061d0f435b52",
+        ".pi/agent/extensions/subagents/delivery.ts": "88f6be13360cf390d72bce7b5d2320ad635ebbd5b80bfd036c34662de5612d35",
+        ".pi/agent/extensions/subagents/interaction.ts": "701b8830a45db2672127da7fc422fdc2bd1526724df8153a09c60eab819c0d12",
+        ".pi/agent/extensions/subagents/specialist.ts": "04177eb808cb6cb16934983a6d9a9b5dc69ac0ce32c00cc435387a4a253c0587",
+        ".pi/agent/extensions/subagents/child-session.ts": "f37c3d38cc74fe17999c3c468e1002b94890dd4ba4fd86655ce88d4fa60babd9"
+      },
+      "harnessSha256": "923ac07b5aaa3e8ecb019427279cc160a2d624ea85b0a09692157a60536dc2cf"
+    },
+    "current": {
+      "revision": "8c1ec821ff3462d45699391f3bcdf630e91aaef5",
+      "workingTreeDirty": false,
+      "workingTreeStatus": "",
+      "sourceSha256": {
+        ".pi/agent/extensions/subagents/owner.ts": "da92a89288f28a95a13cdc4a07ecc82e0bc6061d831e66a367dfc9429f0b4998",
+        ".pi/agent/extensions/subagents/host.ts": "23a710bb54f3d831d2f6101d995e9ac2814f6d48de4c60114b9b141499fc87d6",
+        ".pi/agent/extensions/subagents/ui.ts": "82c9f7cde3b3a4d849ad22631e484ba305053d2aed053fa70bf3b42506a4388a",
+        ".pi/agent/extensions/subagents/widget.ts": "054e6fd425beff58aa47f81de426287b6e43a994593085534e1247aaee20082f",
+        ".pi/agent/extensions/subagents/presentation.ts": "58bfeb9c065a28d54d692faf402872d92b3361cb80979f2b07327cd5007f97eb",
+        ".pi/agent/extensions/subagents/tools.ts": "3bd7a5466501783989f1e4102ea3ec26e9fc1339b52077a8fc4a6371664432ea",
+        ".pi/agent/extensions/subagents/launch-cards.ts": "1511fb92b2cc8924a4b5df22cc852e568cb126762078e9f665b897f1d2195f6e",
+        ".pi/agent/extensions/subagents/rendering.ts": "0a39ac4c3e2e56e371165c972baf40226e694f5a3fdc489eca8b12ea3efcae57",
+        ".pi/agent/extensions/subagents/delivery.ts": "f025ad0454375286b17a059f84ed0bb06f8dbb567af165cb4fe79ec9836a1982",
+        ".pi/agent/extensions/subagents/interaction.ts": "daa829bf99b41387f9fd95b6d0fcd9876cd8af0317073cf2733f2ccb43ca608c",
+        ".pi/agent/extensions/subagents/specialist.ts": "1acd614e925b4d3fa362a766259b1f29714e664d50a640e92128a96d39b3d77a",
+        ".pi/agent/extensions/subagents/child-session.ts": "f37c3d38cc74fe17999c3c468e1002b94890dd4ba4fd86655ce88d4fa60babd9"
+      },
+      "harnessSha256": "923ac07b5aaa3e8ecb019427279cc160a2d624ea85b0a09692157a60536dc2cf"
+    },
+    "includes": "Combined notice-delivery and pattern-matching changes",
+    "tsPatternOnlyAttribution": false
+  },
+  "environment": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "operatingSystemRelease": "27.0.0",
+    "cpuModel": "Apple M4 Pro",
+    "cpuCount": 14,
+    "bun": "1.4.2",
+    "nodeCompatibilityVersion": "v26.3.0",
+    "piCodingAgentSdk": "0.99.1"
+  },
+  "method": {
+    "metric": "monotonic wall-clock milliseconds per frame",
+    "framesPerBatch": 20,
+    "warmupBatches": 1,
+    "measuredBatches": 7,
+    "interleaving": "alternate small/heavy batch order across the seven measured rounds",
+    "setupTimed": false,
+    "animationTimers": "suppressed; active-row timer callbacks are outside the render-cost target",
+    "instabilityRule": "unstable if median absolute deviation / median exceeds 0.25",
+    "processPairs": 3,
+    "processOrder": [
+      "baseline-1",
+      "candidate-1",
+      "candidate-2",
+      "baseline-2",
+      "baseline-3",
+      "candidate-3"
+    ],
+    "aggregation": "Median of three per-process medians; range/MAD describe those three medians",
+    "measuredFramesPerWorkloadPerArm": 420,
+    "profiled": false,
+    "simultaneousBenchmarkProcesses": false
+  },
+  "workload": {
+    "small": {
+      "workers": 5,
+      "assignmentsPerWorker": 1,
+      "transcriptEntriesPerAssignment": 20
+    },
+    "heavy": {
+      "workers": 40,
+      "assignmentsPerWorker": 3,
+      "transcriptEntriesPerAssignment": 100
+    },
+    "runningCardLookupsPerFrame": 4,
+    "widgetRendersPerFrame": 1,
+    "remainingWorkerState": "historical",
+    "providerOrNetworkWork": false,
+    "transcriptEntryText": "short deterministic synthetic role/text/timestamp records"
+  },
+  "correctness": {
+    "checks": [
+      "owner contains the predetermined worker and assignment counts",
+      "four current workers are running and all others are historical",
+      "every assignment has the predetermined transcript-entry count",
+      "registered host card renderers project live running status over a stale queued receipt",
+      "registered host widget renderer includes each running worker",
+      "each timed frame returns non-empty registered card and widget output and consumes a checksum"
+    ],
+    "passed": true
+  },
+  "allSixRunsCorrectAndStable": true,
+  "declaredBudget": {
+    "absoluteIncreaseMsPerFrame": 0.1,
+    "percentIncrease": 20,
+    "rule": "Material regression requires exceeding both thresholds, all pairs slower and stable samples; original projection-improvement criterion is not applied here"
+  },
+  "workloads": {
+    "small": {
+      "baselineProcessMedians": [
+        0.21233960000000138,
+        0.2097249999999974,
+        0.2066479500000014
+      ],
+      "currentProcessMedians": [
+        0.22851459999999973,
+        0.21467289999999933,
+        0.23184374999999874
+      ],
+      "baseline": {
+        "median": 0.2097249999999974,
+        "min": 0.2066479500000014,
+        "max": 0.21233960000000138,
+        "mad": 0.0026146000000039638
+      },
+      "current": {
+        "median": 0.22851459999999973,
+        "min": 0.21467289999999933,
+        "max": 0.23184374999999874,
+        "mad": 0.0033291499999990037
+      },
+      "absoluteDeltaMsPerFrame": 0.01878960000000232,
+      "percentDelta": 8.959160805818358,
+      "pairedDeltaMsPerFrame": [
+        0.016174999999998357,
+        0.00494790000000192,
+        0.025195799999997326
+      ],
+      "allPairsSlower": true,
+      "materialRegression": false
+    },
+    "heavy": {
+      "baselineProcessMedians": [
+        0.2415062500000033,
+        0.24620625000000018,
+        0.24332704999999918
+      ],
+      "currentProcessMedians": [
+        0.27635415000000024,
+        0.2706167000000022,
+        0.26786664999999915
+      ],
+      "baseline": {
+        "median": 0.24332704999999918,
+        "min": 0.2415062500000033,
+        "max": 0.24620625000000018,
+        "mad": 0.0018207999999958757
+      },
+      "current": {
+        "median": 0.2706167000000022,
+        "min": 0.26786664999999915,
+        "max": 0.27635415000000024,
+        "mad": 0.002750050000003057
+      },
+      "absoluteDeltaMsPerFrame": 0.027289650000003024,
+      "percentDelta": 11.215214255876244,
+      "pairedDeltaMsPerFrame": [
+        0.034847899999996934,
+        0.024410450000002026,
+        0.024539599999999967
+      ],
+      "allPairsSlower": true,
+      "materialRegression": false
+    }
+  },
+  "runs": [
+    {
+      "pair": 1,
+      "phase": "baseline",
+      "artifact": "/tmp/pi-subagent-benchmark-rerun.JpAtLG/baseline-pair1.json",
+      "command": "bun run .pi/agent/benchmarks/subagent-ui-status.ts --phase baseline --output ../../../../tmp/pi-subagent-benchmark-rerun.JpAtLG/baseline-pair1.json",
+      "capturedAt": "2026-10-23T17:25:28.724Z",
+      "warmup": {
+        "small": {
+          "batch": 0,
+          "elapsedMs": 9.365625000000023,
+          "msPerFrame": 0.46828125000000115,
+          "checksum": 3815309140
+        },
+        "heavy": {
+          "batch": 0,
+          "elapsedMs": 6.05925000000002,
+          "msPerFrame": 0.302962500000001,
+          "checksum": 3815309140
+        }
+      },
+      "results": {
+        "small": {
+          "samples": [
+            {
+              "batch": 1,
+              "elapsedMs": 4.936417000000006,
+              "msPerFrame": 0.24682085000000029,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 2,
+              "elapsedMs": 4.752542000000005,
+              "msPerFrame": 0.23762710000000026,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 3,
+              "elapsedMs": 3.9253330000000233,
+              "msPerFrame": 0.19626665000000115,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 4,
+              "elapsedMs": 4.246792000000028,
+              "msPerFrame": 0.21233960000000138,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 5,
+              "elapsedMs": 5.0033750000000055,
+              "msPerFrame": 0.2501687500000003,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 6,
+              "elapsedMs": 3.7115830000000187,
+              "msPerFrame": 0.18557915000000094,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 7,
+              "elapsedMs": 3.7266250000000127,
+              "msPerFrame": 0.18633125000000064,
+              "checksum": 3815309140
+            }
+          ],
+          "medianMsPerFrame": 0.21233960000000138,
+          "minMsPerFrame": 0.18557915000000094,
+          "maxMsPerFrame": 0.2501687500000003,
+          "medianAbsoluteDeviationMsPerFrame": 0.026008350000000735,
+          "madFractionOfMedian": 0.12248468961983806,
+          "stability": "within-budget"
+        },
+        "heavy": {
+          "samples": [
+            {
+              "batch": 1,
+              "elapsedMs": 7.574958000000038,
+              "msPerFrame": 0.3787479000000019,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 2,
+              "elapsedMs": 5.154375000000016,
+              "msPerFrame": 0.2577187500000008,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 3,
+              "elapsedMs": 5.231291999999996,
+              "msPerFrame": 0.2615645999999998,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 4,
+              "elapsedMs": 4.386167,
+              "msPerFrame": 0.21930835,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 5,
+              "elapsedMs": 4.480457999999999,
+              "msPerFrame": 0.22402289999999994,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 6,
+              "elapsedMs": 4.777709000000073,
+              "msPerFrame": 0.23888545000000364,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 7,
+              "elapsedMs": 4.830125000000066,
+              "msPerFrame": 0.2415062500000033,
+              "checksum": 3815309140
+            }
+          ],
+          "medianMsPerFrame": 0.2415062500000033,
+          "minMsPerFrame": 0.21930835,
+          "maxMsPerFrame": 0.3787479000000019,
+          "medianAbsoluteDeviationMsPerFrame": 0.017483350000003367,
+          "madFractionOfMedian": 0.07239295049301261,
+          "stability": "within-budget"
+        }
+      }
+    },
+    {
+      "pair": 1,
+      "phase": "candidate",
+      "artifact": "/tmp/pi-subagent-benchmark-rerun.JpAtLG/candidate-pair1.json",
+      "command": "bun run .pi/agent/benchmarks/subagent-ui-status.ts --phase candidate --output ../../../../tmp/pi-subagent-benchmark-rerun.JpAtLG/candidate-pair1.json",
+      "capturedAt": "2026-10-23T17:25:29.763Z",
+      "warmup": {
+        "small": {
+          "batch": 0,
+          "elapsedMs": 7.98924999999997,
+          "msPerFrame": 0.3994624999999985,
+          "checksum": 3815309140
+        },
+        "heavy": {
+          "batch": 0,
+          "elapsedMs": 5.6098329999999805,
+          "msPerFrame": 0.28049164999999904,
+          "checksum": 3815309140
+        }
+      },
+      "results": {
+        "small": {
+          "samples": [
+            {
+              "batch": 1,
+              "elapsedMs": 6.442583000000013,
+              "msPerFrame": 0.32212915000000064,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 2,
+              "elapsedMs": 4.2112920000000145,
+              "msPerFrame": 0.2105646000000007,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 3,
+              "elapsedMs": 4.850000000000023,
+              "msPerFrame": 0.24250000000000113,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 4,
+              "elapsedMs": 4.570291999999995,
+              "msPerFrame": 0.22851459999999973,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 5,
+              "elapsedMs": 5.111625000000004,
+              "msPerFrame": 0.2555812500000002,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 6,
+              "elapsedMs": 4.565124999999966,
+              "msPerFrame": 0.22825624999999833,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 7,
+              "elapsedMs": 3.9578329999999937,
+              "msPerFrame": 0.1978916499999997,
+              "checksum": 3815309140
+            }
+          ],
+          "medianMsPerFrame": 0.22851459999999973,
+          "minMsPerFrame": 0.1978916499999997,
+          "maxMsPerFrame": 0.32212915000000064,
+          "medianAbsoluteDeviationMsPerFrame": 0.017949999999999022,
+          "madFractionOfMedian": 0.07855077968759565,
+          "stability": "within-budget"
+        },
+        "heavy": {
+          "samples": [
+            {
+              "batch": 1,
+              "elapsedMs": 4.793457999999987,
+              "msPerFrame": 0.23967289999999936,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 2,
+              "elapsedMs": 6.127334000000019,
+              "msPerFrame": 0.30636670000000094,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 3,
+              "elapsedMs": 4.3683750000000146,
+              "msPerFrame": 0.21841875000000072,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 4,
+              "elapsedMs": 5.76400000000001,
+              "msPerFrame": 0.2882000000000005,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 5,
+              "elapsedMs": 5.527083000000005,
+              "msPerFrame": 0.27635415000000024,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 6,
+              "elapsedMs": 6.674792000000025,
+              "msPerFrame": 0.33373960000000125,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 7,
+              "elapsedMs": 4.906583000000012,
+              "msPerFrame": 0.2453291500000006,
+              "checksum": 3815309140
+            }
+          ],
+          "medianMsPerFrame": 0.27635415000000024,
+          "minMsPerFrame": 0.21841875000000072,
+          "maxMsPerFrame": 0.33373960000000125,
+          "medianAbsoluteDeviationMsPerFrame": 0.031024999999999636,
+          "madFractionOfMedian": 0.11226536674046549,
+          "stability": "within-budget"
+        }
+      }
+    },
+    {
+      "pair": 2,
+      "phase": "baseline",
+      "artifact": "/tmp/pi-subagent-benchmark-rerun.JpAtLG/baseline-pair2.json",
+      "command": "bun run .pi/agent/benchmarks/subagent-ui-status.ts --phase baseline --output ../../../../tmp/pi-subagent-benchmark-rerun.JpAtLG/baseline-pair2.json",
+      "capturedAt": "2026-10-23T17:25:31.353Z",
+      "warmup": {
+        "small": {
+          "batch": 0,
+          "elapsedMs": 11.403874999999971,
+          "msPerFrame": 0.5701937499999985,
+          "checksum": 3815309140
+        },
+        "heavy": {
+          "batch": 0,
+          "elapsedMs": 5.389957999999979,
+          "msPerFrame": 0.26949789999999896,
+          "checksum": 3815309140
+        }
+      },
+      "results": {
+        "small": {
+          "samples": [
+            {
+              "batch": 1,
+              "elapsedMs": 4.490292000000011,
+              "msPerFrame": 0.22451460000000054,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 2,
+              "elapsedMs": 4.839708999999971,
+              "msPerFrame": 0.24198544999999855,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 3,
+              "elapsedMs": 4.012874999999951,
+              "msPerFrame": 0.20064374999999757,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 4,
+              "elapsedMs": 4.194499999999948,
+              "msPerFrame": 0.2097249999999974,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 5,
+              "elapsedMs": 5.105125000000044,
+              "msPerFrame": 0.2552562500000022,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 6,
+              "elapsedMs": 3.8584170000000313,
+              "msPerFrame": 0.19292085000000156,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 7,
+              "elapsedMs": 3.8980000000000246,
+              "msPerFrame": 0.19490000000000124,
+              "checksum": 3815309140
+            }
+          ],
+          "medianMsPerFrame": 0.2097249999999974,
+          "minMsPerFrame": 0.19292085000000156,
+          "maxMsPerFrame": 0.2552562500000022,
+          "medianAbsoluteDeviationMsPerFrame": 0.014824999999996175,
+          "madFractionOfMedian": 0.07068780545951298,
+          "stability": "within-budget"
+        },
+        "heavy": {
+          "samples": [
+            {
+              "batch": 1,
+              "elapsedMs": 6.808790999999985,
+              "msPerFrame": 0.34043954999999926,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 2,
+              "elapsedMs": 5.676167000000021,
+              "msPerFrame": 0.28380835000000104,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 3,
+              "elapsedMs": 5.628583999999989,
+              "msPerFrame": 0.2814291999999995,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 4,
+              "elapsedMs": 4.7762500000000045,
+              "msPerFrame": 0.23881250000000023,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 5,
+              "elapsedMs": 4.438209000000029,
+              "msPerFrame": 0.22191045000000145,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 6,
+              "elapsedMs": 4.924125000000004,
+              "msPerFrame": 0.24620625000000018,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 7,
+              "elapsedMs": 4.840208000000018,
+              "msPerFrame": 0.2420104000000009,
+              "checksum": 3815309140
+            }
+          ],
+          "medianMsPerFrame": 0.24620625000000018,
+          "minMsPerFrame": 0.22191045000000145,
+          "maxMsPerFrame": 0.34043954999999926,
+          "medianAbsoluteDeviationMsPerFrame": 0.02429579999999873,
+          "madFractionOfMedian": 0.09868067930850136,
+          "stability": "within-budget"
+        }
+      }
+    },
+    {
+      "pair": 2,
+      "phase": "candidate",
+      "artifact": "/tmp/pi-subagent-benchmark-rerun.JpAtLG/candidate-pair2.json",
+      "command": "bun run .pi/agent/benchmarks/subagent-ui-status.ts --phase candidate --output ../../../../tmp/pi-subagent-benchmark-rerun.JpAtLG/candidate-pair2.json",
+      "capturedAt": "2026-10-23T17:25:30.535Z",
+      "warmup": {
+        "small": {
+          "batch": 0,
+          "elapsedMs": 8.828291999999976,
+          "msPerFrame": 0.4414145999999988,
+          "checksum": 3815309140
+        },
+        "heavy": {
+          "batch": 0,
+          "elapsedMs": 6.152833999999984,
+          "msPerFrame": 0.30764169999999924,
+          "checksum": 3815309140
+        }
+      },
+      "results": {
+        "small": {
+          "samples": [
+            {
+              "batch": 1,
+              "elapsedMs": 6.402833999999984,
+              "msPerFrame": 0.3201416999999992,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 2,
+              "elapsedMs": 4.293457999999987,
+              "msPerFrame": 0.21467289999999933,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 3,
+              "elapsedMs": 5.611874999999998,
+              "msPerFrame": 0.28059374999999986,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 4,
+              "elapsedMs": 4.102874999999983,
+              "msPerFrame": 0.20514374999999915,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 5,
+              "elapsedMs": 4.119374999999991,
+              "msPerFrame": 0.20596874999999953,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 6,
+              "elapsedMs": 4.343959000000041,
+              "msPerFrame": 0.21719795000000203,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 7,
+              "elapsedMs": 3.775791999999967,
+              "msPerFrame": 0.18878959999999836,
+              "checksum": 3815309140
+            }
+          ],
+          "medianMsPerFrame": 0.21467289999999933,
+          "minMsPerFrame": 0.18878959999999836,
+          "maxMsPerFrame": 0.3201416999999992,
+          "medianAbsoluteDeviationMsPerFrame": 0.00952915000000018,
+          "madFractionOfMedian": 0.044389161370625776,
+          "stability": "within-budget"
+        },
+        "heavy": {
+          "samples": [
+            {
+              "batch": 1,
+              "elapsedMs": 5.4478750000000105,
+              "msPerFrame": 0.27239375000000055,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 2,
+              "elapsedMs": 5.916584,
+              "msPerFrame": 0.2958292,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 3,
+              "elapsedMs": 4.936290999999983,
+              "msPerFrame": 0.24681454999999913,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 4,
+              "elapsedMs": 5.412334000000044,
+              "msPerFrame": 0.2706167000000022,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 5,
+              "elapsedMs": 5.6037919999999986,
+              "msPerFrame": 0.2801895999999999,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 6,
+              "elapsedMs": 4.608249999999998,
+              "msPerFrame": 0.2304124999999999,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 7,
+              "elapsedMs": 4.657375000000002,
+              "msPerFrame": 0.2328687500000001,
+              "checksum": 3815309140
+            }
+          ],
+          "medianMsPerFrame": 0.2706167000000022,
+          "minMsPerFrame": 0.2304124999999999,
+          "maxMsPerFrame": 0.2958292,
+          "medianAbsoluteDeviationMsPerFrame": 0.023802150000003075,
+          "madFractionOfMedian": 0.08795521488512306,
+          "stability": "within-budget"
+        }
+      }
+    },
+    {
+      "pair": 3,
+      "phase": "baseline",
+      "artifact": "/tmp/pi-subagent-benchmark-rerun.JpAtLG/baseline-pair3.json",
+      "command": "bun run .pi/agent/benchmarks/subagent-ui-status.ts --phase baseline --output ../../../../tmp/pi-subagent-benchmark-rerun.JpAtLG/baseline-pair3.json",
+      "capturedAt": "2026-10-23T17:25:32.079Z",
+      "warmup": {
+        "small": {
+          "batch": 0,
+          "elapsedMs": 11.223958000000039,
+          "msPerFrame": 0.5611979000000019,
+          "checksum": 3815309140
+        },
+        "heavy": {
+          "batch": 0,
+          "elapsedMs": 5.612915999999984,
+          "msPerFrame": 0.2806457999999992,
+          "checksum": 3815309140
+        }
+      },
+      "results": {
+        "small": {
+          "samples": [
+            {
+              "batch": 1,
+              "elapsedMs": 4.402707999999961,
+              "msPerFrame": 0.22013539999999807,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 2,
+              "elapsedMs": 5.046209000000033,
+              "msPerFrame": 0.25231045000000163,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 3,
+              "elapsedMs": 4.132959000000028,
+              "msPerFrame": 0.2066479500000014,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 4,
+              "elapsedMs": 3.953374999999994,
+              "msPerFrame": 0.1976687499999997,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 5,
+              "elapsedMs": 5.424790999999971,
+              "msPerFrame": 0.27123954999999855,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 6,
+              "elapsedMs": 3.7148750000000064,
+              "msPerFrame": 0.18574375000000032,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 7,
+              "elapsedMs": 3.609041999999988,
+              "msPerFrame": 0.1804520999999994,
+              "checksum": 3815309140
+            }
+          ],
+          "medianMsPerFrame": 0.2066479500000014,
+          "minMsPerFrame": 0.1804520999999994,
+          "maxMsPerFrame": 0.27123954999999855,
+          "medianAbsoluteDeviationMsPerFrame": 0.020904200000001094,
+          "madFractionOfMedian": 0.10115851621078724,
+          "stability": "within-budget"
+        },
+        "heavy": {
+          "samples": [
+            {
+              "batch": 1,
+              "elapsedMs": 7.833375000000046,
+              "msPerFrame": 0.39166875000000234,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 2,
+              "elapsedMs": 4.697000000000003,
+              "msPerFrame": 0.23485000000000014,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 3,
+              "elapsedMs": 5.344457999999975,
+              "msPerFrame": 0.2672228999999987,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 4,
+              "elapsedMs": 4.834291000000007,
+              "msPerFrame": 0.24171455000000036,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 5,
+              "elapsedMs": 4.761249999999961,
+              "msPerFrame": 0.23806249999999807,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 6,
+              "elapsedMs": 4.866540999999984,
+              "msPerFrame": 0.24332704999999918,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 7,
+              "elapsedMs": 4.992209000000003,
+              "msPerFrame": 0.24961045000000012,
+              "checksum": 3815309140
+            }
+          ],
+          "medianMsPerFrame": 0.24332704999999918,
+          "minMsPerFrame": 0.23485000000000014,
+          "maxMsPerFrame": 0.39166875000000234,
+          "medianAbsoluteDeviationMsPerFrame": 0.006283400000000938,
+          "madFractionOfMedian": 0.025822858576557597,
+          "stability": "within-budget"
+        }
+      }
+    },
+    {
+      "pair": 3,
+      "phase": "candidate",
+      "artifact": "/tmp/pi-subagent-benchmark-rerun.JpAtLG/candidate-pair3.json",
+      "command": "bun run .pi/agent/benchmarks/subagent-ui-status.ts --phase candidate --output ../../../../tmp/pi-subagent-benchmark-rerun.JpAtLG/candidate-pair3.json",
+      "capturedAt": "2026-10-23T17:25:32.909Z",
+      "warmup": {
+        "small": {
+          "batch": 0,
+          "elapsedMs": 8.215542000000028,
+          "msPerFrame": 0.4107771000000014,
+          "checksum": 3815309140
+        },
+        "heavy": {
+          "batch": 0,
+          "elapsedMs": 5.683917000000008,
+          "msPerFrame": 0.2841958500000004,
+          "checksum": 3815309140
+        }
+      },
+      "results": {
+        "small": {
+          "samples": [
+            {
+              "batch": 1,
+              "elapsedMs": 6.202125000000024,
+              "msPerFrame": 0.3101062500000012,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 2,
+              "elapsedMs": 4.477709000000004,
+              "msPerFrame": 0.2238854500000002,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 3,
+              "elapsedMs": 5.123083000000008,
+              "msPerFrame": 0.2561541500000004,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 4,
+              "elapsedMs": 4.632000000000005,
+              "msPerFrame": 0.23160000000000025,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 5,
+              "elapsedMs": 5.2077919999999835,
+              "msPerFrame": 0.26038959999999917,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 6,
+              "elapsedMs": 4.636874999999975,
+              "msPerFrame": 0.23184374999999874,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 7,
+              "elapsedMs": 4.263332999999989,
+              "msPerFrame": 0.21316664999999943,
+              "checksum": 3815309140
+            }
+          ],
+          "medianMsPerFrame": 0.23184374999999874,
+          "minMsPerFrame": 0.21316664999999943,
+          "maxMsPerFrame": 0.3101062500000012,
+          "medianAbsoluteDeviationMsPerFrame": 0.018677099999999308,
+          "madFractionOfMedian": 0.0805589971694273,
+          "stability": "within-budget"
+        },
+        "heavy": {
+          "samples": [
+            {
+              "batch": 1,
+              "elapsedMs": 5.28000000000003,
+              "msPerFrame": 0.26400000000000146,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 2,
+              "elapsedMs": 6.075832999999989,
+              "msPerFrame": 0.3037916499999994,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 3,
+              "elapsedMs": 4.941374999999994,
+              "msPerFrame": 0.24706874999999967,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 4,
+              "elapsedMs": 5.743666000000019,
+              "msPerFrame": 0.2871833000000009,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 5,
+              "elapsedMs": 4.72420900000003,
+              "msPerFrame": 0.23621045000000152,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 6,
+              "elapsedMs": 5.550958000000037,
+              "msPerFrame": 0.27754790000000185,
+              "checksum": 3815309140
+            },
+            {
+              "batch": 7,
+              "elapsedMs": 5.357332999999983,
+              "msPerFrame": 0.26786664999999915,
+              "checksum": 3815309140
+            }
+          ],
+          "medianMsPerFrame": 0.26786664999999915,
+          "minMsPerFrame": 0.23621045000000152,
+          "maxMsPerFrame": 0.3037916499999994,
+          "medianAbsoluteDeviationMsPerFrame": 0.019316650000001767,
+          "madFractionOfMedian": 0.07211293380494298,
+          "stability": "within-budget"
+        }
+      }
+    }
+  ],
+  "limitations": [
+    "Synthetic pinned SDK 0.99.1/Bun workload, not live installed-Pi UI or end-to-end agent latency",
+    "Three paired processes; no confidence interval, significance, CPU, memory, or allocation claim",
+    "Does not isolate ts-pattern from other changes in 8c1ec821",
+    "Existing full-project acceptance remains blocked and is not waived"
+  ],
+  "operations": {
+    "initialWorkerId": "337108e4-64dd-4b89-acce-de1701df596d",
+    "initialWorkerOutcome": "Setup budget exhausted; no final report or validated timing artifacts; command guard required approval",
+    "approval": "User selected Approve temporary fixtures (Recommended)",
+    "measurementCompletedBy": "parent, after approval",
+    "timingRetries": 0,
+    "discardedApprovedRunSamples": 0,
+    "projectSourceEdits": false,
+    "initialWorkerFinalState": {
+      "state": "idle",
+      "outcome": "budget-exhausted",
+      "turnsUsed": 16,
+      "maxTurns": 16,
+      "persistence": "saved",
+      "reportAvailable": false
+    }
+  },
+  "exactInvocations": [
+    {
+      "pair": 1,
+      "phase": "baseline",
+      "artifact": "/tmp/pi-subagent-benchmark-rerun.JpAtLG/baseline-pair1.json",
+      "log": "/tmp/pi-subagent-benchmark-rerun.JpAtLG/baseline-pair1.log",
+      "invocation": "cd '/tmp/pi-subagent-benchmark-rerun.JpAtLG/baseline-approved' && bun run .pi/agent/benchmarks/subagent-ui-status.ts --phase 'baseline' --output '/tmp/pi-subagent-benchmark-rerun.JpAtLG/baseline-pair1.json'"
+    },
+    {
+      "pair": 1,
+      "phase": "candidate",
+      "artifact": "/tmp/pi-subagent-benchmark-rerun.JpAtLG/candidate-pair1.json",
+      "log": "/tmp/pi-subagent-benchmark-rerun.JpAtLG/candidate-pair1.log",
+      "invocation": "cd '/tmp/pi-subagent-benchmark-rerun.JpAtLG/candidate-approved' && bun run .pi/agent/benchmarks/subagent-ui-status.ts --phase 'candidate' --output '/tmp/pi-subagent-benchmark-rerun.JpAtLG/candidate-pair1.json'"
+    },
+    {
+      "pair": 2,
+      "phase": "candidate",
+      "artifact": "/tmp/pi-subagent-benchmark-rerun.JpAtLG/candidate-pair2.json",
+      "log": "/tmp/pi-subagent-benchmark-rerun.JpAtLG/candidate-pair2.log",
+      "invocation": "cd '/tmp/pi-subagent-benchmark-rerun.JpAtLG/candidate-approved' && bun run .pi/agent/benchmarks/subagent-ui-status.ts --phase 'candidate' --output '/tmp/pi-subagent-benchmark-rerun.JpAtLG/candidate-pair2.json'"
+    },
+    {
+      "pair": 2,
+      "phase": "baseline",
+      "artifact": "/tmp/pi-subagent-benchmark-rerun.JpAtLG/baseline-pair2.json",
+      "log": "/tmp/pi-subagent-benchmark-rerun.JpAtLG/baseline-pair2.log",
+      "invocation": "cd '/tmp/pi-subagent-benchmark-rerun.JpAtLG/baseline-approved' && bun run .pi/agent/benchmarks/subagent-ui-status.ts --phase 'baseline' --output '/tmp/pi-subagent-benchmark-rerun.JpAtLG/baseline-pair2.json'"
+    },
+    {
+      "pair": 3,
+      "phase": "baseline",
+      "artifact": "/tmp/pi-subagent-benchmark-rerun.JpAtLG/baseline-pair3.json",
+      "log": "/tmp/pi-subagent-benchmark-rerun.JpAtLG/baseline-pair3.log",
+      "invocation": "cd '/tmp/pi-subagent-benchmark-rerun.JpAtLG/baseline-approved' && bun run .pi/agent/benchmarks/subagent-ui-status.ts --phase 'baseline' --output '/tmp/pi-subagent-benchmark-rerun.JpAtLG/baseline-pair3.json'"
+    },
+    {
+      "pair": 3,
+      "phase": "candidate",
+      "artifact": "/tmp/pi-subagent-benchmark-rerun.JpAtLG/candidate-pair3.json",
+      "log": "/tmp/pi-subagent-benchmark-rerun.JpAtLG/candidate-pair3.log",
+      "invocation": "cd '/tmp/pi-subagent-benchmark-rerun.JpAtLG/candidate-approved' && bun run .pi/agent/benchmarks/subagent-ui-status.ts --phase 'candidate' --output '/tmp/pi-subagent-benchmark-rerun.JpAtLG/candidate-pair3.json'"
+    }
+  ]
+}
