@@ -350,7 +350,7 @@ in
     "test:pi-subagents".exec = ''
       set -euo pipefail
       cd .pi/agent
-      bun test extensions/minimal-subagents extensions/prompt-ui/__tests__/subagent-transcript-frame.test.ts
+      bun test extensions/subagents extensions/prompt-ui/__tests__/subagent-transcript-frame.test.ts
     '';
     "test:pi-delta".exec = ''
       set -euo pipefail

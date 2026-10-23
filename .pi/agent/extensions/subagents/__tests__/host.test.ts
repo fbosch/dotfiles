@@ -149,7 +149,11 @@ test("native reload waits for six active children, cancels the queue, and restor
   const controlled = controlledDriver({ holdClose: true });
   const { session, errors } = await fixture(undefined, controlled.dependencies);
   const reloadWarnings: string[] = [];
-  session.extensionRunner.setUIContext({ ...session.extensionRunner.createContext().ui, notify: (message) => { reloadWarnings.push(message); } }, "rpc");
+  session.extensionRunner.setUIContext({ ...session.extensionRunner.createContext().ui, notify: (message, type) => {
+    expect(type).toBe("warning");
+    expect(controlled.aborted).toEqual([]);
+    reloadWarnings.push(message);
+  } }, "rpc");
   cleanup.push(async () => { controlled.releaseClose(); });
   const ids: string[] = [];
   for (let index = 0; index < 7; index++) ids.push(workerId(await call(session, "subagent", { specialist: "fixture", prompt: `Assignment ${index}` })));
@@ -161,8 +165,7 @@ test("native reload waits for six active children, cancels the queue, and restor
   expect(controlled.aborted).toHaveLength(6);
   controlled.releaseClose();
   await reload;
-  expect(reloadWarnings).toHaveLength(1);
-  expect(reloadWarnings[0]).toContain("7");
+  expect(reloadWarnings).toEqual(["Reloading Pi will stop 7 subagent workers. Interrupted assignments cannot resume."]);
   expect(controlled.starts()).toBe(6);
   const status = await call(session, "subagent_result", { request: { mode: "status", workerId: ids[0]! } });
   expect(JSON.stringify(status)).toContain("historical");
@@ -245,6 +248,29 @@ test("a delayed worker update reflects completion at model delivery without losi
   expect(JSON.stringify(delivered)).toContain("FIRST_MATERIAL_FINDING");
   expect(JSON.stringify(delivered)).toContain("SECOND_MATERIAL_FINDING");
   expect(JSON.stringify(entries.map((entry) => entry.type === "custom_message" ? entry.content : "")).toLowerCase()).toContain('"state":"running"');
+});
+
+test("reload still stops workers and restores history when its warning cannot be displayed", async () => {
+  const controlled = controlledDriver();
+  const { session, errors } = await fixture(undefined, controlled.dependencies);
+  const id = workerId(await call(session, "subagent", { specialist: "fixture", prompt: "Task" }));
+  const warnings: string[] = [];
+  session.extensionRunner.setUIContext({ ...session.extensionRunner.createContext().ui, notify: (message) => {
+    expect(controlled.aborted).toEqual([]);
+    warnings.push(message);
+    throw new Error("RELOAD_WARNING_FAILED");
+  } }, "rpc");
+  await session.reload();
+  expect(controlled.aborted).toEqual([id]);
+  expect(warnings).toEqual(["Reloading Pi will stop 1 subagent worker. Interrupted assignments cannot resume."]);
+  expect(controlled.health.isBlocked()).toBe(false);
+  const status = await call(session, "subagent_result", { request: { mode: "status", workerId: id } });
+  expect(JSON.stringify(status)).toContain("historical");
+  expect(JSON.stringify(status)).toContain("cancelled");
+  const transcript = await call(session, "subagent_result", { request: { mode: "transcript", workerId: id } });
+  expect(JSON.stringify(transcript)).toContain("PARTIAL_LIFECYCLE_EVIDENCE");
+  expect(errors).toHaveLength(1);
+  expect(errors[0]).toContain("RELOAD_WARNING_FAILED");
 });
 
 test("idle reload and ordinary shutdown do not disclose interrupted work", async () => {

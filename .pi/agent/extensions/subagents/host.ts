@@ -173,8 +173,14 @@ export function registerSubagentHost(pi: ExtensionAPI, options: { agentDir?: str
     const interrupted = previous?.runtime.delivery.owner.list().filter((worker) =>
       worker.status === "queued" || worker.status === "running" || worker.status === "waiting-question"
       || worker.status === "stopping" || worker.status === "cleanup-unknown" || worker.status === "releasing").length ?? 0;
+    let warningFailure: { error: unknown } | undefined;
     if (event.reason === "reload" && interrupted > 0) {
-      shutdownContext.ui.notify(`Pi is reloading; ${interrupted} subagent worker(s) will be stopped and will not resume.`, "warning");
+      try {
+        shutdownContext.ui.notify(`Reloading Pi will stop ${interrupted} subagent ${interrupted === 1 ? "worker" : "workers"}. Interrupted assignments cannot resume.`, "warning");
+      } catch (error) {
+        // A notification failure must not prevent teardown or imply child cleanup failed.
+        warningFailure = { error };
+      }
     }
     try {
       unsubscribeCards();
@@ -192,5 +198,6 @@ export function registerSubagentHost(pi: ExtensionAPI, options: { agentDir?: str
       context = undefined;
       dependencies.runtimeChanged?.(undefined);
     }
+    if (warningFailure) throw warningFailure.error;
   });
 }

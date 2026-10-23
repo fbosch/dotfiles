@@ -12,30 +12,30 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { TuiAltScreen, stripTerminalSequences, type Component, type Terminal } from "@earendil-works/pi-tui";
 import { theme } from "../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme";
-import { processCleanupHealth } from "../extensions/minimal-subagents/health";
-import { HISTORY_ENTRY, type SavedWorker } from "../extensions/minimal-subagents/history";
-import { registerSubagentHost, type HostDependencies } from "../extensions/minimal-subagents/host";
-import type { ChildDriver, ChildExecutionOutcome, WorkerSnapshot } from "../extensions/minimal-subagents/owner";
-import type { ParentRuntime } from "../extensions/minimal-subagents/parent-runtime";
-import type { ResolvedSpecialist } from "../extensions/minimal-subagents/specialist";
-import type { WorkerRenderState } from "../extensions/minimal-subagents/interaction";
+import { processCleanupHealth } from "../extensions/subagents/health";
+import { HISTORY_ENTRY, type SavedWorker } from "../extensions/subagents/history";
+import { registerSubagentHost, type HostDependencies } from "../extensions/subagents/host";
+import type { ChildDriver, ChildExecutionOutcome, WorkerSnapshot } from "../extensions/subagents/owner";
+import type { ParentRuntime } from "../extensions/subagents/parent-runtime";
+import type { ResolvedSpecialist } from "../extensions/subagents/specialist";
+import type { WorkerRenderState } from "../extensions/subagents/interaction";
 
 const scriptPath = fileURLToPath(import.meta.url);
 const repoRoot = resolve(dirname(scriptPath), "../../..");
 const baselinePath = "openspec/changes/pi-minimal-subagents/references/ui-status-baseline-2026-10-23.json";
 const sourcePaths = [
-  ".pi/agent/extensions/minimal-subagents/owner.ts",
-  ".pi/agent/extensions/minimal-subagents/host.ts",
-  ".pi/agent/extensions/minimal-subagents/ui.ts",
-  ".pi/agent/extensions/minimal-subagents/widget.ts",
-  ".pi/agent/extensions/minimal-subagents/presentation.ts",
-  ".pi/agent/extensions/minimal-subagents/tools.ts",
-  ".pi/agent/extensions/minimal-subagents/launch-cards.ts",
-  ".pi/agent/extensions/minimal-subagents/rendering.ts",
-  ".pi/agent/extensions/minimal-subagents/delivery.ts",
-  ".pi/agent/extensions/minimal-subagents/interaction.ts",
-  ".pi/agent/extensions/minimal-subagents/specialist.ts",
-  ".pi/agent/extensions/minimal-subagents/child-session.ts",
+  ".pi/agent/extensions/subagents/owner.ts",
+  ".pi/agent/extensions/subagents/host.ts",
+  ".pi/agent/extensions/subagents/ui.ts",
+  ".pi/agent/extensions/subagents/widget.ts",
+  ".pi/agent/extensions/subagents/presentation.ts",
+  ".pi/agent/extensions/subagents/tools.ts",
+  ".pi/agent/extensions/subagents/launch-cards.ts",
+  ".pi/agent/extensions/subagents/rendering.ts",
+  ".pi/agent/extensions/subagents/delivery.ts",
+  ".pi/agent/extensions/subagents/interaction.ts",
+  ".pi/agent/extensions/subagents/specialist.ts",
+  ".pi/agent/extensions/subagents/child-session.ts",
 ];
 const assignmentCounts = { small: 1, heavy: 3 } as const;
 const transcriptSizes = { small: 20, heavy: 100 } as const;

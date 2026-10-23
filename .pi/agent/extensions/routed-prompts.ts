@@ -8,8 +8,8 @@ import {
   type SlashCommandInfo,
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
-import { requestSubagentLaunch } from "./minimal-subagents/production";
-import type { ParentLaunch } from "./minimal-subagents/parent-runtime";
+import { requestSubagentLaunch } from "./subagents/production";
+import type { ParentLaunch } from "./subagents/parent-runtime";
 
 const ROUTED_PROMPT_MESSAGE = "routed-prompt";
 interface SpawnOptions {

@@ -59,7 +59,7 @@ test("errors, partial results, images and non-hashline output keep the original 
 });
 test("the same resolved renderer works in native main-window and saved subagent tool components", async () => {
   const { renderer } = setup();
-  const { workerTranscript } = await import("../../minimal-subagents/rendering");
+  const { workerTranscript } = await import("../../subagents/rendering");
   const terminal: Terminal = {
     columns: 120, rows: 30, kittyProtocolActive: false,
     start() {}, stop() {}, async drainInput() {}, write() {}, moveBy() {}, hideCursor() {}, showCursor() {},

@@ -1,6 +1,8 @@
-# Minimal subagents
+# Subagents
 
 A local Pi runner for parent-owned, in-process specialist sessions. It keeps execution state, saved evidence, and live-session availability separate.
+
+The extension directory is `subagents`. Existing `minimal-subagents` history, notification, and process-state identifiers remain unchanged so saved sessions and reload cleanup state survive the rename.
 
 `index.ts` loads the local runner. Settings no longer register `@gotgenes/pi-subagents`; reload Pi to use the replacement in an existing thread. Do not enable both runners. See the [implementation audit](../../../../openspec/changes/pi-minimal-subagents/references/implementation-audit.md) for checks and remaining acceptance gaps.
 
