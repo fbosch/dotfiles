@@ -7,7 +7,7 @@ import { agentName, type AgentAppearance } from "./rendering";
 import { createWorkerWidget } from "./widget";
 import { SubagentTranscriptFrame } from "../prompt-ui/subagent-transcript-frame";
 
-export function createWorkerUI(ctx: ExtensionContext, runtime: ParentRuntime, observation: (id: string) => ChildObservation | undefined, maxRows = 4, appearance: AgentAppearance = new Map()) {
+export function createWorkerUI(ctx: ExtensionContext, runtime: ParentRuntime, observation: (id: string) => ChildObservation | undefined, maxRows = 4, appearance: AgentAppearance = new Map(), cardActivity?: { active(): boolean; animate(frame: number): void }) {
   let redrawWidget = () => {};
   let widget: ReturnType<typeof createWorkerWidget> | undefined;
   let overlay: SubagentOverlay | undefined;
@@ -27,7 +27,7 @@ export function createWorkerUI(ctx: ExtensionContext, runtime: ParentRuntime, ob
         agentName: (name) => agentName(name, theme, appearance),
       }), theme, (workerId) => {
         void ui.open(workerId).catch((error: unknown) => ctx.ui.notify(`Unable to open worker output: ${String(error)}`, "error"));
-      }, () => tui.requestRender());
+      }, (frame) => { cardActivity?.animate(frame); tui.requestRender(); }, undefined, () => cardActivity?.active() ?? false);
       return widget;
     }, { placement: "aboveEditor" });
   }

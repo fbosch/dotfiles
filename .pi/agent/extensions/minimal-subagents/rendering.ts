@@ -6,7 +6,8 @@ import { paintDockBottomEdge, paintDockRow } from "../prompt-ui/dock-rendering";
 import { hexForegroundAnsi } from "../prompt-ui/terminal-color";
 import type { ChildObservation } from "./driver";
 import type { WorkerSnapshot } from "./owner";
-import { singleLine, statusGlyph, terminalText, workerDetails } from "./presentation";
+import { singleLine, statusGlyph, terminalText } from "./presentation";
+import { workerMetadata } from "./metadata";
 import { inspectable, resultWorkerTarget, workerTarget, type OpenWorker, type WorkerTarget } from "./interaction";
 import type { AssistantMessage, JsonObject, JsonValue, UserMessage } from "@earendil-works/pi-ai";
 
@@ -72,7 +73,7 @@ function structuredLines(value: unknown, expanded: boolean, theme: Theme, appear
   const status = state === "idle" || state === "historical" || data.type === "completion" ? outcome || state : state;
   const label = string(worker.specialist);
   const id = string(worker.workerId) || string(data.workerId);
-  const heading = [statusGlyph(status, theme), !compact && label ? agentName(label, theme, appearance) : "", theme.fg("dim", singleLine(status)), !compact || expanded ? theme.fg("dim", singleLine(id)) : ""].filter(Boolean).join(" ");
+  const heading = [statusGlyph(status, theme, typeof data.activityFrame === "number" ? data.activityFrame : 0), !compact && label ? agentName(label, theme, appearance) : "", theme.fg("dim", singleLine(status)), !compact || expanded ? theme.fg("dim", singleLine(id)) : ""].filter(Boolean).join(" ");
   const lines = [heading];
   if (typeof assignment.turnsUsed === "number" && typeof assignment.maxTurns === "number") lines.push(theme.fg("dim", `  ↻${assignment.turnsUsed}≤${assignment.maxTurns}`));
   if (data.kind === "launched") lines.push(theme.fg("dim", `  ⎿  ${state === "queued" ? "Queued in background" : state === "running" ? "Running in background" : "Background assignment accepted"}`));
@@ -365,7 +366,7 @@ function decodeTranscriptEntry(entry: { role: string; text: string }): Transcrip
   return { kind: "invalid", reason: `unsupported message role ${singleLine(parsed.role)}; raw saved evidence follows`, text: entry.text };
 }
 
-export function workerTranscript(worker: WorkerSnapshot, observation: ChildObservation | undefined, theme: Theme, options: { tui: TUI; cwd: string; getToolRenderers?: ToolRendererLookup | undefined } | undefined = undefined): Component {
+export function workerTranscript(worker: WorkerSnapshot, observation: ChildObservation | undefined, theme: Theme, options: { tui: TUI; cwd: string; getToolRenderers?: ToolRendererLookup | undefined } | undefined = undefined, metadataExpanded = false): Component {
   let building = true;
   // Replaying lifecycle flags must not schedule another render while this view
   // is being rebuilt. Later renderer invalidations still reach the real TUI.
@@ -381,8 +382,9 @@ export function workerTranscript(worker: WorkerSnapshot, observation: ChildObser
   const body = new Container();
   const text = (value: string) => body.addChild(new Text(terminalText(value), 0, 0));
   const markdown = (value: string) => body.addChild(new Markdown(terminalText(value), 0, 0, getMarkdownTheme()));
-  const { pendingQuestion: _question, ...metadata } = worker;
-  text(workerDetails({ ...metadata, assignments: [] }, observation ? { ...observation, liveText: "" } : undefined));
+  const metadata = workerMetadata(worker, observation, metadataExpanded);
+  metadata.forEach((line, index) => { body.addChild(new Text(index === 0 ? theme.bold(line) : theme.fg("muted", line), 0, 0)); });
+  body.addChild(new Text(theme.fg("dim", "\nReports are worker evidence, not verified conclusions."), 0, 0));
   for (const assignment of worker.assignments) {
     body.addChild(new Text(theme.fg("borderMuted", `\n── Assignment ${singleLine(assignment.id)} ──`), 0, 0));
     text(`Execution: ${assignment.outcome} | Storage: ${assignment.persistence} | ↻${assignment.turnsUsed}≤${assignment.maxTurns}`);

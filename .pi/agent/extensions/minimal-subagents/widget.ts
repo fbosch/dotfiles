@@ -8,8 +8,9 @@ export function createWorkerWidget(
   options: () => Omit<Parameters<typeof widgetLines>[0], "width" | "onWorkerRows">,
   theme: Theme,
   open: (workerId: string) => void,
-  requestRender?: () => void,
+  requestRender?: (frame: number) => void,
   clock: { setInterval(callback: () => void, delay: number): ReturnType<typeof setInterval>; clearInterval(id: ReturnType<typeof setInterval>): void } = globalThis,
+  otherActivity: () => boolean = () => false,
 ): Component & { dispose(): void } {
   let targets = new Map<number, string>();
   let frame = 0;
@@ -30,9 +31,9 @@ export function createWorkerWidget(
           for (let row = start; row < end; row++) targets.set(row + 1, workerId);
         },
       });
-      if (!visibleRunning || disposed) stop();
+      if ((!visibleRunning && !otherActivity()) || disposed) stop();
       else if (!timer && requestRender) {
-        timer = clock.setInterval(() => { if (!disposed) { frame++; requestRender(); } }, 200);
+        timer = clock.setInterval(() => { if (!disposed) { frame++; requestRender(frame); } }, 200);
       }
       return frameWidget(lines, width, theme);
     },

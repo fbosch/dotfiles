@@ -31,6 +31,8 @@ const workerSchema = Type.Object({
 const observationSchema = Type.Object({
   startedAt: Type.Number(), endedAt: Type.Optional(Type.Number()), activity: Type.String(), liveText: Type.String(),
   inputTokens: Type.Optional(Type.Number()), outputTokens: Type.Optional(Type.Number()), cost: Type.Optional(Type.Number()),
+  resolvedModel: Type.Optional(Type.String()),
+  resolvedThinking: Type.Optional(Type.Union((["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const).map((value) => Type.Literal(value)))),
 });
 const savedSchema = Type.Object({ version: Type.Literal(1), worker: workerSchema, observation: Type.Optional(observationSchema) });
 

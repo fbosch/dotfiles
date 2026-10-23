@@ -14,6 +14,7 @@ interface TranscriptView { content: Container; scroll: ScrollView; }
 export class SubagentOverlay implements Component {
   private selected = 0;
   private inspected: string | undefined;
+  private readonly metadataExpanded = new Set<string>();
   private actionIndex = -1;
   private readonly views = new Map<string, TranscriptView>();
   private readonly unsubscribe: () => void;
@@ -68,7 +69,7 @@ export class SubagentOverlay implements Component {
   private actions(): string[] {
     if (!this.inspected) return [];
     const worker = this.runtime.delivery.owner.inspect(this.inspected);
-    return ["Follow latest", ...(cancellable(worker) ? ["Cancel worker…"] : []), "Back to list"];
+    return ["Follow latest", ...(cancellable(worker) ? ["Cancel worker…"] : []), "Back to list", this.metadataExpanded.has(worker.id) ? "Hide details" : "Show details"];
   }
 
   handleMouse(event: TuiMouseEvent): TuiMouseEventResult | undefined {
@@ -99,6 +100,11 @@ export class SubagentOverlay implements Component {
         const action = actions[this.actionIndex];
         if (action === "Follow latest") { view.scroll.scrollToEnd(); this.actionIndex = -1; }
         else if (action === "Back to list") { this.inspected = undefined; this.actionIndex = -1; }
+        else if (action === "Show details" || action === "Hide details") {
+          if (this.metadataExpanded.has(this.inspected)) this.metadataExpanded.delete(this.inspected);
+          else this.metadataExpanded.add(this.inspected);
+          view.scroll.scrollToStart();
+        }
         else if (action === "Cancel worker…") this.cancel([this.inspected]);
       } else if (matchesKey(data, Key.up)) view.scroll.scrollBy(-1);
       else if (matchesKey(data, Key.down)) view.scroll.scrollBy(1);
@@ -144,7 +150,7 @@ export class SubagentOverlay implements Component {
       const worker = this.runtime.delivery.owner.inspect(this.inspected);
       const view = this.view(this.inspected);
       view.content.clear();
-      view.content.addChild(workerTranscript(worker, this.options.observation(worker.id), this.options.theme, this.options.tui && this.options.cwd !== undefined ? { tui: this.options.tui, cwd: this.options.cwd, getToolRenderers: this.options.getToolRenderers } : undefined));
+      view.content.addChild(workerTranscript(worker, this.options.observation(worker.id), this.options.theme, this.options.tui && this.options.cwd !== undefined ? { tui: this.options.tui, cwd: this.options.cwd, getToolRenderers: this.options.getToolRenderers } : undefined, this.metadataExpanded.has(worker.id)));
       const lines = view.content.render(width);
       view.scroll.updateLayout(lines.length, bodyHeight, this.options.requestRender);
       body = lines.slice(view.scroll.scrollTop, view.scroll.scrollTop + bodyHeight);
@@ -162,7 +168,7 @@ export class SubagentOverlay implements Component {
     while (body.length < bodyHeight) body.push("");
     const theme = this.options.theme;
     const selectedWorker = this.inspected ? this.runtime.delivery.owner.inspect(this.inspected) : undefined;
-    const title = selectedWorker ? `Subagents · ${agentName(selectedWorker.specialist, theme, this.options.appearance)} · ${terminalText(selectedWorker.id)}` : "Subagents";
+    const title = selectedWorker ? `Subagents · ${agentName(selectedWorker.specialist, theme, this.options.appearance)}` : "Subagents";
     const hint = terminalText(this.error || (this.busy ? "Waiting for cancellation confirmation or shutdown" : this.inspected ? "↑↓ Scroll · Tab Actions · Enter Choose · Esc Close" : ""));
     return [title, ...body, theme.fg(this.error ? "error" : "dim", hint), theme.fg("dim", footer)]
       .map((line) => truncateToWidth(line, Math.max(1, width), ""));

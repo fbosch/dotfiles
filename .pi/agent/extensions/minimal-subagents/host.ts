@@ -1,6 +1,6 @@
 import { getAgentDir, type ExtensionAPI, type ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { resolveNamedSpecialist } from "./catalog";
-import { WorkerDelivery } from "./delivery";
+import { WorkerDelivery, workerStatus } from "./delivery";
 import { PiChildDriver } from "./driver";
 import { processCleanupHealth } from "./health";
 import { parentHistory, restoreHistory } from "./history";
@@ -10,7 +10,7 @@ import { registerParentTools } from "./tools";
 import { createWorkerUI } from "./ui";
 import { loadAgentMentions } from "../mentions/agent-mentions";
 import { renderNotice, type AgentAppearance } from "./rendering";
-import type { OpenWorker } from "./interaction";
+import { workerTarget, resultWorkerTarget, type OpenWorker } from "./interaction";
 
 export function hasUnsettledWorkers(runtime: ParentRuntime): boolean {
   return runtime.delivery.owner.list().some((worker) =>
@@ -31,6 +31,7 @@ export function registerSubagentHost(pi: ExtensionAPI, options: { agentDir?: str
   let context: ExtensionContext | undefined;
   let current: { parentId: string; runtime: ParentRuntime; ui: ReturnType<typeof createWorkerUI> } | undefined;
   let shuttingDown = false;
+  let unsubscribeCards = () => {};
   let appearance: AgentAppearance = new Map();
 
   const getRuntime = (ctx: ExtensionContext): ParentRuntime => {
@@ -69,7 +70,7 @@ export function registerSubagentHost(pi: ExtensionAPI, options: { agentDir?: str
       const assignment = notice.type === "completion" || notice.type === "storage-failure"
         ? owner.inspect(notice.worker.workerId).assignments.find((item) => item.id === notice.assignment.assignmentId) : undefined;
       const preview = (assignment?.report ?? assignment?.partialReport ?? "").split("\n").slice(0, 30).join("\n").slice(0, 4000);
-      pi.sendMessage({ customType: "minimal-subagents.notice", content: JSON.stringify(notice), details: { preview }, display: true }, { triggerTurn: true, deliverAs: "followUp" });
+      pi.sendMessage({ customType: "minimal-subagents.notice", content: JSON.stringify(notice), details: { preview }, display: !cards.has(workerTarget(notice)) }, { triggerTurn: true, deliverAs: "followUp" });
     }, (error) => { ctx.ui.notify(`Subagent notification failed: ${String(error)}`, "error"); });
     const runtime = new ParentRuntime(delivery, {
       resolve: (name, overrides) => (dependencies.resolve ?? resolveNamedSpecialist)({
@@ -79,8 +80,10 @@ export function registerSubagentHost(pi: ExtensionAPI, options: { agentDir?: str
       messages: () => ctx.sessionManager.buildSessionProjection().messages,
     });
     const historicalObservations = new Map(saved.filter((entry) => entry.observation !== undefined).map((entry) => [entry.worker.id, entry.observation]));
-    const ui = createWorkerUI(ctx, runtime, (id) => driver.observation(id) ?? historicalObservations.get(id), options.widgetRows, appearance);
+    const ui = createWorkerUI(ctx, runtime, (id) => driver.observation(id) ?? historicalObservations.get(id), options.widgetRows, appearance, cards);
     current = { parentId, runtime, ui };
+    unsubscribeCards = owner.subscribe((event) => cards.refresh(event.type === "state" ? event.worker.id : event.type === "question" ? event.question.workerId : event.workerId));
+    cards.refresh();
     dependencies.runtimeChanged?.(runtime);
     return runtime;
   };
@@ -92,8 +95,22 @@ export function registerSubagentHost(pi: ExtensionAPI, options: { agentDir?: str
     }
     void current.ui.open(target.workerId).catch((error: unknown) => context?.ui.notify(`Unable to open worker output: ${String(error)}`, "error"));
   };
-  registerParentTools(pi, getRuntime, () => appearance, openWorker);
-  pi.registerMessageRenderer<{ preview?: string }>("minimal-subagents.notice", (message, options, theme) => renderNotice(message, options.expanded, theme, appearance, openWorker));
+  const cards = registerParentTools(pi, getRuntime, () => appearance, openWorker, (target) => {
+    if (!current || (target.parentSessionId !== undefined && target.parentSessionId !== current.parentId)) return;
+    const worker = current.runtime.delivery.owner.list().find((item) => item.id === target.workerId);
+    if (!worker) return;
+    const assignment = worker.assignments.find((item) => item.id === worker.currentAssignmentId);
+    return { ...workerStatus(worker), ...(assignment ? { prompt: assignment.prompt, report: assignment.report ?? assignment.partialReport ?? "" } : {}) };
+  });
+  pi.registerMessageRenderer<{ preview?: string }>("minimal-subagents.notice", (message, options, theme) => {
+    const target = resultWorkerTarget({ content: typeof message.content === "string" ? [{ type: "text", text: message.content }] : message.content });
+    const component = renderNotice(message, options.expanded, theme, appearance, openWorker);
+    return {
+      render: (width) => cards.has(target) ? [] : component.render(width),
+      invalidate: () => component.invalidate(),
+      handleMouse: (event) => cards.has(target) ? undefined : component.handleMouse?.(event),
+    };
+  });
   pi.registerCommand("subagents", {
     description: "Inspect workers, reports, and transcripts; confirm cancellation",
     async handler(_args, ctx) {
@@ -123,6 +140,8 @@ export function registerSubagentHost(pi: ExtensionAPI, options: { agentDir?: str
     shuttingDown = true;
     const previous = current;
     try {
+      unsubscribeCards();
+      cards.clear();
       previous?.ui.dispose();
       await previous?.runtime.shutdown();
     } catch (error) {

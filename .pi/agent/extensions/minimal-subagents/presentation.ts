@@ -23,12 +23,12 @@ export function terminalText(text: string): string {
 }
 export type DisplayTheme = Pick<import("@earendil-works/pi-coding-agent").Theme, "fg" | "bold">;
 export const plainTheme: DisplayTheme = { fg: (_color, text) => text, bold: (text) => text };
-export function statusGlyph(state: string, theme: DisplayTheme = plainTheme): string {
+export function statusGlyph(state: string, theme: DisplayTheme = plainTheme, activityFrame = 0): string {
   if (state === "completed") return theme.fg("success", "✓");
   if (state === "failed" || state === "cleanup-unknown") return theme.fg("error", "✗");
   if (state === "cancelled" || state === "released") return theme.fg("dim", "■");
   if (state === "waiting-question" || state === "budget-exhausted" || state === "stopping" || state === "releasing") return theme.fg("warning", "!");
-  return theme.fg("accent", state === "queued" ? "◦" : state === "running" ? "◍" : "○");
+  return theme.fg("accent", state === "queued" ? "◦" : state === "running" ? activityFrame % 2 === 0 ? "◍" : "●" : "○");
 }
 export function singleLine(text: string): string { return terminalText(text).replace(/[\n\r\t]+/g, " "); }
 export function elapsed(start: number, end: number): string {

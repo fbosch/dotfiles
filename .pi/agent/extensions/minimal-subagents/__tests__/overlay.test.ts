@@ -185,3 +185,17 @@ test("wheel navigation selects workers without launching or cancelling them", as
   f.overlay.dispose();
   expect(f.overlay.handleMouse?.(event)).toBeUndefined();
 });
+
+test("metadata details expand without changing worker state or losing the summary", async () => {
+  const f = await fixture();
+  f.overlay.inspect(f.first.workerId);
+  for (let index = 0; index < 4; index++) f.overlay.handleInput("\t");
+  expect(f.overlay.render(140).join("\n")).toContain("[Show details]");
+  f.overlay.handleInput(enter);
+  expect(f.overlay.render(140).join("\n")).toContain("Worker ID");
+  expect(f.overlay.render(140).join("\n")).toContain("[Hide details]");
+  f.overlay.handleInput(enter);
+  expect(f.overlay.render(140).join("\n")).toContain("[Show details]");
+  expect(f.owner.inspect(f.first.workerId).status).toBe("running");
+  expect(f.starts()).toBe(2);
+});

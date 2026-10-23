@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { createAssistantMessageEventStream, type AssistantMessage } from "@earendil-works/pi-ai";
 import type { ExtensionContext, ExtensionFactory } from "@earendil-works/pi-coding-agent";
 import { createChildSession } from "../child-session";
-import { PiChildDriver } from "../driver";
+import { PiChildDriver, runtimeModelDetails } from "../driver";
 import { WorkerOwner, type ChildDriverCallbacks, type ChildRunInput, type TranscriptEntry } from "../owner";
 import { processCleanupHealth } from "../health";
 import { Type } from "typebox";
@@ -21,7 +21,7 @@ const model: NonNullable<ExtensionContext["model"]> = {
 };
 
 type Response = Pick<AssistantMessage, "content" | "stopReason">;
-async function fixture(program: (call: number) => Response, extra?: ExtensionFactory) {
+async function fixture(program: (call: number) => Response, extra?: ExtensionFactory, virtual = false) {
   const cwd = await mkdtemp(join(tmpdir(), "pi-driver-"));
   cleanup.push(() => rm(cwd, { recursive: true, force: true }));
   await writeFile(join(cwd, "baseline.ts"), "export default function () {}\n");
@@ -30,11 +30,12 @@ async function fixture(program: (call: number) => Response, extra?: ExtensionFac
   const requests: string[] = [];
   const retained: unknown[] = [];
   const handles: Array<Awaited<ReturnType<typeof createChildSession>>> = [];
-  const driver = new PiChildDriver({ cwd, agentDir: cwd, projectTrusted: false, resolveModel: () => model,
+  const driver = new PiChildDriver({ cwd, agentDir: cwd, projectTrusted: false, resolveModel: () => virtual ? { ...model, api: "pi-virtual", provider: "router", id: "auto", reasoning: true } : model,
     retainUncertain: (_id, resources) => { retained.push(resources); }, shutdownGraceMs: 20,
     create: (options) => createChildSession({ ...options, sdk, protocol: async (pi) => {
       await options.protocol(pi);
       await extra?.(pi);
+      if (virtual) pi.registerVirtualModel({ provider: "router", id: "auto", name: "Auto", thinkingLevels: ["high"], route: (_request, ctx) => ({ model: ctx.modelRegistry.find("fixture", "fixture")!, thinkingLevel: "low" }) });
       pi.registerCommand("tripwire", { description: "Must not run as an assignment", handler: async () => { commandCalls++; } });
       pi.registerProvider("fixture", {
         api: "openai-completions", baseUrl: "https://fixture.invalid", apiKey: "fixture-not-a-real-key",
@@ -56,7 +57,7 @@ async function fixture(program: (call: number) => Response, extra?: ExtensionFac
     } }).then((child) => { handles.push(child); return child; }),
   });
   const input: ChildRunInput = { parentSessionId: "parent", workerId: "worker", assignmentId: "assignment", specialist: "fixture",
-    config: { name: "fixture", description: "Fixture", prompt: "Bounded fixture", model: "fixture/fixture", maxTurns: 3,
+    config: { name: "fixture", description: "Fixture", prompt: "Bounded fixture", model: virtual ? "router/auto" : "fixture/fixture", ...(virtual ? { thinking: "high" as const } : {}), maxTurns: 3,
       tools: ["read"], excludeTools: ["subagent", "mcp__*"], extensions: [join(cwd, "baseline.ts")], skills: [],
     }, prompt: "fixture assignment", turnsAlreadyUsed: 0, turnBudget: 3, wrapUpAtRemaining: 2,
   };
@@ -84,6 +85,22 @@ test("real Pi execution returns the full report and treats slash-command assignm
   expect(f.requests[0]).toContain("/tripwire");
   expect(f.transcript.some((entry) => entry.role === "assistant" && entry.text.includes("FINAL_CAVEAT"))).toBe(true);
   expect(f.driver.observation("worker")?.outputTokens).toBe(2);
+  expect(f.driver.observation("worker")?.resolvedModel).toBe("fixture/fixture");
+  expect(f.driver.observation("worker")?.resolvedThinking).toBe(f.handles[0]!.session.thinkingLevel);
+});
+
+test("virtual model metadata uses the runtime route rather than the alias thinking level", () => {
+  const selected = { ...model, provider: "presets", id: "routine", api: "pi-virtual" };
+  expect(runtimeModelDetails({ model: selected, thinkingLevel: "high", routedModel: { model, thinkingLevel: "low" } })).toEqual({ resolvedModel: "fixture/fixture", resolvedThinking: "low" });
+  expect(runtimeModelDetails({ model: selected, thinkingLevel: "high", routedModel: undefined })).toEqual({ resolvedModel: undefined, resolvedThinking: undefined });
+  expect(runtimeModelDetails({ model: selected, thinkingLevel: "high", routedModel: { model } }).resolvedThinking).toBeUndefined();
+});
+
+test("a real virtual child records the physical response and its clamped thinking level", async () => {
+  const f = await fixture(() => answer("Routed response"), undefined, true);
+  expect(await f.driver.start(f.input, f.callbacks)).toMatchObject({ kind: "completed", report: "Routed response" });
+  expect(f.handles[0]!.session.model?.provider).toBe("router");
+  expect(f.driver.observation("worker")).toMatchObject({ resolvedModel: "fixture/fixture", resolvedThinking: "off" });
 });
 
 test("turn budget stops real repeated tool execution and injects the two-turn warning", async () => {

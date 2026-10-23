@@ -2,7 +2,7 @@ import type { Component, TuiMouseEvent } from "@earendil-works/pi-tui";
 
 export interface WorkerTarget { workerId: string; parentSessionId?: string; }
 export type OpenWorker = (target: WorkerTarget) => void;
-export interface WorkerRenderState { target?: WorkerTarget; }
+export interface WorkerRenderState { target?: WorkerTarget; hasResult?: boolean; }
 
 export function isInspectClick(event: TuiMouseEvent): boolean {
   return event.type === "click" && event.button === "left" && !event.shift && !event.alt && !event.ctrl;

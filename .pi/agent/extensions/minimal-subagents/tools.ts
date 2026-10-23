@@ -3,6 +3,19 @@ import { Type } from "typebox";
 import type { ParentRuntime } from "./parent-runtime";
 import { renderCall, renderResult, type AgentAppearance } from "./rendering";
 import { inspectable, resultWorkerTarget, type OpenWorker, type WorkerRenderState } from "./interaction";
+import { LaunchCards, type WorkerLookup } from "./launch-cards";
+import { Box, Spacer, type Component } from "@earendil-works/pi-tui";
+import type { Theme } from "@earendil-works/pi-coding-agent";
+
+function frame(component: Component, theme: Theme, isError: boolean, slot: "call" | "result", state: WorkerRenderState): Component {
+  if (slot === "result") state.hasResult = true;
+  const box = new Box(1, 0, (line) => theme.bg(isError ? "toolErrorBg" : "toolSuccessBg", line));
+  if (slot === "call") box.addChild(new Spacer(1));
+  box.addChild(component);
+  // Call and result share one padded card; move the bottom padding when the result arrives.
+  box.addChild({ render: () => slot === "result" || !state.hasResult ? [""] : [], invalidate() {} });
+  return box;
+}
 
 const id = Type.String({ minLength: 1 });
 const text = Type.String({ minLength: 1 });
@@ -25,7 +38,8 @@ function result(value: unknown) {
 }
 
 /** Register only in the parent; child capability preflight excludes these names. */
-export function registerParentTools(pi: Pick<ExtensionAPI, "registerTool">, getRuntime: (context: ExtensionContext) => ParentRuntime | Promise<ParentRuntime>, appearance: () => AgentAppearance = () => new Map(), open?: OpenWorker): void {
+export function registerParentTools(pi: Pick<ExtensionAPI, "registerTool">, getRuntime: (context: ExtensionContext) => ParentRuntime | Promise<ParentRuntime>, appearance: () => AgentAppearance = () => new Map(), open?: OpenWorker, lookup?: WorkerLookup): LaunchCards {
+  const cards = new LaunchCards(lookup);
   pi.registerTool({
     name: "subagent", label: "Launch specialist",
     description: "Launch one named specialist. Background is the default; foreground returns its report or blocking question. Optional inherited context contains only parent narrative text. A report is evidence, not verification.",
@@ -34,11 +48,15 @@ export function registerParentTools(pi: Pick<ExtensionAPI, "registerTool">, getR
       maxTurns: Type.Optional(turns), model: Type.Optional(id),
       thinking: Type.Optional(Type.Union((["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const).map((value) => Type.Literal(value)))),
     }),
-    renderCall: (args, theme, context: { state: WorkerRenderState }) => inspectable(renderCall("launch", args, theme, appearance()), () => context.state.target, open),
-    renderResult: (result, options, theme, context: { state: WorkerRenderState }) => {
+    renderShell: "self",
+    renderCall: (args, theme, context: { state: WorkerRenderState; toolCallId: string; invalidate: () => void; isError: boolean }) => {
+      const current = cards.current(context.state.target);
+      return cards.wrap(frame(inspectable(renderCall("launch", { ...args, specialist: current?.specialist ?? args.specialist, prompt: current?.prompt ?? args.prompt }, theme, appearance()), () => context.state.target, open), theme, context.isError, "call", context.state), () => context.state.target, context);
+    },
+    renderResult: (result, options, theme, context: { state: WorkerRenderState; toolCallId: string; invalidate: () => void; isError: boolean }) => {
       const target = resultWorkerTarget(result);
       if (target) context.state.target = target;
-      return renderResult(result, { ...options, compact: true, open, target }, theme, appearance());
+      return cards.wrap(frame(renderResult(cards.project(result, context), { ...options, compact: true, open, target }, theme, appearance()), theme, context.isError, "result", context.state), () => target, context);
     },
     async execute(_call, args, signal, update, context) {
       return result(await (await getRuntime(context)).launch(args, signal, (status) => update?.(result(status))));
@@ -48,8 +66,18 @@ export function registerParentTools(pi: Pick<ExtensionAPI, "registerTool">, getR
     name: "subagent_result", label: "Inspect specialist",
     description: "Inspect parent-owned worker status, retrieve a complete report, read a bounded transcript page, or wait for an assignment. Interrupting or timing out a background wait does not cancel the worker.",
     parameters: Type.Object({ request: inspection }),
-    renderCall: (args, theme) => inspectable(renderCall("inspect", args, theme, appearance()), () => "workerId" in args.request ? { workerId: args.request.workerId } : undefined, open),
-    renderResult: (result, options, theme, context) => renderResult(result, { ...options, open, target: "workerId" in context.args.request ? { workerId: context.args.request.workerId } : undefined }, theme, appearance(), context.args.request.mode === "report"),
+    renderShell: "self",
+    renderCall: (args, theme, context) => {
+      const target = args.request?.workerId ? { workerId: args.request.workerId } : undefined;
+      return cards.wrap(frame(inspectable(renderCall("inspect", args, theme, appearance()), () => target, open), theme, context.isError, "call", context.state), () => target, context, () => !context.state.hasResult || context.state.hideStatusList === true);
+    },
+    renderResult: (result, options, theme, context) => {
+      const target = resultWorkerTarget(result) ?? (context.args.request?.workerId ? { workerId: context.args.request.workerId } : undefined);
+      const list = !context.isError && context.args.request?.mode === "status" && !target ? cards.statusList(result) : undefined;
+      context.state.hideStatusList = list?.hidden ?? false;
+      const projected = list?.result ?? cards.project(result, context, target);
+      return cards.wrap(frame(renderResult(projected, { ...options, open, target }, theme, appearance(), projected === result && context.args.request?.mode === "report"), theme, context.isError, "result", context.state), () => target, context, () => context.state.hideStatusList === true);
+    },
     async execute(_call, args, signal, _update, context) {
       return result(await (await getRuntime(context)).inspect(args.request, signal));
     },
@@ -58,10 +86,18 @@ export function registerParentTools(pi: Pick<ExtensionAPI, "registerTool">, getR
     name: "subagent_control", label: "Control specialist",
     description: "Continue a retained worker, answer its correlated question, steer current work, extend a waiting assignment budget, cancel work, or release an idle session. Cancellation is terminal; a stopping response is not confirmed termination.",
     parameters: Type.Object({ request: control }),
-    renderCall: (args, theme) => inspectable(renderCall("control", args, theme, appearance()), () => ({ workerId: args.request.workerId }), open),
-    renderResult: (result, options, theme) => renderResult(result, options, theme, appearance()),
+    renderShell: "self",
+    renderCall: (args, theme, context) => {
+      const target = args.request?.workerId ? { workerId: args.request.workerId } : undefined;
+      return cards.wrap(frame(inspectable(renderCall("control", args, theme, appearance()), () => target, open), theme, context.isError, "call", context.state), () => target, context, () => !context.state.hasResult);
+    },
+    renderResult: (result, options, theme, context) => {
+      const target = resultWorkerTarget(result) ?? (context.args.request?.workerId ? { workerId: context.args.request.workerId } : undefined);
+      return cards.wrap(frame(renderResult(cards.project(result, context, target), { ...options, open, target }, theme, appearance()), theme, context.isError, "result", context.state), () => target, context);
+    },
     async execute(_call, args, _signal, _update, context) {
       return result(await (await getRuntime(context)).control(args.request));
     },
   });
+  return cards;
 }

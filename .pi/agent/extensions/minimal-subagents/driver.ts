@@ -14,6 +14,8 @@ export interface ChildObservation {
   readonly inputTokens?: number;
   readonly outputTokens?: number;
   readonly cost?: number;
+  readonly resolvedModel?: string | undefined;
+  readonly resolvedThinking?: AgentSession["thinkingLevel"] | undefined;
 }
 
 interface Segment {
@@ -56,6 +58,14 @@ async function confirmWithin<T>(operation: Promise<T>, milliseconds: number): Pr
   }
 }
 
+export function runtimeModelDetails(session: Pick<AgentSession, "model" | "thinkingLevel" | "routedModel">): Pick<ChildObservation, "resolvedModel" | "resolvedThinking"> {
+  const route = session.routedModel;
+  if (route) return { resolvedModel: `${route.model.provider}/${route.model.id}`, resolvedThinking: route.thinkingLevel };
+  // Virtual selections resolve on a successful response; the alias is not a physical model.
+  const selected = session.model;
+  if (!selected || selected.api === "pi-virtual") return { resolvedModel: undefined, resolvedThinking: undefined };
+  return { resolvedModel: `${selected.provider}/${selected.id}`, resolvedThinking: session.thinkingLevel };
+}
 export class PiChildDriver implements ChildDriver {
   private readonly children = new Map<string, LiveChild>();
   private readonly observations = new Map<string, ChildObservation>();
@@ -238,6 +248,7 @@ export class PiChildDriver implements ChildDriver {
           if (message.stopReason !== "error" && message.stopReason !== "aborted") {
             const previous = this.observations.get(workerId);
             this.change(workerId, {
+              ...runtimeModelDetails(session),
               inputTokens: (previous?.inputTokens ?? 0) + message.usage.input,
               outputTokens: (previous?.outputTokens ?? 0) + message.usage.output,
               cost: (previous?.cost ?? 0) + message.usage.cost.total,
@@ -255,7 +266,7 @@ export class PiChildDriver implements ChildDriver {
     if (!child) throw new Error("Child startup has not completed");
     const segment: Segment = { input, callbacks, used: input.turnsAlreadyUsed, exhausted: false, question: false, warn: false, lastReport: "" };
     record.segment = segment;
-    this.change(input.workerId, { activity: "Running", liveText: "" });
+    this.change(input.workerId, { ...runtimeModelDetails(child.session), activity: "Running", liveText: "" });
     record.running = (async (): Promise<ChildExecutionOutcome> => {
       try {
         if (!record.cancelled) await child.session.sendUserMessage(input.prompt, { expandPromptTemplates: false });
@@ -268,7 +279,7 @@ export class PiChildDriver implements ChildDriver {
         return { kind: "failed", turnsUsed: segment.used, error: String(error), partialReport: segment.lastReport };
       } finally {
         delete record.segment;
-        this.change(input.workerId, { endedAt: Date.now(), activity: segment.question ? "Waiting for parent" : "Settled", liveText: "" });
+        this.change(input.workerId, { ...runtimeModelDetails(child.session), endedAt: Date.now(), activity: segment.question ? "Waiting for parent" : "Settled", liveText: "" });
       }
     })();
     return record.running;

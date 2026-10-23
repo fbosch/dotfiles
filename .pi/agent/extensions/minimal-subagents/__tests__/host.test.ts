@@ -7,6 +7,8 @@ import { registerSubagentHost, type HostDependencies } from "../host";
 import { HISTORY_ENTRY, type SavedWorker } from "../history";
 import { processCleanupHealth } from "../health";
 import type { ChildDriver, ChildExecutionOutcome } from "../owner";
+import { TuiAltScreen, stripTerminalSequences } from "@earendil-works/pi-tui";
+import type { ParentRuntime } from "../parent-runtime";
 
 const sdk: typeof import("@earendil-works/pi-coding-agent") = await import(process.env.PI_SUBAGENT_TEST_SDK ?? "@earendil-works/pi-coding-agent");
 const cleanup: Array<() => Promise<void>> = [];
@@ -107,7 +109,7 @@ function controlledDriver(options: { holdClose?: boolean; uncertainClose?: boole
   };
   const health = processCleanupHealth({});
   const dependencies: HostDependencies = { createDriver: () => driver, resolve: async () => saved("fixture").worker.config, health };
-  return { dependencies, health, aborted, releaseClose, starts: () => starts };
+  return { dependencies, health, aborted, releaseClose, starts: () => starts, finish: (id: string, outcome: ChildExecutionOutcome) => runs.get(id)?.(outcome) };
 }
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 
@@ -172,4 +174,38 @@ test("uncertain child cleanup remains a delegation block after native reload", a
   await expect(call(session, "subagent", { specialist: "fixture", prompt: "New task" })).rejects.toThrow("cleanup uncertainty");
   expect(controlled.starts()).toBe(1);
   expect(errors).toEqual([]);
+});
+
+test("completion updates the mounted worker card while retaining a hidden model notification", async () => {
+  sdk.initTheme("dark", false);
+  const controlled = controlledDriver();
+  let runtime: ParentRuntime | undefined;
+  const { session } = await fixture(undefined, { ...controlled.dependencies, runtimeChanged: (value) => { runtime = value; } });
+  const launched = await call(session, "subagent", { specialist: "fixture", prompt: "Task" });
+  const id = workerId(launched);
+  const ui = new TuiAltScreen({
+    columns: 100, rows: 30, kittyProtocolActive: false,
+    start() {}, stop() {}, async drainInput() {}, write() {}, moveBy() {}, hideCursor() {}, showCursor() {},
+    clearLine() {}, clearFromCursor() {}, clearScreen() {}, setTitle() {}, setProgress() {},
+  }, false);
+  const card = new sdk.ToolExecutionComponent("subagent", "launch", { specialist: "fixture", prompt: "Task" }, {}, session.extensionRunner.getToolDefinition("subagent"), ui, "/tmp");
+  card.updateResult({ ...launched, isError: false });
+  expect(card.render(100).map(stripTerminalSequences).join("\n")).toContain("running");
+  await tick();
+  if (!runtime) throw new Error("Missing runtime");
+  const done = runtime.delivery.owner.wait(id, runtime.delivery.owner.inspect(id).currentAssignmentId);
+  controlled.finish(id, { kind: "completed", turnsUsed: 1, report: "CARD_OK" });
+  await done;
+  await tick();
+  const lines = card.render(100).map(stripTerminalSequences).join("\n");
+  expect(lines).toContain("completed");
+  expect(lines).toContain("CARD_OK");
+  const notices = session.sessionManager.getEntries().filter((entry) => entry.type === "custom_message" && entry.customType === "minimal-subagents.notice");
+  expect(notices).toHaveLength(1);
+  const notice = notices[0];
+  if (notice?.type !== "custom_message") throw new Error("Missing completion notification");
+  expect(notice.display).toBe(false);
+  expect(notice.content).toContain(id);
+  expect(notice.content).toContain('"outcome":"completed"');
+  expect(session.sessionManager.buildSessionProjection().messages.some((message) => message.role === "custom" && message.customType === "minimal-subagents.notice")).toBe(true);
 });
