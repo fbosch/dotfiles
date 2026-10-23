@@ -22,7 +22,7 @@ export function createWorkerUI(ctx: ExtensionContext, runtime: ParentRuntime, ob
       widget?.dispose();
       redrawWidget = () => tui.requestRender();
       widget = createWorkerWidget(() => ({
-        workers: runtime.delivery.owner.list(), observation, terminalRows: tui.terminal.rows,
+        workers: runtime.delivery.owner.listStatus(), observation, terminalRows: tui.terminal.rows,
         maxRows, hiddenWorkers: runtime.delivery.foregroundWorkerIds(), theme,
         agentName: (name) => agentName(name, theme, appearance),
       }), theme, (workerId) => {

@@ -13,7 +13,7 @@ import { renderNotice, type AgentAppearance } from "./rendering";
 import { workerTarget, resultWorkerTarget, type OpenWorker } from "./interaction";
 
 export function hasUnsettledWorkers(runtime: ParentRuntime): boolean {
-  return runtime.delivery.owner.list().some((worker) =>
+  return runtime.delivery.owner.listStatus().some((worker) =>
     worker.status === "queued" || worker.status === "running" || worker.status === "waiting-question"
     || worker.status === "stopping" || worker.status === "cleanup-unknown" || worker.status === "releasing");
 }
@@ -108,7 +108,7 @@ export function registerSubagentHost(pi: ExtensionAPI, options: { agentDir?: str
   };
   const cards = registerParentTools(pi, getRuntime, () => appearance, openWorker, (target) => {
     if (!current || (target.parentSessionId !== undefined && target.parentSessionId !== current.parentId)) return;
-    const worker = current.runtime.delivery.owner.list().find((item) => item.id === target.workerId);
+    const worker = current.runtime.delivery.owner.findStatus(target.workerId);
     if (!worker) return;
     const assignment = worker.assignments.find((item) => item.id === worker.currentAssignmentId);
     return { ...workerStatus(worker), ...(assignment ? { prompt: assignment.prompt, report: assignment.report ?? assignment.partialReport ?? "" } : {}) };
@@ -130,12 +130,21 @@ export function registerSubagentHost(pi: ExtensionAPI, options: { agentDir?: str
         || !("updateDeliveryId" in message.details) || typeof message.details.updateDeliveryId !== "string") return message;
       const pending = pendingUpdateDeliveries.get(message.details.updateDeliveryId);
       if (!pending) return message;
-      pendingUpdateDeliveries.delete(message.details.updateDeliveryId);
       const active = current;
-      if (!active || active.parentId !== pending.parentId) return message;
+      if (!active || active.parentId !== pending.parentId) {
+        pendingUpdateDeliveries.delete(message.details.updateDeliveryId);
+        return message;
+      }
       const worker = active.runtime.delivery.owner.inspect(pending.notice.workerId);
       const assignment = worker.assignments.find((item) => item.id === pending.notice.assignmentId);
-      const state = assignment?.outcome ?? pending.notice.state;
+      if (!assignment) {
+        pendingUpdateDeliveries.delete(message.details.updateDeliveryId);
+        return message;
+      }
+      if (assignment.outcome === "queued" || assignment.outcome === "running"
+        || assignment.outcome === "waiting-question" || assignment.outcome === "stopping") return message;
+      pendingUpdateDeliveries.delete(message.details.updateDeliveryId);
+      const state = assignment.outcome;
       if (state === pending.notice.state) return message;
       changed = true;
       return { ...message, content: JSON.stringify({ ...pending.notice, state }) };
@@ -170,7 +179,7 @@ export function registerSubagentHost(pi: ExtensionAPI, options: { agentDir?: str
   pi.on("session_shutdown", async (event, shutdownContext) => {
     shuttingDown = true;
     const previous = current;
-    const interrupted = previous?.runtime.delivery.owner.list().filter((worker) =>
+    const interrupted = previous?.runtime.delivery.owner.listStatus().filter((worker) =>
       worker.status === "queued" || worker.status === "running" || worker.status === "waiting-question"
       || worker.status === "stopping" || worker.status === "cleanup-unknown" || worker.status === "releasing").length ?? 0;
     let warningFailure: { error: unknown } | undefined;

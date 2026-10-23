@@ -33,6 +33,7 @@ async function fixture() {
 
 test("full reports and transcripts survive parent-file restoration without executable workers", async () => {
   const f = await fixture();
+  expect(HISTORY_ENTRY).toBe("minimal-subagents.worker.v1");
   const live = owner(f.persistence);
   const launched = await live.launch({ config, prompt: "Investigate" });
   await live.wait(launched.workerId, launched.assignmentId);
@@ -58,6 +59,59 @@ test("failed evidence writes leave successful reports available in memory", asyn
   expect(assignment?.outcome).toBe("completed");
   expect(assignment?.persistence).toBe("failed");
   expect(assignment?.persistenceError).toContain("disk full");
+  expect(live.report(launched.workerId)).toBe(report);
+});
+
+test("a fresh parent without a session file cannot claim evidence was saved", async () => {
+  let appendCalls = 0;
+  const persistence = parentHistory({
+    parentSessionId: "parent",
+    currentParentId: () => "parent",
+    parentFile: () => undefined,
+    append() { appendCalls++; },
+    observation: () => undefined,
+  });
+  const live = owner(persistence);
+  const launched = await live.launch({ config, prompt: "Investigate" });
+  await live.wait(launched.workerId, launched.assignmentId);
+
+  await live.shutdown();
+
+  const assignment = live.inspect(launched.workerId).assignments[0];
+  expect(assignment?.outcome).toBe("completed");
+  expect(assignment?.persistence).toBe("failed");
+  expect(assignment?.persistenceError).toContain("Parent session evidence is not persisted");
+  expect(appendCalls).toBe(0);
+  expect(live.report(launched.workerId)).toBe(report);
+});
+
+test("a later saved-marker append failure restores as failed, not saved", async () => {
+  const f = await fixture();
+  let appendCalls = 0;
+  const persistence = parentHistory({
+    parentSessionId: "parent",
+    currentParentId: () => "parent",
+    parentFile: () => f.file,
+    append(customType, data) {
+      appendCalls++;
+      if (appendCalls === 2) throw new Error("saved marker append failed");
+      appendFileSync(f.file, JSON.stringify({ type: "custom", customType, data }) + "\n");
+    },
+    observation: () => undefined,
+  });
+  const live = owner(persistence);
+  const launched = await live.launch({ config, prompt: "Investigate" });
+  await live.wait(launched.workerId, launched.assignmentId);
+
+  await live.shutdown();
+
+  const entries: unknown[] = (await readFile(f.file, "utf8")).trim().split("\n").map((line) => JSON.parse(line));
+  const restored = restoreHistory(entries, "parent");
+  const assignment = restored[0]?.worker.assignments[0];
+  expect(appendCalls).toBe(3);
+  expect(assignment?.outcome).toBe("completed");
+  expect(assignment?.persistence).toBe("failed");
+  expect(assignment?.persistenceError).toContain("saved marker append failed");
   expect(live.report(launched.workerId)).toBe(report);
 });
 

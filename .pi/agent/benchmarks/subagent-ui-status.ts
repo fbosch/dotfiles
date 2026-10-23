@@ -220,7 +220,7 @@ async function makeCohort(name: "small" | "heavy"): Promise<Cohort> {
     getSessionFile: () => scriptPath,
     buildSessionProjection: () => ({ messages: [] as readonly unknown[] }),
   };
-  const context = {
+  const contextFields = {
     cwd: repoRoot,
     mode: "tui",
     hasUI: true,
@@ -233,17 +233,21 @@ async function makeCohort(name: "small" | "heavy"): Promise<Cohort> {
       },
       notify() {},
     },
-  } as unknown as ExtensionContext;
+  };
+  // SAFETY: This partial test double supplies every ExtensionContext member used by the benchmark host.
+  const context = contextFields as unknown as ExtensionContext;
   const registered = new Map<string, Parameters<ExtensionAPI["registerTool"]>[0]>();
   const hooks = new Map<string, (event: unknown, context: ExtensionContext) => unknown>();
-  const pi = {
+  const piFields = {
     registerTool(tool: Parameters<ExtensionAPI["registerTool"]>[0]) { registered.set(tool.name, tool); },
     registerMessageRenderer() {},
     registerCommand() {},
     on(event: string, handler: (event: unknown, context: ExtensionContext) => unknown) { hooks.set(event, handler); },
     appendEntry(customType: string, data: unknown) { sessionEntries.push({ type: "custom", customType, data }); },
     sendMessage() {},
-  } as unknown as ExtensionAPI;
+  };
+  // SAFETY: This partial test double supplies every ExtensionAPI member used by the benchmark host.
+  const pi = piFields as unknown as ExtensionAPI;
   let runtime: ParentRuntime | undefined;
   const dependencies: HostDependencies = {
     createDriver: () => driver,
@@ -270,12 +274,14 @@ async function makeCohort(name: "small" | "heavy"): Promise<Cohort> {
   const hostRuntime = getRuntimeFromHost();
   for (let index = 0; index < runningWorkers; index++) {
     const launch = await hostRuntime.launch({ specialist: config.name, prompt: `Running assignment ${index + 1}` });
+    if (launch.kind !== "launched") throw new Error("Expected a background benchmark launch");
     const workerId = launch.workerId;
     activeIds.push(workerId);
     let currentAssignmentId = launch.assignmentId;
     for (let assignmentIndex = 1; assignmentIndex < assignmentCount; assignmentIndex++) {
       await hostRuntime.delivery.owner.wait(workerId, currentAssignmentId);
       const next = await hostRuntime.control({ action: "continue", workerId, prompt: `Continuation ${assignmentIndex + 1}` });
+      if (!("kind" in next) || next.kind !== "launched") throw new Error("Expected a continuation benchmark launch");
       currentAssignmentId = next.assignmentId;
     }
     const staleReceipt = {
@@ -286,9 +292,13 @@ async function makeCohort(name: "small" | "heavy"): Promise<Cohort> {
         assignments: launch.worker.assignments.map((assignment) => ({ ...assignment, outcome: "queued" })),
       },
     };
-    const result = { content: [{ type: "text", text: JSON.stringify(staleReceipt) }], isError: false };
+    const result = { content: [{ type: "text" as const, text: JSON.stringify(staleReceipt) }], details: undefined, isError: false };
     const state: WorkerRenderState = {};
-    const renderContext = { state, toolCallId: `benchmark-card-${index}`, invalidate() {}, isError: false };
+    const renderContext = {
+      args: { specialist: config.name, prompt: `Running assignment ${index + 1}` },
+      state, toolCallId: `benchmark-card-${index}`, invalidate() {}, lastComponent: undefined, cwd: repoRoot,
+      executionStarted: true, argsComplete: true, isPartial: false, expanded: false, showImages: false, isError: false,
+    };
     cardRenders.push(() => {
       const component = launchTool.renderResult!(result, { expanded: false, isPartial: false }, theme, renderContext);
       return visibleLines(component);
@@ -405,16 +415,18 @@ async function main(): Promise<void> {
   if (await Bun.file(outputPath).exists()) throw new Error(`Refusing to overwrite existing artifact: ${relative(repoRoot, outputPath)}`);
 
   initTheme("dark", false);
-  const cohorts = [await makeCohort("small"), await makeCohort("heavy")];
   const originalSetInterval = globalThis.setInterval;
   const originalClearInterval = globalThis.clearInterval;
   let fakeTimerId = 0;
-  // Active-row animation is outside this render-cost target; suppress timer callbacks for repeatable frames.
-  globalThis.setInterval = (() => ++fakeTimerId as unknown as ReturnType<typeof setInterval>) as typeof globalThis.setInterval;
-  globalThis.clearInterval = (() => {}) as typeof globalThis.clearInterval;
+  const cohorts: Awaited<ReturnType<typeof makeCohort>>[] = [];
   const warmup: Record<string, BatchSample> = {};
   const samples: Record<string, BatchSample[]> = { small: [], heavy: [] };
   try {
+    // Install stubs before widgets are created so real animation intervals cannot affect samples or keep the process alive.
+    Object.defineProperty(globalThis, "setInterval", { configurable: true, writable: true, value: () => ++fakeTimerId });
+    Object.defineProperty(globalThis, "clearInterval", { configurable: true, writable: true, value: () => {} });
+    cohorts.push(await makeCohort("small"));
+    cohorts.push(await makeCohort("heavy"));
     for (const cohort of cohorts) warmup[cohort.name] = measureBatch(cohort, 0);
     for (let batch = 1; batch <= measuredBatches; batch++) {
       const order = batch % 2 === 1 ? cohorts : [...cohorts].reverse();
@@ -435,6 +447,9 @@ async function main(): Promise<void> {
   const harnessHash = sha256(await readFile(scriptPath));
   const results = Object.fromEntries(cohorts.map((cohort) => [cohort.name, summarize(samples[cohort.name]!)]));
   const unstable = Object.values(results).some((result) => result.stability === "unstable");
+  const verdict = unstable
+    ? `${phase} captured; sampling stability guard exceeded`
+    : phase === "baseline" ? "baseline captured; candidate not run" : "candidate captured; compare against baseline";
   const artifact = {
     schemaVersion: 1,
     benchmark: "minimal-subagents-ui-status",
@@ -495,7 +510,7 @@ async function main(): Promise<void> {
     },
     warmup,
     results,
-    verdict: unstable ? "baseline captured; sampling stability guard exceeded" : "baseline captured; candidate not run",
+    verdict,
   };
   await Bun.write(outputPath, `${JSON.stringify(artifact, null, 2)}\n`);
   console.log(JSON.stringify({

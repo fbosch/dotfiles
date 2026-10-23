@@ -1,7 +1,7 @@
 import { stripVTControlCharacters } from "node:util";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import type { ChildObservation } from "./driver";
-import type { WorkerSnapshot } from "./owner";
+import type { WorkerSnapshot, WorkerStatusSnapshot } from "./owner";
 
 /** Tool output is untrusted terminal content, including when restored from history. */
 export function terminalText(text: string): string {
@@ -36,7 +36,7 @@ export function elapsed(start: number, end: number): string {
   return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s`;
 }
 
-function priority(worker: WorkerSnapshot): number {
+function priority(worker: WorkerStatusSnapshot): number {
   switch (worker.status) {
     case "waiting-question": return 0;
     case "running": return 1;
@@ -51,7 +51,7 @@ export function cancellable(worker: WorkerSnapshot): boolean {
 }
 
 export function widgetLines(options: {
-  workers: readonly WorkerSnapshot[];
+  workers: readonly WorkerStatusSnapshot[];
   observation: (id: string) => ChildObservation | undefined;
   width: number;
   terminalRows: number;

@@ -1,0 +1,201 @@
+{
+  "schemaVersion": 1,
+  "benchmark": "minimal-subagents-ui-status",
+  "phase": "baseline",
+  "capturedAt": "2026-10-23T14:48:04.957Z",
+  "command": "bun run .pi/agent/benchmarks/subagent-ui-status.ts --phase baseline --output ../openspec/changes/pi-minimal-subagents/references/ui-status-baseline-2026-10-23-rerun.json",
+  "identity": {
+    "revision": "b06f201638b13d27e7ee65e8aa72032e065813a5",
+    "workingTreeDirty": true,
+    "workingTreeStatus": " M .pi/agent/benchmarks/subagent-ui-status.ts\n M .pi/agent/extensions/subagents/__tests__/history.test.ts\n M .pi/agent/extensions/subagents/__tests__/host.test.ts\n M .pi/agent/extensions/subagents/host.ts\n?? openspec/changes/pi-minimal-subagents/references/ui-status-baseline-2026-10-23.json",
+    "sourceSha256": {
+      ".pi/agent/extensions/subagents/owner.ts": "bdf4d5d3976eb7a1f3f11a595eca964bafe54fa30f61009eb0b753b573024e68",
+      ".pi/agent/extensions/subagents/host.ts": "d9f58903fe48c21e8acdaba7cde136152f8054d1537a9387fa8735667918d8d7",
+      ".pi/agent/extensions/subagents/ui.ts": "0972dbd2d8869f6e756e408c5597876a51d4e55a1b5aed3724dea4b5aa8efd7f",
+      ".pi/agent/extensions/subagents/widget.ts": "054e6fd425beff58aa47f81de426287b6e43a994593085534e1247aaee20082f",
+      ".pi/agent/extensions/subagents/presentation.ts": "b4666e66a4bef128e65e71de42e0d65ca754e69397231fcd87f001d79954be64",
+      ".pi/agent/extensions/subagents/tools.ts": "3bd7a5466501783989f1e4102ea3ec26e9fc1339b52077a8fc4a6371664432ea",
+      ".pi/agent/extensions/subagents/launch-cards.ts": "634d555a8c4891ff3ca3965ae63b43f91d904703e2a392e30dc645d6db3e65c7",
+      ".pi/agent/extensions/subagents/rendering.ts": "1f77cf48d5fde75ebcefbcda07da625675779b85d3f98a88de94061d0f435b52",
+      ".pi/agent/extensions/subagents/delivery.ts": "38e99916856f2d9fcc67cfe2887d53f8e20ed262cf461b97c8614dbd7fbe2fe9",
+      ".pi/agent/extensions/subagents/interaction.ts": "701b8830a45db2672127da7fc422fdc2bd1526724df8153a09c60eab819c0d12",
+      ".pi/agent/extensions/subagents/specialist.ts": "04177eb808cb6cb16934983a6d9a9b5dc69ac0ce32c00cc435387a4a253c0587",
+      ".pi/agent/extensions/subagents/child-session.ts": "f37c3d38cc74fe17999c3c468e1002b94890dd4ba4fd86655ce88d4fa60babd9"
+    },
+    "harnessSha256": "12dc62b9b8d309ef6f589bae1bdc2c06bc113638a0d3cee973ab3cd78711515e"
+  },
+  "environment": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "operatingSystemRelease": "27.0.0",
+    "cpuModel": "Apple M4 Pro",
+    "cpuCount": 14,
+    "bun": "1.4.2",
+    "nodeCompatibilityVersion": "v26.3.0",
+    "piCodingAgentSdk": "0.99.1"
+  },
+  "method": {
+    "metric": "monotonic wall-clock milliseconds per frame",
+    "framesPerBatch": 20,
+    "warmupBatches": 1,
+    "measuredBatches": 7,
+    "interleaving": "alternate small/heavy batch order across the seven measured rounds",
+    "setupTimed": false,
+    "animationTimers": "suppressed; active-row timer callbacks are outside the render-cost target",
+    "instabilityRule": "unstable if median absolute deviation / median exceeds 0.25"
+  },
+  "workload": {
+    "small": {
+      "workers": 5,
+      "assignmentsPerWorker": 1,
+      "transcriptEntriesPerAssignment": 20
+    },
+    "heavy": {
+      "workers": 40,
+      "assignmentsPerWorker": 3,
+      "transcriptEntriesPerAssignment": 100
+    },
+    "runningCardLookupsPerFrame": 4,
+    "widgetRendersPerFrame": 1,
+    "remainingWorkerState": "historical",
+    "providerOrNetworkWork": false,
+    "transcriptEntryText": "short deterministic synthetic role/text/timestamp records"
+  },
+  "correctness": {
+    "checks": [
+      "owner contains the predetermined worker and assignment counts",
+      "four current workers are running and all others are historical",
+      "every assignment has the predetermined transcript-entry count",
+      "registered host card renderers project live running status over a stale queued receipt",
+      "registered host widget renderer includes each running worker",
+      "each timed frame returns non-empty registered card and widget output and consumes a checksum"
+    ],
+    "passed": true
+  },
+  "acceptanceCriterion": {
+    "heavyMedianReduction": "at least 20% and at least 0.5 ms/frame",
+    "smallCaseRegression": "no more than 0.1 ms/frame",
+    "correctness": "unchanged"
+  },
+  "warmup": {
+    "small": {
+      "batch": 0,
+      "elapsedMs": 24.32370800000001,
+      "msPerFrame": 1.2161854000000005,
+      "checksum": 3815309140
+    },
+    "heavy": {
+      "batch": 0,
+      "elapsedMs": 186.52595800000006,
+      "msPerFrame": 9.326297900000004,
+      "checksum": 3815309140
+    }
+  },
+  "results": {
+    "small": {
+      "samples": [
+        {
+          "batch": 1,
+          "elapsedMs": 9.939624999999978,
+          "msPerFrame": 0.49698124999999893,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 2,
+          "elapsedMs": 10.22829200000001,
+          "msPerFrame": 0.5114146000000005,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 3,
+          "elapsedMs": 6.78058400000009,
+          "msPerFrame": 0.33902920000000447,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 4,
+          "elapsedMs": 6.378500000000031,
+          "msPerFrame": 0.31892500000000157,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 5,
+          "elapsedMs": 7.44404099999997,
+          "msPerFrame": 0.3722020499999985,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 6,
+          "elapsedMs": 6.27416600000015,
+          "msPerFrame": 0.3137083000000075,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 7,
+          "elapsedMs": 6.048624999999902,
+          "msPerFrame": 0.3024312499999951,
+          "checksum": 3815309140
+        }
+      ],
+      "medianMsPerFrame": 0.33902920000000447,
+      "minMsPerFrame": 0.3024312499999951,
+      "maxMsPerFrame": 0.5114146000000005,
+      "medianAbsoluteDeviationMsPerFrame": 0.033172849999994036,
+      "madFractionOfMedian": 0.09784658666567245,
+      "stability": "within-budget"
+    },
+    "heavy": {
+      "samples": [
+        {
+          "batch": 1,
+          "elapsedMs": 149.09645799999998,
+          "msPerFrame": 7.454822899999999,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 2,
+          "elapsedMs": 130.8281249999999,
+          "msPerFrame": 6.541406249999994,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 3,
+          "elapsedMs": 127.37883299999999,
+          "msPerFrame": 6.368941649999999,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 4,
+          "elapsedMs": 126.59525000000008,
+          "msPerFrame": 6.329762500000004,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 5,
+          "elapsedMs": 126.5966249999999,
+          "msPerFrame": 6.329831249999995,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 6,
+          "elapsedMs": 126.10529100000008,
+          "msPerFrame": 6.305264550000004,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 7,
+          "elapsedMs": 127.85583300000008,
+          "msPerFrame": 6.392791650000004,
+          "checksum": 3815309140
+        }
+      ],
+      "medianMsPerFrame": 6.368941649999999,
+      "minMsPerFrame": 6.305264550000004,
+      "maxMsPerFrame": 7.454822899999999,
+      "medianAbsoluteDeviationMsPerFrame": 0.03917914999999539,
+      "madFractionOfMedian": 0.006151595061323163,
+      "stability": "within-budget"
+    }
+  },
+  "verdict": "baseline captured; candidate not run"
+}

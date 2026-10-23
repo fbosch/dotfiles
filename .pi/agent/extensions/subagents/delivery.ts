@@ -1,6 +1,6 @@
-import { WorkerOwner, type AssignmentSnapshot, type LaunchRequest, type OwnerEvent, type WaitOptions, type WaitResult, type WorkerSnapshot } from "./owner";
+import { WorkerOwner, type AssignmentSnapshot, type LaunchRequest, type OwnerEvent, type WaitOptions, type WaitResult, type WorkerSnapshot, type WorkerStatusSnapshot } from "./owner";
 
-function assignmentStatus(assignment: AssignmentSnapshot) {
+function assignmentStatus(assignment: Omit<AssignmentSnapshot, "transcript">) {
   return {
     assignmentId: assignment.id, outcome: assignment.outcome, turnsUsed: assignment.turnsUsed,
     maxTurns: assignment.maxTurns, remainingTurns: assignment.remainingTurns, persistence: assignment.persistence,
@@ -10,7 +10,7 @@ function assignmentStatus(assignment: AssignmentSnapshot) {
 }
 
 /** Ordinary status excludes configuration prompts, reports, and investigation transcripts. */
-export function workerStatus(worker: WorkerSnapshot) {
+export function workerStatus(worker: WorkerStatusSnapshot) {
   return {
     parentSessionId: worker.parentSessionId, workerId: worker.id, specialist: worker.specialist,
     state: worker.status, liveSession: worker.liveSession, currentAssignmentId: worker.currentAssignmentId,

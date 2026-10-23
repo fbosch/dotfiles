@@ -50,6 +50,12 @@ export interface WorkerSnapshot {
   readonly createdAt: number;
 }
 
+/** Lightweight UI/status projection; full evidence remains available through inspect() and list(). */
+export type WorkerStatusSnapshot = Omit<WorkerSnapshot, "config" | "assignments"> & {
+  readonly config: Pick<ResolvedSpecialist, "model">;
+  readonly assignments: readonly Omit<AssignmentSnapshot, "transcript">[];
+};
+
 export interface PersistedEvidence {
   /** Complete detached state needed to reconstruct owner-scoped history without credentials. */
   readonly worker: WorkerSnapshot;
@@ -261,7 +267,7 @@ function freezeConfig(config: ResolvedSpecialist): ResolvedSpecialist {
   });
 }
 
-function freezeAssignment(assignment: MutableAssignment): AssignmentSnapshot {
+function freezeAssignmentStatus(assignment: MutableAssignment): Omit<AssignmentSnapshot, "transcript"> {
   return Object.freeze({
     id: assignment.id,
     prompt: assignment.prompt,
@@ -274,6 +280,12 @@ function freezeAssignment(assignment: MutableAssignment): AssignmentSnapshot {
     ...(assignment.error === undefined ? {} : { error: assignment.error }),
     persistence: assignment.persistence,
     ...(assignment.persistenceError === undefined ? {} : { persistenceError: assignment.persistenceError }),
+  });
+}
+
+function freezeAssignment(assignment: MutableAssignment): AssignmentSnapshot {
+  return Object.freeze({
+    ...freezeAssignmentStatus(assignment),
     transcript: Object.freeze(assignment.transcript.map((entry) => Object.freeze({ ...entry }))),
   });
 }
@@ -343,6 +355,15 @@ export class WorkerOwner {
 
   list(): WorkerSnapshot[] {
     return [...this.workers.values()].map((worker) => this.snapshot(worker));
+  }
+
+  listStatus(): WorkerStatusSnapshot[] {
+    return [...this.workers.values()].map((worker) => this.statusSnapshot(worker));
+  }
+
+  findStatus(workerId: WorkerId): WorkerStatusSnapshot | undefined {
+    const worker = this.workers.get(workerId);
+    return worker?.parentSessionId === this.parentSessionId ? this.statusSnapshot(worker) : undefined;
   }
 
   inspect(workerId: WorkerId): WorkerSnapshot {
@@ -659,6 +680,21 @@ export class WorkerOwner {
     const assignment = worker.assignments.get(assignmentId);
     if (!assignment) throw new Error("Assignment is not owned by this worker");
     return assignment;
+  }
+
+  private statusSnapshot(worker: MutableWorker): WorkerStatusSnapshot {
+    return Object.freeze({
+      parentSessionId: worker.parentSessionId,
+      id: worker.id,
+      specialist: worker.specialist,
+      config: Object.freeze({ model: worker.config.model }),
+      status: worker.status,
+      liveSession: worker.liveSession,
+      currentAssignmentId: worker.currentAssignmentId,
+      ...(worker.pendingQuestion === undefined ? {} : { pendingQuestion: Object.freeze({ ...worker.pendingQuestion }) }),
+      assignments: Object.freeze([...worker.assignments.values()].map(freezeAssignmentStatus)),
+      createdAt: worker.createdAt,
+    });
   }
 
   private snapshot(worker: MutableWorker): WorkerSnapshot {

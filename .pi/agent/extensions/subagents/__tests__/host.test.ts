@@ -126,6 +126,13 @@ function workerId(result: Awaited<ReturnType<typeof call>>): string {
   return parsed.workerId;
 }
 
+function assignmentId(result: Awaited<ReturnType<typeof call>>): string {
+  const block = result.content.find((item) => item.type === "text");
+  const parsed: unknown = block?.type === "text" ? JSON.parse(block.text) : undefined;
+  if (typeof parsed !== "object" || parsed === null || !("assignmentId" in parsed) || typeof parsed.assignmentId !== "string") throw new Error("No worker assignment ID");
+  return parsed.assignmentId;
+}
+
 test("declining a native switch preserves active work; confirmation defers teardown until actual shutdown", async () => {
   const controlled = controlledDriver();
   const { session, errors } = await fixture(undefined, controlled.dependencies);
@@ -225,11 +232,12 @@ test("completion updates the mounted worker card while retaining a hidden model 
 test("a delayed worker update reflects completion at model delivery without losing attribution or text", async () => {
   const controlled = controlledDriver();
   const { session } = await fixture(undefined, controlled.dependencies);
-  const id = workerId(await call(session, "subagent", { specialist: "fixture", prompt: "Task" }));
+  const launched = await call(session, "subagent", { specialist: "fixture", prompt: "Task" });
+  const id = workerId(launched);
+  const assignment = assignmentId(launched);
   await tick();
   controlled.update(id, "FIRST_MATERIAL_FINDING");
   controlled.update(id, "SECOND_MATERIAL_FINDING");
-  controlled.finish(id, { kind: "completed", turnsUsed: 1, report: "DONE" });
   await tick();
 
   const entries = session.sessionManager.getEntries().filter((entry) =>
@@ -240,14 +248,21 @@ test("a delayed worker update reflects completion at model delivery without losi
     if (entry.type !== "custom_message") throw new Error("Expected a custom update message");
     return { role: "custom" as const, customType: entry.customType, content: entry.content, display: entry.display, details: entry.details, timestamp: 0 };
   });
-  const delivered = await session.extensionRunner.emitContext(pending);
+  const early = await session.extensionRunner.emitContext(pending);
+  const earlyText = early.flatMap((message) => message.role === "custom" && typeof message.content === "string" ? [message.content] : []).join("\n");
+  expect(earlyText).toContain('"state":"running"');
 
-  expect(JSON.stringify(delivered)).toContain('"state":"completed"');
-  expect(JSON.stringify(delivered)).toContain('"workerId":"' + id + '"');
-  expect(JSON.stringify(delivered)).toContain('"assignmentId":');
-  expect(JSON.stringify(delivered)).toContain("FIRST_MATERIAL_FINDING");
-  expect(JSON.stringify(delivered)).toContain("SECOND_MATERIAL_FINDING");
-  expect(JSON.stringify(entries.map((entry) => entry.type === "custom_message" ? entry.content : "")).toLowerCase()).toContain('"state":"running"');
+  controlled.finish(id, { kind: "completed", turnsUsed: 1, report: "DONE" });
+  await call(session, "subagent_result", { request: { mode: "wait", workerId: id, assignmentId: assignment } });
+  const delivered = await session.extensionRunner.emitContext(pending);
+  const deliveredText = delivered.flatMap((message) => message.role === "custom" && typeof message.content === "string" ? [message.content] : []).join("\n");
+
+  expect(deliveredText).toContain('"state":"completed"');
+  expect(deliveredText).toContain('"workerId":"' + id + '"');
+  expect(deliveredText).toContain('"assignmentId":');
+  expect(deliveredText).toContain("FIRST_MATERIAL_FINDING");
+  expect(deliveredText).toContain("SECOND_MATERIAL_FINDING");
+  expect(entries.map((entry) => entry.type === "custom_message" ? entry.content : "").join("\n").toLowerCase()).toContain('"state":"running"');
 });
 
 test("reload still stops workers and restores history when its warning cannot be displayed", async () => {

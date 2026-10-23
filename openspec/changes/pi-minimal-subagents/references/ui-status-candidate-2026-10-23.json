@@ -1,0 +1,208 @@
+{
+  "schemaVersion": 1,
+  "benchmark": "minimal-subagents-ui-status",
+  "phase": "candidate",
+  "capturedAt": "2026-10-23T14:56:06.736Z",
+  "command": "bun run .pi/agent/benchmarks/subagent-ui-status.ts --phase candidate --output openspec/changes/pi-minimal-subagents/references/ui-status-candidate-2026-10-23.json",
+  "identity": {
+    "revision": "b06f201638b13d27e7ee65e8aa72032e065813a5",
+    "workingTreeDirty": true,
+    "workingTreeStatus": " M .pi/agent/benchmarks/subagent-ui-status.ts\n M .pi/agent/extensions/subagents/__tests__/history.test.ts\n M .pi/agent/extensions/subagents/__tests__/host.test.ts\n M .pi/agent/extensions/subagents/__tests__/owner.test.ts\n M .pi/agent/extensions/subagents/delivery.ts\n M .pi/agent/extensions/subagents/host.ts\n M .pi/agent/extensions/subagents/owner.ts\n M .pi/agent/extensions/subagents/presentation.ts\n M .pi/agent/extensions/subagents/ui.ts\n?? openspec/changes/pi-minimal-subagents/references/ui-status-baseline-2026-10-23-rerun.json\n?? openspec/changes/pi-minimal-subagents/references/ui-status-baseline-2026-10-23.json",
+    "sourceSha256": {
+      ".pi/agent/extensions/subagents/owner.ts": "c9cca71188e400660ffc24cc7bf967bd6ceec2b6eced6cf978a02f81996ed0c1",
+      ".pi/agent/extensions/subagents/host.ts": "3c56d434aac1d24b8ce2de67951f01ecf98f2ce0085601d85e12ac5bc4e1a8dd",
+      ".pi/agent/extensions/subagents/ui.ts": "82c9f7cde3b3a4d849ad22631e484ba305053d2aed053fa70bf3b42506a4388a",
+      ".pi/agent/extensions/subagents/widget.ts": "054e6fd425beff58aa47f81de426287b6e43a994593085534e1247aaee20082f",
+      ".pi/agent/extensions/subagents/presentation.ts": "8d5514b8bd3cb92673a6a058b4b4fb04704e99e4abdac6b12b5f0c2044638d63",
+      ".pi/agent/extensions/subagents/tools.ts": "3bd7a5466501783989f1e4102ea3ec26e9fc1339b52077a8fc4a6371664432ea",
+      ".pi/agent/extensions/subagents/launch-cards.ts": "634d555a8c4891ff3ca3965ae63b43f91d904703e2a392e30dc645d6db3e65c7",
+      ".pi/agent/extensions/subagents/rendering.ts": "1f77cf48d5fde75ebcefbcda07da625675779b85d3f98a88de94061d0f435b52",
+      ".pi/agent/extensions/subagents/delivery.ts": "88f6be13360cf390d72bce7b5d2320ad635ebbd5b80bfd036c34662de5612d35",
+      ".pi/agent/extensions/subagents/interaction.ts": "701b8830a45db2672127da7fc422fdc2bd1526724df8153a09c60eab819c0d12",
+      ".pi/agent/extensions/subagents/specialist.ts": "04177eb808cb6cb16934983a6d9a9b5dc69ac0ce32c00cc435387a4a253c0587",
+      ".pi/agent/extensions/subagents/child-session.ts": "f37c3d38cc74fe17999c3c468e1002b94890dd4ba4fd86655ce88d4fa60babd9"
+    },
+    "harnessSha256": "12dc62b9b8d309ef6f589bae1bdc2c06bc113638a0d3cee973ab3cd78711515e"
+  },
+  "environment": {
+    "platform": "darwin",
+    "architecture": "arm64",
+    "operatingSystemRelease": "27.0.0",
+    "cpuModel": "Apple M4 Pro",
+    "cpuCount": 14,
+    "bun": "1.4.2",
+    "nodeCompatibilityVersion": "v26.3.0",
+    "piCodingAgentSdk": "0.99.1"
+  },
+  "method": {
+    "metric": "monotonic wall-clock milliseconds per frame",
+    "framesPerBatch": 20,
+    "warmupBatches": 1,
+    "measuredBatches": 7,
+    "interleaving": "alternate small/heavy batch order across the seven measured rounds",
+    "setupTimed": false,
+    "animationTimers": "suppressed; active-row timer callbacks are outside the render-cost target",
+    "instabilityRule": "unstable if median absolute deviation / median exceeds 0.25"
+  },
+  "workload": {
+    "small": {
+      "workers": 5,
+      "assignmentsPerWorker": 1,
+      "transcriptEntriesPerAssignment": 20
+    },
+    "heavy": {
+      "workers": 40,
+      "assignmentsPerWorker": 3,
+      "transcriptEntriesPerAssignment": 100
+    },
+    "runningCardLookupsPerFrame": 4,
+    "widgetRendersPerFrame": 1,
+    "remainingWorkerState": "historical",
+    "providerOrNetworkWork": false,
+    "transcriptEntryText": "short deterministic synthetic role/text/timestamp records"
+  },
+  "correctness": {
+    "checks": [
+      "owner contains the predetermined worker and assignment counts",
+      "four current workers are running and all others are historical",
+      "every assignment has the predetermined transcript-entry count",
+      "registered host card renderers project live running status over a stale queued receipt",
+      "registered host widget renderer includes each running worker",
+      "each timed frame returns non-empty registered card and widget output and consumes a checksum"
+    ],
+    "passed": true
+  },
+  "acceptanceCriterion": {
+    "heavyMedianReduction": "at least 20% and at least 0.5 ms/frame",
+    "smallCaseRegression": "no more than 0.1 ms/frame",
+    "correctness": "unchanged"
+  },
+  "warmup": {
+    "small": {
+      "batch": 0,
+      "elapsedMs": 9.899292000000003,
+      "msPerFrame": 0.49496460000000014,
+      "checksum": 3815309140
+    },
+    "heavy": {
+      "batch": 0,
+      "elapsedMs": 7.883166000000017,
+      "msPerFrame": 0.39415830000000085,
+      "checksum": 3815309140
+    }
+  },
+  "results": {
+    "small": {
+      "samples": [
+        {
+          "batch": 1,
+          "elapsedMs": 6.016416000000049,
+          "msPerFrame": 0.30082080000000244,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 2,
+          "elapsedMs": 6.710666000000003,
+          "msPerFrame": 0.33553330000000015,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 3,
+          "elapsedMs": 5.64308299999999,
+          "msPerFrame": 0.2821541499999995,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 4,
+          "elapsedMs": 5.464249999999993,
+          "msPerFrame": 0.27321249999999964,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 5,
+          "elapsedMs": 6.560584000000006,
+          "msPerFrame": 0.3280292000000003,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 6,
+          "elapsedMs": 4.956208000000004,
+          "msPerFrame": 0.24781040000000018,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 7,
+          "elapsedMs": 4.965542000000028,
+          "msPerFrame": 0.2482771000000014,
+          "checksum": 3815309140
+        }
+      ],
+      "medianMsPerFrame": 0.2821541499999995,
+      "minMsPerFrame": 0.24781040000000018,
+      "maxMsPerFrame": 0.33553330000000015,
+      "medianAbsoluteDeviationMsPerFrame": 0.033877049999998105,
+      "madFractionOfMedian": 0.12006575129232784,
+      "stability": "within-budget"
+    },
+    "heavy": {
+      "samples": [
+        {
+          "batch": 1,
+          "elapsedMs": 7.716250000000002,
+          "msPerFrame": 0.3858125000000001,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 2,
+          "elapsedMs": 6.9399589999999876,
+          "msPerFrame": 0.3469979499999994,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 3,
+          "elapsedMs": 6.993333000000007,
+          "msPerFrame": 0.34966665000000036,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 4,
+          "elapsedMs": 6.054166000000009,
+          "msPerFrame": 0.3027083000000005,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 5,
+          "elapsedMs": 5.937082999999973,
+          "msPerFrame": 0.29685414999999865,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 6,
+          "elapsedMs": 6.425332999999966,
+          "msPerFrame": 0.3212666499999983,
+          "checksum": 3815309140
+        },
+        {
+          "batch": 7,
+          "elapsedMs": 6.399874999999952,
+          "msPerFrame": 0.3199937499999976,
+          "checksum": 3815309140
+        }
+      ],
+      "medianMsPerFrame": 0.3212666499999983,
+      "minMsPerFrame": 0.29685414999999865,
+      "maxMsPerFrame": 0.3858125000000001,
+      "medianAbsoluteDeviationMsPerFrame": 0.02441249999999967,
+      "madFractionOfMedian": 0.07598827951796365,
+      "stability": "within-budget"
+    }
+  },
+  "comparison": {
+    "baselineArtifact": "ui-status-baseline-2026-10-23-rerun.json",
+    "smallDeltaMsPerFrame": -0.05687505000000498,
+    "heavyReductionMsPerFrame": 6.047675000000001,
+    "heavyReductionPercent": 94.95572941856048,
+    "acceptance": { "heavyReduction": true, "smallRegression": true, "correctness": true, "stable": true, "passed": true }
+  },
+  "verdict": "candidate captured; acceptance criteria met against ui-status-baseline-2026-10-23-rerun.json"
+}

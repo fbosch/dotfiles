@@ -303,6 +303,28 @@ test("list returns detached snapshots and freezes optional MCP configuration", a
   expect(Object.isFrozen(listed[0]?.config.mcpServers)).toBe(true);
 });
 
+test("lightweight status projections preserve display fields without transcript history", async () => {
+  const { owner, driver } = setup();
+  driver.startBehavior = (_input, callbacks) => {
+    callbacks.onTranscript({ role: "tool", text: "Full investigation history" });
+    return Promise.resolve(completed(1));
+  };
+  const launched = await owner.launch({ config: config(), prompt: "Investigate" });
+  await owner.wait(launched.workerId, launched.assignmentId);
+
+  const status = owner.findStatus(launched.workerId);
+  if (!status) throw new Error("Expected a lightweight status projection");
+  expect(status.status).toBe("idle");
+  expect(status.specialist).toBe("explore");
+  expect(status.config.model).toBe(config().model);
+  expect(status.assignments[0]?.prompt).toBe("Investigate");
+  expect(status.assignments[0]?.report).toBe("done");
+  expect(status.assignments[0]?.turnsUsed).toBe(1);
+  expect("transcript" in status.assignments[0]!).toBe(false);
+  expect(owner.listStatus()).toEqual([status]);
+  await owner.shutdown();
+});
+
 test("budget extension rejects stale assignments and unsafe overflow", async () => {
   const stale = setup();
   const original = await stale.owner.launch({ config: config(), prompt: "first" });
