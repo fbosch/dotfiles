@@ -1,49 +1,46 @@
-# Tool-output shadow pilot
+# Bash output previews
 
-The pilot ranks blocks of approved Bash output through the shared classifier and records which blocks it would keep. It never shortens the model-facing output or replaces `structuredContent`. It is off by default. Shadow mode adds classifier latency and cost; it does not save context tokens.
+This extension saves complete eligible Bash text locally and replaces the chat-facing result with deterministic excerpts. It does not call a classifier. The directory retains its original `tool-output-pilot` name.
 
-## Enable a narrow trial
+## Enable for a project
 
-1. Choose a command whose output is safe to send to every provider in `classifier.providers`. An approval covers future executions of that exact command, not just one run. Do not approve commands that can print credentials, personal data, private source, or sensitive logs.
-2. Merge the following into `~/.pi/agent/settings.json`, replacing the example directory, command, and goal. Preserve existing classifier routing settings.
+1. Merge this setting into the project's `.pi/settings.json`:
 
    ```json
    {
-     "classifier": {
-       "toolOutputPilot": {
-         "mode": "shadow",
-         "approvedCommands": [
-           {
-             "cwd": "/absolute/path/to/project",
-             "command": "your-public-output-command",
-             "goal": "Identify the final result and any diagnostic evidence"
-           }
-         ]
-       }
+     "toolOutput": {
+       "enabled": true
      }
    }
    ```
 
-3. Run `/reload` after installing the extension. Later settings changes take effect on subsequent results. The project must be trusted, and both global and project classifier policy must permit requests.
-4. Run the approved command through the top-level `bash` tool. Inspect the session's `tool-output-pilot` custom entries for `artifactPath` and `reportPath`.
-5. Set `mode` to `"off"` to stop subsequent pilot requests. This does not cancel a request already in progress.
+2. Trust the project in Pi and run `/reload` after installing the extension. Later settings changes take effect on subsequent results.
+3. To retrieve omitted output, call `read` with the absolute `Full output` path from the preview. Use `offset` and `limit` to read the indicated omitted line range. The installed hashline reader returns anchored rows and `nextOffset` for pagination.
 
-Only global settings can approve commands or enable the pilot. Directory and command matching are exact, with no globbing or shell normalization. The goal is static, so conversation text is never included automatically. The goal and complete eligible output are sent to the classifier. A secret-pattern check rejects some suspicious content, but cannot establish that an output is safe to send.
+Only a trusted project's explicit `true` enables previews. A global `toolOutput.enabled: false` vetoes all project opt-ins; a global `true` does not enable every project. Malformed settings leave output unchanged. The classifier master switch does not control this local-only extension. Command protection remains separate and unchanged.
 
-## Eligibility and limits
+## What the preview keeps
 
-The pilot accepts successful, top-level Bash results with one text block matching the structured output, an explicit zero exit code, and no truncation. It skips nested calls, media, other tools, full-output-file references, and incomplete captures.
+The preview retains the first four and last six lines, plus lines with common diagnostic or outcome markers and one adjacent line on each side. Markers include errors, warnings, failures, constraints, revisions, final results, summaries, skipped work, timeouts, incompatibility, and prohibitions. Excerpts remain in source order and preserve their original line contents. Explicit omission markers identify every gap. Preview labels are not file anchors and must not be used for edits.
 
-Eligible output is 8,000–32,000 UTF-8 bytes and must split into 3–16 whole-line blocks of at most 4,000 bytes each. Longer individual lines are excluded. There is at most one request in flight and eight attempts between session lifecycle resets. Restarting or reloading the extension resets its in-memory budget. The shared classifier's request limits, fallback providers, cooldowns, and usage accounting still apply.
+These are incomplete excerpts, not a semantic summary. Relevant evidence without a recognized marker can be omitted. Retrieve the full output when the question depends on omitted evidence; a preview cannot establish that no other findings exist.
 
-The proposed selection retains the first and last blocks, blocks with common diagnostic markers, relevant blocks, and uncertain judgments. Only a relevance score below 1 with confidence of at least 0.8 can omit an unpinned block. These are advisory judgments, not proof that omitted material is irrelevant. Provider or validation failures retain every block.
+The preview, including retrieval instructions, must fit within 6,000 UTF-8 bytes and save at least 25% of the original text bytes. If required excerpts exceed that budget, the original result remains unchanged. This measures text bytes, not tokens or end-to-end latency.
 
-## Review and retrieval
+## Eligibility and preservation
 
-Each eligible attempt creates a private `pi-tool-output-pilot-*` directory under the system temporary directory. `output.txt` contains the exact model-facing text saved before classification. `report.json` records selected block ranges, proposed omitted bytes, elapsed time, and available usage. Directories use mode `0700`; files use mode `0600`. A storage failure may leave a partial artifact directory.
+Only successful top-level `bash` results are eligible. The extension requires one complete text block matching native structured output, explicit zero exit status, and `truncated: false`. It skips nested calls, failures, media, other tools, existing full-output-file references, and incomplete captures. Read/search/edit results and their source anchors are never shortened. Codemode's nested calls receive their original results.
 
-Read `artifactPath` to retrieve the complete output. Block offsets are half-open UTF-16 code-unit ranges, not byte offsets or file line numbers. Proposed byte savings exclude any future preview envelope and do not measure token savings or end-to-end speedups. Session entries contain report metadata and paths, not a second copy of the output.
+Eligible text is 8,000 to 128,000 UTF-8 bytes, with no line longer than 2,000 bytes. Binary/control-character output, ANSI escape sequences, invalid Unicode round trips, and suspicious secret-like patterns are excluded. This heuristic cannot guarantee that an output contains no sensitive information.
 
-Artifacts remain in the temporary directory until you or system cleanup remove them. The extension does not clean them up automatically or provide durable retrieval after cleanup. Disabling the pilot leaves existing reports and artifacts intact.
+The full native `structuredContent` object, including output and status fields, is preserved explicitly. Only model-facing text changes. Details, usage, and error status remain unchanged. Programmatic consumers keep the full data; they do not gain context savings from this extension. Other result hooks run in load order and may change these fields afterward.
 
-Before considering active compaction, review missed evidence and false omissions across representative approved commands. Keep source edits, hashline anchors, errors, and structured results outside the pilot's scope. No active mode is implemented.
+## Storage and failure behavior
+
+Before publishing a preview, the extension writes the exact captured text to `output.txt` inside a private random `pi-tool-output-*` directory under the system temporary directory. The directory uses mode `0700`; files use mode `0600`. `report.json` records the artifact path, byte counts, selected line ranges, and local processing time. A `tool-output-preview` session entry stores the same metadata without duplicating the output.
+
+This preserves the captured text, not original process bytes lost before Pi decoded them. It never reads a full-output path supplied by another tool. Artifact paths are generated independently of commands and tool IDs. No extra copy is sent to a classifier or another external service.
+
+Up to 8 MiB of captured text can be reserved between session lifecycle resets. Reservations include failed attempts and are made before asynchronous writes, so parallel calls share the limit. Metadata and filesystem overhead are additional. Reloading or replacing the extension resets the in-memory budget. Existing artifacts are not deleted automatically and can accumulate across sessions.
+
+Storage errors, disabled settings, cancellation, and session or directory changes leave the original result unchanged. A failed attempt may leave private partial artifacts. Retrieval needs no in-memory registry and works after reload while the artifact exists. Temporary-directory cleanup or manual deletion removes retrieval access; artifacts are not durable backups. Disabling previews does not delete previous artifacts.
