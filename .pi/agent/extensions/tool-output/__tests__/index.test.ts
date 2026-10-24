@@ -11,14 +11,16 @@ import {
   type ToolResultEvent,
   type ToolResultEventResult,
 } from "@earendil-works/pi-coding-agent";
+import { convertMcpResult } from "@earendil-works/pi-coding-agent/dist/extensions/mcp/tools.js";
 import { registerToolOutput } from "../index";
 import {
-  eligibleOutput,
+  eligibleCapture,
   MAX_PREVIEW_BYTES,
   MAX_SESSION_BYTES,
   makePreview,
   outputEnabled,
 } from "../policy";
+import { type createOutputSearchTool, SEARCH_TOOL } from "../search";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -46,6 +48,8 @@ async function harness() {
   const root = await mkdtemp(join(tmpdir(), "tool-output-test-"));
   roots.push(root);
   const records: Record<string, unknown>[] = [];
+  const entries: unknown[] = [];
+  let searchTool: ReturnType<typeof createOutputSearchTool> | undefined;
   const handlers = new Map<string, Handler>();
   let settings: { global: unknown; project: unknown } = { global: {}, project };
   let afterSettings: (() => void) | undefined;
@@ -54,14 +58,23 @@ async function harness() {
     isProjectTrusted: () => true,
     signal: undefined,
     hasUI: false,
+    sessionManager: {
+      getBranch: () => entries,
+      getSessionId: () => "test-session",
+    },
   } as unknown as ExtensionContext;
   let readerAvailable = true;
   const api = {
-    getActiveTools: () => (readerAvailable ? ["read"] : []),
-    registerTool: () => {},
+    getActiveTools: () => (readerAvailable ? ["read", SEARCH_TOOL] : []),
+    registerTool: (tool: ReturnType<typeof createOutputSearchTool>) => {
+      searchTool = tool;
+    },
     getAllTools: () => (readerAvailable ? [{ name: "read", exposure: "direct" }] : []),
     on: (name: string, handler: Handler) => handlers.set(name, handler),
-    appendEntry: (_name: string, data: Record<string, unknown>) => records.push(data),
+    appendEntry: (name: string, data: Record<string, unknown>) => {
+      records.push(data);
+      entries.push({ type: "custom", customType: name, data });
+    },
   } as unknown as Pick<
     ExtensionAPI,
     "on" | "appendEntry" | "getAllTools" | "getActiveTools" | "registerTool"
@@ -78,6 +91,8 @@ async function harness() {
     root,
     context,
     records,
+    searchTool: () => searchTool,
+    restoreBranch: () => entries.splice(0, entries.length, ...structuredClone(entries)),
     disableReader: () => {
       readerAvailable = false;
     },
@@ -201,7 +216,7 @@ test("off, untrusted, malformed config, and unavailable reader do not alter resu
   expect(await readdir(h.root)).toEqual([]);
 });
 
-test("nested calls, source tools, media, failures, incomplete captures, controls, and sizes are unchanged", async () => {
+test("nested calls, source tools, media, inconsistent statuses, incomplete captures, controls, and sizes are unchanged", async () => {
   const h = await harness();
   const noStructured = result();
   delete noStructured.structuredContent;
@@ -226,7 +241,7 @@ test("nested calls, source tools, media, failures, incomplete captures, controls
     result(`${output}\ud800`),
   ];
   for (const event of events) {
-    expect(eligibleOutput(event)).toBeUndefined();
+    expect(eligibleCapture(event)).toBeUndefined();
     expect(await h.run(event)).toBeUndefined();
   }
   expect(await readdir(h.root)).toEqual([]);
@@ -338,6 +353,26 @@ test("Pi discovers the tool-output entry point and registers artifact search", a
   expect(loaded.extensions).toHaveLength(1);
   expect(loaded.extensions[0]?.tools.get("tool_output_search")).toBeDefined();
 }, 20_000);
+test("captured artifacts remain searchable from restored persisted branch entries", async () => {
+  const h = await harness();
+  await h.run();
+  const report = h.records[0];
+  if (!report) throw new Error("Capture did not publish a persisted proof");
+  const path = String(report.artifactPath);
+  const tool = h.searchTool();
+  if (!tool) throw new Error("Search tool was not registered");
+
+  h.restoreBranch();
+  const result = await tool.execute(
+    "search",
+    { path, queries: ["Progress 257: æ ø å 😀"] },
+    undefined,
+    undefined,
+    h.context,
+  );
+  expect(result.structuredContent.matchingLines).toBe(1);
+  expect(result.structuredContent.excerpts[0]?.text).toContain("Progress 257: æ ø å 😀");
+});
 
 test("mixed fixture retains buried constraints and revisions without retaining whole progress blocks", async () => {
   const headings = [
@@ -422,4 +457,107 @@ test("novel output that does not fit is unchanged rather than reduced to head an
   expect(makePreview(unique, "/private/output.txt")).toBeUndefined();
   const rare = `${output}scan 1: unusual\nscan 2: unusual\n`;
   expect(makePreview(rare, "/private/output.txt")?.text).toContain("scan 1: unusual");
+});
+
+test("failed native Bash keeps exact failure status, output artifact, and structured data", async () => {
+  const h = await harness();
+  const raw = `${output}ERROR: replica lag; do not roll out\n`;
+  const native = await createBashTool("/work", {
+    operations: {
+      exec: async (_command, _cwd, { onData }) => {
+        onData(Buffer.from(raw));
+        return { exitCode: 7 };
+      },
+    },
+  }).execute("failed", { command: "synthetic-failure" });
+  const event: ToolResultEvent = { ...result(), ...native, isError: native.isError === true };
+  const changed = await h.run(event);
+  const combined = { ...event, ...changed };
+  expect(combined.isError).toBe(true);
+  expect(combined.structuredContent).toBe(native.structuredContent);
+  const text = changed?.content?.[0];
+  if (text?.type !== "text") throw new Error("Failure capture was not previewed");
+  expect(text.text).toContain("isError=true; exitCode=7");
+  expect(text.text).toContain("ERROR: replica lag; do not roll out");
+  expect(text.text).toContain("Command exited with code 7");
+  const original = native.content[0];
+  if (original?.type !== "text") throw new Error("Missing native failure text");
+  expect(await readFile(String(h.records[0]?.artifactPath), "utf8")).toBe(original.text);
+  expect(h.records[0]?.exitCode).toBe(7);
+});
+
+test("native MCP success and error text preserve the entire CallToolResult and truthful capture scope", async () => {
+  for (const isError of [false, true]) {
+    const h = await harness();
+    const raw = {
+      content: [{ type: "text" as const, text: `${output}artifact=oak-637\n` }],
+      structuredContent: { ticket: 17, flags: ["hold"] },
+      isError,
+    };
+    const native = await convertMcpResult("fixture", "inspect", raw);
+    const event: ToolResultEvent = {
+      ...result(),
+      ...native,
+      toolName: "mcp__fixture__inspect",
+      input: { scope: "public-fixture" },
+      isError: native.isError === true,
+    };
+    const before = structuredClone(event);
+    const changed = await h.run(event);
+    const combined = { ...event, ...changed };
+    const text = changed?.content?.[0];
+    if (text?.type !== "text") throw new Error("MCP text was not previewed");
+    expect(text.text).toContain(`MCP output; isError=${isError}`);
+    expect(text.text).toContain("artifact=oak-637");
+    expect(event).toEqual(before);
+    expect(combined.structuredContent).toBe(native.structuredContent);
+    expect(combined.isError).toBe(isError);
+    expect(combined.details).toBe(native.details);
+    expect(h.records[0]?.coverage).toBe("received-single-text-block");
+    expect(h.records[0]?.toolName).toBe("mcp__fixture__inspect");
+    expect(await readFile(String(h.records[0]?.artifactPath), "utf8")).toBe(
+      raw.content[0]?.text ?? "",
+    );
+  }
+});
+
+test("already-offloaded, multi-block, redacted, or mismatched MCP results remain unchanged", async () => {
+  const h = await harness();
+  const native = await convertMcpResult("fixture", "inspect", {
+    content: [{ type: "text", text: output }],
+  });
+  const event: ToolResultEvent = {
+    ...result(),
+    ...native,
+    toolName: "mcp__fixture__inspect",
+    input: {},
+    isError: false,
+  };
+  const offloaded = await convertMcpResult(
+    "fixture",
+    "inspect",
+    { content: [{ type: "text", text: output.repeat(3) }] },
+    { saveOutput: async () => "/untrusted/output.txt" },
+  );
+  const multiple = await convertMcpResult("fixture", "inspect", {
+    content: [
+      { type: "text", text: output },
+      { type: "text", text: "second block" },
+    ],
+  });
+  for (const candidate of [
+    { ...event, ...offloaded },
+    { ...event, ...multiple },
+    {
+      ...event,
+      content: [{ type: "text" as const, text: output.replace("Progress", "Redacted") }],
+    },
+    { ...event, isError: true },
+    { ...event, details: undefined },
+    { ...event, parentToolCallId: "codemode" },
+  ]) {
+    expect(eligibleCapture(candidate)).toBeUndefined();
+    expect(await h.run(candidate)).toBeUndefined();
+  }
+  expect(await readdir(h.root)).toEqual([]);
 });

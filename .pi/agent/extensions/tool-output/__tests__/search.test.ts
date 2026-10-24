@@ -3,9 +3,10 @@ import { createHash } from "node:crypto";
 import { chmod, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
+import type { ExtensionAPI, ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { Value } from "typebox/value";
-import { createOutputSearchTool, SEARCH_MAX_BYTES, searchArtifact, searchText } from "../search";
+import { createOutputArtifacts } from "../artifacts";
+import { createOutputSearchTool, SEARCH_MAX_BYTES, searchText } from "../search";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -27,6 +28,34 @@ async function artifact(text = "æ ø å 😀\r\nneedle.* = 7\r\nNEEDLE = 9\r\nl
     },
   };
   return { root, path, text, entry, entries: [entry] };
+}
+function searchHarness(
+  entries: () => readonly unknown[],
+  enabled: () => boolean = () => true,
+  sessionId: () => string = () => "test-session",
+  cwd = "/work",
+) {
+  const context = {
+    cwd,
+    sessionManager: { getBranch: entries, getSessionId: sessionId },
+  } as unknown as ExtensionContext;
+  const pi = {
+    appendEntry: () => {},
+    getActiveTools: () => [],
+    getAllTools: () => [],
+  } as unknown as Pick<ExtensionAPI, "appendEntry" | "getActiveTools" | "getAllTools">;
+  const artifacts = createOutputArtifacts(pi, { enabled, artifactRoot: () => tmpdir() });
+  return { artifacts, context };
+}
+
+function searchEntries(
+  entries: readonly unknown[],
+  input: { path: string; queries: string[] },
+  signal?: AbortSignal,
+  cwd = "/work",
+) {
+  const harness = searchHarness(() => entries, undefined, undefined, cwd);
+  return harness.artifacts.search(harness.context, input, signal);
 }
 
 test("literal OR matching gives full-artifact counts, verbatim Unicode/CRLF context, and bounded pages", () => {
@@ -94,37 +123,21 @@ test("invalid and unbounded requests are rejected", () => {
     expect(() => searchText("hit", input)).toThrow();
 });
 
-test("current-branch capability and matching project are required before reading a path", async () => {
+test("current branch proof and matching project authorize registered artifacts", async () => {
   const a = await artifact();
-  expect(
-    (await searchArtifact(a.entries, "/work", { path: a.path, queries: ["needle"] })).matchingLines,
-  ).toBe(1);
-  // A fresh registry is unnecessary: persisted branch entries are the only authority.
-  expect(
-    (
-      await searchArtifact(structuredClone(a.entries), "/work", {
-        path: a.path,
-        queries: ["needle"],
-      })
-    ).matchingLines,
-  ).toBe(1);
-  await expect(searchArtifact([], "/work", { path: a.path, queries: ["needle"] })).rejects.toThrow(
+  const input = { path: a.path, queries: ["needle"] };
+  expect((await searchEntries(a.entries, input)).matchingLines).toBe(1);
+  // Persisted branch entries remain the authority after restoration or cloning.
+  expect((await searchEntries(structuredClone(a.entries), input)).matchingLines).toBe(1);
+  await expect(searchEntries([], input)).rejects.toThrow("not registered");
+  await expect(searchEntries(a.entries, input, undefined, "/other")).rejects.toThrow(
     "not registered",
   );
   await expect(
-    searchArtifact(a.entries, "/other", { path: a.path, queries: ["needle"] }),
+    searchEntries(a.entries, { ...input, path: join(a.root, "unregistered.txt") }),
   ).rejects.toThrow("not registered");
   await expect(
-    searchArtifact(a.entries, "/work", {
-      path: join(a.root, "unregistered.txt"),
-      queries: ["needle"],
-    }),
-  ).rejects.toThrow("not registered");
-  await expect(
-    searchArtifact([{ ...a.entry, data: { ...a.entry.data, sha256: "bad" } }], "/work", {
-      path: a.path,
-      queries: ["needle"],
-    }),
+    searchEntries([{ ...a.entry, data: { ...a.entry.data, sha256: "bad" } }], input),
   ).rejects.toThrow("not registered");
 });
 
@@ -145,73 +158,73 @@ test("changed, removed, linked, special, or public artifacts cannot be searched"
     }
     if (mode === "public") await chmod(a.path, 0o644);
     if (mode === "oversized") await writeFile(a.path, "x".repeat(128001));
-    await expect(
-      searchArtifact(a.entries, "/work", { path: a.path, queries: ["needle"] }),
-    ).rejects.toThrow("Unable to search output artifact.");
+    await expect(searchEntries(a.entries, { path: a.path, queries: ["needle"] })).rejects.toThrow(
+      "Unable to search output artifact.",
+    );
   }
 });
-
 test("cancellation and project policy changes fail closed; tool preserves its structured schema", async () => {
   const a = await artifact();
+  const input = { path: a.path, queries: ["needle"] };
+  const canceled = searchHarness(() => a.entries);
   const controller = new AbortController();
   controller.abort();
   await expect(
-    searchArtifact(a.entries, "/work", { path: a.path, queries: ["needle"] }, controller.signal),
+    canceled.artifacts.search(canceled.context, input, controller.signal),
   ).rejects.toThrow();
-  const ctx = {
-    cwd: "/work",
-    sessionManager: { getBranch: () => a.entries, getSessionId: () => "test-session" },
-  } as unknown as ExtensionContext;
-  const tool = createOutputSearchTool(() => true);
-  const result = await tool.execute(
-    "search",
-    { path: a.path, queries: ["needle"] },
-    undefined,
-    undefined,
-    ctx,
-  );
+
+  const enabled = searchHarness(() => a.entries);
+  const tool = createOutputSearchTool(enabled.artifacts);
+  const result = await tool.execute("search", input, undefined, undefined, enabled.context);
   expect(Value.Check(tool.outputSchema, result.structuredContent)).toBe(true);
   expect(JSON.parse(result.content[0]?.text ?? "")).toEqual(result.structuredContent);
+
+  const disabled = searchHarness(
+    () => a.entries,
+    () => false,
+  );
   await expect(
-    createOutputSearchTool(() => false).execute(
+    createOutputSearchTool(disabled.artifacts).execute(
       "disabled",
-      { path: a.path, queries: ["needle"] },
+      input,
       undefined,
       undefined,
-      ctx,
+      disabled.context,
     ),
   ).rejects.toThrow("not enabled");
+
   let calls = 0;
+  const changed = searchHarness(
+    () => a.entries,
+    () => ++calls === 1,
+  );
   await expect(
-    createOutputSearchTool(() => ++calls === 1).execute(
+    createOutputSearchTool(changed.artifacts).execute(
       "changed",
-      { path: a.path, queries: ["needle"] },
+      input,
       undefined,
       undefined,
-      ctx,
+      changed.context,
     ),
   ).rejects.toThrow("settings changed");
 });
-
 test("branch removal and session replacement cannot publish a completed search", async () => {
   for (const change of ["branch", "session"]) {
     const a = await artifact();
     let branchReads = 0;
     let sessionReads = 0;
-    const ctx = {
-      cwd: "/work",
-      sessionManager: {
-        getBranch: () => (++branchReads >= 3 && change === "branch" ? [] : a.entries),
-        getSessionId: () => (++sessionReads >= 2 && change === "session" ? "new" : "old"),
-      },
-    } as unknown as ExtensionContext;
+    const harness = searchHarness(
+      () => (++branchReads >= 3 && change === "branch" ? [] : a.entries),
+      () => true,
+      () => (++sessionReads >= 2 && change === "session" ? "new" : "old"),
+    );
     await expect(
-      createOutputSearchTool(() => true).execute(
+      createOutputSearchTool(harness.artifacts).execute(
         "search",
         { path: a.path, queries: ["needle"] },
         undefined,
         undefined,
-        ctx,
+        harness.context,
       ),
     ).rejects.toThrow("settings changed");
   }

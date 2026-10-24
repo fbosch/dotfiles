@@ -1,24 +1,10 @@
-import { createHash } from "node:crypto";
-import { constants } from "node:fs";
-import { open } from "node:fs/promises";
-import { isAbsolute, resolve } from "node:path";
+import { isAbsolute } from "node:path";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { isMatching, P } from "ts-pattern";
 import { type Static, Type } from "typebox";
+import type { OutputArtifacts } from "./artifacts";
 import { MAX_OUTPUT_BYTES } from "./policy";
-
 export const SEARCH_TOOL = "tool_output_search";
 export const SEARCH_MAX_BYTES = 6_000;
-const REPORT = {
-  type: "custom",
-  customType: "tool-output-preview",
-  data: {
-    artifactPath: P.string,
-    cwd: P.string,
-    sha256: P.string.regex(/^[a-f0-9]{64}$/u),
-    originalBytes: P.number.int().between(1, MAX_OUTPUT_BYTES),
-  },
-};
 
 const Parameters = Type.Object({
   path: Type.String({ description: "Full output artifact path from a Bash preview" }),
@@ -167,67 +153,7 @@ export function searchText(text: string, input: SearchInput): SearchOutput {
   return result;
 }
 
-function recordedArtifact(entries: readonly unknown[], cwd: string, path: string) {
-  const report = [...entries]
-    .reverse()
-    .find(
-      (entry) =>
-        isMatching(REPORT, entry) && entry.data.cwd === cwd && entry.data.artifactPath === path,
-    );
-  return isMatching(REPORT, report) ? report.data : undefined;
-}
-export async function searchArtifact(
-  entries: readonly unknown[],
-  cwd: string,
-  input: SearchInput,
-  signal?: AbortSignal,
-): Promise<SearchOutput> {
-  signal?.throwIfAborted();
-  if (!isAbsolute(input.path) || resolve(input.path) !== input.path)
-    throw new Error("Output artifact is not registered for this session and project.");
-  const report = recordedArtifact(entries, cwd, input.path);
-  if (!report) throw new Error("Output artifact is not registered for this session and project.");
-  try {
-    // A recorded capability is required before opening. Refuse links and special files without blocking.
-    const handle = await open(
-      input.path,
-      constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
-    );
-    try {
-      const stat = await handle.stat();
-      if (
-        !stat.isFile() ||
-        stat.size !== report.originalBytes ||
-        stat.size > MAX_OUTPUT_BYTES ||
-        (stat.mode & 0o077) !== 0 ||
-        (process.getuid && stat.uid !== process.getuid())
-      )
-        throw new Error("Invalid artifact");
-      const bytes = Buffer.alloc(stat.size + 1);
-      let length = 0;
-      while (length < bytes.length) {
-        signal?.throwIfAborted();
-        const chunk = await handle.read(bytes, length, bytes.length - length, length);
-        if (chunk.bytesRead === 0) break;
-        length += chunk.bytesRead;
-      }
-      const captured = bytes.subarray(0, length);
-      if (
-        length !== stat.size ||
-        createHash("sha256").update(captured).digest("hex") !== report.sha256
-      )
-        throw new Error("Artifact changed");
-      signal?.throwIfAborted();
-      return searchText(captured.toString("utf8"), input);
-    } finally {
-      await handle.close();
-    }
-  } catch {
-    throw new Error("Unable to search output artifact.");
-  }
-}
-
-export function createOutputSearchTool(enabled: (ctx: ExtensionContext) => boolean) {
+export function createOutputSearchTool(artifacts: Pick<OutputArtifacts, "search">) {
   return {
     name: SEARCH_TOOL,
     label: "Search tool output",
@@ -248,20 +174,7 @@ export function createOutputSearchTool(enabled: (ctx: ExtensionContext) => boole
       _update: unknown,
       ctx: ExtensionContext,
     ) {
-      if (!enabled(ctx)) throw new Error("Output search is not enabled for this project.");
-      const cwd = ctx.cwd;
-      const sessionId = ctx.sessionManager.getSessionId();
-      const proof = recordedArtifact(ctx.sessionManager.getBranch(), cwd, input.path);
-      const result = await searchArtifact(ctx.sessionManager.getBranch(), cwd, input, signal);
-      const current = recordedArtifact(ctx.sessionManager.getBranch(), cwd, input.path);
-      if (
-        ctx.cwd !== cwd ||
-        !enabled(ctx) ||
-        ctx.sessionManager.getSessionId() !== sessionId ||
-        !proof ||
-        current?.sha256 !== proof.sha256
-      )
-        throw new Error("Output search session or project settings changed.");
+      const result = await artifacts.search(ctx, input, signal);
       return {
         content: [{ type: "text" as const, text: JSON.stringify(result) }],
         details: undefined,
