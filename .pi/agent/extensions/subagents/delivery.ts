@@ -64,10 +64,9 @@ export type WorkerNotice =
       type: "question";
       worker: ReturnType<typeof workerStatus>;
       question: NonNullable<WorkerSnapshot["pendingQuestion"]>;
+      requiresReply: boolean;
     }
   | { type: "update"; workerId: string; assignmentId: string; state: string; text: string };
-
-type WorkerUpdate = Extract<WorkerNotice, { type: "update" }>;
 
 function isUnsettledAssignment(outcome: AssignmentSnapshot["outcome"]): boolean {
   return match(outcome)
@@ -86,7 +85,7 @@ interface Delivery {
 /** Coordinates full-result waits and structural notices without replaying assignments. */
 export class WorkerDelivery {
   private readonly assignments = new Map<string, Delivery>();
-  private readonly pendingUpdates = new Map<string, WorkerUpdate>();
+  private readonly pendingNotices = new Map<string, WorkerNotice>();
   private readonly unsubscribe: () => void;
   private closing = false;
   private readonly foreground = new Set<string>();
@@ -104,7 +103,7 @@ export class WorkerDelivery {
 
   constructor(
     readonly owner: WorkerOwner,
-    private readonly notify: (notice: WorkerNotice, updateDeliveryId?: string) => void,
+    private readonly notify: (notice: WorkerNotice, noticeDeliveryId: string) => void,
     private readonly onError: (error: unknown) => void,
   ) {
     this.unsubscribe = owner.subscribe((event) => {
@@ -217,24 +216,47 @@ export class WorkerDelivery {
     }
   }
 
-  /** Project settled state into model delivery without rewriting saved update evidence. */
-  refreshUpdate(updateDeliveryId: string): WorkerUpdate | undefined {
+  /** Context projections are transient, so notices stay refreshable until runtime shutdown. */
+  refreshNotice(noticeDeliveryId: string): WorkerNotice | undefined {
     if (this.closing) return;
-    const notice = this.pendingUpdates.get(updateDeliveryId);
+    const notice = this.pendingNotices.get(noticeDeliveryId);
     if (!notice) return;
-    const worker = this.owner.findStatus(notice.workerId);
-    const assignment = worker?.assignments.find((item) => item.id === notice.assignmentId);
-    if (assignment && isUnsettledAssignment(assignment.outcome)) return;
-    // Active updates stay tracked across context projections; settled updates refresh only once.
-    this.pendingUpdates.delete(updateDeliveryId);
-    return assignment && assignment.outcome !== notice.state
-      ? { ...notice, state: assignment.outcome }
-      : undefined;
+    const worker = this.owner.findStatus(
+      notice.type === "update" ? notice.workerId : notice.worker.workerId,
+    );
+    if (!worker) return;
+    return match(notice)
+      .with({ type: "update" }, (update) => {
+        const assignment = worker.assignments.find((item) => item.id === update.assignmentId);
+        if (!assignment || isUnsettledAssignment(assignment.outcome)) return;
+        return { ...update, state: assignment.outcome };
+      })
+      .with({ type: "question" }, (question) => ({
+        ...question,
+        worker: workerStatus(worker),
+        requiresReply:
+          worker.liveSession === "available" &&
+          worker.status === "waiting-question" &&
+          worker.currentAssignmentId === question.question.assignmentId &&
+          worker.pendingQuestion?.id === question.question.id,
+      }))
+      .with({ type: P.union("completion", "storage-failure") }, (receipt) => {
+        const assignment = worker.assignments.find(
+          (item) => item.id === receipt.assignment.assignmentId,
+        );
+        if (!assignment) return;
+        return {
+          ...receipt,
+          worker: workerStatus(worker),
+          assignment: assignmentStatus(assignment),
+        };
+      })
+      .exhaustive();
   }
 
   async shutdown(): Promise<void> {
     this.closing = true;
-    this.pendingUpdates.clear();
+    this.pendingNotices.clear();
     try {
       await this.owner.shutdown();
     } finally {
@@ -260,7 +282,9 @@ export class WorkerDelivery {
   private onEvent(event: OwnerEvent): void {
     if (this.closing) return;
     match(event)
-      .with({ type: "update" }, (update) => this.notifyUpdate(update))
+      .with({ type: "update" }, ({ workerId, assignmentId, state, text }) =>
+        this.notifyTracked({ type: "update", workerId, assignmentId, state, text }),
+      )
       .with({ type: "state" }, ({ worker }) => this.flush(worker.id, worker.currentAssignmentId))
       .with({ type: "persistence" }, ({ workerId, assignmentId }) =>
         this.flush(workerId, assignmentId),
@@ -269,21 +293,14 @@ export class WorkerDelivery {
       .exhaustive();
   }
 
-  private notifyUpdate(event: Extract<OwnerEvent, { type: "update" }>): void {
-    const notice: WorkerUpdate = {
-      type: "update",
-      workerId: event.workerId,
-      assignmentId: event.assignmentId,
-      state: event.state,
-      text: event.text,
-    };
+  private notifyTracked(notice: WorkerNotice): void {
     // Saved messages outlive a runtime; opaque tokens must not collide after reload.
-    const updateDeliveryId = `${this.owner.parentSessionId}:${randomUUID()}`;
-    this.pendingUpdates.set(updateDeliveryId, notice);
+    const noticeDeliveryId = `${this.owner.parentSessionId}:${randomUUID()}`;
+    this.pendingNotices.set(noticeDeliveryId, notice);
     try {
-      this.notify(notice, updateDeliveryId);
+      this.notify(notice, noticeDeliveryId);
     } catch (error) {
-      this.pendingUpdates.delete(updateDeliveryId);
+      this.pendingNotices.delete(noticeDeliveryId);
       throw error;
     }
   }
@@ -301,14 +318,19 @@ export class WorkerDelivery {
       question &&
       !delivery.questionsDelivered.has(question.id)
     ) {
-      this.notify({ type: "question", worker: workerStatus(worker), question });
+      this.notifyTracked({
+        type: "question",
+        worker: workerStatus(worker),
+        question,
+        requiresReply: true,
+      });
       delivery.questionsDelivered.add(question.id);
       return;
     }
     if (isUnsettledAssignment(assignment.outcome)) return;
     if (assignment.persistence === "pending" || assignment.persistence === "not-attempted") return;
     if (!delivery.reportDelivered && !delivery.receiptSent) {
-      this.notify({
+      this.notifyTracked({
         type: "completion",
         worker: workerStatus(worker),
         assignment: assignmentStatus(assignment),
@@ -322,7 +344,7 @@ export class WorkerDelivery {
       !delivery.receiptSent &&
       !delivery.storageWarningSent
     ) {
-      this.notify({
+      this.notifyTracked({
         type: "storage-failure",
         worker: workerStatus(worker),
         assignment: assignmentStatus(assignment),

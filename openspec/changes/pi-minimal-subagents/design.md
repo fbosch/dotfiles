@@ -52,6 +52,8 @@ Keep specialist Markdown and model presets. Extend the local configuration contr
 
 Central bundles describe backing extensions and their dependencies. A required baseline supplies model/provider integration and mandatory safety policies. The specialist tool allowlist remains authoritative even when an extension registers additional tools. The child receives a selected skill catalog, not the parent's entire catalog or preloaded skill bodies. Required safety instructions cannot depend on a skill being chosen.
 
+Missing selected skills do not block startup. Keep the remaining explicit selection and record skipped names in the child prompt and assignment transcript, without loading substitute or ambient skills. Required tools, extensions, presets, and mandatory policies still fail preflight when unavailable.
+
 Resolve and validate before starting assignment execution. Fail on missing required components; do not fall back to another model, omit a required policy, or inherit the parent's ambient extensions. Binding failures after partial setup must use the same cleanup rules as other launch failures.
 
 Freeze the resolved role, model/thinking, tool policy, bundles, skills, and required instructions for the live session. Continuation changes the assignment and budget, not the capabilities. A changed definition affects new workers only. Configuration snapshots must not serialize credentials.

@@ -13,6 +13,10 @@ Background completion SHALL notify the owning parent using structural worker ide
 - **WHEN** a background worker finishes and saves a final report
 - **THEN** the parent receives a structural receipt and can retrieve the report, without an automatic report excerpt or summary-model call
 
+#### Scenario: Worker changes after a receipt is queued
+- **WHEN** a completed worker is released or continued before the parent model receives its receipt
+- **THEN** model delivery includes current worker metadata while retaining the original completed assignment and unverified status
+
 ### Requirement: Full report retrieval without arbitrary truncation
 The inspect/result interface SHALL return the full saved final report on explicit retrieval. The runner SHALL NOT truncate final reports to an arbitrary character cap. Investigation logs SHALL remain in separately retrievable transcripts, while workers are instructed to produce concise findings, evidence, and unresolved-work handoffs.
 
@@ -37,6 +41,14 @@ Material progress updates and question notifications SHALL identify their owning
 #### Scenario: Update becomes stale before delivery
 - **WHEN** a worker sends a material update and finishes before the parent receives it
 - **THEN** delivery identifies its settled state rather than claiming the worker is still running
+
+#### Scenario: Question is resolved before delivery
+- **WHEN** a queued question has been answered or its worker cancelled before the next model request
+- **THEN** model delivery retains the original question identity and text as evidence, sets `requiresReply: false`, and includes current worker state
+
+#### Scenario: Model context is projected repeatedly
+- **WHEN** a completed assignment's tracked update appears in later model requests
+- **THEN** every projection reports its settled outcome without changing original attribution or the saved message
 
 ### Requirement: Separate execution and persistence outcomes
 The runner SHALL save complete reports and transcripts and track persistence independently of execution. Failed saving SHALL produce an explicit storage/delivery failure rather than a normal durable-completion receipt. Available in-memory evidence SHALL remain retrievable, durable history SHALL be marked incomplete, and the runner SHALL NOT rerun work to recreate evidence.

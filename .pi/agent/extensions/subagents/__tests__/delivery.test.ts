@@ -222,19 +222,19 @@ test("tracked updates refresh independently at delivery without changing their o
   const [firstId, secondId] = f.updateIds;
   if (!firstId || !secondId) throw new Error("Missing update delivery IDs");
   expect(firstId).not.toBe(secondId);
-  expect(f.delivery.refreshUpdate(firstId)).toBeUndefined();
-  expect(f.delivery.refreshUpdate(secondId)).toBeUndefined();
+  expect(f.delivery.refreshNotice(firstId)).toBeUndefined();
+  expect(f.delivery.refreshNotice(secondId)).toBeUndefined();
 
   run.resolve(completed);
   await f.delivery.wait(launch.workerId, launch.assignmentId);
-  expect(f.delivery.refreshUpdate(firstId)).toEqual({
+  expect(f.delivery.refreshNotice(firstId)).toEqual({
     type: "update",
     workerId: launch.workerId,
     assignmentId: launch.assignmentId,
     state: "completed",
     text: "FIRST_MATERIAL_FINDING",
   });
-  expect(f.delivery.refreshUpdate(secondId)).toEqual({
+  expect(f.delivery.refreshNotice(secondId)).toEqual({
     type: "update",
     workerId: launch.workerId,
     assignmentId: launch.assignmentId,
@@ -257,8 +257,66 @@ test("tracked updates refresh independently at delivery without changing their o
       text: "SECOND_MATERIAL_FINDING",
     },
   ]);
-  expect(f.delivery.refreshUpdate(firstId)).toBeUndefined();
-  expect(f.delivery.refreshUpdate(secondId)).toBeUndefined();
+  expect(f.delivery.refreshNotice(firstId)).toMatchObject({ state: "completed" });
+  expect(f.delivery.refreshNotice(secondId)).toMatchObject({ state: "completed" });
+  expect(f.errors).toEqual([]);
+});
+
+test("question freshness matches the exact question rather than a later pending question", async () => {
+  const f = fixture();
+  const launch = launched(await f.delivery.launch({ config, prompt: "Task" }));
+  const first = execution(f, launch.workerId);
+  first.callbacks.onQuestion("First target?");
+  first.resolve({ kind: "waiting-question", turnsUsed: 1 });
+  await drain();
+  const original = f.notices[0];
+  const firstId = f.updateIds[0];
+  if (original?.type !== "question" || !firstId) throw new Error("Missing first question");
+  expect(f.delivery.refreshNotice(firstId)).toMatchObject({ requiresReply: true });
+  await f.owner.reply(launch.workerId, original.question.id, "Target A");
+  const second = execution(f, launch.workerId);
+  second.callbacks.onQuestion("Second target?");
+  second.resolve({ kind: "waiting-question", turnsUsed: 2 });
+  await drain();
+  const latest = f.notices[1];
+  const secondId = f.updateIds[1];
+  if (latest?.type !== "question" || !secondId) throw new Error("Missing second question");
+  expect(latest.question.id).not.toBe(original.question.id);
+  const saved = JSON.stringify(f.notices);
+  expect(f.delivery.refreshNotice(firstId)).toMatchObject({
+    type: "question",
+    requiresReply: false,
+    question: { id: original.question.id, text: "First target?" },
+    worker: { question: { id: latest.question.id } },
+  });
+  expect(f.delivery.refreshNotice(secondId)).toMatchObject({
+    type: "question",
+    requiresReply: true,
+    question: { id: latest.question.id, text: "Second target?" },
+  });
+  expect(JSON.stringify(f.notices)).toBe(saved);
+  expect(f.errors).toEqual([]);
+});
+
+test("completion freshness preserves its original assignment after continuation", async () => {
+  const f = fixture();
+  const launch = launched(await f.delivery.launch({ config, prompt: "Task" }));
+  execution(f, launch.workerId).resolve(completed);
+  await drain();
+  const id = f.updateIds[0];
+  if (!id) throw new Error("Missing completion delivery ID");
+  const original = JSON.stringify(f.notices);
+  await f.delivery.continue(launch.workerId, "Next task");
+  const currentAssignmentId = f.owner.findStatus(launch.workerId)?.currentAssignmentId;
+  expect(currentAssignmentId).not.toBe(launch.assignmentId);
+  expect(f.delivery.refreshNotice(id)).toMatchObject({
+    type: "completion",
+    worker: { workerId: launch.workerId, state: "running", currentAssignmentId },
+    assignment: { assignmentId: launch.assignmentId, outcome: "completed", persistence: "saved" },
+    reportAvailable: true,
+    verified: false,
+  });
+  expect(JSON.stringify(f.notices)).toBe(original);
   expect(f.errors).toEqual([]);
 });
 
@@ -282,15 +340,15 @@ test.each(["parent", "other-parent"])(
       other.delivery.wait(otherLaunch.workerId, otherLaunch.assignmentId),
     ]);
 
-    expect(first.delivery.refreshUpdate(otherId)).toBeUndefined();
-    expect(other.delivery.refreshUpdate(firstId)).toBeUndefined();
-    expect(first.delivery.refreshUpdate(firstId)).toMatchObject({
+    expect(first.delivery.refreshNotice(otherId)).toBeUndefined();
+    expect(other.delivery.refreshNotice(firstId)).toBeUndefined();
+    expect(first.delivery.refreshNotice(firstId)).toMatchObject({
       workerId: firstLaunch.workerId,
       assignmentId: firstLaunch.assignmentId,
       state: "completed",
       text: "FIRST_PARENT_FINDING",
     });
-    expect(other.delivery.refreshUpdate(otherId)).toMatchObject({
+    expect(other.delivery.refreshNotice(otherId)).toMatchObject({
       workerId: otherLaunch.workerId,
       assignmentId: otherLaunch.assignmentId,
       state: "completed",
@@ -309,7 +367,7 @@ test("an earlier update retains its assignment outcome while a continuation is r
   await f.delivery.wait(first.workerId, first.assignmentId);
   const next = await f.delivery.continue(first.workerId, "Next");
   expect(next.worker.state).toBe("running");
-  expect(f.delivery.refreshUpdate(firstId)).toMatchObject({
+  expect(f.delivery.refreshNotice(firstId)).toMatchObject({
     workerId: first.workerId,
     assignmentId: first.assignmentId,
     state: "completed",
@@ -324,9 +382,9 @@ test("shutdown closes pending update delivery before awaiting child cleanup", as
   const [id] = f.updateIds;
   if (!id) throw new Error("Missing update delivery ID");
   const closing = f.delivery.shutdown();
-  expect(f.delivery.refreshUpdate(id)).toBeUndefined();
+  expect(f.delivery.refreshNotice(id)).toBeUndefined();
   await closing;
-  expect(f.delivery.refreshUpdate(id)).toBeUndefined();
+  expect(f.delivery.refreshNotice(id)).toBeUndefined();
   expect(f.notices).toHaveLength(1);
   expect(f.owner.inspect(launch.workerId).status).toBe("cancelled");
   expect(f.errors).toEqual([]);
@@ -345,7 +403,7 @@ test("failed notification delivery releases the update without hiding the transp
   if (!id) throw new Error("Missing update delivery ID");
   execution(f, launch.workerId).resolve(completed);
   await f.delivery.wait(launch.workerId, launch.assignmentId);
-  expect(f.delivery.refreshUpdate(id)).toBeUndefined();
+  expect(f.delivery.refreshNotice(id)).toBeUndefined();
   expect(f.errors).toEqual([failure]);
 });
 
@@ -372,19 +430,19 @@ test("an update remains eligible through question and reply until its assignment
   first.resolve({ kind: "waiting-question", turnsUsed: 1 });
   const waiting = await f.delivery.wait(launch.workerId, launch.assignmentId);
   if (waiting.kind !== "question" || !waiting.question) throw new Error("Missing question");
-  expect(f.delivery.refreshUpdate(id)).toBeUndefined();
+  expect(f.delivery.refreshNotice(id)).toBeUndefined();
   await f.owner.reply(launch.workerId, waiting.question.id, "Target A");
-  expect(f.delivery.refreshUpdate(id)).toBeUndefined();
+  expect(f.delivery.refreshNotice(id)).toBeUndefined();
   execution(f, launch.workerId).resolve(completed);
   await f.delivery.wait(launch.workerId, launch.assignmentId);
-  expect(f.delivery.refreshUpdate(id)).toEqual({
+  expect(f.delivery.refreshNotice(id)).toEqual({
     type: "update",
     workerId: launch.workerId,
     assignmentId: launch.assignmentId,
     state: "completed",
     text: "FINDING_BEFORE_QUESTION",
   });
-  expect(f.delivery.refreshUpdate(id)).toBeUndefined();
+  expect(f.delivery.refreshNotice(id)).toMatchObject({ state: "completed" });
 });
 
 const unsuccessfulOutcomes: Array<[string, ChildExecutionOutcome]> = [
@@ -403,14 +461,14 @@ for (const [state, outcome] of unsuccessfulOutcomes) {
     if (!id) throw new Error("Missing update delivery ID");
     execution(f, launch.workerId).resolve(outcome);
     await f.delivery.wait(launch.workerId, launch.assignmentId);
-    expect(f.delivery.refreshUpdate(id)).toEqual({
+    expect(f.delivery.refreshNotice(id)).toEqual({
       type: "update",
       workerId: launch.workerId,
       assignmentId: launch.assignmentId,
       state,
       text: "PARTIAL_FINDING",
     });
-    expect(f.delivery.refreshUpdate(id)).toBeUndefined();
+    expect(f.delivery.refreshNotice(id)).toMatchObject({ state });
   });
 }
 
@@ -423,7 +481,7 @@ test("a cancelled assignment refreshes its update without cancelling an independ
   if (!id) throw new Error("Missing update delivery ID");
   await f.owner.cancel(launch.workerId);
   await f.delivery.wait(launch.workerId, launch.assignmentId);
-  expect(f.delivery.refreshUpdate(id)).toMatchObject({
+  expect(f.delivery.refreshNotice(id)).toMatchObject({
     workerId: launch.workerId,
     assignmentId: launch.assignmentId,
     state: "cancelled",

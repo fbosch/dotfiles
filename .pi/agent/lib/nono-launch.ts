@@ -82,6 +82,8 @@ export function launchArguments(
     // LMDB needs writable environments, including lock files, even when opening for searches.
     environment.FFF_FRECENCY_DB || join(cacheHome, "nvim", "fff_nvim"),
     environment.FFF_HISTORY_DB || join(dataHome, "nvim", "fff_queries"),
+    // Devenv needs writable state without access to the rest of XDG data.
+    join(dataHome, "devenv"),
   ]) {
     if (existingDirectory(path) !== undefined) integrationGrants.push("--allow", path);
   }

@@ -157,6 +157,8 @@ export class PiChildDriver implements ChildDriver {
     try {
       record.child = await record.building;
       this.observeSession(input.workerId, record, record.child.session);
+      for (const warning of record.child.warnings)
+        callbacks.onTranscript({ role: "system", text: warning });
       return await this.run(record, input, callbacks);
     } catch (error) {
       if (record.uncertain) throw new UnconfirmedChildStartupError(String(error));

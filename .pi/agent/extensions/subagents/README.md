@@ -15,7 +15,7 @@ The extension directory is `subagents`. Existing `minimal-subagents` history, no
 | `owner.ts`, `health.ts` | Own worker identities, queue capacity, budgets, and cleanup uncertainty |
 | `budget*.ts` | Own budget policy, optional advice, structural outcomes, and budget evidence |
 | `history.ts` | Save complete evidence with the owning parent |
-| `delivery.ts` | Coordinate full-result waits, receipts, and tracked update delivery |
+| `delivery.ts` | Coordinate full-result waits, receipts, and tracked notice delivery |
 | `parent-runtime.ts`, `tools.ts`, `host.ts` | Share launch/inspection/control behavior across parent integrations |
 | `presentation.ts`, `overlay.ts`, `ui.ts` | Render progress and read-only inspection with confirmed cancellation |
 
@@ -42,13 +42,23 @@ Production definitions must name an available model and the bundles backing thei
 
 `catalog.ts` defines the available bundles: `files`, `file-search`, `structural`, `git-read`, `web`, `browser`, `classifier`, `commands`, `charts`, `docs-mcp`, `github-mcp`, `chrome-mcp`, and `firefox-mcp`. Bundles select backing extensions and MCP servers; the `tools` list grants callable capabilities. `codemode` is shared by every specialist; include `tool_search` explicitly only when the role needs discovery.
 
-Every child retains the central authentication, model, classifier, command-policy, and instruction baseline. Skills load only from the names explicitly selected for that specialist. Missing models, bundles, skills, extension files, MCP servers, or required callable tools fail preflight. Unexpected callable tools also fail preflight.
+Every child retains the central authentication, model, classifier, command-policy, and instruction baseline. Skills load only from the names and paths explicitly selected for that specialist. Missing skills are skipped, with their names recorded in the child system prompt and full assignment transcript; no substitute or ambient skills are loaded. Missing models, bundles, extension files, MCP servers, or required callable tools still fail preflight. Unexpected callable tools also fail preflight.
 
 `permission` maps are rejected because this runner does not enforce that format. Extensions share the Pi process and are not an OS sandbox. Children cannot delegate. The parent owns workspace coordination; there are no automatic worktrees or runtime workspace locks.
 
 ## Parent tools
 
 These are the active contracts, not aliases for the old runner's tools. Routed commands use `requestSubagentLaunch` over Pi's event bus and share the same `ParentRuntime` as tool calls.
+
+### Explicit mentions
+
+`@specialist` keeps the parent as a launch-first coordinator. The mention extension supplies the selected role descriptions and default initial allowances, without role bodies. The parent prepares focused assignments from the request and existing context rather than reading task files or agent definitions first.
+
+Direct and nested codemode tool calls enforce this ordering. With multiple mentions, investigation remains blocked until all selected specialists have launched or a launched prerequisite returns evidence for parent verification. Failed or malformed launch results do not release the restriction. Clarification, checklists, and native worker coordination remain available. Each new request and session cleanup resets the restriction.
+
+Independent workers need read-only scope or disjoint write ownership and background launches before waits. Dependencies and shared writes remain serial; the parent verifies prerequisite reports before launching downstream work. The guard permits a staged verification step after a known worker's report; the parent still owns dependency and write-ownership decisions. All launches use normal runner preflight, permissions, approvals, and budget ceilings.
+
+### Tool calls
 
 Launch one specialist with `subagent`:
 
@@ -71,7 +81,7 @@ Omit `workerId` only for the status list. Status excludes report text, configura
 
 Background completion sends a structural receipt, not the report body. A foreground result or explicit wait returns available full evidence and consumes the concurrent completion notice. A timeout or interrupted background wait leaves its worker alive and preserves later notice delivery. A report is worker evidence, not a verified conclusion.
 
-`WorkerDelivery` owns pending worker updates and their opaque delivery IDs. The host carries those IDs through Pi messages and asks the delivery module to refresh settled assignment state when building model context. Update text, attribution, and saved messages remain unchanged. Active updates stay eligible for a later refresh; settled updates refresh once. Shutdown discards pending delivery state, and IDs from another parent or a previous runtime cannot recreate it.
+`WorkerDelivery` tracks structural notices with opaque delivery IDs. When building model context, the host refreshes settled updates, question status, and receipt metadata while preserving each notice's original attribution. For questions, `requiresReply` is true only for the current question of an available, waiting worker. Repeated projections stay fresh without changing saved messages or question/update text. This is a model-context projection, not a rewrite of displayed historical messages. Shutdown discards tracking, and tokens from another parent or runtime cannot recreate it.
 
 Control with `subagent_control`:
 

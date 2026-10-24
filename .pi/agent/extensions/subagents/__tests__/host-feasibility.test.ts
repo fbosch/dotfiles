@@ -68,7 +68,11 @@ async function fixture(
     await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
     session.dispose();
   });
-  await session.bindExtensions({ onError: (error) => { throw new Error(JSON.stringify(error)); } });
+  await session.bindExtensions({
+    onError: (error) => {
+      throw new Error(JSON.stringify(error));
+    },
+  });
   return { session, loader, cwd };
 }
 
@@ -90,11 +94,20 @@ test("allowlists constrain nested dispatch and late MCP registrations; policy ho
         },
       });
     }
-    for (const name of ["probe_allowed", "probe_blocked", "probe_forbidden", "mcp__fixture__allowed", "mcp__fixture__forbidden", "subagent"]) register(name);
+    for (const name of [
+      "probe_allowed",
+      "probe_blocked",
+      "probe_forbidden",
+      "mcp__fixture__allowed",
+      "mcp__fixture__forbidden",
+      "subagent",
+    ])
+      register(name);
     addLateTool = () => register("mcp__fixture__late");
     pi.on("tool_call", (event) => {
       intercepted.push(event.toolName);
-      if (event.toolName === "probe_blocked") return { block: true, reason: "fixture policy denied" };
+      if (event.toolName === "probe_blocked")
+        return { block: true, reason: "fixture policy denied" };
     });
     pi.registerTool({
       name: "probe_dispatch",
@@ -112,7 +125,10 @@ test("allowlists constrain nested dispatch and late MCP registrations; policy ho
   if (!dispatch || !addLateTool) throw new Error("Probe setup incomplete");
   const call = (name: string) => callTool(session, "probe_dispatch", { name });
   expect(session.getCallableToolNames().sort()).toEqual([
-    "mcp__fixture__allowed", "probe_allowed", "probe_blocked", "probe_dispatch",
+    "mcp__fixture__allowed",
+    "probe_allowed",
+    "probe_blocked",
+    "probe_dispatch",
   ]);
   await call("probe_allowed");
   await call("mcp__fixture__allowed");
@@ -123,7 +139,12 @@ test("allowlists constrain nested dispatch and late MCP registrations; policy ho
   expect(intercepted).toContain("probe_blocked");
   addLateTool();
   expect(session.getCallableToolNames()).not.toContain("mcp__fixture__late");
-  for (const name of ["probe_forbidden", "mcp__fixture__forbidden", "mcp__fixture__late", "subagent"]) {
+  for (const name of [
+    "probe_forbidden",
+    "mcp__fixture__forbidden",
+    "mcp__fixture__late",
+    "subagent",
+  ]) {
     const denied = await call(name);
     expect(denied.isError).toBe(true);
   }
@@ -132,7 +153,9 @@ test("allowlists constrain nested dispatch and late MCP registrations; policy ho
 test("reload awaits shutdown and process-scoped state survives loader replacement", async () => {
   const events: string[] = [];
   const key = `pi-subagent-feasibility-${crypto.randomUUID()}`;
-  cleanup.push(async () => { Reflect.deleteProperty(process, key); });
+  cleanup.push(async () => {
+    Reflect.deleteProperty(process, key);
+  });
   const extension: ExtensionFactory = (pi) => {
     events.push(Reflect.has(process, key) ? "load:blocked" : "load:healthy");
     pi.on("session_shutdown", async (event) => {
@@ -141,7 +164,9 @@ test("reload awaits shutdown and process-scoped state survives loader replacemen
       Reflect.set(process, key, { cleanupUnknown: true });
       events.push("shutdown:settled");
     });
-    pi.on("session_start", () => { events.push("start"); });
+    pi.on("session_start", () => {
+      events.push("start");
+    });
   };
   const { session } = await fixture([extension]);
   events.length = 0;
@@ -149,21 +174,34 @@ test("reload awaits shutdown and process-scoped state survives loader replacemen
   expect(events).toEqual(["shutdown:reload", "shutdown:settled", "load:blocked", "start"]);
   const other = await fixture([extension]);
   expect(events.at(-2)).toBe("load:blocked");
-  expect(other.session.sessionManager.getSessionId()).not.toBe(session.sessionManager.getSessionId());
+  expect(other.session.sessionManager.getSessionId()).not.toBe(
+    session.sessionManager.getSessionId(),
+  );
 });
 
 function callTool(session: AgentSession, name: string, args: Record<string, string>) {
   const tool = session.agent.state.tools.find((candidate) => candidate.name === name);
   if (!tool) throw new Error(`Missing probe tool: ${name}`);
   // This synthetic envelope exercises real nested dispatch without a provider request.
-  session.agent.state.messages = [{
-    role: "assistant",
-    content: [{ type: "toolCall", id: "probe", name, arguments: args }],
-    api: "openai-completions", provider: "fixture", model: "fixture",
-    usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
-    stopReason: "toolUse", timestamp: 0,
-  }];
+  session.agent.state.messages = [
+    {
+      role: "assistant",
+      content: [{ type: "toolCall", id: "probe", name, arguments: args }],
+      api: "openai-completions",
+      provider: "fixture",
+      model: "fixture",
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: "toolUse",
+      timestamp: 0,
+    },
+  ];
   return tool.execute("probe", args, new AbortController().signal);
 }
 
@@ -171,7 +209,9 @@ test("explicit hashline, provider hooks, codemode, and command guard load withou
   let shellExecutions = 0;
   const shellStub: ExtensionFactory = (pi) => {
     pi.registerTool({
-      name: "bash", label: "Harmless shell stub", description: "Harmless shell stub",
+      name: "bash",
+      label: "Harmless shell stub",
+      description: "Harmless shell stub",
       parameters: Type.Object({ command: Type.String() }),
       async execute() {
         shellExecutions++;
@@ -186,21 +226,31 @@ test("explicit hashline, provider hooks, codemode, and command guard load withou
     resolve(agentDir, "extensions/model-presets.ts"),
     resolve(agentDir, "extensions/openai-capabilities.ts"),
   ];
-  const { session, loader, cwd } = await fixture([
-    shellStub, sdk.createCodemodeExtension({ models: false }), sdk.createToolSearchExtension(),
-  ], paths, ["read", "bash", "codemode", "tool_search"]);
-  expect(loader.getExtensions().extensions.map((extension) => extension.path)).toEqual(expect.arrayContaining(paths));
+  const { session, loader, cwd } = await fixture(
+    [shellStub, sdk.createCodemodeExtension({ models: false }), sdk.createToolSearchExtension()],
+    paths,
+    ["read", "bash", "codemode", "tool_search"],
+  );
+  expect(loader.getExtensions().extensions.map((extension) => extension.path)).toEqual(
+    expect.arrayContaining(paths),
+  );
   expect(session.getCallableToolNames()).toContain("read");
   expect(session.getCallableToolNames()).not.toContain("subagent");
-  expect(session.extensionRunner.getToolDefinition("bash")?.description).toBe("Harmless shell stub");
+  expect(session.extensionRunner.getToolDefinition("bash")?.description).toBe(
+    "Harmless shell stub",
+  );
   const input = resolve(cwd, "probe.txt");
   await writeFile(input, "HASHLINE_FIXTURE\n");
-  const read = await callTool(session, "codemode", { code: `text(JSON.stringify(await tools.read({ path: ${JSON.stringify(input)}, anchors: true })));` });
+  const read = await callTool(session, "codemode", {
+    code: `text(JSON.stringify(await tools.read({ path: ${JSON.stringify(input)}, anchors: true })));`,
+  });
   expect(read.isError).not.toBe(true);
   expect(JSON.stringify(read.content)).toContain("HASHLINE_FIXTURE");
   expect(JSON.stringify(read.content)).toContain("│");
   expect(await Bun.file(resolve(cwd, "hashline", "hash-store.sqlite")).exists()).toBe(true);
-  const blocked = await callTool(session, "codemode", { code: 'await tools.bash({ command: "mkfs /dev/sda" });' });
+  const blocked = await callTool(session, "codemode", {
+    code: 'await tools.bash({ command: "mkfs /dev/sda" });',
+  });
   expect(JSON.stringify(blocked.content)).toContain("Script error:");
   expect(shellExecutions).toBe(0);
 });

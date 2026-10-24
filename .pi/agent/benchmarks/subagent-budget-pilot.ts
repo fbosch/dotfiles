@@ -40,7 +40,7 @@ export interface PilotSample extends PlanEntry {
   readonly workerDurationMs: number;
   readonly totalDurationMs: number;
   readonly timedOut: boolean;
-  readonly manualTurns: number;
+  readonly referenceTurns: number;
   readonly cleanupConfirmed: boolean;
   readonly storageFailed: boolean;
   readonly workerSdkRequests: number;
@@ -66,6 +66,7 @@ export function summarizeQuality(samples: readonly PilotSample[]) {
       const reference = samples.find(
         (sample) =>
           sample.arm === "reference" &&
+          sample.referenceTurns > 0 &&
           healthy(sample) &&
           sample.fixtureId === advisory.fixtureId &&
           sample.block === advisory.block,
@@ -113,7 +114,7 @@ function safeSample(
     checked,
     checkpoint,
     label:
-      entry.arm === "reference"
+      entry.arm === "reference" && result.referenceTurns > 0
         ? labelReference(
             fixture,
             checkpoint ?? undefined,
@@ -121,14 +122,16 @@ function safeSample(
             result.checkpoint?.budget.progress,
             result.waitingForParent,
           )
-        : null,
+        : entry.arm === "reference"
+          ? "unscorable"
+          : null,
     outcome: result.outcome,
     turnsUsed: result.turnsUsed,
     waitingForParent: result.waitingForParent,
     workerDurationMs: result.durationMs,
     totalDurationMs,
     timedOut: result.timedOut,
-    manualTurns: result.manualTurns,
+    referenceTurns: result.referenceTurns,
     cleanupConfirmed: result.cleanupConfirmed,
     storageFailed: result.storageFailed,
     workerSdkRequests: result.workerSdkRequests,
@@ -372,7 +375,7 @@ async function main() {
     }
   }
   const report = {
-    version: 1,
+    version: 2,
     startedAt,
     deadline: options.deadline,
     elapsedMs: performance.now() - started,

@@ -1,0 +1,117 @@
+{
+  "version": 1,
+  "date": "2026-10-24",
+  "host": "rvn-mac",
+  "baselineHead": "3a1f9f6029ce8dce784ac8e95675cb590a710809",
+  "baselineWorktreeClean": true,
+  "userUiAcceptance": {
+    "statement": "ui is fine; move on",
+    "basis": "user report",
+    "automatedUiInspection": false
+  },
+  "approval": {
+    "devenvState": "Approved existing default/XDG devenv state directory only.",
+    "macosNixSocket": "Initially approved; retained Linux-only policy after daemon safety prerequisites were inspected and the user chose external validation."
+  },
+  "sourceChanges": [
+    ".pi/agent/lib/nono-launch.ts",
+    ".pi/agent/lib/__tests__/nono-launch.test.ts"
+  ],
+  "scope": {
+    "existingDevenvDirectoryOnly": true,
+    "xdgOverride": true,
+    "parentDirectoryNotGranted": true,
+    "missingDirectoryOmitted": true,
+    "nonDirectoryRejected": true,
+    "requiresPiRestart": true,
+    "nixProfileChangedByAgent": false,
+    "noDependenciesOrLockfilesChanged": true
+  },
+  "tests": {
+    "command": "bun test ./.pi/agent/lib/__tests__/nono-launch.test.ts",
+    "red": {
+      "exitCode": 1,
+      "passed": 27,
+      "failed": 2,
+      "assertions": 104,
+      "log": "/tmp/pi-devenv-grant-red.ZgBQAS/test.log"
+    },
+    "intermediate": {
+      "exitCode": 1,
+      "passed": 28,
+      "failed": 1,
+      "assertions": 107,
+      "log": "/tmp/pi-devenv-grant-green.iWQaTc/test.log",
+      "cause": "New test incorrectly expected non-directory state to be omitted; updated it to assert the existing fail-closed exception instead of changing the helper."
+    },
+    "verified": {
+      "exitCode": 0,
+      "passed": 29,
+      "failed": 0,
+      "assertions": 109,
+      "log": "/tmp/pi-devenv-grant-verified.F6xZWJ/test.log"
+    }
+  },
+  "biome": {
+    "exitCode": 0,
+    "files": 2
+  },
+  "diffCheck": {
+    "exitCode": 0
+  },
+  "validation": {
+    "devenvVersion": "2.4.0",
+    "taskListExitCode": 1,
+    "taskListError": "failed to create devenv home directory: /Users/fbb/.local/share/devenv/; File exists (os error 17)",
+    "directoryInspection": "lstat /Users/fbb/.local/share/devenv: EPERM",
+    "dekitStart": "Registration failed for just:devenv-test without diagnostics.",
+    "dekitStatus": "Invalid dekit runner response",
+    "rawTsc": {
+      "exitCode": 1,
+      "scope": "Direct tsc skipped the package's sdk:sync prerequisite and reported SDK/type diagnostics; not accepted as the declared typecheck.",
+      "outputArtifact": "/var/folders/2p/9hk4b2yx0wdckt43n_4g2wbc0000gn/T/pi-codemode-6c37c8cdca557910.txt"
+    },
+    "declaredTypecheck": {
+      "command": "cd .pi/agent && bun run typecheck",
+      "exitCode": 1,
+      "log": "/tmp/pi-devenv-grant-typecheck.yO256J/typecheck.log",
+      "cause": "sdk:sync cannot connect to /nix/var/nix/daemon-socket/socket: Operation not permitted"
+    },
+    "fullProjectAcceptance": false,
+    "externalValidationRequired": true
+  },
+  "daemonSafety": {
+    "trustedUsers": "root fbb root @admin",
+    "sandbox": false,
+    "sandboxFallback": false,
+    "buildUsersGroup": "nixbld",
+    "currentProfileSocketPlatform": "linux",
+    "linuxRequirements": "root-only trusted-users and sandboxed builds without fallback",
+    "decision": "Do not broaden the macOS socket grant or change daemon trust/build settings; user selected validation outside Pi."
+  },
+  "liveUpdateProbe": {
+    "workerId": "119efc18-9da1-44ce-a4d3-f1007f0af5a0",
+    "assignmentId": "6cd11452-f8a7-4265-b402-947dcef78d78",
+    "update": "LIVE_UPDATE_FRESHNESS_20261024",
+    "nativeUpdateResult": "Update sent.",
+    "reportMarker": "LIVE_UPDATE_DONE_20261024",
+    "outcome": "completed",
+    "turnsUsed": 3,
+    "maxTurns": 4,
+    "persistence": "saved",
+    "released": true,
+    "modelContextDeliveryStillPendingAtCapture": true
+  },
+  "openSpec": {
+    "completed": 16,
+    "total": 21,
+    "unchecked": [
+      "6.2",
+      "6.3",
+      "6.4",
+      "7.2",
+      "7.3"
+    ]
+  },
+  "automaticBudgetGrantsEnabled": false
+}

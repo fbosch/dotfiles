@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { execFileSync } from "node:child_process";
+import { spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -23,9 +23,11 @@ test.skipIf(pi === null).each([
         join(agentDir, "skills", "gjs", "SKILL.md"),
         "---\nname: gjs\ndescription: Diagnose GJS signal lifecycle\n---\nSKILL BODY MUST NOT BE LOADED\n",
       );
-      const output = execFileSync(
+      const result = spawnSync(
         pi ?? "pi",
         [
+          // SDK fixtures isolate fake providers; launcher sandbox acceptance is separate.
+          "--no-sandbox",
           "--approve",
           "--no-extensions",
           "--no-session",
@@ -55,6 +57,9 @@ test.skipIf(pi === null).each([
           timeout: 30_000,
         },
       );
+      if (result.error) throw result.error;
+      expect(result.status, result.stderr).toBe(0);
+      const output = `${result.stdout}\n${result.stderr}`;
       const line = output.split("\n").find((value) => value.startsWith("MID_TASK_RUNTIME_CHECK "));
       expect(line).toBeDefined();
       expect(JSON.parse(line?.slice("MID_TASK_RUNTIME_CHECK ".length) ?? "{}")).toEqual({

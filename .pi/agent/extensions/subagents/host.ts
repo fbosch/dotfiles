@@ -116,7 +116,7 @@ export function registerSubagentHost(
     });
     const delivery = new WorkerDelivery(
       owner,
-      (notice, updateDeliveryId) => {
+      (notice, noticeDeliveryId) => {
         if (context?.sessionManager.getSessionId() !== parentId || shuttingDown) return;
         const assignment = match(notice)
           .with(
@@ -137,7 +137,8 @@ export function registerSubagentHost(
           {
             customType: "minimal-subagents.notice",
             content: JSON.stringify(notice),
-            details: { preview, ...(updateDeliveryId === undefined ? {} : { updateDeliveryId }) },
+            // Preserve the persisted token key for every structural notice.
+            details: { preview, updateDeliveryId: noticeDeliveryId },
             display: !cards.has(workerTarget(notice)),
           },
           { triggerTurn: true, deliverAs: "followUp" },
@@ -257,7 +258,7 @@ export function registerSubagentHost(
         typeof message.details.updateDeliveryId !== "string"
       )
         return message;
-      const notice = current?.runtime.delivery.refreshUpdate(message.details.updateDeliveryId);
+      const notice = current?.runtime.delivery.refreshNotice(message.details.updateDeliveryId);
       if (!notice) return message;
       changed = true;
       return { ...message, content: JSON.stringify(notice) };

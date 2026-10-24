@@ -40,7 +40,7 @@ The runner SHALL retain Markdown specialist definitions and model preset integra
 - **THEN** the resolved child configuration uses that override without expanding its tool permissions
 
 ### Requirement: Explicit child capabilities and preflight
-Children SHALL load centrally defined capability bundles and a mandatory baseline for required policies and model/provider support, not the parent's ambient extension set. Bundle selection MUST NOT grant tools outside the specialist allowlist. Missing required tools, extensions, presets, skills, or policies SHALL fail preflight before worker execution.
+Children SHALL load centrally defined capability bundles and a mandatory baseline for required policies and model/provider support, not the parent's ambient extension set. Bundle selection MUST NOT grant tools outside the specialist allowlist. Missing required tools, extensions, presets, or policies SHALL fail preflight before worker execution.
 
 #### Scenario: Missing required integration
 - **WHEN** a launch cannot resolve a required provider hook or tool-backing extension
@@ -51,11 +51,15 @@ Children SHALL load centrally defined capability bundles and a mandatory baselin
 - **THEN** those tools remain unavailable to the child
 
 ### Requirement: Scoped on-demand skills
-A child SHALL receive only its explicitly selected skill catalog, with names and descriptions available at startup and full instructions loaded on demand. Required safety policies SHALL remain in the mandatory baseline rather than depend on optional skill invocation.
+A child SHALL receive only its available explicitly selected skills, with names and descriptions available at startup and full instructions loaded on demand. Missing selected skills SHALL NOT block startup or cause implicit skill selection. Required safety policies SHALL remain in the mandatory baseline rather than depend on optional skill invocation.
 
 #### Scenario: Specialist starts
 - **WHEN** a worker is created with a selected skill set
 - **THEN** its catalog excludes unselected parent skills and does not preload full selected skill text
+
+#### Scenario: Selected skill is missing
+- **WHEN** a selected skill is missing from the catalog or disk, or omitted by the SDK loader
+- **THEN** startup proceeds with the remaining explicitly selected skills, records skipped names in the child system prompt and assignment transcript, and does not load substitute or ambient skills
 
 ### Requirement: Fresh or textual parent context
 Workers SHALL start with fresh conversation context unless textual inheritance is requested. Inheritance SHALL include parent user/assistant text and compaction summaries, excluding tool-result roles and non-text content. Shared project instructions and specialist identity SHALL remain applicable in either mode. The runner MUST NOT implement a true conversation fork.
