@@ -281,6 +281,7 @@ export function createHandoffExtension(
     });
 
     pi.on("before_agent_start", async (event, ctx) => {
+      if (event.messageType !== "user") return;
       const handoff = findHandoffState(ctx.sessionManager.getBranch());
       if (handoff === undefined || handoff.consumed) return;
       if (event.prompt.includes(sourceReference(handoff.sourceSessionId)) === false) return;

@@ -373,7 +373,7 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
     });
 
     pi.on("before_agent_start", (event) => {
-      pendingUserText ??= event.prompt;
+      if (event.messageType === "user") pendingUserText ??= event.prompt;
     });
 
     pi.on("agent_start", (_event, ctx) => {

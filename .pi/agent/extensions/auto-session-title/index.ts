@@ -206,6 +206,7 @@ export default async function autoSessionTitle(
   });
 
   pi.on("before_agent_start", (event) => {
+    if (event.messageType !== "user") return;
     if (!eligible || settings === undefined || !event.prompt.trim()) return;
     if (pi.getSessionName() !== generatedTitle) {
       eligible = false;

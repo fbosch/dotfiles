@@ -19,12 +19,12 @@ function setup() {
   return { original: read, renderer: resolver("read", () => read)!, resolver };
 }
 const context = {
-  args: { path: "fixture.ts", offset: "Abcd" }, argsComplete: true, cwd: "/tmp",
+  args: { path: "fixture.ts", offset: "abcde" }, argsComplete: true, cwd: "/tmp",
   executionStarted: true, expanded: true, invalidate() {}, isError: false,
   isPartial: false, lastComponent: undefined, showImages: false, state: {}, toolCallId: "read",
 };
 const result = {
-  content: [{ type: "text" as const, text: 'Abcd│const name = "æøå";\nEfgh│\nIjkl│return name;\n\n[Showing lines 7–9 of 12. Use offset=Ijkl to continue.]' }],
+  content: [{ type: "text" as const, text: 'abcde│const name = "æøå";\nfghij│\nklmno│return name;\n\n[Showing lines 7–9 of 12. Use offset=klmno to continue.]' }],
   details: { offset: 7 },
 };
 test("installed hashline read gets highlighted source with numbered gutters and preserved metadata", () => {
@@ -36,7 +36,7 @@ test("installed hashline read gets highlighted source with numbered gutters and 
   expect(plain).toContain('7 │ const name = "æøå";');
   expect(plain).toContain("8 │");
   expect(plain).toContain("9 │ return name;");
-  expect(plain).toContain("[Showing lines 7–9 of 12. Use offset=Ijkl to continue.]");
+  expect(plain).toContain("[Showing lines 7–9 of 12. Use offset=klmno to continue.]");
   expect(output).toContain(theme.getFgAnsi("syntaxKeyword"));
   expect(JSON.stringify(result)).toBe(before);
   expect(renderer.renderCall).toBe(original.renderCall);
@@ -102,13 +102,13 @@ test.skipIf(!process.env.PI_SUBAGENT_TEST_SDK)("installed Pi loads the shared re
 test("source anchors are display-only and unknown extensions retain text and warning content", () => {
   const { renderer } = setup();
   const value = {
-    content: [{ type: "text" as const, text: "Abcd│Efgh│literal file content\nIjkl│æøå\n\n[Warning: incomplete preview]" }],
+    content: [{ type: "text" as const, text: "abcde│fghij│literal file content\nklmno│æøå\n\n[Warning: incomplete preview]" }],
     details: { offset: 12 },
   };
   const output = renderer.renderResult!(value, { expanded: true, isPartial: false }, theme, {
-    ...context, args: { path: "fixture.unknown", offset: "Abcd" },
+    ...context, args: { path: "fixture.unknown", offset: "abcde" },
   }).render(120).map(stripTerminalSequences).join("\n");
-  expect(output).toContain("12 │ Efgh│literal file content");
+  expect(output).toContain("12 │ fghij│literal file content");
   expect(output).toContain("13 │ æøå");
   expect(output).toContain("[Warning: incomplete preview]");
 });

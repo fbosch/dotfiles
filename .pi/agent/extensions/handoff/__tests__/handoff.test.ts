@@ -3,11 +3,13 @@ import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
+  type BeforeAgentStartEvent,
   type ExtensionAPI,
   type ExtensionCommandContext,
   type ExtensionContext,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
+import { customStartEvent, userStartEvent } from "../../shared/__tests__/agent-start-events";
 import {
   buildHandoffDraft,
   findHandoffState,
@@ -22,7 +24,7 @@ import { createHandoffExtension, generationFailureReason } from "../index";
 
 type CommandHandler = (args: string, ctx: ExtensionCommandContext) => Promise<void>;
 type BeforeAgentStartHandler = (
-  event: { prompt: string },
+  event: BeforeAgentStartEvent,
   ctx: ExtensionContext,
 ) => Promise<unknown> | unknown;
 type CapturedTool = {
@@ -283,14 +285,16 @@ test("injects retained selected files once when the draft is submitted", async (
   const prompt = `${sourceReference(source.getSessionId())}\n\n@notes.txt\n\nContinue.`;
 
   try {
-    const unrelated = await beforeAgentStart?.({ prompt: "Unrelated prompt" }, context);
+    const unrelated = await beforeAgentStart?.(userStartEvent("Unrelated prompt"), context);
     expect(unrelated).toBeUndefined();
+    expect(beforeAgentStart).toBeDefined();
+    expect(await beforeAgentStart?.(customStartEvent(), context)).toBeUndefined();
     expect(findHandoffState(target.getEntries())?.consumed).toBeFalse();
 
-    const first = (await beforeAgentStart?.({ prompt }, context)) as
+    const first = (await beforeAgentStart?.(userStartEvent(prompt), context)) as
       | { message?: { content: string; display: boolean } }
       | undefined;
-    const second = await beforeAgentStart?.({ prompt }, context);
+    const second = await beforeAgentStart?.(userStartEvent(prompt), context);
 
     expect(first?.message?.content).toContain("## notes.txt");
     expect(first?.message?.content).toContain("1: first line");

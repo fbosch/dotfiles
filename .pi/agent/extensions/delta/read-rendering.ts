@@ -1,6 +1,7 @@
 import { stripVTControlCharacters } from "node:util";
 import { getLanguageFromPath, highlightCode, type ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { diffComponent } from "./rendering";
+import { HASHLINE_READ_ROW_PATTERN } from "./shared";
 import type { TSchema } from "typebox";
 import { Container, Text } from "@earendil-works/pi-tui";
 
@@ -28,8 +29,9 @@ export function registerHashlineReadRendering(pi: { registerToolRenderer(resolve
         const lines = stripVTControlCharacters(block.text).split("\n");
         const source: string[] = [];
         for (const line of lines) {
-          if (!/^[A-Za-z]{4}│/u.test(line)) break;
-          source.push(line.slice(5));
+          const content = HASHLINE_READ_ROW_PATTERN.exec(line)?.[1];
+          if (content === undefined) break;
+          source.push(content);
         }
         if (!source.length) return unchanged();
         const args = record(context.args);
