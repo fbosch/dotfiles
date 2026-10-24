@@ -63,4 +63,4 @@ The opt-in installed-SDK test takes `PI_CLASSIFIER_RUNTIME_MODULE`, the absolute
 
 ## Local output previews
 
-[Bash output previews](../tool-output-pilot/settings.md) use deterministic excerpts and local artifacts, not a classifier. They require trusted-project opt-in through `toolOutput.enabled` and do not use `classifier.enabled`.
+[Bash output previews](../tool-output/settings.md) use deterministic excerpts and local artifacts, not a classifier. They require trusted-project opt-in through `toolOutput.enabled` and do not use `classifier.enabled`.

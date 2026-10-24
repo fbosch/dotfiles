@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,6 +9,7 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { eligibleOutput, MAX_SESSION_BYTES, makePreview, outputEnabled } from "./policy";
+import { createOutputSearchTool, SEARCH_TOOL } from "./search";
 
 function loadSettings(ctx: ExtensionContext): { global: unknown; project: unknown } {
   const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
@@ -22,8 +24,8 @@ interface Dependencies {
   artifactRoot: () => string;
 }
 
-export function registerToolOutputPilot(
-  pi: Pick<ExtensionAPI, "on" | "appendEntry" | "getAllTools">,
+export function registerToolOutput(
+  pi: Pick<ExtensionAPI, "on" | "appendEntry" | "getAllTools" | "getActiveTools" | "registerTool">,
   dependencies: Dependencies = { settings: loadSettings, artifactRoot: tmpdir },
 ): void {
   let generation = 0;
@@ -37,16 +39,18 @@ export function registerToolOutputPilot(
   pi.on("session_start", reset);
   pi.on("session_shutdown", reset);
 
+  const enabled = (ctx: ExtensionContext) => {
+    const settings = dependencies.settings(ctx);
+    return outputEnabled(settings.global, settings.project, ctx.isProjectTrusted());
+  };
+  pi.registerTool(createOutputSearchTool(enabled));
   pi.on("tool_result", async (event, ctx) => {
     if (event.toolName !== "bash" || event.parentToolCallId || ctx.signal?.aborted) return;
     const owner = generation;
     const cwd = ctx.cwd;
-    const enabled = () => {
-      const settings = dependencies.settings(ctx);
-      return outputEnabled(settings.global, settings.project, ctx.isProjectTrusted());
-    };
+    const searchAvailable = pi.getActiveTools().includes(SEARCH_TOOL);
     try {
-      if (!enabled()) return;
+      if (!enabled(ctx)) return;
       // Retrieval uses the existing paginated reader, not a new arbitrary-file API.
       if (!pi.getAllTools().some((tool) => tool.name === "read" && tool.exposure !== "hidden"))
         return;
@@ -54,7 +58,7 @@ export function registerToolOutputPilot(
       const structuredContent = event.structuredContent;
       if (text === undefined || structuredContent === undefined) return;
       // Avoid disk writes for outputs whose required evidence already exceeds the preview budget.
-      if (!makePreview(text, "/artifact/output.txt")) return;
+      if (!makePreview(text, "/artifact/output.txt", searchAvailable)) return;
       const bytes = Buffer.byteLength(text);
       if (storedBytes + bytes > MAX_SESSION_BYTES) return;
       storedBytes += bytes;
@@ -62,12 +66,15 @@ export function registerToolOutputPilot(
       // No untrusted command, tool id, or output is used to construct filesystem paths.
       const directory = await mkdtemp(join(dependencies.artifactRoot(), "pi-tool-output-"));
       const artifactPath = join(directory, "output.txt");
-      const preview = makePreview(text, artifactPath);
+      const preview = makePreview(text, artifactPath, searchAvailable);
       if (!preview) return;
       await writeFile(artifactPath, text, { encoding: "utf8", mode: 0o600, flag: "wx" });
       const report = {
         version: 2,
         mode: "preview",
+        strategy: "repeated-progress",
+        cwd,
+        sha256: createHash("sha256").update(text).digest("hex"),
         toolCallId: event.toolCallId,
         artifactPath,
         coverage: "complete-model-facing-text",
@@ -84,7 +91,7 @@ export function registerToolOutputPilot(
         flag: "wx",
       });
       // Never publish a result into a replacement session or after a project/settings change.
-      if (ctx.signal?.aborted || owner !== generation || cwd !== ctx.cwd || !enabled()) return;
+      if (ctx.signal?.aborted || owner !== generation || cwd !== ctx.cwd || !enabled(ctx)) return;
       pi.appendEntry("tool-output-preview", report);
       return {
         content: [{ type: "text", text: preview.text }],
@@ -106,6 +113,6 @@ export function registerToolOutputPilot(
   });
 }
 
-export default function toolOutputPreview(pi: ExtensionAPI): void {
-  registerToolOutputPilot(pi);
+export default function toolOutput(pi: ExtensionAPI): void {
+  registerToolOutput(pi);
 }

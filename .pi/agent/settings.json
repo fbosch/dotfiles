@@ -22,7 +22,7 @@
   ],
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-6-luna-fast",
-  "defaultThinkingLevel": "xhigh",
+  "defaultThinkingLevel": "max",
   "defaultTools": [
     "+codemode"
   ],
@@ -38,7 +38,7 @@
   "quickReplies": {
     "enabled": true
   },
-  "hideThinkingBlock": false,
+  "hideThinkingBlock": true,
   "showFileChanges": false,
   "tuiMode": "fullscreen",
   "selectorOverlayWidth": 72,

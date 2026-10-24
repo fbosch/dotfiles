@@ -64,7 +64,68 @@ export interface Preview {
   ranges: { from: number; to: number }[];
 }
 
-export function makePreview(text: string, artifactPath: string): Preview | undefined {
+const DIAGNOSTIC =
+  /\b(?:error|fail(?:ed|ure)?|warn(?:ing)?|cancel(?:led|ed)?|timeout|timed out|constraint|revision|final|result|summary|skipped|incompatible|prohibited)\b/iu;
+
+interface ProgressFamily {
+  indices: number[];
+  previous: number[];
+  ordered: boolean;
+}
+
+function repeatedProgress(lines: string[]): Set<number> {
+  const families = new Map<string, ProgressFamily>();
+  for (const [index, line] of lines.entries()) {
+    if (DIAGNOSTIC.test(line)) continue;
+    // Only explicit progress prefixes qualify. Keep payloads, measurements, paths, and IDs exact.
+    const parts = /^([ \t]*(?:progress|scan(?:ning)?)\b[^:\r\n]*):([^\r\n]*)(\r?\n)?$/iu.exec(line);
+    if (!parts) continue;
+    const prefix = parts[1];
+    if (prefix === undefined || !/^[a-z\d \t,/%.-]+$/iu.test(prefix)) continue;
+    const labels = prefix.match(/[a-z]+/giu) ?? [];
+    if (
+      labels.some(
+        (label) =>
+          !/^(?:progress|scan|scanning|block|tick|item|batch|step|of|total)$/iu.test(label),
+      )
+    )
+      continue;
+    const counters = [...prefix.matchAll(/\b\d+\b/gu)].map((match) => Number(match[0]));
+    if (counters.some((counter) => !Number.isSafeInteger(counter))) continue;
+    const key = JSON.stringify([
+      prefix.replace(/\b\d+\b/gu, "#"),
+      parts[2]?.replace(/[ \t]+$/u, ""),
+      parts[3],
+    ]);
+    const family = families.get(key);
+    if (!family) {
+      families.set(key, { indices: [index], previous: counters, ordered: true });
+      continue;
+    }
+    const changed = counters.findIndex((value, i) => value !== family.previous[i]);
+    if (
+      counters.length !== family.previous.length ||
+      (counters.length > 0 &&
+        (changed < 0 || (counters[changed] ?? 0) <= (family.previous[changed] ?? 0)))
+    )
+      family.ordered = false;
+    family.previous = counters;
+    family.indices.push(index);
+  }
+  const collapsible = new Set<number>();
+  for (const family of families.values()) {
+    // Rare progress lines and reset/out-of-order counters may carry different meaning.
+    if (!family.ordered || family.indices.length < 8) continue;
+    for (const index of family.indices.slice(1, -1)) collapsible.add(index);
+  }
+  return collapsible;
+}
+
+export function makePreview(
+  text: string,
+  artifactPath: string,
+  searchAvailable = false,
+): Preview | undefined {
   const lines = text.match(/[^\n]*\n|[^\n]+$/gu) ?? [];
   // Whole lines keep Unicode and CRLF intact; oversized lines require the original result.
   if (lines.some((line) => Buffer.byteLength(line) > 2_000)) return undefined;
@@ -74,10 +135,9 @@ export function makePreview(text: string, artifactPath: string): Preview | undef
   };
   for (let i = 0; i < Math.min(4, lines.length); i++) add(i);
   for (let i = Math.max(0, lines.length - 6); i < lines.length; i++) add(i);
-  const diagnostic =
-    /\b(?:error|fail(?:ed|ure)?|warn(?:ing)?|cancel(?:led|ed)?|timeout|timed out|constraint|revision|final|result|summary|skipped|incompatible|prohibited)\b/iu;
-  for (const [i, line] of lines.entries()) {
-    if (diagnostic.test(line)) {
+  const collapsible = repeatedProgress(lines);
+  for (const [i] of lines.entries()) {
+    if (!collapsible.has(i)) {
       add(i - 1);
       add(i);
       add(i + 1);
@@ -90,23 +150,30 @@ export function makePreview(text: string, artifactPath: string): Preview | undef
     else ranges.push({ from: i + 1, to: i + 1 });
   }
   const parts = [
-    `[Bash output preview: ${selected.size}/${lines.length} lines; ${Buffer.byteLength(text)} original bytes. Incomplete excerpts, not a summary.]\n`,
+    `[Bash output: ${selected.size}/${lines.length} lines; ${Buffer.byteLength(text)} original bytes. Only repeated progress templates collapsed; all other lines are shown.]\n`,
     `Full output: ${JSON.stringify(artifactPath)}\n`,
-    "Retrieve omitted evidence with read({path: <full output path>, offset: <line>, limit: 100}); follow nextOffset until complete.\n",
+    ...(searchAvailable
+      ? [
+          "Search exact progress counters with tool_output_search({path: <full output path>, queries: [<literal substring>]}). Counts cover the entire captured artifact.\n",
+        ]
+      : []),
+    "For exact progress counters, use read({path: <full output path>, offset: <line>, limit: 100}). Collapsed line ranges are listed below.\n",
   ];
   let next = 1;
   for (const range of ranges) {
-    if (range.from > next) parts.push(`[Omitted lines ${next}-${range.from - 1}]\n`);
+    if (range.from > next)
+      parts.push(`[Collapsed repeated progress lines ${next}-${range.from - 1}]\n`);
     parts.push(`[Lines ${range.from}-${range.to}]\n`);
     const excerpt = lines.slice(range.from - 1, range.to).join("");
     parts.push(excerpt);
     if (!excerpt.endsWith("\n")) parts.push("\n");
     next = range.to + 1;
   }
-  if (next <= lines.length) parts.push(`[Omitted lines ${next}-${lines.length}]\n`);
+  if (next <= lines.length)
+    parts.push(`[Collapsed repeated progress lines ${next}-${lines.length}]\n`);
   const preview = parts.join("");
   const bytes = Buffer.byteLength(preview);
-  // Retain every selected diagnostic or fall back; never squeeze it out to meet the budget.
+  // Never discard non-progress evidence just to meet the budget.
   if (bytes > MAX_PREVIEW_BYTES || bytes > Buffer.byteLength(text) * 0.75) return undefined;
   return { text: preview, ranges, totalLines: lines.length, selectedLines: selected.size };
 }

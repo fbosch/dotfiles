@@ -11,7 +11,7 @@ import {
   type ToolResultEvent,
   type ToolResultEventResult,
 } from "@earendil-works/pi-coding-agent";
-import { registerToolOutputPilot } from "../index";
+import { registerToolOutput } from "../index";
 import {
   eligibleOutput,
   MAX_PREVIEW_BYTES,
@@ -57,11 +57,16 @@ async function harness() {
   } as unknown as ExtensionContext;
   let readerAvailable = true;
   const api = {
+    getActiveTools: () => (readerAvailable ? ["read"] : []),
+    registerTool: () => {},
     getAllTools: () => (readerAvailable ? [{ name: "read", exposure: "direct" }] : []),
     on: (name: string, handler: Handler) => handlers.set(name, handler),
     appendEntry: (_name: string, data: Record<string, unknown>) => records.push(data),
-  } as unknown as Pick<ExtensionAPI, "on" | "appendEntry" | "getAllTools">;
-  registerToolOutputPilot(api, {
+  } as unknown as Pick<
+    ExtensionAPI,
+    "on" | "appendEntry" | "getAllTools" | "getActiveTools" | "registerTool"
+  >;
+  registerToolOutput(api, {
     settings: () => {
       const current = settings;
       afterSettings?.();
@@ -112,8 +117,8 @@ test("preview retains boundary and diagnostic lines verbatim with context and om
   if (!p) throw new Error("Missing preview");
   for (const i of [0, 199, 200, 201, 399, 400, 401, 599]) expect(p.text).toContain(lines[i] ?? "");
   expect(p.text).toContain("FINAL: æøå 😀");
-  expect(p.text).toContain("[Omitted lines 5-199]");
-  expect(p.text).toContain("Incomplete excerpts, not a summary");
+  expect(p.text).toContain("[Collapsed repeated progress lines 5-199]");
+  expect(p.text).toContain("Only repeated progress templates collapsed");
   expect(p.text).toContain("offset: <line>, limit: 100");
   expect(Buffer.byteLength(p.text)).toBeLessThan(MAX_PREVIEW_BYTES);
   const numbers = p.ranges.flatMap((r) =>
@@ -325,6 +330,15 @@ test("installed hashline reader retrieves preview artifacts with paginated ancho
   expect(text).toMatch(/[a-z]{5}│/u);
 }, 20_000);
 
+test("Pi discovers the tool-output entry point and registers artifact search", async () => {
+  const h = await harness();
+  const entry = resolve(import.meta.dir, "../index.ts");
+  const loaded = await discoverAndLoadExtensions([entry], h.root, h.root);
+  expect(loaded.errors).toEqual([]);
+  expect(loaded.extensions).toHaveLength(1);
+  expect(loaded.extensions[0]?.tools.get("tool_output_search")).toBeDefined();
+}, 20_000);
+
 test("mixed fixture retains buried constraints and revisions without retaining whole progress blocks", async () => {
   const headings = [
     "SYNTHETIC CASE mixed. A staged deployment simulation. Exit zero means capture succeeded.",
@@ -363,4 +377,49 @@ test("mixed fixture retains buried constraints and revisions without retaining w
       classifierCalls: 0,
     }),
   );
+});
+
+test("all unrecognized lines survive, including unmarked identifiers, measurements, and contradictory observations", () => {
+  const lines = output.match(/[^\n]*\n/gu) ?? [];
+  const evidence = [
+    "artifact = pine-7631\r\n",
+    "Observation 2 supersedes 1: allowed=false; host=staging\r\n",
+    "adjustment amount=-11\r\n",
+    "build/cache/entry-572: retained\r\n",
+    "Latency p99 943ms\r\n",
+  ];
+  evidence.forEach((line, i) => {
+    lines[60 + i * 90] = line;
+  });
+  const preview = makePreview(lines.join(""), "/private/output.txt");
+  expect(preview).toBeDefined();
+  for (const line of evidence) expect(preview?.text).toContain(line);
+});
+
+test("progress payload changes, diagnostics, and counter resets are never masked", () => {
+  for (const special of [
+    "Progress 300: checksum=9472\r\n",
+    "Progress 300: value changed to 19\r\n",
+    "Progress 300: WARNING replica unavailable\r\n",
+  ]) {
+    const lines = output.match(/[^\n]*\n/gu) ?? [];
+    lines[300] = special;
+    expect(makePreview(lines.join(""), "/private/output.txt")?.text).toContain(special);
+  }
+  const reset = Array.from({ length: 300 }, (_, i) => `Progress ${i % 40}: waiting\n`).join("");
+  expect(makePreview(reset, "/private/output.txt")).toBeUndefined();
+  const measurements = Array.from(
+    { length: 400 },
+    (_, i) => `Progress ${i}: measured ${i * 7}ms\n`,
+  ).join("");
+  expect(makePreview(measurements, "/private/output.txt")).toBeUndefined();
+});
+
+test("novel output that does not fit is unchanged rather than reduced to head and tail", () => {
+  const unique = Array.from({ length: 400 }, (_, i) => `record ${i}: measurement=${i * 13}\n`).join(
+    "",
+  );
+  expect(makePreview(unique, "/private/output.txt")).toBeUndefined();
+  const rare = `${output}scan 1: unusual\nscan 2: unusual\n`;
+  expect(makePreview(rare, "/private/output.txt")?.text).toContain("scan 1: unusual");
 });
