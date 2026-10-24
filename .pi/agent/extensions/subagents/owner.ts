@@ -342,6 +342,9 @@ function freezeConfig(config: ResolvedSpecialist): ResolvedSpecialist {
     excludeTools: Object.freeze([...config.excludeTools]),
     extensions: Object.freeze([...config.extensions]),
     skills: Object.freeze(config.skills.map((skill) => Object.freeze({ ...skill }))),
+    ...(config.skippedSkills === undefined
+      ? {}
+      : { skippedSkills: Object.freeze([...config.skippedSkills]) }),
     ...(config.mcpServers === undefined
       ? {}
       : { mcpServers: Object.freeze([...config.mcpServers]) }),

@@ -7,8 +7,8 @@ The five read-only microfixtures test the reporting/checking protocol. They are 
 ## Limits and comparisons
 
 - Maximum 26 trials, 15 minutes overall, and two minutes per trial, including failed trials. No paid warmups or automatic retries.
-- Two blocks reverse fixed/advisory order. Each block adds a manually extended reference for the three non-blocker fixtures.
-- All arms start with four turns and a fixture-only ceiling of eight. At the shared checkpoint after two completed turns, the reference receives one parent-controlled four-turn increment. Fixed/advisory arms receive no automatic grants.
+- Two blocks reverse fixed/advisory order. Each block adds a scripted admission reference for the three non-blocker fixtures.
+- All arms start with four turns and a fixture-only ceiling of eight. At the shared checkpoint after two completed turns, an eligible reference receives one scripted four-turn increment through the existing admission policy. Its oracle returns probability one without dispatching a classifier. Unknown-only evidence and repeated failures remain non-granting. Fixed/advisory arms receive no automatic grants.
 - Stop after the first fixed/advisory/reference trio if none reaches admission. Stop on infrastructure, cleanup, persistence, mutation, deterministic-limit, or overall-deadline failure. Preserve failed attempts instead of silently replacing them.
 - A retry must subtract prior attempts from the 26-trial limit and retain the original deadline. The recipe exposes both values.
 
@@ -17,6 +17,8 @@ The five read-only microfixtures test the reporting/checking protocol. They are 
 The checker accepts only bounded, exact cited facts in the declared wire format. It never returns raw model text. Reference labels depend on independently checked new facts, observed structural evidence, and verified blockers. Intended fixture labels are planning metadata, not measured labels. Report compliance is part of this microfixture metric; equivalent wording outside the declared encoding can fail.
 
 The public report explicitly selects checked results and structural budget inputs. Full SDK entries, messages, tool details, model reports, and failure logs stay in private temporary directories. No transcript or fixture text reaches budget advice.
+
+Version-two reports record granted `referenceTurns` separately from classifier dispatches. The reference budget snapshot records its scripted admission grant as an automatic grant. It is not a real classifier recommendation or production enablement. References without a grant are unscorable. The saved version-one smoke artifact remains unchanged.
 
 Record native SDK requests separately from transport fetch observations. Virtual routing calls are not physical SDK requests. Fetch-only instrumentation does not establish complete websocket/CLI provider-attempt totals. Classifier provider attempts come from shared-requester telemetry. Missing metrics remain unknown; SDK cost figures are estimates, not billing receipts.
 

@@ -30,15 +30,37 @@ export async function createChildSession(options: ChildSessionOptions) {
     packages: [], extensions: [], skills: [], prompts: [], themes: [],
     cacheWarming: "off",
   });
-  const selectedSkills = sdk.loadSkills({ cwd, agentDir, skillPaths: config.skills.map((skill) => skill.path), includeDefaults: false });
-  for (const required of config.skills) {
-    if (!selectedSkills.skills.some((skill) => skill.name === required.name && skill.filePath === required.path)) {
-      throw new Error(`Required skill did not load: ${required.name}`);
-    }
-  }
-  if (selectedSkills.diagnostics.some((diagnostic) => diagnostic.type === "error")) {
-    throw new Error(`Skill loading failed: ${selectedSkills.diagnostics.map((diagnostic) => diagnostic.message).join("; ")}`);
-  }
+  const loadedSkills = sdk.loadSkills({
+    cwd,
+    agentDir,
+    skillPaths: config.skills.map((skill) => skill.path),
+    includeDefaults: false,
+  });
+  // Metadata can change after catalog resolution; never substitute a different skill.
+  const selectedSkills = {
+    ...loadedSkills,
+    skills: loadedSkills.skills.filter((skill) =>
+      config.skills.some(
+        (required) => required.name === skill.name && required.path === skill.filePath,
+      ),
+    ),
+  };
+  const skippedSkills = [
+    ...new Set([
+      ...(config.skippedSkills ?? []),
+      ...config.skills
+        .filter(
+          (required) =>
+            !selectedSkills.skills.some(
+              (skill) => skill.name === required.name && skill.filePath === required.path,
+            ),
+        )
+        .map((skill) => skill.name),
+    ]),
+  ];
+  const warnings = skippedSkills.length
+    ? [`Skipped unavailable skills: ${skippedSkills.join(", ")}`]
+    : [];
   const errors: string[] = [];
   const mcp = await selectedMcp({ agentDir, cwd, projectTrusted: options.projectTrusted ?? false,
     servers: config.mcpServers ?? [], tools: config.tools, create: sdk.createMcpExtension });
@@ -56,6 +78,7 @@ export async function createChildSession(options: ChildSessionOptions) {
     appendSystemPrompt: [
       `You are the ${config.name} specialist.\n${config.prompt}`,
       "Only the parent delegates work. Do not spawn agents. Report concise findings, checks actually run, remaining work, and limitations. Worker reports are evidence, not verified conclusions. Use worker_question only for a blocking parent decision; use worker_update only for a material finding.",
+      ...warnings,
     ],
   });
   let session: Pi.AgentSession | undefined;
@@ -97,7 +120,7 @@ export async function createChildSession(options: ChildSessionOptions) {
       throw new Error(`Child did not retain required model: ${config.model}`);
     }
     verifyChildCapabilities(selected, [...new Set([...session.getActiveToolNames(), ...session.getCallableToolNames()])]);
-    return { session, close, errors };
+    return { session, close, errors, warnings };
   } catch (cause) {
     const failure = cause instanceof Error ? cause : new Error(String(cause));
     try {

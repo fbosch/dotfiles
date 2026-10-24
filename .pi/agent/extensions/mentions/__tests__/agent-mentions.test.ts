@@ -41,8 +41,14 @@ describe("agent mentions", () => {
     const cwd = join(root, "project");
     mkdirSync(join(agentDirectory, "agents"), { recursive: true });
     mkdirSync(join(cwd, ".pi", "agents"), { recursive: true });
-    writeFileSync(join(agentDirectory, "agents", "general.md"), "---\ndescription: General\n---\nGeneral tasks.");
-    writeFileSync(join(agentDirectory, "agents", "Plan.md"), "---\ndescription: Plan\n---\nPlan tasks.");
+    writeFileSync(
+      join(agentDirectory, "agents", "general.md"),
+      "---\ndescription: General\n---\nGeneral tasks.",
+    );
+    writeFileSync(
+      join(agentDirectory, "agents", "Plan.md"),
+      "---\ndescription: Plan\n---\nPlan tasks.",
+    );
     writeFileSync(
       join(agentDirectory, "agents", "review.md"),
       '---\ndescription: Global reviewer\ncolor: "#a8d0e6"\n---\nReview globally.',
@@ -187,6 +193,12 @@ describe("agent mentions", () => {
   });
 
   test("adds the routing instruction only when the subagent tool is active", async () => {
+    const agentDirectory = temporaryDirectory();
+    mkdirSync(join(agentDirectory, "agents"));
+    writeFileSync(
+      join(agentDirectory, "agents", "explore.md"),
+      "---\ndescription: Explore\nmax_turns: 12\n---\nExplore only.\n",
+    );
     let handler:
       | ((
           event: BeforeAgentStartEvent,
@@ -200,7 +212,7 @@ describe("agent mentions", () => {
       getActiveTools: () => ["subagent"],
       registerMarkdownTransformer() {},
     } as unknown as ExtensionAPI;
-    agentMentions(pi);
+    agentMentions(pi, agentDirectory);
 
     const event = {
       type: "before_agent_start",
@@ -209,20 +221,22 @@ describe("agent mentions", () => {
       systemPrompt: "base prompt",
       systemPromptOptions: {},
     } as unknown as BeforeAgentStartEvent;
-    const result = await handler?.(event, { cwd: "/tmp" } as ExtensionContext);
+    const result = await handler?.(event, { cwd: agentDirectory } as ExtensionContext);
 
     expect(result?.systemPrompt).toBeUndefined();
     expect(event.systemPromptOptions.forceSystemPrompt).toBeUndefined();
     expect(result?.message).toEqual({
       customType: "explicit-subagent-invocation",
-      content: agentMentionInstruction([{ name: "explore", description: "Explore" }]),
+      content: agentMentionInstruction([
+        { name: "explore", description: "Explore", defaultMaxTurns: 12 },
+      ]),
       display: false,
       details: { agents: ["explore"] },
     });
     expect(result?.message?.content).toContain("only to the current user request");
     expect(
       await handler?.({ ...event, prompt: "Continue without delegation" }, {
-        cwd: "/tmp",
+        cwd: agentDirectory,
       } as ExtensionContext),
     ).toBeUndefined();
   });

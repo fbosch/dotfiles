@@ -42,13 +42,23 @@ Production definitions must name an available model and the bundles backing thei
 
 `catalog.ts` defines the available bundles: `files`, `file-search`, `structural`, `git-read`, `web`, `browser`, `classifier`, `commands`, `charts`, `docs-mcp`, `github-mcp`, `chrome-mcp`, and `firefox-mcp`. Bundles select backing extensions and MCP servers; the `tools` list grants callable capabilities. `codemode` is shared by every specialist; include `tool_search` explicitly only when the role needs discovery.
 
-Every child retains the central authentication, model, classifier, command-policy, and instruction baseline. Skills load only from the names explicitly selected for that specialist. Missing models, bundles, skills, extension files, MCP servers, or required callable tools fail preflight. Unexpected callable tools also fail preflight.
+Every child retains the central authentication, model, classifier, command-policy, and instruction baseline. Skills load only from the names and paths explicitly selected for that specialist. Missing skills are skipped, with their names recorded in the child system prompt and full assignment transcript; no substitute or ambient skills are loaded. Missing models, bundles, extension files, MCP servers, or required callable tools still fail preflight. Unexpected callable tools also fail preflight.
 
 `permission` maps are rejected because this runner does not enforce that format. Extensions share the Pi process and are not an OS sandbox. Children cannot delegate. The parent owns workspace coordination; there are no automatic worktrees or runtime workspace locks.
 
 ## Parent tools
 
 These are the active contracts, not aliases for the old runner's tools. Routed commands use `requestSubagentLaunch` over Pi's event bus and share the same `ParentRuntime` as tool calls.
+
+### Explicit mentions
+
+`@specialist` keeps the parent as a launch-first coordinator. The mention extension supplies the selected role descriptions and default initial allowances, without role bodies. The parent prepares focused assignments from the request and existing context rather than reading task files or agent definitions first.
+
+Direct and nested codemode tool calls enforce this ordering. With multiple mentions, investigation remains blocked until all selected specialists have launched or a launched prerequisite returns evidence for parent verification. Failed or malformed launch results do not release the restriction. Clarification, checklists, and native worker coordination remain available. Each new request and session cleanup resets the restriction.
+
+Independent workers need read-only scope or disjoint write ownership and background launches before waits. Dependencies and shared writes remain serial; the parent verifies prerequisite reports before launching downstream work. The guard permits a staged verification step after a known worker's report; the parent still owns dependency and write-ownership decisions. All launches use normal runner preflight, permissions, approvals, and budget ceilings.
+
+### Tool calls
 
 Launch one specialist with `subagent`:
 

@@ -46,6 +46,7 @@ export interface ResolvedSpecialist {
   readonly excludeTools: readonly string[];
   readonly extensions: readonly string[];
   readonly skills: readonly Readonly<{ name: string; path: string }>[];
+  readonly skippedSkills?: readonly string[];
   readonly mcpServers?: readonly string[];
 }
 
@@ -163,12 +164,35 @@ export async function resolveSpecialist(
   const extensions = [
     ...new Set([catalog.baseline, ...bundles].flatMap((bundle) => [...bundle.extensions])),
   ];
-  const skills = list(fields.skills, "skills").map((skill) => {
+  const skills: Readonly<{ name: string; path: string }>[] = [];
+  const skippedSkills: string[] = [];
+  for (const skill of list(fields.skills, "skills")) {
     const path = catalog.skills.get(skill);
-    if (!path) throw new Error(`Required skill is unavailable: ${skill}`);
-    return Object.freeze({ name: skill, path });
-  });
-  for (const path of [...extensions, ...skills.map((skill) => skill.path)]) {
+    if (!path) {
+      skippedSkills.push(skill);
+      continue;
+    }
+    if (!isAbsolute(path)) throw new Error(`Capability paths must be absolute: ${path}`);
+    try {
+      if (!(await stat(path)).isFile()) {
+        skippedSkills.push(skill);
+        continue;
+      }
+      await access(path, constants.R_OK);
+    } catch (cause) {
+      if (
+        cause instanceof Error &&
+        "code" in cause &&
+        (cause.code === "ENOENT" || cause.code === "ENOTDIR")
+      ) {
+        skippedSkills.push(skill);
+        continue;
+      }
+      throw new Error(`Required capability file is unavailable: ${path}`, { cause });
+    }
+    skills.push(Object.freeze({ name: skill, path }));
+  }
+  for (const path of extensions) {
     if (!isAbsolute(path)) throw new Error(`Capability paths must be absolute: ${path}`);
     try {
       if (!(await stat(path)).isFile()) throw new Error("Not a file");
@@ -193,6 +217,7 @@ export async function resolveSpecialist(
     excludeTools: Object.freeze(excludeTools),
     extensions: Object.freeze(extensions),
     skills: Object.freeze(skills),
+    skippedSkills: Object.freeze(skippedSkills),
     mcpServers: Object.freeze([
       ...new Set(
         [catalog.baseline, ...bundles].flatMap((bundle) => [...(bundle.mcpServers ?? [])]),

@@ -7,7 +7,15 @@ when:
 
 # Subagent orchestration
 
-Read these operational references BEFORE the relevant actions:
+## Explicit specialist mentions
+
+An `explicit-subagent-invocation` message supplies the selected catalog and initial coordination rules. For this request, prepare a focused assignment from the user message and existing context, then dispatch before investigating task files. Do not read agent definitions, skill bodies, or the references below just to prepare the initial launches. The runner validates role configuration and capabilities; a mention does not change permissions or approvals.
+
+For multiple mentions, launch independent work in the background with disjoint write ownership or read-only scope. Keep dependencies and shared writes serial. Retrieve and verify prerequisite evidence before starting dependent work, and ask the user when scope or ordering is unclear. After dispatch, read the operational references when their supervision or verification procedures become relevant.
+
+## Other orchestration
+
+Outside that initial mention-dispatch phase, read these operational references BEFORE the relevant actions:
 
 Pass each reference path below literally to `read`, including its `~/` prefix; the tool expands it. Do not guess a username, substitute a working-directory path, or search for these files. If a literal read fails, report the error rather than trying invented paths.
 

@@ -112,9 +112,73 @@ Dekit registration for `devenv:test:pi-subagents` failed, so the discovered `dev
 
 No new calibration trials ran and no automatic-grant settings changed. The fresh-parent storage check is complete, not live/UI acceptance. Task `7.3`, the full-project gate, and the notice-delivery goal remain incomplete. The extension still requires `/reload` in the running parent.
 
+### Follow-up at `c7817a2c9c7af776dfa33d5ac8f250fd60c670e1`
+
+The follow-up began from that clean HEAD. The user approved replacing the invalid manual pilot reference with a scripted admission reference. No production role, permission, dependency, lockfile, or automatic-enablement setting changed.
+
+The old reference called `extendBudget()` while its worker was running, a state the public manual-control contract rejects. The benchmark now uses a fixture-only probability-one oracle through the existing admission policy. It does not dispatch a real classifier. The evidence gate and eight-turn ceiling still apply. Version-two reports record granted `referenceTurns`; unextended references are unscorable. The saved version-one smoke remains unchanged.
+
+The fake-driver owner regression verifies running admission, the unchanged manual-extension rejection, one four-turn increment, refusal beyond eight turns, and no classifier dispatch. Other cases preserve fixed/advisory behavior, unknown-only rejection, and the repeated-failure gate. These are offline owner/policy checks, not a measured live calibration run.
+
+- `devenv tasks run test:pi-subagent-budget-fixtures`: 18 passed, 0 failed, 107 assertions across 3 files; scoped TypeScript exited 0. Evidence: `/tmp/pi-budget-reference-final.EUFTFU/workflow.log`.
+- Changed-file Biome exited 0 for four files. Evidence: `/tmp/pi-budget-reference-final-lint.sxCn3o/biome.log`. An initial import-wrapping error was corrected.
+- Global `bun run typecheck` exited 0. Evidence: `/tmp/pi-budget-reference-checks.FSsEOO/typecheck.log`.
+- Pilot protocol prose, strict OpenSpec validation, and the source diff check exited 0. The audit itself is checked separately after this update.
+- Dekit registration failed for `devenv:test:pi-subagent-budget-fixtures` without a diagnostic. The discovered devenv command ran directly. No new calibration trials ran and no trial deadline was reset.
+
+#### Fresh full-project failure
+
+A read-only `devenv test` pass on the clean pre-edit HEAD exited 1. Its `test:pi-extensions` summary records 2481 passed, 34 failed, 8 skipped, and 1 error; 2523 tests across 260 files with 15449 assertions. The parent verified that summary in the retained log. Other task totals remain unknown where terminal output was interleaved.
+
+Explicitly visible failed tasks include `test:ags-gjs`, `test:fish-greeting`, `test:skill-suggestions-eval`, `test:nvim-dekit-terminal`, `test:pi-mcp`, `test:stow`, `test:runtime-shell`, `test:pi-extensions`, and dependency-failed `test:all`. Cohorts include unavailable `ags` and `fc-match`, MCP expectation mismatches, two skill-suggestion assertions, the pi-lens patch mismatch, hashline package/image failures, CLI fixture setup failures, staged Git context, and other runtime assertions. These failures are not proven to pre-date the original migration, and no exception was accepted.
+
+Full output is `/var/folders/2p/9hk4b2yx0wdckt43n_4g2wbc0000gn/T/openspec-7.2-validation.APTSn2/devenv-test.log`; `exit-code.txt` and `environment.txt` are beside it. The observed tools were devenv 2.4.0 on aarch64-darwin and Bun 1.4.2. The full run left the worktree clean before the reference repair.
+
+The narrower diagnostic command `devenv shell -- bash -c 'cd .pi/agent && bun test extensions/skill-discovery/__tests__/mid-task-runtime.test.ts'` also exited 1. It reached the sandbox and reported unknown provider `mid-task-fixture` plus denied paths, rather than reproducing the full pass's missing-module message. The launcher module exists in the repository. The causes must not be conflated. Evidence: `/tmp/pi-cli-fixture-red.kb0omk/test.log`. No launcher or sandbox changes were made.
+
+The user subsequently directed the SDK fixture to run with `--no-sandbox`. Pinning the absolute system `pi` had still invoked Nono, so that pinning probe was reverted. With the explicit flag first in the child arguments, all three fixture cases reached their expected model/classifier behavior. The remaining failures were report capture: the test read only stdout while the runtime report appeared on stderr. An explicit-stdout experiment did not resolve capture and was reverted without changing the fixture.
+
+`mid-task-runtime.test.ts` now uses `spawnSync`, rejects process errors and nonzero status, and captures both output streams before applying the existing exact report and skill-body canary assertions. The targeted devenv-shell test passed all 3 cases with 12 assertions. Evidence: `/tmp/pi-cli-fixture-capture.iRJUVP/test.log`. Global typecheck and changed-file Biome exited 0; logs are under `/tmp/pi-cli-fixture-checks.3JHKBK/` and `/tmp/pi-cli-fixture-lint.i1ZmNq/`. Production launcher defaults and sandbox permissions are unchanged. Other SDK fixture cohorts and full-project acceptance are not covered by this scoped pass.
+
+#### Live lifecycle evidence
+
+Native worker `dbc2edb1-cf5b-44f9-a5c3-659d6341fc2c` completed background assignment `f4ff6da4-76fc-4d00-8351-695c6f9df150` in 7 of 8 turns and continuation `527386d4-f2fa-4a51-8326-cf5da390c36d` in 4 of 6 turns. Both reported saved persistence. Native release returned `state: released` and `liveSession: released`. The first complete report remained readable after release. This verifies those exercised paths only, not queue capacity, questions, cancellation, teardown/reload, classifier setup variants, animation, or visual layout.
+
+#### Production-role readiness
+
+The 20 checked-in global specialist definitions have initial allowances but no configured `hard_max_turns`. This worktree has no `.pi/agents` overrides. The observed initial values are:
+
+- 6: `docs`.
+- 12: `backlog-planning`, `explore`, `ideate`, `lookup`, `patterns`, `quick`, `validate`.
+- 16: `benchmark`.
+- 24: `adversarial`, `analyze`, `debug`, `general`, `pr-feedback`, `refactor`, `research`, `review`, `spec`, `test`, `visualizer`.
+
+This is a configuration inventory, not workload evidence approving ceilings or automatic roles. The fixture ceiling is not a rollout default. Tasks 6.2, 6.3, 6.4, 7.2, and 7.3 remain unchecked, and the notice-delivery acceptance gate remains unresolved.
+
 ### Remaining acceptance
 
 - `6.2`, `6.3`, `6.4` remain unchecked. The microfixture smoke did not reach admission. Representative fixed/advisory evidence, threshold review, controlled adaptive comparisons, and approved production role values are still needed. Scripted probabilities and fixture ceilings are not rollout recommendations.
-- `7.2` remains blocked on full-project failure disposition and the required environment. No fresh full `devenv test` pass is claimed, and failures not proven pre-existing remain unresolved.
+- `7.2` remains blocked on full-project failure disposition and the required environment. The fresh full `devenv test` pass above failed. No exception was accepted, and failures not proven pre-existing remain unresolved.
 - `7.3` remains open for live foreground/background, queue, question, cancellation/release, teardown/reload, classifier-failure, and visual acceptance. Component and native fixtures do not close that gate.
 - Durable notice-delivery goal `1bafba24-970d-4655-9255-9d0fc4b3428d` was inspected and remains blocked. It was not resumed, updated, or completed.
+
+### Follow-up: explicit mentions and missing skills
+
+Missing selected skills no longer prevent startup. Resolution skips absent catalog entries or missing files, and child startup tolerates SDK omissions. The child catalog retains only selected names with matching paths; a mismatched SDK result cannot substitute another skill. Skipped names appear in the child system prompt and assignment transcript, separately from the worker's final report. Models, capability bundles, extensions, MCP requirements, tools, mandatory policies, and permissions retain their validation.
+
+Explicit mentions supply descriptions and initial-turn defaults without exposing role bodies. Request-scoped hooks guard direct and nested tool dispatch. Background receipts require worker and assignment identities; foreground completion and question receipts also require their corresponding evidence. Parent coordination still determines dependencies and disjoint write ownership. A known worker report permits staged verification; the guard is not a dependency planner or sandbox.
+
+Verified scoped results:
+
+- Development mention workflow: 78 passed, 210 assertions. Log: `/tmp/pi-skill-final-dev.0OujY7/mentions.log`.
+- Development runner: 271 passed, 1 skipped, 1,639 assertions. Final rerun and global typecheck exited 0 under `/tmp/pi-skill-confirmed.ynbPa9/`.
+- Installed Pi 1.3.0 runner: 272 passed, 1,646 assertions. Installed mention regression: 14 passed, 45 assertions. Logs: `/tmp/pi-skill-final-installed.8hG9MT/`.
+- Budget fixture workflow: 18 passed, 107 assertions. Log: `/tmp/pi-skill-budget-fixtures.tz89dv/test.log`.
+- Mention-file Biome, five-file prose checking, both strict OpenSpec checks, and `git diff --check` passed.
+- Runner lint passed with formatter and import assists disabled: 15 warnings and 1 info remain. Log: `/tmp/pi-skill-final-confirm.CBOj7D/runner-lint.log`. Full runner-file formatting/import acceptance is not established. Two stdin-based HEAD comparison attempts failed with “The contents aren't fixed”; they do not prove a warning baseline.
+
+The missing-skill cases first failed at the resolver and actual child-startup boundaries. A further regression exposed substituted SDK metadata; filtering the loaded catalog fixed it. Installed mention checks initially exposed a changed SDK trigger signature and a sandbox-worker shutdown limit in the fixture. The fixture now uses the supported trigger signatures and two bounded scripts, without raising production limits. A nullable expected fixture path subsequently failed typecheck; an explicit fixture guard fixed it.
+
+DeKit registration failed for the scoped test workflows; the discovered devenv tasks ran directly. Both delegated assignments initially exhausted their allowances without final reports; reporting-only continuations supplied saved handoffs. Both live worker sessions were then confirmed released.
+
+No full-project test rerun, failure waiver, adaptive calibration, production ceiling review, or live UI acceptance is claimed. Tasks 6.2, 6.3, 6.4, 7.2, and 7.3 and the notice-delivery gate remain open.

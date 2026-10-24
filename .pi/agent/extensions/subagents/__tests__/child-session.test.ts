@@ -111,6 +111,41 @@ test("real child keeps project and role instructions with scoped skill metadata 
   expect(uncertain).toEqual([]);
 });
 
+test("missing SDK skill loads do not block child startup or broaden tools", async () => {
+  const f = await fixture();
+  const missing = { name: "missing", path: join(f.cwd, "missing/SKILL.md") };
+  const child = await createChildSession({ ...f, agentDir: f.cwd, sdk,
+    config: { ...f.config, skills: [...f.config.skills, missing], skippedSkills: ["catalog-missing"] },
+    onUncertainStartup: () => { throw new Error("unexpected cleanup uncertainty"); },
+  });
+  cleanups.push(child.close);
+  expect(child.session.systemPrompt).toContain("Selected catalog entry");
+  expect(child.session.systemPrompt).toContain("catalog-missing");
+  expect(child.session.systemPrompt).toContain("missing");
+  expect(child.warnings).toEqual(["Skipped unavailable skills: catalog-missing, missing"]);
+  expect(child.session.getCallableToolNames()).not.toContain("forbidden");
+  expect(child.session.getCallableToolNames()).not.toContain("subagent");
+});
+
+test.each([false, true])("SDK omission does not load substitute skill metadata (%s)", async (substitute) => {
+  const f = await fixture();
+  const child = await createChildSession({ ...f, agentDir: f.cwd,
+    sdk: { ...sdk, loadSkills: (...args: Parameters<typeof sdk.loadSkills>) => {
+      const loaded = sdk.loadSkills(...args);
+      return { ...loaded, skills: substitute ? loaded.skills.map((skill) => ({
+        ...skill, name: "other-skill", description: "SUBSTITUTE_METADATA_MUST_NOT_LOAD",
+      })) : [] };
+    } },
+    onUncertainStartup: () => { throw new Error("unexpected cleanup uncertainty"); },
+  });
+  cleanups.push(child.close);
+  expect(child.warnings).toEqual(["Skipped unavailable skills: selected-skill"]);
+  expect(child.session.systemPrompt).not.toContain("Selected catalog entry");
+  expect(child.session.systemPrompt).not.toContain("SUBSTITUTE_METADATA_MUST_NOT_LOAD");
+  expect(child.session.systemPrompt).toContain("Skipped unavailable skills: selected-skill");
+  expect(child.session.getCallableToolNames()).not.toContain("subagent");
+});
+
 test("missing loaded tool fails preflight and confirms cleanup without executing a prompt", async () => {
   const f = await fixture();
   const uncertain: Error[] = [];

@@ -122,6 +122,7 @@ test("retained configuration is immutable and detached from catalog arrays", asy
   expect(Object.isFrozen(resolved)).toBe(true);
   expect(Object.isFrozen(resolved.tools)).toBe(true);
   expect(Object.isFrozen(resolved.skills[0])).toBe(true);
+  expect(Object.isFrozen(resolved.skippedSkills)).toBe(true);
 });
 
 test("model and thinking overrides require separate explicit permission", async () => {
@@ -147,23 +148,25 @@ test("model and thinking overrides require separate explicit permission", async 
   expect(resolved.maxTurns).toBe(24);
 });
 
-test("missing model, bundle, skill, or mandatory baseline fails preflight", async () => {
+test("missing skills are skipped without weakening model, bundle, or baseline preflight", async () => {
   const available = await catalog();
+  const skillPath = available.skills.get("analysis");
+  if (!skillPath) throw new Error("Fixture skill is missing");
   await expect(
     resolveSpecialist("explore", definition({ model: "missing/model" }), available),
   ).rejects.toThrow("Required model");
   await expect(
     resolveSpecialist("explore", definition({ bundles: ["missing"] }), available),
   ).rejects.toThrow("Required capability bundle");
-  await expect(
-    resolveSpecialist("explore", definition({ skills: ["missing"] }), available),
-  ).rejects.toThrow("Required skill");
+  const missing = await resolveSpecialist("explore", definition({ skills: ["analysis", "missing"] }), available);
+  expect(missing.skills).toEqual([{ name: "analysis", path: skillPath }]);
+  expect(missing.skippedSkills).toEqual(["missing"]);
   await expect(
     resolveSpecialist("explore", definition(), { ...available, baseline: { extensions: [] } }),
   ).rejects.toThrow("Mandatory baseline");
 });
 
-test("missing extension and skill files fail rather than silently dropping capabilities", async () => {
+test("missing skill files are skipped while extension files remain required", async () => {
   const available = await catalog();
   await expect(
     resolveSpecialist("explore", definition(), {
@@ -171,12 +174,12 @@ test("missing extension and skill files fail rather than silently dropping capab
       baseline: { extensions: [join(directories[0]!, "missing.ts")] },
     }),
   ).rejects.toThrow("Required capability file");
-  await expect(
-    resolveSpecialist("explore", definition(), {
-      ...available,
-      skills: new Map([["analysis", join(directories[0]!, "missing.md")]]),
-    }),
-  ).rejects.toThrow("Required capability file");
+  const missingFile = await resolveSpecialist("explore", definition(), {
+    ...available,
+    skills: new Map([["analysis", join(directories[0]!, "missing.md")]]),
+  });
+  expect(missingFile.skills).toEqual([]);
+  expect(missingFile.skippedSkills).toEqual(["analysis"]);
 });
 
 test("rejects unsupported permission maps, invalid budgets, and implicit tool expansion", async () => {

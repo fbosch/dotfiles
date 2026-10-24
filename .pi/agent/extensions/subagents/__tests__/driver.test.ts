@@ -89,6 +89,13 @@ test("real Pi execution returns the full report and treats slash-command assignm
   expect(f.driver.observation("worker")?.resolvedThinking).toBe(f.handles[0]!.session.thinkingLevel);
 });
 
+test("skipped skill warning is retained in parent transcript without altering report", async () => {
+  const f = await fixture(() => answer("Full report"));
+  const input = { ...f.input, config: { ...f.input.config, skippedSkills: ["absent"] } };
+  expect(await f.driver.start(input, f.callbacks)).toMatchObject({ kind: "completed", report: "Full report" });
+  expect(f.transcript).toContainEqual({ role: "system", text: "Skipped unavailable skills: absent" });
+  expect(f.handles[0]!.session.systemPrompt).toContain("Skipped unavailable skills: absent");
+});
 test("virtual model metadata uses the runtime route rather than the alias thinking level", () => {
   const selected = { ...model, provider: "presets", id: "routine", api: "pi-virtual" };
   expect(runtimeModelDetails({ model: selected, thinkingLevel: "high", routedModel: { model, thinkingLevel: "low" } })).toEqual({ resolvedModel: "fixture/fixture", resolvedThinking: "low" });

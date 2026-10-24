@@ -2,7 +2,12 @@ import { writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type * as Pi from "@earendil-works/pi-coding-agent";
-import type { BudgetAdviceInput, BudgetSnapshot } from "../extensions/subagents/budget";
+import type {
+  BudgetAdviceInput,
+  BudgetAdvisor,
+  BudgetOptions,
+  BudgetSnapshot,
+} from "../extensions/subagents/budget";
 import { createBudgetAdvisor } from "../extensions/subagents/budget-advisor";
 import { resolveNamedSpecialist } from "../extensions/subagents/catalog";
 import { createChildSession } from "../extensions/subagents/child-session";
@@ -38,7 +43,7 @@ export interface BudgetTrialResult {
   readonly waitingForParent: boolean;
   readonly durationMs: number;
   readonly timedOut: boolean;
-  readonly manualTurns: number;
+  readonly referenceTurns: number;
   readonly cleanupConfirmed: boolean;
   readonly storageFailed: boolean;
   readonly workerSdkRequests: number;
@@ -57,6 +62,23 @@ export interface BudgetTrialResult {
 }
 
 const retainedUncertainResources: unknown[] = [];
+
+export function createTrialBudget(
+  arm: PilotArm,
+  advisor: BudgetAdvisor,
+  recordInput: (input: BudgetAdviceInput) => void,
+): BudgetOptions {
+  const reference = arm === "reference";
+  return {
+    mode: arm === "fixed" ? "fixed" : reference ? "automatic" : "advisory",
+    // This oracle is a fixture control, not a calibrated classifier threshold.
+    ...(reference ? { confidenceThreshold: 1 } : {}),
+    advisor: async (input, signal) => {
+      recordInput(input);
+      return reference ? { kind: "judgment", probability: 1 } : advisor(input, signal);
+    },
+  };
+}
 
 async function loadSdk(root: string): Promise<typeof Pi> {
   const sdk: typeof Pi = await import(pathToFileURL(join(root, "dist/index.js")).href);
@@ -138,7 +160,6 @@ export async function runBudgetTrial(options: BudgetTrialOptions): Promise<Budge
   let workerSdkRequests = 0;
   let workerObservedFetches = 0;
   let classifierObservedFetches = 0;
-  let manualTurns = 0;
   let checkpoint: TrialCheckpoint | undefined;
   const adviceInputs: BudgetAdviceInput[] = [];
   const physicalModels = new Set<string>();
@@ -253,17 +274,7 @@ export async function runBudgetTrial(options: BudgetTrialOptions): Promise<Budge
               visibleTexts: visibleAssistantTexts(child?.agent.state.messages ?? []),
             };
           }
-          const admission = await beforeModel();
-          if (target && options.arm === "reference" && admission.admitted) {
-            const state = activeOwner.inspect(input.workerId);
-            const assignment = state.assignments.find((item) => item.id === input.assignmentId);
-            if (state.pendingQuestion || assignment?.budget?.grantedTurns !== 4)
-              throw new Error("Manual reference extension is not eligible");
-            await activeOwner.extendBudget(input.workerId, input.assignmentId, 4);
-            manualTurns = 4;
-            return beforeModel();
-          }
-          return admission;
+          return beforeModel();
         },
       };
     };
@@ -298,13 +309,7 @@ export async function runBudgetTrial(options: BudgetTrialOptions): Promise<Budge
           }
         },
       },
-      budget: {
-        mode: options.arm === "fixed" ? "fixed" : "advisory",
-        advisor: async (input, signal) => {
-          adviceInputs.push(input);
-          return advise(input, signal);
-        },
-      },
+      budget: createTrialBudget(options.arm, advise, (input) => adviceInputs.push(input)),
       cleanupHealth: {
         isBlocked: () => cleanupUncertain,
         markUncertain() {
@@ -337,13 +342,16 @@ export async function runBudgetTrial(options: BudgetTrialOptions): Promise<Budge
     await owner.shutdown();
     if (assignment.budget.grantedTurns > 8 || assignment.turnsUsed > assignment.budget.grantedTurns)
       violations.push("turn-limit");
-    if (assignment.budget.automaticGrants !== 0)
+    if (options.arm !== "reference" && assignment.budget.automaticGrants !== 0)
       violations.push("automatic-grant-in-nonautomatic-arm");
     if (assignment.budget.checks > 2) violations.push("check-limit");
     if (options.arm === "fixed" && adviceInputs.length !== 0)
       violations.push("fixed-arm-classification");
-    if (options.arm !== "reference" && manualTurns !== 0)
-      violations.push("unexpected-manual-extension");
+    if (
+      options.arm === "reference" &&
+      (assignment.budget.automaticGrants > 1 || classifierProviderDispatches !== 0)
+    )
+      violations.push("invalid-scripted-reference");
     const cleanupConfirmed =
       !cleanupUncertain && !owner.list().some((worker) => worker.status === "cleanup-unknown");
     await writeFile(join(options.directory, "session.json"), raw, { mode: 0o600, flag: "wx" });
@@ -355,7 +363,10 @@ export async function runBudgetTrial(options: BudgetTrialOptions): Promise<Budge
       waitingForParent: handoff.pendingQuestion !== undefined,
       durationMs,
       timedOut,
-      manualTurns,
+      referenceTurns:
+        options.arm === "reference"
+          ? assignment.budget.grantedTurns - assignment.budget.initialTurns
+          : 0,
       cleanupConfirmed,
       storageFailed,
       workerSdkRequests,
