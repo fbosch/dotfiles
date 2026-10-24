@@ -1,6 +1,7 @@
 import { match } from "ts-pattern";
 import { budgetMetadata } from "./budget-metadata";
 import type { ChildObservation } from "./driver";
+import { interpretWorkerSnapshot } from "./interpretation";
 import type { WorkerSnapshot } from "./owner";
 import { singleLine } from "./presentation";
 
@@ -11,24 +12,12 @@ export function workerMetadata(
   expanded = false,
   now = Date.now(),
 ): string[] {
-  const assignment = worker.assignments.find((item) => item.id === worker.currentAssignmentId);
-  const state = match(worker.status)
-    .with("idle", "historical", (status) => assignment?.outcome ?? status)
-    .with(
-      "queued",
-      "running",
-      "waiting-question",
-      "stopping",
-      "cancelled",
-      "cleanup-unknown",
-      "releasing",
-      "released",
-      (status) => status,
-    )
-    .exhaustive();
+  const interpretation = interpretWorkerSnapshot(worker);
+  const assignment = interpretation.currentAssignment;
+  const state = interpretation.displayStatus;
   const label = state.replaceAll("-", " ").replace(/^./, (letter) => letter.toUpperCase());
-  const availability = match(worker.liveSession)
-    .with("available", () => (worker.status === "idle" ? "Ready to continue" : ""))
+  const availability = match(interpretation.liveSession)
+    .with("available", () => (interpretation.state === "idle" ? "Ready to continue" : ""))
     .with("historical", () => "Historical")
     .with("released", () => "Session released")
     .with("none", () => "")

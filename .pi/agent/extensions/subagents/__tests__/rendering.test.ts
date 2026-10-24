@@ -143,6 +143,73 @@ test("failure, storage failure, cancellation and cleanup uncertainty remain expl
     ),
   ).toContain("! review budget-exhausted");
 });
+test("tool cards preserve lifetime, receipt, and storage interpretation", () => {
+  const failed = { ...assignment, outcome: "failed", persistence: "saved" };
+  const cases: {
+    name: string;
+    value: unknown;
+    includes: string[];
+    excludes?: string[];
+  }[] = [
+    {
+      name: "idle failure",
+      value: { worker, assignment: failed },
+      includes: ["✗ review failed worker"],
+    },
+    {
+      name: "historical failure",
+      value: { worker: { ...worker, state: "historical" }, assignment: failed },
+      includes: ["✗ review failed worker"],
+    },
+    {
+      name: "released completion",
+      value: {
+        type: "completion",
+        worker: { ...worker, state: "released" },
+        assignment: failed,
+      },
+      includes: ["✗ review failed worker"],
+    },
+    {
+      name: "pending question keeps worker state",
+      value: {
+        worker: { ...worker, state: "waiting-question" },
+        assignment: failed,
+        question: { text: "Which target?" },
+      },
+      includes: ["! review waiting-question worker", "Answer needed"],
+      excludes: ["✗ review failed"],
+    },
+    {
+      name: "explicit prior receipt overrides the worker's new current assignment",
+      value: {
+        type: "completion",
+        worker: {
+          ...worker,
+          currentAssignmentId: "next",
+          assignments: [{ ...assignment, assignmentId: "next", turnsUsed: 8 }],
+        },
+        assignment: { ...failed, assignmentId: "prior", turnsUsed: 2 },
+      },
+      includes: ["✗ review failed worker", "↻2≤12"],
+      excludes: ["↻8≤12"],
+    },
+    {
+      name: "storage failure does not change a completed outcome",
+      value: {
+        worker,
+        assignment: { ...assignment, persistence: "failed", persistenceError: "disk full" },
+      },
+      includes: ["✓ review completed worker", "History save failed: disk full"],
+    },
+  ];
+
+  for (const { name, value, includes, excludes = [] } of cases) {
+    const rendered = plain(result(value));
+    for (const text of includes) expect(rendered, name).toContain(text);
+    for (const text of excludes) expect(rendered, name).not.toContain(text);
+  }
+});
 
 test("report text remains text even when it is valid JSON, and display caps point to full evidence", () => {
   const report = '{"key":"æ ø å"}';

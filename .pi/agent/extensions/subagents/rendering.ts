@@ -30,6 +30,7 @@ import {
   type WorkerTarget,
   workerTarget,
 } from "./interaction";
+import { interpretProjectedResult } from "./interpretation";
 import type { ToolRendererLookup } from "./main-window-renderers";
 import { workerMetadata } from "./metadata";
 import type { WorkerSnapshot } from "./owner";
@@ -137,18 +138,8 @@ function structuredLines(
         : theme.fg("dim", `\n  More transcript entries at offset ${data.nextOffset}`))
     );
   }
-  const worker = data.worker === undefined ? data : object(data.worker);
-  const assignments = Array.isArray(worker.assignments) ? worker.assignments.map(object) : [];
-  const assignment =
-    data.assignment === undefined
-      ? (assignments.find((item) => item.assignmentId === worker.currentAssignmentId) ?? {})
-      : object(data.assignment);
-  const state = string(worker.state) || string(data.state);
-  const outcome = string(assignment.outcome);
-  // Worker lifetime and assignment outcome are distinct: an idle or released child may have failed.
-  const status = match({ state, type: data.type })
-    .with({ state: P.union("idle", "historical") }, { type: "completion" }, () => outcome || state)
-    .otherwise(() => state);
+  const interpretation = interpretProjectedResult(data);
+  const { worker, currentAssignment: assignment, state, displayStatus: status } = interpretation;
   const label = string(worker.specialist);
   const id = string(worker.workerId) || string(data.workerId);
   const heading = [
@@ -188,11 +179,11 @@ function structuredLines(
     lines.push(theme.fg("dim", "  ⎿  Report available · /subagents"));
   if (assignment.error)
     lines.push(theme.fg("error", `  ⎿  ${singleLine(string(assignment.error))}`));
-  if (assignment.persistence === "failed" || data.type === "storage-failure")
+  if (interpretation.storageFailureNotice)
     lines.push(
       theme.fg(
         "error",
-        `  History save failed${assignment.persistenceError ? ": " + singleLine(string(assignment.persistenceError)) : ""}`,
+        `  History save failed${assignment.persistenceError ? `: ${singleLine(string(assignment.persistenceError))}` : ""}`,
       ),
     );
   if (expanded && assignment.assignmentId)

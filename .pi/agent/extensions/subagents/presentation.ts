@@ -2,6 +2,7 @@ import { stripVTControlCharacters } from "node:util";
 import { truncateToWidth } from "@earendil-works/pi-tui";
 import { match } from "ts-pattern";
 import type { ChildObservation } from "./driver";
+import { interpretWorkerSnapshot } from "./interpretation";
 import type { WorkerSnapshot, WorkerStatusSnapshot } from "./owner";
 
 /** Tool output is untrusted terminal content, including when restored from history. */
@@ -110,38 +111,26 @@ export function widgetLines(options: {
   const width = Math.max(1, Math.floor(options.width));
   const now = options.now ?? Date.now();
   const warnings: string[] = [];
-  const live = options.workers.filter((worker) => worker.liveSession !== "historical");
-  if (live.some((worker) => worker.status === "cleanup-unknown"))
+  const live = options.workers
+    .map((worker) => ({ worker, interpretation: interpretWorkerSnapshot(worker) }))
+    .filter(({ interpretation }) => interpretation.liveSession !== "historical");
+  if (live.some(({ interpretation }) => interpretation.state === "cleanup-unknown"))
     warnings.push("! Delegation blocked: cleanup unknown");
-  if (
-    live.some((worker) =>
-      worker.assignments.some((assignment) => assignment.persistence === "failed"),
-    )
-  )
+  if (live.some(({ interpretation }) => interpretation.hasStorageFailure))
     warnings.push("! History save failed; inspect in-memory evidence");
-  if (
-    live.some((worker) => worker.assignments.some((assignment) => assignment.outcome === "failed"))
-  )
+  if (live.some(({ interpretation }) => interpretation.hasFailedAssignment))
     warnings.push("! Assignment failed; inspect history");
-  if (
-    live.some(
-      (worker) =>
-        worker.liveSession === "available" &&
-        worker.assignments.find((assignment) => assignment.id === worker.currentAssignmentId)
-          ?.outcome === "budget-exhausted",
-    )
-  )
+  if (live.some(({ interpretation }) => interpretation.currentBudgetExhausted))
     warnings.push("! Turn budget exhausted; inspect partial evidence");
   const active = live
-    .filter((worker) => priority(worker) < 4 && !options.hiddenWorkers?.has(worker.id))
-    .map((worker, index) => ({ worker, index }))
+    .filter(({ worker }) => priority(worker) < 4 && !options.hiddenWorkers?.has(worker.id))
+    .map(({ worker, interpretation }, index) => ({ worker, interpretation, index }))
     .sort(
       (a, b) =>
         priority(a.worker) - priority(b.worker) ||
         a.worker.createdAt - b.worker.createdAt ||
         a.index - b.index,
-    )
-    .map(({ worker }) => worker);
+    );
   const theme = options.theme ?? plainTheme;
   const name = options.agentName ?? ((value: string) => theme.bold(singleLine(value)));
   const rows = warnings.map((warning) => theme.fg("warning", warning));
@@ -155,12 +144,12 @@ export function widgetLines(options: {
   rows.push(theme.fg("accent", "● Agents"));
   let remaining = room - 1;
   let shown = 0;
-  for (const worker of active.slice(0, maxRows)) {
+  for (const { worker, interpretation } of active.slice(0, maxRows)) {
     const last = shown === active.length - 1;
     const required = last ? 2 : 3;
     if (remaining < required) break;
     const observation = options.observation(worker.id);
-    const assignment = worker.assignments.find((item) => item.id === worker.currentAssignmentId);
+    const assignment = interpretation.currentAssignment;
     const activity = worker.pendingQuestion
       ? "Answer needed"
       : (observation?.activity ??
@@ -186,9 +175,10 @@ export function widgetLines(options: {
 }
 
 export function workerDetails(worker: WorkerSnapshot, observation?: ChildObservation): string {
+  const interpretation = interpretWorkerSnapshot(worker);
   const lines = [
     `${worker.specialist} · ${worker.id}`,
-    `State: ${worker.status} | Live session: ${worker.liveSession}`,
+    `State: ${interpretation.state} | Live session: ${interpretation.liveSession}`,
     `Model: ${worker.config.model} | Thinking: ${worker.config.thinking ?? "unavailable"}`,
     `Created: ${new Date(worker.createdAt).toISOString()}`,
     `Started: ${observation ? new Date(observation.startedAt).toISOString() : "unavailable"}`,

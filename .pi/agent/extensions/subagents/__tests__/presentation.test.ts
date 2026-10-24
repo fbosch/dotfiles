@@ -133,6 +133,95 @@ test("releasing an exhausted worker does not hide a history save failure", () =>
     }),
   ).toEqual(["! History save failed; inspect in-memory evidence"]);
 });
+test("widget warnings and details interpret worker and assignment state independently", () => {
+  const base = worker("snapshot", "idle");
+  const assignment = base.assignments[0];
+  if (!assignment) throw new Error("Expected fixture assignment");
+  const cases: {
+    name: string;
+    snapshot: WorkerSnapshot;
+    warnings: string[];
+    detail: string;
+  }[] = [
+    {
+      name: "idle failed assignment",
+      snapshot: { ...base, assignments: [{ ...assignment, outcome: "failed" }] },
+      warnings: ["! Assignment failed; inspect history"],
+      detail: "Execution: failed | Storage: not-attempted",
+    },
+    {
+      name: "historical failures remain in details but not live warnings",
+      snapshot: {
+        ...base,
+        status: "historical",
+        liveSession: "historical",
+        assignments: [
+          {
+            ...assignment,
+            outcome: "failed",
+            persistence: "failed",
+            persistenceError: "disk full",
+          },
+        ],
+      },
+      warnings: [],
+      detail: "Storage error: disk full",
+    },
+    {
+      name: "released storage failure remains visible without a budget warning",
+      snapshot: {
+        ...base,
+        status: "released",
+        liveSession: "released",
+        assignments: [{ ...assignment, outcome: "budget-exhausted", persistence: "failed" }],
+      },
+      warnings: ["! History save failed; inspect in-memory evidence"],
+      detail: "Execution: budget-exhausted | Storage: failed",
+    },
+    {
+      name: "pending question status is not replaced by a failed outcome",
+      snapshot: {
+        ...base,
+        status: "waiting-question",
+        assignments: [{ ...assignment, outcome: "failed" }],
+      },
+      warnings: ["! Assignment failed; inspect history"],
+      detail: "Execution: failed | Storage: not-attempted",
+    },
+    {
+      name: "a non-current storage error is independent of the current assignment",
+      snapshot: {
+        ...base,
+        assignments: [
+          { ...assignment, outcome: "completed", persistence: "saved" },
+          {
+            ...assignment,
+            id: "previous",
+            outcome: "completed",
+            persistence: "failed",
+            persistenceError: "older write failed",
+          },
+        ],
+      },
+      warnings: ["! History save failed; inspect in-memory evidence"],
+      detail: "Storage error: older write failed",
+    },
+  ];
+
+  for (const { name, snapshot, warnings, detail } of cases) {
+    const rows = widgetLines({ ...defaults, workers: [snapshot] });
+    expect(
+      rows.filter((row) => row.startsWith("!")),
+      name,
+    ).toEqual(warnings);
+    expect(workerDetails(snapshot), name).toContain(detail);
+    if (name === "pending question status is not replaced by a failed outcome") {
+      expect(
+        rows.some((row) => row.includes("! snapshot") && row.includes("waiting-question")),
+      ).toBe(true);
+    }
+  }
+});
 
 test("row count is configurable and foreground rows can be excluded", () => {
   const rows = widgetLines({

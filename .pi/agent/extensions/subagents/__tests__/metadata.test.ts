@@ -65,6 +65,42 @@ test("metadata groups outcome and measured metrics with the runtime-resolved pre
   expect(details).toContain("State      idle · available");
 });
 
+test("metadata keeps assignment outcome and live-session availability distinct", () => {
+  const assignment = worker.assignments[0];
+  if (!assignment) throw new Error("Expected fixture assignment");
+  const cases = [
+    {
+      status: "idle",
+      liveSession: "available",
+      expected: "Failed · Ready to continue",
+    },
+    {
+      status: "historical",
+      liveSession: "historical",
+      expected: "Failed · Historical",
+    },
+    {
+      status: "released",
+      liveSession: "released",
+      expected: "Released · Session released",
+    },
+    {
+      status: "waiting-question",
+      liveSession: "available",
+      expected: "Waiting question",
+    },
+  ] as const;
+
+  for (const { status, liveSession, expected } of cases) {
+    const snapshot: WorkerSnapshot = {
+      ...worker,
+      status,
+      liveSession,
+      assignments: [{ ...assignment, outcome: "failed" }],
+    };
+    expect(workerMetadata(snapshot)[0]).toBe(expected);
+  }
+});
 test("pending resolution omits thinking instead of presenting the configured alias level as resolved", () => {
   const rows = workerMetadata(worker);
   expect(rows).toContain("Model      presets/routine");

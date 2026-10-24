@@ -176,23 +176,21 @@ export class AssignmentBudget {
     const budget = new AssignmentBudget(maxTurns, { mode: "fixed" });
     // Saved evidence is never a reconstructed executable policy or a guessed initial allocation.
     budget.restored = true;
-    budget.restoredSnapshot =
-      snapshot === undefined
-        ? undefined
-        : Object.freeze({
-            ...snapshot,
-            progress: Object.freeze({ ...snapshot.progress }),
-            decisions: Object.freeze(
-              snapshot.decisions.map((decision) =>
-                Object.freeze({
-                  ...decision,
-                  ...(decision.usage === undefined
-                    ? {}
-                    : { usage: Object.freeze({ ...decision.usage }) }),
-                }),
-              ),
-            ),
-          });
+    if (snapshot === undefined) return budget;
+    budget.restoredSnapshot = Object.freeze({
+      ...snapshot,
+      progress: Object.freeze({ ...snapshot.progress }),
+      decisions: Object.freeze(
+        snapshot.decisions.map((decision) =>
+          Object.freeze({
+            ...decision,
+            ...(decision.usage === undefined
+              ? {}
+              : { usage: Object.freeze({ ...decision.usage }) }),
+          }),
+        ),
+      ),
+    });
     return budget;
   }
 

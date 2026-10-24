@@ -329,29 +329,22 @@ export class WorkerDelivery {
     }
     if (isUnsettledAssignment(assignment.outcome)) return;
     if (assignment.persistence === "pending" || assignment.persistence === "not-attempted") return;
-    if (!delivery.reportDelivered && !delivery.receiptSent) {
-      this.notifyTracked({
-        type: "completion",
-        worker: workerStatus(worker),
-        assignment: assignmentStatus(assignment),
-        reportAvailable: assignment.report !== undefined,
-        verified: false,
-      });
-      delivery.receiptSent = true;
-    } else if (
-      delivery.reportDelivered &&
-      assignment.persistence === "failed" &&
-      !delivery.receiptSent &&
-      !delivery.storageWarningSent
-    ) {
-      this.notifyTracked({
-        type: "storage-failure",
-        worker: workerStatus(worker),
-        assignment: assignmentStatus(assignment),
-        reportAvailable: assignment.report !== undefined,
-        verified: false,
-      });
-      delivery.storageWarningSent = true;
-    }
+    if (delivery.receiptSent) return;
+    const type = delivery.reportDelivered ? "storage-failure" : "completion";
+    if (
+      type === "storage-failure" &&
+      (assignment.persistence !== "failed" || delivery.storageWarningSent)
+    )
+      return;
+
+    this.notifyTracked({
+      type,
+      worker: workerStatus(worker),
+      assignment: assignmentStatus(assignment),
+      reportAvailable: assignment.report !== undefined,
+      verified: false,
+    });
+    if (type === "completion") delivery.receiptSent = true;
+    else delivery.storageWarningSent = true;
   }
 }
