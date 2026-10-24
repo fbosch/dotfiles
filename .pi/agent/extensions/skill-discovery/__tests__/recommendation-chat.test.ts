@@ -27,7 +27,6 @@ function harness(attempt: SkillSelectionAttempt) {
   createSkillSelectionExtension({
     getConfig: () => ({
       enabled: true,
-      midTaskEnabled: true,
       threshold: 0.72,
       timeoutMs: 2400,
       maxRecommendations: 3,

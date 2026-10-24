@@ -26,7 +26,6 @@ import {
   type SkillAdvisoryRecord,
   skillAdvisoryStatus,
 } from "./advisory-state";
-import { createMidTaskSkillSelection } from "./mid-task";
 import {
   configuredSkillSelection,
   DEFAULT_SKILL_SELECTION_CONFIG,
@@ -447,14 +446,14 @@ export function createSkillSelectionExtension(
   };
 
   return (pi) => {
-    const midTask = createMidTaskSkillSelection(pi, {
-      select: selectSkillsDetailed,
-      format: formatSkillRecommendations,
-      isExplicitInvocation: isExplicitSkillInvocation,
-      getConfig,
-      now,
-      ...(dependencies.fetch ? { fetch: dependencies.fetch } : {}),
-    });
+    let request: AbortController | undefined;
+    const reset = () => {
+      request?.abort();
+      request = undefined;
+    };
+    pi.on("session_start", reset);
+    pi.on("session_tree", reset);
+    pi.on("session_shutdown", reset);
     pi.registerEntryRenderer<{ skills: string[] }>(
       SKILL_RECOMMENDATIONS_ENTRY,
       (entry, _options, theme) => {
@@ -479,7 +478,6 @@ export function createSkillSelectionExtension(
           JSON.stringify({
             ...status,
             advisory: skillAdvisoryStatus(advisory),
-            midTask: midTask.status(),
           }),
           "info",
         );
@@ -487,13 +485,13 @@ export function createSkillSelectionExtension(
     });
 
     pi.on("before_agent_start", async (event: BeforeAgentStartEvent, context) => {
-      midTask.reset();
+      reset();
       const eventCount = status.eventCount + 1;
       const skip = (reason: string, enabled = status.enabled) => {
         status = { enabled, eventCount, state: "skipped", reason, fetchAttempted: false };
       };
 
-      // Custom-message starts have no user goal for input or mid-task skill selection.
+      // Custom-message starts have no user goal for skill selection.
       if ("messageType" in event && event.messageType === "custom") return skip("custom-message");
       if (event.images !== undefined && event.images.length > 0) return skip("images");
       if (isExplicitSkillInvocation(event.prompt)) return skip("explicit-skill");
@@ -536,7 +534,10 @@ export function createSkillSelectionExtension(
         formatSkillRecommendations,
       );
       if (possible.records.length === 0) return skip("advisory-budget-exhausted", true);
-      const midRequest = midTask.begin(event, context, skills, candidates, branchState);
+      const controller = new AbortController();
+      request = controller;
+      // Session replacement or a newer request must invalidate even classifiers that ignore abort.
+      const isCurrent = () => request === controller;
 
       const startedAt = now();
       let fetchAttempted = false;
@@ -551,15 +552,11 @@ export function createSkillSelectionExtension(
         const selectionOptions: SkillSelectionRequestOptions = {
           modelRegistry: context.modelRegistry,
           ...(dependencies.fetch === undefined ? {} : { fetch: dependencies.fetch }),
-          ...(midRequest
-            ? {
-                signal: context.signal
-                  ? AbortSignal.any([context.signal, midRequest.controller.signal])
-                  : midRequest.controller.signal,
-              }
-            : {}),
+          signal: context.signal
+            ? AbortSignal.any([context.signal, controller.signal])
+            : controller.signal,
           onFetchAttempt: () => {
-            if (midRequest && !midTask.isCurrent(midRequest)) return;
+            if (!isCurrent()) return;
             fetchAttempted = true;
             status = { ...status, fetchAttempted: true };
           },
@@ -570,7 +567,7 @@ export function createSkillSelectionExtension(
           config,
           selectionOptions,
         );
-        if (midRequest && !midTask.isCurrent(midRequest)) return;
+        if (!isCurrent()) return;
         const elapsedMs = Math.max(0, now() - startedAt);
         if (context.signal?.aborted) {
           status = {
@@ -629,7 +626,6 @@ export function createSkillSelectionExtension(
         };
         if (admission.records.length === 0) return;
 
-        midTask.recommend(admission.records, admission.content);
         const names = admission.records.map(({ name }) => name);
         // The custom entry is chat-only; the returned custom message is persisted in model context.
         pi.appendEntry(SKILL_RECOMMENDATIONS_ENTRY, { skills: names });
@@ -642,7 +638,7 @@ export function createSkillSelectionExtension(
           },
         };
       } catch {
-        if (midRequest && !midTask.isCurrent(midRequest)) return;
+        if (!isCurrent()) return;
         status = {
           enabled: true,
           eventCount,
@@ -654,6 +650,8 @@ export function createSkillSelectionExtension(
         };
         // Advisory selection must never change the default skill behavior when Classifier is unavailable.
         return;
+      } finally {
+        if (isCurrent()) request = undefined;
       }
     });
   };

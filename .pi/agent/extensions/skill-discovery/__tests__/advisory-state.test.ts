@@ -3,7 +3,6 @@ import type { AssistantMessage } from "@earendil-works/pi-ai";
 import { SessionManager, type Skill } from "@earendil-works/pi-coding-agent";
 import {
   admitSkillAdvisories,
-  includePendingSkillAdvisories,
   MAX_SKILL_ADVISORY_CHARS,
   readSkillAdvisoryState,
   SKILL_ADVISORY_MESSAGE,
@@ -54,7 +53,7 @@ const call = (id: string, path: string): AssistantMessage => ({
 
 // Native startup custom messages and turn-boundary drafts persist in different shapes.
 describe("session-wide skill advisory state", () => {
-  test("counts both native advice shapes and restores offered names without double charging commits", () => {
+  test("counts native advice shapes and restores offered names", () => {
     const session = SessionManager.inMemory(cwd);
     const initial = {
       records: [record("initial")],
@@ -72,37 +71,17 @@ describe("session-wide skill advisory state", () => {
     const restored = readState(session);
     expect([...restored.offered.keys()]).toEqual(["initial", "later"]);
     expect(restored.usedCharacters).toBe(initial.content.length + later.content.length);
-    expect(includePendingSkillAdvisories(restored, [initial, later]).usedCharacters).toBe(
-      restored.usedCharacters,
-    );
-  });
-
-  test("reserves not-yet-committed drafts against the same rendered-content budget", () => {
-    const session = SessionManager.inMemory(cwd);
-    const pending = {
-      records: [record("pending")],
-      content: formatSkillRecommendations([record("pending")]),
-    };
-    const reserved = includePendingSkillAdvisories(readState(session), [pending]);
-    expect(reserved.usedCharacters).toBe(pending.content.length);
-    expect(reserved.offered.has("pending")).toBe(true);
-    expect(
-      admitSkillAdvisories(pending.records, reserved, formatSkillRecommendations).records,
-    ).toEqual([]);
   });
 
   test("reclaims compacted advice capacity while retaining session-wide dedup knowledge", () => {
     const session = SessionManager.inMemory(cwd);
-    const old = addAdvice(session, "old");
+    addAdvice(session, "old");
     const keep = session.appendMessage({ role: "user", content: "Continue", timestamp: 2 });
     const retained = addAdvice(session, "retained");
     session.appendCompaction("Task summary", keep, 10_000);
     const restored = readState(session);
     expect(restored.usedCharacters).toBe(retained.content.length);
     expect([...restored.offered.keys()]).toEqual(["old", "retained"]);
-    expect(includePendingSkillAdvisories(restored, [old, retained]).usedCharacters).toBe(
-      retained.content.length,
-    );
     expect(
       admitSkillAdvisories([record("fresh")], restored, formatSkillRecommendations).records,
     ).toEqual([record("fresh")]);

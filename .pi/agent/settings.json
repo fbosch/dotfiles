@@ -23,7 +23,8 @@
   "defaultModel": "gpt-6-luna-fast",
   "defaultThinkingLevel": "max",
   "defaultTools": [
-    "+codemode"
+    "+codemode",
+    "+subagent"
   ],
   "compactionModel": {
     "model": "openai-codex/gpt-6-luna",
@@ -142,7 +143,6 @@
     },
     "skillSelection": {
       "enabled": true,
-      "midTaskEnabled": false,
       "threshold": 0.72,
       "timeoutMs": 2400,
       "maxRecommendations": 3

@@ -81,25 +81,17 @@ class EvalTests(unittest.TestCase):
         self.assertTrue(verdict['outcomePass'])
         self.assertFalse(verdict['applicationPass'])
 
-    def test_input_only_requires_valid_input_and_rejects_mid_task_calls(self):
-        events = self.events()
-        expected = self.expected(arm='input-only')
-        self.assertTrue(grader.evaluate(events, expected)['infrastructureErrors'])
-        events.append({'kind': 'classifier', 'phase': 'input', 'validResponse': True})
-        self.assertEqual(grader.evaluate(events, expected)['infrastructureErrors'], [])
-        events.append({'kind': 'classifier', 'phase': 'mid-task', 'validResponse': True})
-        self.assertIn('input-only arm received mid-task classification', grader.evaluate(events, expected)['infrastructureErrors'])
 
-    def test_comparator_accepts_input_only_but_rejects_source_drift(self):
+    def test_comparator_accepts_baseline_but_rejects_source_drift(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             metadata = {'scope': 'fixture', 'model': 'model', 'thinking': 'low', 'sha256': {'fixture': 'same'},
                         'warm': WARM, 'cold': COLD, 'classifierProviders': None, 'threshold': 0.72}
-            paths = [root / arm for arm in ('input-only', 'treatment')]
+            paths = [root / arm for arm in ('baseline', 'treatment')]
             for path in paths:
                 path.mkdir()
                 (path / 'metadata.json').write_text(json.dumps({**metadata, 'arm': path.name}))
-            self.assertEqual(comparison.compare(*paths)['controlArm'], 'input-only')
+            self.assertEqual(comparison.compare(*paths)['controlArm'], 'baseline')
             metadata['sha256'] = {'fixture': 'different'}
             (paths[1] / 'metadata.json').write_text(json.dumps({**metadata, 'arm': 'treatment'}))
             with self.assertRaisesRegex(ValueError, 'sha256 differs'):
@@ -110,7 +102,7 @@ class EvalTests(unittest.TestCase):
             root = Path(tmp)
             metadata = {'scope': 'fixture', 'model': 'model', 'thinking': 'low', 'sha256': {},
                         'warm': WARM, 'cold': COLD, 'classifierProviders': None, 'threshold': 0.72}
-            paths = [root / arm for arm in ('input-only', 'treatment')]
+            paths = [root / arm for arm in ('baseline', 'treatment')]
             for path in paths:
                 path.mkdir()
                 (path / 'metadata.json').write_text(json.dumps({**metadata, 'arm': path.name}))
@@ -118,7 +110,7 @@ class EvalTests(unittest.TestCase):
             (paths[1] / 'metadata.json').write_text(json.dumps({**metadata, 'arm': 'treatment', 'selectionTimeoutMs': 5000}))
             with self.assertRaisesRegex(ValueError, 'selectionTimeoutMs differs'):
                 comparison.compare(*paths)
-            metadata['arm'] = 'input-only'
+            metadata['arm'] = 'baseline'
             (paths[1] / 'metadata.json').write_text(json.dumps({**metadata, 'selectionTimeoutMs': 5000}))
             with self.assertRaisesRegex(ValueError, 'selectionTimeoutMs differs'):
                 comparison.aggregate(paths, root / 'mixed')
@@ -132,13 +124,6 @@ class EvalTests(unittest.TestCase):
             self.assertEqual(result.returncode, 2)
             self.assertIn('value from 1 to 5000', result.stderr)
 
-    def test_wrapper_rejects_invalid_input_only_combinations(self):
-        import subprocess
-        wrapper = SOURCE.parents[3] / 'scripts/caliper-skill-eval.sh'
-        for flags in (['--input-only'], ['--skill-suggestions', '--input-only', '--baseline']):
-            result = subprocess.run([str(wrapper), *flags, 'skill-suggestions'], capture_output=True, text=True)
-            self.assertEqual(result.returncode, 2)
-            self.assertIn('--input-only requires --skill-suggestions', result.stderr)
 
     def test_treatment_unavailable_is_not_semantic_no_match(self):
         verdict = grader.evaluate(self.events(), self.expected(arm='treatment'))
@@ -159,7 +144,7 @@ class EvalTests(unittest.TestCase):
             import shutil
             shutil.copytree(SOURCE / 'skills', evidence / 'skills')
             settings = []
-            for arm in ('baseline', 'input-only', 'treatment'):
+            for arm in ('baseline', 'treatment'):
                 home = root / arm
                 agent = home / '.pi/agent'
                 config = {'arm': arm, 'evidence': str(evidence), 'extensions': ['fixture.ts', 'skill-discovery/index.ts'],
@@ -167,7 +152,6 @@ class EvalTests(unittest.TestCase):
                 launcher.configure_attempt(home, agent, config, root / (arm + '.jsonl'), 'ledger-positive-warm')
                 value = json.loads((agent / 'settings.json').read_text())
                 self.assertEqual(value['classifier']['skillSelection'].pop('enabled'), arm != 'baseline')
-                self.assertEqual(value['classifier']['skillSelection'].pop('midTaskEnabled'), arm != 'input-only')
                 self.assertEqual(value['classifier']['skillSelection']['timeoutMs'], 5000)
                 self.assertEqual(value['classifier']['toolDiscovery']['timeoutMs'], 2400)
                 settings.append(value)
@@ -182,7 +166,7 @@ class EvalTests(unittest.TestCase):
     def test_aggregation_preserves_ungraded_attempts_and_rejects_mixed_arms(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            metadata = {'arm': 'input-only', 'scope': 'fixture', 'model': 'model', 'thinking': 'low',
+            metadata = {'arm': 'baseline', 'scope': 'fixture', 'model': 'model', 'thinking': 'low',
                         'sha256': {}, 'warm': WARM, 'cold': COLD, 'classifierProviders': None, 'threshold': 0.72}
             paths = [root / str(i) for i in range(2)]
             for i, path in enumerate(paths):

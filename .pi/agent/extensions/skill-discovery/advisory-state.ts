@@ -18,12 +18,6 @@ export interface SkillAdvisoryState {
   readonly offered: ReadonlyMap<string, SkillAdvisoryRecord | undefined>;
   readonly read: ReadonlySet<string>;
   readonly usedCharacters: number;
-  readonly branchMessageKeys: ReadonlySet<string>;
-}
-
-export interface PendingSkillAdvisory {
-  readonly records: readonly SkillAdvisoryRecord[];
-  readonly content: string;
 }
 
 export interface SkillAdvisoryAdmission {
@@ -59,10 +53,6 @@ function canonicalPath(path: string, cwd: string): string {
   } catch {
     return expanded;
   }
-}
-
-function advisoryKey(names: readonly string[]): string {
-  return JSON.stringify([...new Set(names)].sort());
 }
 
 function recordsFromDetails(details: unknown): SkillAdvisoryRecord[] {
@@ -171,7 +161,6 @@ export function readSkillAdvisoryState(
 ): SkillAdvisoryState {
   const branch = session.getBranch();
   const offered = new Map<string, SkillAdvisoryRecord | undefined>();
-  const branchMessageKeys = new Set<string>();
 
   for (const entry of branch) {
     if (entry.type === "custom" && entry.customType === SKILL_RECOMMENDATIONS_ENTRY) {
@@ -187,7 +176,6 @@ export function readSkillAdvisoryState(
     const advisory = recordsAndNames(message.details);
     recordAdvisories(offered, advisory.records);
     for (const name of advisory.names) if (name && !offered.has(name)) offered.set(name, undefined);
-    if (advisory.names.length > 0) branchMessageKeys.add(advisoryKey(advisory.names));
   }
 
   let usedCharacters = 0;
@@ -197,8 +185,6 @@ export function readSkillAdvisoryState(
     if (!advisory) continue;
     for (const message of projected.messages) {
       if (message.role !== "custom" || !OWNED_ADVISORY_TYPES.has(message.customType)) continue;
-      const names = recordsAndNames(advisory.details).names;
-      if (names.length > 0) branchMessageKeys.add(advisoryKey(names));
       usedCharacters += textLength(message.content);
     }
   }
@@ -207,24 +193,7 @@ export function readSkillAdvisoryState(
     offered,
     read: successfulReadNames(branch, skills, cwd),
     usedCharacters,
-    branchMessageKeys,
   };
-}
-
-export function includePendingSkillAdvisories(
-  state: SkillAdvisoryState,
-  pending: readonly PendingSkillAdvisory[],
-): SkillAdvisoryState {
-  if (pending.length === 0) return state;
-  const offered = new Map(state.offered);
-  let pendingCharacters = 0;
-  for (const advisory of pending) {
-    const names = advisory.records.map(({ name }) => name);
-    const key = advisoryKey(names);
-    if (!state.branchMessageKeys.has(key)) pendingCharacters += advisory.content.length;
-    recordAdvisories(offered, advisory.records);
-  }
-  return { ...state, offered, usedCharacters: state.usedCharacters + pendingCharacters };
 }
 
 export function admitSkillAdvisories(

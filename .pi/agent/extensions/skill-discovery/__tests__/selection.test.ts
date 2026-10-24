@@ -9,7 +9,6 @@ import type {
 import { createEventBus, SessionManager } from "@earendil-works/pi-coding-agent";
 import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-classifier-registry";
 import { SKILL_ADVISORY_MESSAGE } from "../advisory-state";
-import { buildMidTaskPrompt } from "../mid-task";
 import {
   createSkillSelectionExtension,
   createSkillSelectionRequest,
@@ -56,8 +55,8 @@ function extensionHarness(dependencies: Parameters<typeof createSkillSelectionEx
     registerEntryRenderer: () => {},
     appendEntry: () => {},
     registerCommand: () => {},
-    on: (_event: string, callback: typeof handler) => {
-      handler = callback;
+    on: (name: string, callback: typeof handler) => {
+      if (name === "before_agent_start") handler = callback;
     },
   } as unknown as ExtensionAPI;
   extension(api);
@@ -78,8 +77,8 @@ function lifecycleHarness(dependencies: Parameters<typeof createSkillSelectionEx
     registerCommand: (name: string, definition: { handler: typeof statusCommand }) => {
       if (name === "classifier-status") statusCommand = definition.handler;
     },
-    on: (_event: string, callback: typeof handler) => {
-      handler = callback;
+    on: (name: string, callback: typeof handler) => {
+      if (name === "before_agent_start") handler = callback;
     },
   } as unknown as ExtensionAPI);
   if (handler === undefined || statusCommand === undefined) throw new Error("extension incomplete");
@@ -170,22 +169,8 @@ describe("skill selection", () => {
     expect(JSON.stringify(request)).not.toContain("SKILL.md");
   });
 
-  test.each([
-    ["input", "What's the status?"],
-    [
-      "mid-task",
-      buildMidTaskPrompt({
-        goal: "What's the status?",
-        latestVisibleActivity: "Checking which tasks are complete.",
-        visibleActivity: ["Checking which tasks are complete."],
-        toolObservations: ["Completed TaskList: ok"],
-        deltaVisibleActivity: ["Checking which tasks are complete."],
-        deltaToolObservations: ["Completed TaskList: ok"],
-        alreadyRead: [],
-        alreadyRecommended: [],
-      }) ?? "",
-    ],
-  ])("requires current workflow evidence in %s selection questions", (_stage, prompt) => {
+  test("requires current workflow evidence in selection questions", () => {
+    const prompt = "What's the status?";
     const request = createSkillSelectionRequest(prompt, [
       {
         name: "openspec-apply-change",
@@ -408,7 +393,6 @@ describe("skill selection", () => {
       state: "skipped",
       reason: "custom-message",
       fetchAttempted: false,
-      midTask: { state: "idle", attempts: 0 },
     });
     expect(await handler(event("Write a guide"), context())).toMatchObject({
       message: { customType: "skill-recommendation-advice" },
@@ -422,7 +406,6 @@ describe("skill selection", () => {
     expect(JSON.parse(notifications.at(-1) ?? "{}")).toMatchObject({
       eventCount: 3,
       reason: "custom-message",
-      midTask: { state: "idle", attempts: 0 },
     });
     expect(prompts).toEqual(["Write a guide"]);
   });
@@ -694,26 +677,6 @@ describe("skill selection", () => {
     }
   });
 
-  test("mid-task enablement defaults on and honors independently validated overrides", () => {
-    expect(resolveSkillSelectionConfig({}, {}).midTaskEnabled).toBe(true);
-    const global = { classifier: { skillSelection: { enabled: true, midTaskEnabled: false } } };
-    expect(resolveSkillSelectionConfig(global, {})).toMatchObject({
-      enabled: true,
-      midTaskEnabled: false,
-    });
-    expect(
-      resolveSkillSelectionConfig(global, {
-        classifier: { skillSelection: { midTaskEnabled: true } },
-      }),
-    ).toMatchObject({ enabled: true, midTaskEnabled: true });
-    expect(
-      resolveSkillSelectionConfig(
-        { classifier: { skillSelection: { enabled: true, midTaskEnabled: "off" } } },
-        {},
-      ).enabled,
-    ).toBe(false);
-  });
-
   test("honors global and project config overrides and disables malformed config", () => {
     expect(
       resolveSkillSelectionConfig(
@@ -722,7 +685,6 @@ describe("skill selection", () => {
       ),
     ).toEqual({
       enabled: false,
-      midTaskEnabled: true,
       threshold: 0.8,
       timeoutMs: 500,
       maxRecommendations: 2,

@@ -64,8 +64,8 @@ def aggregate(paths, destination):
 
 def compare(baseline, treatment):
     a, b = [json.loads((p / 'metadata.json').read_text()) for p in (baseline, treatment)]
-    if a['arm'] not in ('baseline', 'input-only') or b['arm'] != 'treatment':
-        raise ValueError('Pass baseline or input-only evidence then treatment evidence')
+    if a['arm'] != 'baseline' or b['arm'] != 'treatment':
+        raise ValueError('Pass baseline evidence then treatment evidence')
     for key in ('model', 'thinking', 'sha256', 'warm', 'cold', 'classifierProviders', 'threshold'):
         if a[key] != b[key]:
             raise ValueError(f'Confounded comparison: {key} differs')

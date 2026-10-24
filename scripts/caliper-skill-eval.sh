@@ -3,7 +3,7 @@ set -euo pipefail
 
 usage() {
   cat <<'EOF'
-Usage: caliper-skill-eval.sh [--ablate] [--auth-profile NAME] [--spec PATH] [--orchestration [--without-instructions]] [--codemode [--baseline]] [--skill-suggestions [--baseline | --input-only] [--selection-timeout-ms MS]] SKILL [MODEL] [THINKING] [K] [JUDGE_MODEL] [JUDGE_THINKING]
+Usage: caliper-skill-eval.sh [--ablate] [--auth-profile NAME] [--spec PATH] [--orchestration [--without-instructions]] [--codemode [--baseline]] [--skill-suggestions [--baseline] [--selection-timeout-ms MS]] SKILL [MODEL] [THINKING] [K] [JUDGE_MODEL] [JUDGE_THINKING]
 EOF
 }
 
@@ -15,7 +15,6 @@ without_instructions=false
 codemode=false
 baseline=false
 skill_suggestions=false
-input_only=false
 selection_timeout_ms=2400
 selection_timeout_set=false
 while (($# > 0)); do
@@ -28,10 +27,6 @@ while (($# > 0)); do
     selection_timeout_ms="$2"
     selection_timeout_set=true
     shift 2
-    ;;
-  --input-only)
-    input_only=true
-    shift
     ;;
   --skill-suggestions)
     skill_suggestions=true
@@ -160,10 +155,6 @@ if [[ "$selection_timeout_set" == true ]]; then
   fi
 fi
 
-if [[ "$input_only" == true && ( "$skill_suggestions" != true || "$baseline" == true ) ]]; then
-  printf '%s\n' '--input-only requires --skill-suggestions and cannot be combined with --baseline' >&2
-  exit 2
-fi
 
 if [[ "$skill_suggestions" == true ]]; then
   if [[ "$orchestration" == true || "$codemode" == true || "$ablate" == true || "$skill" != skill-suggestions ]]; then
@@ -229,7 +220,7 @@ if [[ "$skill_suggestions" == true ]]; then
   SKILL_SUGGESTIONS_EVAL_RUN="$(mktemp -d "$repo_root/.caliper/skill-suggestions/run.XXXXXX")"
   export SKILL_SUGGESTIONS_EVAL_RUN
   python3 "$repo_root/.pi/agent/evals/skill-suggestions/launch.py" prepare \
-    "$repo_root" "$run_root" "$SKILL_SUGGESTIONS_EVAL_RUN" "$baseline" "$model" "$thinking" "$input_only" "$selection_timeout_ms"
+    "$repo_root" "$run_root" "$SKILL_SUGGESTIONS_EVAL_RUN" "$baseline" "$model" "$thinking" "$selection_timeout_ms"
   printf 'Skill suggestions evidence: %s\n' "$SKILL_SUGGESTIONS_EVAL_RUN"
 fi
 

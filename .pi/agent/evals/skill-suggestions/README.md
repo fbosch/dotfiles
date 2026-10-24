@@ -1,20 +1,16 @@
 # Skill suggestion A/B eval
 
-This eval compares actual agent behavior with automatic skill recommendations off,
-at input only, or at input and mid-task checkpoints. All arms retain the same
-warm/cold skill catalog, `skill_search`, model, thinking level, fixture tools, and
-task files. Baseline disables `classifier.skillSelection.enabled`; input-only
-keeps it enabled and disables `classifier.skillSelection.midTaskEnabled`.
-Treatment keeps both enabled. The production selector uses threshold 0.72 and its
-normal attempt limits. Search uses the real classifier in every arm, with the
-production lexical fallback.
+This eval compares actual agent behavior with automatic input-time skill
+recommendations off or on. Both arms retain the same warm/cold skill catalog,
+`skill_search`, model, thinking level, fixture tools, and task files. Baseline
+disables `classifier.skillSelection.enabled`; treatment enables it. The
+production selector uses threshold 0.72. Search uses the real classifier in
+both arms, with the production lexical fallback.
 
-The [full-run report](RESULTS.md) records the 72-attempt comparison and its grading
-limitation. Raw evidence is ignored; retain it separately for replay.
-
-The [input-only ablation](INPUT-ONLY-RESULTS.md) compares input-only and full
-suggestions at a shared 5000 ms deadline, including task timeouts and matched-pair
-analysis.
+The [full-run report](RESULTS.md) and [input-only ablation](INPUT-ONLY-RESULTS.md)
+record historical experiments that included the retired mid-task recommendation
+feature. They do not describe the current treatment. Raw evidence is ignored;
+retain it separately for replay with the frozen scripts captured by those runs.
 
 ## Run
 
@@ -36,20 +32,14 @@ scripts/caliper-skill-eval.sh --skill-suggestions --baseline \
 scripts/caliper-skill-eval.sh --skill-suggestions \
   skill-suggestions configured configured 3
 
-# Input-only ablation against full suggestions, 36 attempts per arm.
-scripts/caliper-skill-eval.sh --skill-suggestions --input-only \
-  skill-suggestions configured configured 3
-scripts/caliper-skill-eval.sh --skill-suggestions \
-  skill-suggestions configured configured 3
-
-# Use the printed evidence directories, baseline or input-only first.
+# Use the printed evidence directories, baseline first.
 python3 .pi/agent/evals/skill-suggestions/compare.py CONTROL_DIR TREATMENT_DIR
 ```
 
-`--selection-timeout-ms MS` overrides the automatic input and mid-task deadline
-for this eval only, from 1 to 5000 ms. The default remains 2400 ms and search keeps
-its 2400 ms deadline. Use the same value in both arms. For example, add
-`--selection-timeout-ms 5000` to both input-only and full-suggestions commands.
+`--selection-timeout-ms MS` overrides the automatic input deadline for this
+eval only, from 1 to 5000 ms. The default remains 2400 ms and search keeps its
+2400 ms deadline. Use the same value in both arms. For example, add
+`--selection-timeout-ms 5000` to both baseline and treatment commands.
 The deadline is recorded in metadata; aggregation and comparison reject mixed
 values. Earlier persisted records without this field used 2400 ms.
 
@@ -57,11 +47,11 @@ For blockwise interleaving, run each arm with `K=1` three times, reversing arm
 order in the middle block. Pool each arm's evidence without changing verdicts:
 
 ```sh
-python3 .pi/agent/evals/skill-suggestions/compare.py --aggregate INPUT_ONLY_COMBINED \
-  INPUT_ONLY_BLOCK_1 INPUT_ONLY_BLOCK_2 INPUT_ONLY_BLOCK_3
-python3 .pi/agent/evals/skill-suggestions/compare.py --aggregate FULL_COMBINED \
-  FULL_BLOCK_1 FULL_BLOCK_2 FULL_BLOCK_3
-python3 .pi/agent/evals/skill-suggestions/compare.py INPUT_ONLY_COMBINED FULL_COMBINED
+python3 .pi/agent/evals/skill-suggestions/compare.py --aggregate BASELINE_COMBINED \
+  BASELINE_BLOCK_1 BASELINE_BLOCK_2 BASELINE_BLOCK_3
+python3 .pi/agent/evals/skill-suggestions/compare.py --aggregate TREATMENT_COMBINED \
+  TREATMENT_BLOCK_1 TREATMENT_BLOCK_2 TREATMENT_BLOCK_3
+python3 .pi/agent/evals/skill-suggestions/compare.py BASELINE_COMBINED TREATMENT_COMBINED
 ```
 
 Aggregation requires matching source hashes and settings within each arm, rejects
@@ -115,8 +105,8 @@ This tests synthetic workflow discovery and compliance, not the reliability of
 the personal skill corpus or the full extension stack. The deterministic text
 checks are bounded rubrics, not a complete semantic judge. Application scores
 include formatting and read-order compliance, not just task correctness.
-The mid-task tasks exercise the production gate but do not force a recommendation;
-no suggestion after a revealed workflow is a valid observation.
+The tasks with later workflow revelations exercise on-demand `skill_search`;
+input-time recommendations cannot use evidence revealed after the initial prompt.
 
 The default commands run baseline then treatment rather than interleaving, so
 provider conditions can affect timing. Three repetitions per task are a pilot-scale

@@ -33,6 +33,8 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 
 - Extensions in `.pi/agent/extensions/` are auto-discovered from the Stow-linked `~/.pi/agent/extensions/`; use `/reload` after changes.
 - Before changing Pi extensions or upgrading Pi, follow [SDK alignment](docs/agents/pi-sdk.md); compile and test against the installed runtime, not stale npm declarations.
+- Configure the main agent's startup tools through `defaultTools` in `.pi/agent/settings.json`, using `+tool_name` to preserve the inherited selection. Do not hardcode startup activation in extension JavaScript or TypeScript.
+- Keep optional tools deferred in their registrations. Enable only the needed entry point by default, such as `subagent`; leave `subagent_result` and `subagent_control` discoverable on demand.
 
 ## OpenCode Fallback
 

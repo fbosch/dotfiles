@@ -134,7 +134,7 @@ export default function skillSuggestionsFixture(pi: ExtensionAPI): void {
 
   const workRoot = realpathSync(work);
   const skillsRoot = realpathSync(skillRoot);
-  let phase: "input" | "mid-task" | "skill_search" | "agent" = "agent";
+  let phase: "input" | "skill_search" | "agent" = "agent";
   let toolCalls = 0;
   let searchCalls = 0;
   let requestStartedAt: number | undefined;
@@ -277,7 +277,7 @@ export default function skillSuggestionsFixture(pi: ExtensionAPI): void {
       toolDriven: event.message.stopReason === "toolUse",
       ...activityFlags(visible),
     });
-    if (event.message.stopReason === "toolUse") phase = "mid-task";
+    phase = "agent";
   });
 
   pi.on("context_with_system", (event, context) => {
