@@ -1,4 +1,5 @@
 {
+  "extends": "./node_modules/.cache/pi-sdk/tsconfig.json",
   "compilerOptions": {
     "target": "ES2022",
     "module": "ESNext",

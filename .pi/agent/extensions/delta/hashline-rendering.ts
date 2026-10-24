@@ -3,7 +3,12 @@ import { getLanguageFromPath, highlightCode } from "@earendil-works/pi-coding-ag
 import { Container, Text } from "@earendil-works/pi-tui";
 import { registerHashlineReadRendering } from "./read-rendering";
 import { diffComponent } from "./rendering";
-import { HASHLINE_DIFF_TOOLS, isDeltaDetails } from "./shared";
+import {
+  HASHLINE_DIFF_ROW_PATTERN,
+  HASHLINE_DIFF_TOOLS,
+  HASHLINE_GREP_ROW_PATTERN,
+  isDeltaDetails,
+} from "./shared";
 
 type RendererAPI = Parameters<typeof registerHashlineReadRendering>[0];
 function record(value: unknown): Record<string, unknown> {
@@ -45,7 +50,7 @@ export function registerHashlineRendering(pi: RendererAPI): void {
         const output = lines.map((line, index) => {
           const heading = name === "grep" ? /^=== (.+) ===$/u.exec(line) : /^--- (.+) ---$/u.exec(line);
           if (heading) { path = heading[1]; return theme.fg("accent", line); }
-          const row = name === "grep" ? /^(\s*\d+[:-]│)\s+[A-Za-z]{4}│(.*)$/u.exec(line) : /^([ +-])[A-Za-z]{4}│(.*)$/u.exec(line);
+          const row = (name === "grep" ? HASHLINE_GREP_ROW_PATTERN : HASHLINE_DIFF_ROW_PATTERN).exec(line);
           if (!row) return theme.fg("dim", line);
           found = true;
           lastSource = index;

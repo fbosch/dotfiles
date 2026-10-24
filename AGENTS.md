@@ -32,6 +32,7 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 ## Pi Extensions
 
 - Extensions in `.pi/agent/extensions/` are auto-discovered from the Stow-linked `~/.pi/agent/extensions/`; use `/reload` after changes.
+- Before changing Pi extensions or upgrading Pi, follow [SDK alignment](docs/agents/pi-sdk.md); compile and test against the installed runtime, not stale npm declarations.
 
 ## OpenCode Fallback
 

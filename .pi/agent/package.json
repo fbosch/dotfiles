@@ -7,8 +7,10 @@
   "scripts": {
     "format": "biome format --write .",
     "lint": "biome check .",
-    "test": "bun test",
-    "typecheck": "tsc --noEmit",
+    "test": "bun run sdk:sync && bun test",
+    "sdk:sync": "bun lib/runtime-sdk.ts",
+    "sdk:check": "bun lib/runtime-sdk.ts --check",
+    "typecheck": "bun run sdk:sync && tsc --noEmit",
     "audit": "fallow --only dead-code --fail-on-issues",
     "benchmark:startup": "bash benchmarks/startup.sh",
     "patch:packages": "bun lib/pi-npm.ts --apply-patches",

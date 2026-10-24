@@ -7,6 +7,7 @@ import type {
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
+import { customStartEvent, userStartEvent } from "../../shared/__tests__/agent-start-events";
 import autoSessionTitle, {
   composeSessionTitle,
   extractTicketReferences,
@@ -141,13 +142,23 @@ describe("auto-session-title lifecycle", () => {
       expect(guidanceLoads).toBe(0);
 
       sessionStart?.({}, ctx);
-      await beforeAgentStart?.({ prompt: "First request" } as BeforeAgentStartEvent, ctx);
+      const customEvent = customStartEvent();
+      expect(beforeAgentStart).toBeDefined();
+      await beforeAgentStart?.(customEvent, ctx);
+      await agentEnd?.({}, ctx);
+      expect(guidanceLoads).toBe(0);
+      expect(systemPrompts).toEqual([]);
+      await beforeAgentStart?.(userStartEvent("First request"), ctx);
       await agentEnd?.({}, ctx);
       expect(guidanceLoads).toBe(1);
+      await beforeAgentStart?.(customEvent, ctx);
+      await agentEnd?.({}, ctx);
+      expect(systemPrompts).toHaveLength(1);
+      expect(sessionName).toBe("Generated title");
 
       sessionName = undefined;
       sessionStart?.({}, ctx);
-      await beforeAgentStart?.({ prompt: "Second request" } as BeforeAgentStartEvent, ctx);
+      await beforeAgentStart?.(userStartEvent("Second request"), ctx);
       await agentEnd?.({}, ctx);
 
       expect(guidanceLoads).toBe(1);
@@ -227,21 +238,21 @@ describe("auto-session-title lifecycle", () => {
         );
         sessionStart?.({}, ctx);
 
-        await beforeAgentStart?.({ prompt: "Build the feature" } as BeforeAgentStartEvent, ctx);
+        await beforeAgentStart?.(userStartEvent("Build the feature"), ctx);
         expect(titleRequests).toHaveLength(0);
         await agentEnd?.({}, ctx);
         expect(sessionName).toBe("Generated title 1");
         expect(titleRequests).toHaveLength(1);
         expect(classifierRequests).toHaveLength(0);
 
-        await beforeAgentStart?.({ prompt: "Add a regression test" } as BeforeAgentStartEvent, ctx);
+        await beforeAgentStart?.(userStartEvent("Add a regression test"), ctx);
         expect(classifierRequests).toHaveLength(0);
         await agentEnd?.({}, ctx);
         expect(sessionName).toBe("Generated title 1");
         expect(titleRequests).toHaveLength(1);
 
         await beforeAgentStart?.(
-          { prompt: "Actually, replace the feature with a CLI command" } as BeforeAgentStartEvent,
+          userStartEvent("Actually, replace the feature with a CLI command"),
           ctx,
         );
         await agentEnd?.({}, ctx);
@@ -264,10 +275,7 @@ describe("auto-session-title lifecycle", () => {
           "Build the feature\n\nAdd a regression test\n\nActually, replace the feature with a CLI command",
         ]);
 
-        await beforeAgentStart?.(
-          { prompt: "Continue the same task" } as BeforeAgentStartEvent,
-          ctx,
-        );
+        await beforeAgentStart?.(userStartEvent("Continue the same task"), ctx);
         await agentEnd?.({}, ctx);
         expect(sessionName).toBe("Generated title 2");
         expect(titleRequests).toHaveLength(2);
@@ -276,7 +284,7 @@ describe("auto-session-title lifecycle", () => {
           "Could not assess whether the session title is stale: Classifier unavailable",
         ]);
         sessionName = "Manual title";
-        await beforeAgentStart?.({ prompt: "Another follow-up" } as BeforeAgentStartEvent, ctx);
+        await beforeAgentStart?.(userStartEvent("Another follow-up"), ctx);
         await agentEnd?.({}, ctx);
         expect(sessionName).toBe("Manual title");
         expect(classifierRequests).toHaveLength(3);
@@ -353,14 +361,14 @@ describe("auto-session-title lifecycle", () => {
         },
       );
       sessionStart?.({}, ctx);
-      await beforeAgentStart?.({ prompt: "Build the feature" } as BeforeAgentStartEvent, ctx);
+      await beforeAgentStart?.(userStartEvent("Build the feature"), ctx);
       await agentEnd?.({}, ctx);
       expect(sessionName).toBe("Generated title 1");
 
       activeRequestController = new AbortController();
       activeRequestController.abort();
       requestSignal = activeRequestController.signal;
-      await beforeAgentStart?.({ prompt: "Clarify the feature" } as BeforeAgentStartEvent, ctx);
+      await beforeAgentStart?.(userStartEvent("Clarify the feature"), ctx);
       await agentEnd?.({}, ctx);
       expect(staleChecks).toBe(0);
       expect(sessionName).toBe("Generated title 1");
@@ -369,7 +377,7 @@ describe("auto-session-title lifecycle", () => {
 
       activeRequestController = new AbortController();
       requestSignal = activeRequestController.signal;
-      await beforeAgentStart?.({ prompt: "Continue the feature" } as BeforeAgentStartEvent, ctx);
+      await beforeAgentStart?.(userStartEvent("Continue the feature"), ctx);
       await agentEnd?.({}, ctx);
       expect(staleChecks).toBe(1);
       expect(sessionName).toBe("Generated title 1");
@@ -377,10 +385,7 @@ describe("auto-session-title lifecycle", () => {
       expect(notifications).toEqual([]);
 
       requestSignal = new AbortController().signal;
-      await beforeAgentStart?.(
-        { prompt: "Add an implementation detail" } as BeforeAgentStartEvent,
-        ctx,
-      );
+      await beforeAgentStart?.(userStartEvent("Add an implementation detail"), ctx);
       await agentEnd?.({}, ctx);
       expect(staleChecks).toBe(2);
       expect(sessionName).toBe("Generated title 1");
@@ -428,9 +433,9 @@ describe("auto-session-title lifecycle", () => {
         throw new Error("guidance unavailable");
       });
       sessionStart?.({}, ctx);
-      await beforeAgentStart?.({ prompt: "First request" } as BeforeAgentStartEvent, ctx);
+      await beforeAgentStart?.(userStartEvent("First request"), ctx);
       await agentEnd?.({}, ctx);
-      await beforeAgentStart?.({ prompt: "Second request" } as BeforeAgentStartEvent, ctx);
+      await beforeAgentStart?.(userStartEvent("Second request"), ctx);
       await agentEnd?.({}, ctx);
 
       expect(notifications).toEqual(["Could not generate a session title: guidance unavailable"]);

@@ -2,7 +2,7 @@ import { realpathSync } from "node:fs";
 import { homedir } from "node:os";
 import { resolve } from "node:path";
 import type {
-  BeforeAgentStartEvent,
+  BeforeAgentStartUserEvent,
   ExtensionAPI,
   ExtensionContext,
   Skill,
@@ -158,7 +158,7 @@ export function createMidTaskSkillSelection(pi: ExtensionAPI, dependencies: Depe
     if (skill) state.read.add(skill);
   };
   const begin = (
-    event: Pick<BeforeAgentStartEvent, "prompt" | "images">,
+    event: Pick<BeforeAgentStartUserEvent, "prompt" | "images">,
     context: ExtensionContext,
     skills: readonly Skill[],
     candidates: readonly SkillCandidate[],

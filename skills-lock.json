@@ -59,6 +59,12 @@
       "skillPath": "skills/evaluate-skill/SKILL.md",
       "computedHash": "e7ea1d33fb525012dc7eaf4210f56abf4160a8afe4fb8dafab915e411faa6993"
     },
+    "ghgrab": {
+      "source": "akillness/jeo-skills",
+      "sourceType": "github",
+      "skillPath": ".agent-skills/ghgrab/SKILL.md",
+      "computedHash": "7b43c285253febf20cd22a7086958dde56026a5d6b48416ee440b6354d775154"
+    },
     "github-actions-docs": {
       "source": "xixu-me/skills",
       "sourceType": "github",

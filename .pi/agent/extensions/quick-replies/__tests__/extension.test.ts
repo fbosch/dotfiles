@@ -7,6 +7,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import type { Component } from "@earendil-works/pi-tui";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
+import { customStartEvent, userStartEvent } from "../../shared/__tests__/agent-start-events";
 import type { QuickReply, QuickReplyGenerator, QuickReplyInput } from "../generator";
 import {
   createQuickRepliesExtension,
@@ -190,10 +191,11 @@ function createHarness(
         timestamp: Date.now(),
       });
       await emit("input", { type: "input", text: prompt, source: "interactive" });
-      await emit("before_agent_start", { type: "before_agent_start", prompt: expandedPrompt });
+      await emit("before_agent_start", userStartEvent(expandedPrompt));
       await emit("agent_start");
     },
     async startRunWithoutPrompt() {
+      await emit("before_agent_start", customStartEvent());
       idle = false;
       await emit("agent_start");
     },

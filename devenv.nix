@@ -582,6 +582,7 @@ in
   };
 
   enterTest = ''
+    bun run --cwd .pi/agent sdk:sync
     devenv tasks run test:all
   '';
 }

@@ -29,7 +29,7 @@ async function setup() {
   const execute = (name: string, args: object) => tools.get(name)!.execute(crypto.randomUUID(), args, undefined, undefined, ctx);
   const anchors = async (file: string) => {
     const result = await execute("read", { path: file });
-    return result.content.flatMap((block) => block.type === "text" ? [...block.text.matchAll(/^([A-Za-z]{4})│/gm)].map((match) => match[1]!) : []);
+    return result.content.flatMap((block) => block.type === "text" ? [...block.text.matchAll(/^([A-Za-z]+)│/gm)].map((match) => match[1]!) : []);
   };
   function render(name: string, result: Awaited<ReturnType<typeof execute>>, expanded = true, isError = false, isPartial = false) {
     const resolve = (index: number): ReturnType<Resolver> => index < resolvers.length
@@ -59,7 +59,7 @@ for (const name of ["insert", "replace", "replace_match", "copy", "move", "undo_
     for (const expanded of [false, true]) {
       const output = f.render(name, result, expanded);
       expect(output).toContain("const");
-      expect(output).not.toMatch(/[ +-][A-Za-z]{4}│/);
+      expect(output).not.toMatch(/[ +-][A-Za-z]+│/);
     }
   });
 }
@@ -74,7 +74,7 @@ test("cross-file move renders both captured file diffs without reading current d
   expect(output).toContain("source.ts");
   expect(output).toContain("destination.ts");
   expect(output).toContain('const name = "æøå";');
-  expect(output).not.toMatch(/[ +-][A-Za-z]{4}│/);
+  expect(output).not.toMatch(/[ +-][A-Za-z]+│/);
 });
 
 test("real grep results preserve file headings, line numbers and match/context markers", async () => {
@@ -85,7 +85,7 @@ test("real grep results preserve file headings, line numbers and match/context m
     expect(output).toContain("source.ts");
     expect(output).toMatch(/1:│\s*const name/);
     expect(output).toMatch(/2-│\s*const count/);
-    expect(output).not.toMatch(/[A-Za-z]{4}│/);
+    expect(output).not.toMatch(/[A-Za-z]+│/);
   }
 });
 
@@ -94,23 +94,24 @@ test("collapsed reads show highlighted source rather than anchors", async () => 
   const result = await f.execute("read", { path: f.path });
   const output = f.render("read", result, false);
   expect(output).toContain('1 │ const name = "æøå";');
-  expect(output).not.toMatch(/[A-Za-z]{4}│/);
+  expect(output).not.toMatch(/[A-Za-z]+│/);
 });
 
 
 test("captured Delta details render even when the current tool has only its native renderer", async () => {
   const f = await setup();
   const result = { content: [{ type: "text" as const, text: "Warnings:\nKeep this warning\n\nHints:\nKeep this hint" }],
-    details: { diff: "+Abcd│const value = 1;", delta: { display: "inline", noChanges: false, output: "CAPTURED DELTA", scope: "edit", width: 80 } } };
+    details: { diff: "+abcde│const value = 1;", delta: { display: "inline", noChanges: false, output: "CAPTURED DELTA", scope: "edit", width: 80 } } };
   const output = f.render("insert", result);
   expect(output).toContain("CAPTURED DELTA");
   expect(output).toContain("Keep this warning");
   expect(output).toContain("Keep this hint");
 });
 
-test("collapsed previews retain truncation notices, warnings and literal anchor-like source", async () => {
+test.each([1, 5, 12])("collapsed previews preserve source and notices with %i-character anchors", async (width) => {
   const f = await setup();
-  const source = Array.from({ length: 40 }, (_, index) => `+Abcd│const value${index} = "Efgh│literal";`).join("\n");
+  const anchor = "a".repeat(width);
+  const source = Array.from({ length: 40 }, (_, index) => `+${anchor}│const value${index} = "fghij│literal";`).join("\n");
   const result = { content: [{ type: "text" as const, text: "Warnings:\nKeep warning\n\nHints:\nKeep hint" }],
     details: { diff: source + "\n[Diff truncated]", diffLineNumbers: Array.from({ length: 40 }, (_, index) => index + 1) } };
   const collapsed = f.render("insert", result, false);
@@ -118,19 +119,37 @@ test("collapsed previews retain truncation notices, warnings and literal anchor-
   expect(collapsed).toContain("[Diff truncated]");
   expect(collapsed).toContain("Keep warning");
   expect(collapsed).toContain("Keep hint");
-  expect(collapsed).toContain("Efgh│literal");
+  expect(collapsed).toContain('1 │ + const value0 = "fghij│literal";');
   expect(f.render("insert", result)).toContain("value39");
-  const read = { content: [{ type: "text" as const, text: source.replaceAll("+Abcd│", "Abcd│") + "\n[Showing lines 1–40 of 80]"}], details: { offset: 1 } };
-  expect(f.render("read", read, false)).toContain("[Showing lines 1–40 of 80]");
-  const grep = { content: [{ type: "text" as const, text: "=== source.ts ===\n" + source.replaceAll("+Abcd│", "1:│ Abcd│") + "\n[grep: match limit reached]"}], details: undefined };
-  expect(f.render("grep", grep, false)).toContain("[grep: match limit reached]");
+  const read = { content: [{ type: "text" as const, text: source.replaceAll(`+${anchor}│`, `${anchor}│`) + "\n[Showing lines 1–40 of 80]"}], details: { offset: 1 } };
+  const readOutput = f.render("read", read, false);
+  expect(readOutput).toContain('1 │ const value0 = "fghij│literal";');
+  expect(readOutput).toContain("[Showing lines 1–40 of 80]");
+  const grep = { content: [{ type: "text" as const, text: "=== source.ts ===\n" + source.replaceAll(`+${anchor}│`, `1:│ ${anchor}│`) + "\n[grep: match limit reached]"}], details: undefined };
+  const grepOutput = f.render("grep", grep, false);
+  expect(grepOutput).toContain('1:│ const value0 = "fghij│literal";');
+  expect(grepOutput).toContain("[grep: match limit reached]");
+});
+
+test.each([1, 5, 12])("edit previews retain deletion rows with %i-character blank gutters", async (width) => {
+  const f = await setup();
+  const result = {
+    content: [{ type: "text" as const, text: "Edited" }],
+    details: {
+      diff: `+${"a".repeat(width)}│const value = 1;\n-${" ".repeat(width)}│removed│literal`,
+      diffLineNumbers: [7, 8],
+    },
+  };
+  const output = f.render("replace", result);
+  expect(output).toContain("7 │ + const value = 1;");
+  expect(output).toContain("8 │ - removed│literal");
 });
 
 test("errors, partial results, no-ops and malformed metadata retain native behavior", async () => {
   const f = await setup();
-  const error = await f.execute("insert", { path: f.path, anchor: "zzzz", direction: "after", text: "x" });
+  const error = await f.execute("insert", { path: f.path, anchor: "zzzzz", direction: "after", text: "x" });
   expect(f.render("insert", error, true, true)).toContain("E_");
-  const partial = { content: [{ type: "text" as const, text: "pending" }], details: { diff: "+Abcd│value" } };
+  const partial = { content: [{ type: "text" as const, text: "pending" }], details: { diff: "+abcde│value" } };
   expect(f.render("insert", partial, true, false, true)).toContain("Editing");
   const noop = { content: [{ type: "text" as const, text: "No changes made" }], details: { diff: "", metrics: { classification: "noop" } } };
   expect(f.render("insert", noop)).toContain("No changes made");

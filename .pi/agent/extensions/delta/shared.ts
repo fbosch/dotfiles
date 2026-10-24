@@ -15,9 +15,16 @@ export const COLLAPSED_LINES = 24;
 export const MAX_PATHS = 100;
 export const ENTRY_TYPE = "delta-git-diff";
 export const HASHLINE_DIFF_TOOLS = new Set(["replace", "insert", "replace_match", "copy", "move", "undo_last_change"]);
-// Hashline metadata addresses tool edits but should not appear in the renderer's source view.
-export const HASHLINE_DIFF_ROW_PATTERN = /^([ +-])(?:[A-Za-z0-9]{4}| {4})│/mu;
-export const HASHLINE_DIFF_ROW_REPLACEMENT = /^([ +-])(?:[A-Za-z0-9]{4}| {4})│/gmu;
+// Parse metadata up to its delimiter so anchor-width changes cannot consume source text.
+const HASHLINE_ANCHOR_FIELD = "[A-Za-z0-9]+";
+const HASHLINE_DIFF_PREFIX = `([ +-])(?:${HASHLINE_ANCHOR_FIELD}| +)│`;
+export const HASHLINE_READ_ROW_PATTERN = new RegExp(`^${HASHLINE_ANCHOR_FIELD}│(.*)$`, "u");
+export const HASHLINE_GREP_ROW_PATTERN = new RegExp(
+  `^(\\s*\\d+[:-]│)\\s+${HASHLINE_ANCHOR_FIELD}│(.*)$`,
+  "u",
+);
+export const HASHLINE_DIFF_ROW_PATTERN = new RegExp(`^${HASHLINE_DIFF_PREFIX}(.*)$`, "mu");
+export const HASHLINE_DIFF_ROW_REPLACEMENT = new RegExp(`^${HASHLINE_DIFF_PREFIX}`, "gmu");
 export const ESCAPE = "\u001b";
 export const SGR_SUFFIX_PATTERN = /^\[[0-9;]*m/;
 export const SGR_PATTERN = new RegExp(`${ESCAPE}\\[([0-9;]*)m`, "g");
