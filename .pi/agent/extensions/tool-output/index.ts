@@ -8,7 +8,7 @@ import {
   getAgentDir,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { eligibleOutput, MAX_SESSION_BYTES, makePreview, outputEnabled } from "./policy";
+import { eligibleCapture, MAX_SESSION_BYTES, makePreview, outputEnabled } from "./policy";
 import { createOutputSearchTool, SEARCH_TOOL } from "./search";
 
 function loadSettings(ctx: ExtensionContext): { global: unknown; project: unknown } {
@@ -45,7 +45,8 @@ export function registerToolOutput(
   };
   pi.registerTool(createOutputSearchTool(enabled));
   pi.on("tool_result", async (event, ctx) => {
-    if (event.toolName !== "bash" || event.parentToolCallId || ctx.signal?.aborted) return;
+    if (event.parentToolCallId || ctx.signal?.aborted) return;
+    if (event.toolName !== "bash" && !event.toolName.startsWith("mcp__")) return;
     const owner = generation;
     const cwd = ctx.cwd;
     const searchAvailable = pi.getActiveTools().includes(SEARCH_TOOL);
@@ -54,11 +55,12 @@ export function registerToolOutput(
       // Retrieval uses the existing paginated reader, not a new arbitrary-file API.
       if (!pi.getAllTools().some((tool) => tool.name === "read" && tool.exposure !== "hidden"))
         return;
-      const text = eligibleOutput(event);
+      const capture = eligibleCapture(event);
       const structuredContent = event.structuredContent;
-      if (text === undefined || structuredContent === undefined) return;
+      if (capture === undefined || structuredContent === undefined) return;
+      const { text } = capture;
       // Avoid disk writes for outputs whose required evidence already exceeds the preview budget.
-      if (!makePreview(text, "/artifact/output.txt", searchAvailable)) return;
+      if (!makePreview(text, "/artifact/output.txt", searchAvailable, capture)) return;
       const bytes = Buffer.byteLength(text);
       if (storedBytes + bytes > MAX_SESSION_BYTES) return;
       storedBytes += bytes;
@@ -66,7 +68,7 @@ export function registerToolOutput(
       // No untrusted command, tool id, or output is used to construct filesystem paths.
       const directory = await mkdtemp(join(dependencies.artifactRoot(), "pi-tool-output-"));
       const artifactPath = join(directory, "output.txt");
-      const preview = makePreview(text, artifactPath, searchAvailable);
+      const preview = makePreview(text, artifactPath, searchAvailable, capture);
       if (!preview) return;
       await writeFile(artifactPath, text, { encoding: "utf8", mode: 0o600, flag: "wx" });
       const report = {
@@ -77,7 +79,11 @@ export function registerToolOutput(
         sha256: createHash("sha256").update(text).digest("hex"),
         toolCallId: event.toolCallId,
         artifactPath,
-        coverage: "complete-model-facing-text",
+        toolName: event.toolName,
+        source: capture.source,
+        coverage: capture.coverage,
+        isError: event.isError,
+        ...(capture.exitCode === undefined ? {} : { exitCode: capture.exitCode }),
         originalBytes: bytes,
         previewBytes: Buffer.byteLength(preview.text),
         totalLines: preview.totalLines,
@@ -107,7 +113,7 @@ export function registerToolOutput(
           outcome: "unchanged",
           reason: "preview-error",
         });
-        if (ctx.hasUI) ctx.ui.notify("Unable to create Bash output preview.", "warning");
+        if (ctx.hasUI) ctx.ui.notify("Unable to create tool output preview.", "warning");
       }
     }
   });

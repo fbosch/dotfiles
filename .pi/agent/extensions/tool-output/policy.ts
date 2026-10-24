@@ -31,12 +31,17 @@ export function hasSensitiveText(text: string): boolean {
   );
 }
 
-export function eligibleOutput(event: ToolResultEvent): string | undefined {
-  if (event.toolName !== "bash" || event.parentToolCallId || event.isError) return undefined;
-  if (!isMatching([{ type: "text", text: P.string }], event.content)) return undefined;
-  if (!isMatching({ output: P.string, truncated: false, exit_code: 0 }, event.structuredContent))
+export interface OutputCapture {
+  text: string;
+  source: "bash" | "mcp";
+  coverage: "complete-model-facing-text" | "received-single-text-block";
+  isError: boolean;
+  exitCode?: number;
+}
+
+export function eligibleCapture(event: ToolResultEvent): OutputCapture | undefined {
+  if (event.parentToolCallId || !isMatching([{ type: "text", text: P.string }], event.content))
     return undefined;
-  if (Object.hasOwn(event.structuredContent, "full_output_path")) return undefined;
   if (
     event.details !== undefined &&
     (!isMatching(RecordPattern, event.details) ||
@@ -45,7 +50,56 @@ export function eligibleOutput(event: ToolResultEvent): string | undefined {
   )
     return undefined;
   const text = event.content[0].text;
-  if (text !== event.structuredContent.output) return undefined;
+  let capture: OutputCapture;
+  if (event.toolName === "bash") {
+    if (
+      !isMatching(
+        { output: P.string, truncated: false, exit_code: P.number.int() },
+        event.structuredContent,
+      )
+    )
+      return undefined;
+    const native = event.structuredContent;
+    if (
+      !Number.isSafeInteger(native.exit_code) ||
+      Object.hasOwn(native, "full_output_path") ||
+      event.isError !== (native.exit_code !== 0)
+    )
+      return undefined;
+    const expected =
+      native.exit_code === 0
+        ? native.output
+        : `${native.output ? `${native.output}\n\n` : ""}Command exited with code ${native.exit_code}`;
+    // Do not undo a previous result hook's redaction or reintroduce structured-only text.
+    if (text !== expected) return undefined;
+    capture = {
+      text,
+      source: "bash",
+      coverage: "complete-model-facing-text",
+      isError: event.isError,
+      exitCode: native.exit_code,
+    };
+  } else if (event.toolName.startsWith("mcp__")) {
+    if (
+      !isMatching({ server: P.string, tool: P.string }, event.details) ||
+      !isMatching(
+        { content: [{ type: "text", text: P.string }], isError: P.optional(P.boolean) },
+        event.structuredContent,
+      )
+    )
+      return undefined;
+    if (
+      text !== event.structuredContent.content[0].text ||
+      event.isError !== (event.structuredContent.isError === true)
+    )
+      return undefined;
+    capture = {
+      text,
+      source: "mcp",
+      coverage: "received-single-text-block",
+      isError: event.isError,
+    };
+  } else return undefined;
   const bytes = Buffer.byteLength(text);
   if (bytes < MIN_OUTPUT_BYTES || bytes > MAX_OUTPUT_BYTES) return undefined;
   const control = [...text].some((char) => {
@@ -53,8 +107,8 @@ export function eligibleOutput(event: ToolResultEvent): string | undefined {
     return (code < 32 && code !== 9 && code !== 10 && code !== 13) || code === 127;
   });
   if (control || Buffer.from(text).toString("utf8") !== text) return undefined;
-  if (hasSensitiveText(text) || hasSensitiveText(String(event.input.command))) return undefined;
-  return text;
+  if (hasSensitiveText(text) || hasSensitiveText(JSON.stringify(event.input))) return undefined;
+  return capture;
 }
 
 export interface Preview {
@@ -125,6 +179,10 @@ export function makePreview(
   text: string,
   artifactPath: string,
   searchAvailable = false,
+  status: Pick<OutputCapture, "source" | "isError" | "exitCode"> = {
+    source: "bash",
+    isError: false,
+  },
 ): Preview | undefined {
   const lines = text.match(/[^\n]*\n|[^\n]+$/gu) ?? [];
   // Whole lines keep Unicode and CRLF intact; oversized lines require the original result.
@@ -150,7 +208,7 @@ export function makePreview(
     else ranges.push({ from: i + 1, to: i + 1 });
   }
   const parts = [
-    `[Bash output: ${selected.size}/${lines.length} lines; ${Buffer.byteLength(text)} original bytes. Only repeated progress templates collapsed; all other lines are shown.]\n`,
+    `[${status.source === "bash" ? "Bash" : "MCP"} output; isError=${status.isError}${status.exitCode === undefined ? "" : `; exitCode=${status.exitCode}`}: ${selected.size}/${lines.length} lines; ${Buffer.byteLength(text)} original bytes. Only repeated progress templates collapsed; all other lines are shown.]\n`,
     `Full output: ${JSON.stringify(artifactPath)}\n`,
     ...(searchAvailable
       ? [

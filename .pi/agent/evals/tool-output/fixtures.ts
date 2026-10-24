@@ -1,5 +1,6 @@
 export interface Fixture {
   id: string;
+  kind?: "mcp";
   question: string;
   output: string;
   exitCode: number;
@@ -90,7 +91,7 @@ export const FIXTURES: Fixture[] = [
     }),
     exitCode: 1,
     expected: { succeeded: false, blocker: "replica_lag" },
-    previewExpected: false,
+    previewExpected: true,
     unmarkedEvidence: false,
   },
   {

@@ -1,6 +1,6 @@
-# Bash output previews
+# Tool-output previews
 
-This extension saves complete eligible Bash text locally and replaces the chat-facing result with deterministic excerpts. It does not call a classifier.
+This extension saves eligible Bash and MCP text locally and replaces the chat-facing result with deterministic excerpts. It does not call a classifier.
 
 ## Enable for a project
 
@@ -31,7 +31,11 @@ The preview, including retrieval instructions, must fit within 6,000 UTF-8 bytes
 
 ## Eligibility and preservation
 
-Only successful top-level `bash` results are eligible. The extension requires one complete text block matching native structured output, explicit zero exit status, and `truncated: false`. It skips nested calls, failures, media, other tools, existing full-output-file references, and incomplete captures. Read/search/edit results and their source anchors are never shortened. Codemode's nested calls receive their original results.
+Eligible results are top-level `bash` captures and native `mcp__*` tool results with exactly one text block. Bash requires native structured output with `truncated: false`, an integer exit code, and a consistent `isError` flag. Nonzero exit codes are supported only when the text exactly matches Pi's native failure format, including its exit-status footer. The artifact preserves that footer; the preview also states the error flag and exit code.
+
+MCP requires the native `CallToolResult` envelope, server/tool details, consistent error flags, and text identical in the model-facing and structured content blocks. Both success and error results are supported. Coverage is explicitly `received-single-text-block`: it preserves what the server supplied, not a claim that the upstream dataset is complete. The full original `CallToolResult`, including nested structured data, stays intact.
+
+Pi already offloads MCP text above its native 20 KB limit. Results carrying that native full-output-file reference are left unchanged rather than saved again. This extension never reads those supplied paths or restores text hidden by an earlier result hook. Multi-block, media, resource, structured-only, mismatched, incomplete, and nested results are excluded. Read/search/edit results and source anchors are never shortened. Codemode's nested calls receive their original results.
 
 Eligible text is 8,000 to 128,000 UTF-8 bytes, with no line longer than 2,000 bytes. Binary/control-character output, ANSI escape sequences, invalid Unicode round trips, and suspicious secret-like patterns are excluded. This heuristic cannot guarantee that an output contains no sensitive information.
 

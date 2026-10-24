@@ -230,9 +230,9 @@ export async function searchArtifact(
 export function createOutputSearchTool(enabled: (ctx: ExtensionContext) => boolean) {
   return {
     name: SEARCH_TOOL,
-    label: "Search Bash output",
+    label: "Search tool output",
     description:
-      "Search a registered Bash output artifact using literal substrings. Counts scan the entire artifact; bounded verbatim excerpts include source line numbers and nextOffset. Zero matches means no literal match, not absence of other evidence. Use read for full output or edit anchors.",
+      "Search a registered tool output artifact using literal substrings. Counts scan the entire artifact; bounded verbatim excerpts include source line numbers and nextOffset. Zero matches means no literal match, not absence of other evidence. Use read for full output or edit anchors.",
     parameters: Parameters,
     outputSchema: Output,
     annotations: {

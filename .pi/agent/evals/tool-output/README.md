@@ -117,6 +117,32 @@ All four pairs were complete, with no exclusions or service failures. Each searc
 
 Across these two final evaluations, all 32 answers were correct. This does not establish broad absence of regressions: the captures are synthetic, the model and reasoning level are fixed, and the number of independent cases is small. Active settings remained byte-for-byte unchanged during each run.
 
+## Failed Bash and MCP extension
+
+The broader suite runs a nonzero-exit Bash capture, a successful MCP readiness query with contradictory observations, an MCP operation error, and an MCP result above Pi's native offload limit. It uses the installed SDK's actual Bash and MCP adapters with synthetic execution and a synthetic MCP client. No production MCP server is contacted.
+
+```sh
+EVAL_COMPARISON=broader EVAL_PROVIDER=openai-codex EVAL_MODEL=gpt-6.1-sol EVAL_REPEATS=2 EVAL_MAX_TRIALS=16 bun evals/tool-output/evaluate.ts
+```
+
+Results are in `/tmp/pi-output-agent-eval-SibzjD/`, using the installed Pi 1.4.0 SDK selected from `/nix/store/rhgjl41g196f8g8zh1d2hdppv6jj8j05-pi-1.4.0/`.
+
+| Metric | Previews off | Previews on |
+| --- | ---: | ---: |
+| Exact answers correct | 8/8 | 8/8 |
+| Additional retrieval calls | 0 | 0 |
+| Total tool calls | 8 | 8 |
+| Median completion time | 5.0395 s | 4.2145 s |
+| Uncached input tokens | 21,989 | 16,649 |
+| Output tokens | 276 | 276 |
+| Estimated usage cost, USD | 0.046738 | 0.036058 |
+
+All eight pairs completed without exclusions or observed answer regressions. Failed Bash and MCP errors kept their error status, exact received text artifacts, and structured payloads in local integration tests. The already-offloaded MCP control remained unchanged. Estimated cost fell by about 23%; the small latency sample does not establish a general speedup.
+
+Only complete single-block MCP text that survives the native adapter unchanged is eligible. Native MCP results already carrying a full-output-file reference are not reprocessed. Multi-block, media, resource, structured-only, or previously transformed results remain outside this extension's contract. MCP capture metadata describes received text, not upstream dataset completeness.
+
+The latest `devenv test` attempt failed before executing tests because Nix could not open `/` due to a permission error. The focused tests were then run directly with Bun against the synchronized installed SDK; this does not establish that the devenv environment is healthy.
+
 ## Limits and conclusion
 
 These are six synthetic questions with two repeats, one model, low thinking, short initial contexts, and a native numeric-line reader. They do not cover the full personal extension stack, the installed hashline reader's live agent behavior, long coding tasks, file edits, or broad model variability. Separate implementation tests cover installed hashline pagination, but that is not a substitute for agent-quality evaluation with that reader.

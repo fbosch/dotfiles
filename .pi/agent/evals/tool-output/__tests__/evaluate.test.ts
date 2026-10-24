@@ -1,6 +1,6 @@
 import { expect, test } from "bun:test";
 import { createBashTool, type ToolResultEvent } from "@earendil-works/pi-coding-agent";
-import { eligibleOutput, makePreview } from "../../../extensions/tool-output/policy";
+import { eligibleCapture, makePreview } from "../../../extensions/tool-output/policy";
 import { median, type Row, summarize } from "../evaluate";
 import { checkAnswer, FIXTURES } from "../fixtures";
 import { SEARCH_FIXTURES } from "../search-fixtures";
@@ -28,9 +28,11 @@ test("fixtures exercise actual eligible previews and intentional fallbacks witho
       truncated: false,
       exit_code: fixture.exitCode,
     });
-    const eligible = eligibleOutput(event);
+    const eligible = eligibleCapture(event);
     const preview =
-      eligible === undefined ? undefined : makePreview(eligible, "/tmp/private/output.txt");
+      eligible === undefined
+        ? undefined
+        : makePreview(eligible.text, "/tmp/private/output.txt", false, eligible);
     expect(!!preview).toBe(fixture.previewExpected);
     if (fixture.unmarkedEvidence) {
       expect(preview).toBeDefined();
