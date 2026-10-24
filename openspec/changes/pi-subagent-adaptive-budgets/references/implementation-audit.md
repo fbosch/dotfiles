@@ -295,3 +295,19 @@ The delayed question retained ID `e5781fba-f0de-4a2f-a897-bcc34893fc50` and its 
 The [live reload evidence](notification-freshness-live-reload-2026-10-24.json) records the checked values. This bounded pass does not establish visual UI behavior, native settled-update repetition, cross-continuation attribution, queue capacity, in-flight reload/shutdown, or the classifier setup matrix. Task 7.3 remains unchecked.
 
 Tooling limits: `tools.get_goal` was unavailable. Native report output was plain text, and transcript output used tab-delimited TOON; initial JSON decoding assumptions were corrected. The codemode scratch store was full, so the evidence was written directly without deleting unrelated stored state.
+
+## UI acceptance and validation access, 2026-10-24
+
+The user accepted the UI with "ui is fine; move on". This is user-reported acceptance, not automated visual inspection. No further UI probe was launched.
+
+The validation preflight on clean HEAD `3a1f9f6029ce8dce784ac8e95675cb590a710809` failed before acceptance evidence could be obtained. DeKit registration failed without diagnostics, and status returned an invalid-runner-response error. Direct `devenv tasks list` exited 1; inspecting its existing data directory returned `EPERM`.
+
+The user approved a scoped launcher grant for the existing default/XDG devenv state directory. The fix and neighboring regression tests leave its parent directories ungranted, omit missing state, and retain rejection of non-directory state. The focused suite passed 29 tests and 109 assertions after the two expected missing-grant failures and one corrected test assumption. Scoped Biome and `git diff --check` passed. The [access evidence](devenv-sandbox-access-2026-10-24.json) preserves the commands, results, failures, and logs.
+
+Direct `tsc --noEmit` reported SDK/type diagnostics without the required SDK synchronization. The declared `bun run typecheck` then stopped in `sdk:sync` because the sandbox denied the Nix daemon socket. Neither invocation establishes project typecheck acceptance.
+
+The active profile grants that socket only on Linux. Its Linux prerequisites require root-only daemon trust and sandboxed builds. The Mac instead trusts `fbb` and `@admin` and has `sandbox = false`. After inspecting these facts, the user chose to keep macOS socket access blocked and run validation outside Pi. No Nix repository or deployed profile was changed. The launcher grant requires a new Pi process, not a Nix rebuild or `/reload`.
+
+A separate read-only update probe completed in three of four turns, sent `LIVE_UPDATE_FRESHNESS_20261024` through `worker_update`, and returned `LIVE_UPDATE_DONE_20261024`. Native tool evidence confirmed "Update sent.". Worker `119efc18-9da1-44ce-a4d3-f1007f0af5a0`, assignment `6cd11452-f8a7-4265-b402-947dcef78d78`, was saved and released. Queued model-context delivery remains unverified at this checkpoint.
+
+Full-project acceptance now awaits an external workflow result. Tasks 6.2, 6.3, 6.4, 7.2, and 7.3 remain unchecked; automatic grants remain disabled.
