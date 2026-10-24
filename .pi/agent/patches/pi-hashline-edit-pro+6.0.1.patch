@@ -1,5 +1,5 @@
 diff --git a/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts b/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts
-index f8ebfee5..f47dbed3 100644
+index 8fa7b2d8..9608fe09 100644
 --- a/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts
 +++ b/node_modules/pi-hashline-edit-pro/src/anchor-registry.ts
 @@ -187,6 +187,8 @@ const sessionFileByKey = new Map<string, string>();
@@ -11,7 +11,7 @@ index f8ebfee5..f47dbed3 100644
  const sessionScope = new AsyncLocalStorage<string>();
  
  function newSessionState(seed?: string): SessionState {
-@@ -369,7 +371,7 @@ async function compactSidecarIfNeeded(sidecar: string, raw: string, sessionFile:
+@@ -373,7 +375,7 @@ async function compactSidecarIfNeeded(sidecar: string, raw: string, sessionFile:
  }
  
  async function loadRegistryState(key: string, sessionFile: string, token: object): Promise<void> {
@@ -20,7 +20,7 @@ index f8ebfee5..f47dbed3 100644
    let events: RegistryEvent[] = [];
    let rawLog = "";
    try {
-@@ -400,9 +402,57 @@ async function loadRegistryState(key: string, sessionFile: string, token: object
+@@ -405,9 +407,57 @@ async function loadRegistryState(key: string, sessionFile: string, token: object
    }
  }
  
@@ -79,7 +79,7 @@ index f8ebfee5..f47dbed3 100644
    const pending = pendingInits.get(key);
    if (pending) {
      await pending;
-@@ -439,10 +489,25 @@ export async function initRegistry(sessionFile: string | undefined): Promise<str
+@@ -444,10 +494,25 @@ export async function initRegistry(sessionFile: string | undefined): Promise<str
  }
  
  export function sessionKeyFor(ctx: AnchorSessionContext | undefined): string | undefined {
@@ -108,7 +108,7 @@ index f8ebfee5..f47dbed3 100644
    return undefined;
  }
  
-@@ -808,7 +873,11 @@ function computeParts(
+@@ -800,7 +865,11 @@ function computeParts(
    const parts: ArrayPart[] = [];
    if (prefix > 0) parts.push({ count: prefix });
    for (const part of Diff.diffArrays(prevMid, newMid) as unknown as Array<{ count?: number; added?: boolean; removed?: boolean }>) {
@@ -121,7 +121,7 @@ index f8ebfee5..f47dbed3 100644
    }
    if (suffix > 0) parts.push({ count: suffix });
    return parts;
-@@ -1075,6 +1144,8 @@ export function resetRegistryForTests(): void {
+@@ -1068,6 +1137,8 @@ export function resetRegistryForTests(): void {
    sessionFileByKey.clear();
    pendingInits.clear();
    loadTokens.clear();
@@ -130,7 +130,7 @@ index f8ebfee5..f47dbed3 100644
    registries.clear();
  }
  
-@@ -1118,6 +1189,12 @@ export async function readSidecarSessionFile(sidecar: string): Promise<string |
+@@ -1111,6 +1182,12 @@ export async function readSidecarSessionFile(sidecar: string): Promise<string |
  
  export function releaseRegistrySession(key: string): void {
    loadTokens.delete(key);
@@ -200,10 +200,10 @@ index e17801fa..0bddfeb4 100644
  }
  
 diff --git a/node_modules/pi-hashline-edit-pro/src/hashline/resolve.ts b/node_modules/pi-hashline-edit-pro/src/hashline/resolve.ts
-index 1ad809c1..0b2e2e22 100644
+index afd21569..4cf3c467 100644
 --- a/node_modules/pi-hashline-edit-pro/src/hashline/resolve.ts
 +++ b/node_modules/pi-hashline-edit-pro/src/hashline/resolve.ts
-@@ -305,6 +305,14 @@ export function preserveDeletionSeparators(edit: HEdit, fileLines: string[], fil
+@@ -319,6 +319,14 @@ export function preserveDeletionSeparators(edit: HEdit, fileLines: string[], fil
  	return { ...edit, hash_bounds: [{ hash: fileHashes[start]! }, { hash: fileHashes[end]! }] };
  }
  
@@ -218,7 +218,7 @@ index 1ad809c1..0b2e2e22 100644
  export function valEdit(
  	edit: HEdit,
  	fileLines: string[],
-@@ -337,10 +345,10 @@ export function valEdit(
+@@ -351,10 +359,10 @@ export function valEdit(
  	const endResolved = tryResolve(edit.hash_bounds[1]);
  	if (!startResolved || !endResolved) {
  		if (!startResolved && endResolved) {
@@ -231,3 +231,57 @@ index 1ad809c1..0b2e2e22 100644
  			if (endMismatch && endMismatch.kind === "not_found") endMismatch.context = startResolved;
  		}
  		return { resolved: undefined, mismatches };
+diff --git a/node_modules/pi-hashline-edit-pro/src/read.ts b/node_modules/pi-hashline-edit-pro/src/read.ts
+index 95ad7e3f..35dcf24e 100644
+--- a/node_modules/pi-hashline-edit-pro/src/read.ts
++++ b/node_modules/pi-hashline-edit-pro/src/read.ts
+@@ -23,7 +23,7 @@ import { withAnchorSession, adoptAnchors, ownerOf, formatAnchorReclaimNotice, ta
+ import { serveRows } from "./served";
+ import { snapshotCache } from "./hash-store/cache";
+ import { Text } from "@earendil-works/pi-tui";
+-import { anchoredLine, readResultSchema, withStructuredErrors, type AnchoredLine, type ReadResult, type ReadTextResult } from "./structured";
++import { anchoredLine, readResultSchema, structuredFailure, withStructuredErrors, type AnchoredLine, type ReadResult, type ReadTextResult } from "./structured";
+ const R_DESC = loadP("../tool-prompts/read.md");
+ const R_SNIPPET = loadP("../tool-prompts/read-snippet.md");
+ function readGuide(): Guideline[] {
+@@ -378,7 +378,15 @@ export function regRead(pi: ExtensionAPI, flags: EditToolFlags = DEFAULT_EDIT_FL
+ 						context: typeof ctx,
+ 					) => ReturnType<typeof builtinRead.execute>;
+ 					const imageResult = await executeBuiltinRead(_toolCallId, params, signal, _onUpdate, ctx);
+-					return { ...imageResult, structuredContent: imageResult.structuredContent as ReadResult };
++					const note = imageResult.content.filter((block) => block.type === "text").map((block) => block.text).join("\n");
++					const image = imageResult.content.find((block) => block.type === "image");
++					if (image === undefined) return structuredFailure(new Error(`[E_IMAGE_READ] ${note || "Image omitted by the image processor."}`), imageResult.details);
++					// The processor may convert formats; expose the actual attachment to codemode.
++					const structuredContent: ReadResult = {
++						ok: true, kind: "image", path: rawPath, type: "image",
++						data: image.data, mimeType: image.mimeType, note,
++					};
++					return { ...imageResult, structuredContent };
+ 				}
+ 	      const { normalized, fileHashes, hadUtf8DecodeErrors, absolutePath: resolvedPath } = await readNormFile(
+ 	        rawPath, ctx.cwd, { signal, preloadedFile: file, maxLines: MAX_HASH_LINES },
+diff --git a/node_modules/pi-hashline-edit-pro/src/structured.ts b/node_modules/pi-hashline-edit-pro/src/structured.ts
+index 887b3542..00d0ad35 100644
+--- a/node_modules/pi-hashline-edit-pro/src/structured.ts
++++ b/node_modules/pi-hashline-edit-pro/src/structured.ts
+@@ -49,6 +49,9 @@ export type ReadTextResult = {
+ };
+ 
+ export type ReadImageResult = {
++	ok: true;
++	kind: "image";
++	path: string;
+ 	type: "image";
+ 	data: string;
+ 	mimeType: string;
+@@ -73,6 +76,9 @@ export const readResultSchema = Type.Union([
+ 		notices: Type.Array(Type.String()),
+ 	}),
+ 	Type.Object({
++		ok: Type.Literal(true),
++		kind: Type.Literal("image"),
++		path: Type.String(),
+ 		type: Type.Literal("image"),
+ 		data: Type.String(),
+ 		mimeType: Type.String(),

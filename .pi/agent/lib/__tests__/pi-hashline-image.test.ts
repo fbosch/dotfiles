@@ -17,8 +17,11 @@ beforeAll(async () => {
   workspace = mkdtempSync(join(tmpdir(), "pi-hashline-image-package-"));
   const installRoot = join(workspace, "runtime");
   const packageRoot = join(installRoot, "node_modules/pi-hashline-edit-pro");
-  cpSync(join(agentRoot, "npm/node_modules/pi-hashline-edit-pro"), packageRoot, {
+  const installedPackageRoot = join(agentRoot, "npm/node_modules/pi-hashline-edit-pro");
+  cpSync(installedPackageRoot, packageRoot, {
     recursive: true,
+    // Resolve fixture dependencies through the shared install, not copied nested packages.
+    filter: (source) => source !== join(installedPackageRoot, "node_modules"),
   });
   symlinkSync(join(agentRoot, "npm/node_modules"), join(packageRoot, "node_modules"));
   symlinkSync(join(agentRoot, "node_modules"), join(workspace, "node_modules"));

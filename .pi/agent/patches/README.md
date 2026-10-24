@@ -2,7 +2,7 @@
 
 Tracked patches preserve local changes to pinned Pi extensions:
 - `@ff-labs+pi-fff+0.11.0.patch` disables FFF's native watcher on macOS, forwards Git-status metadata for `@` suggestions, and marks the bounded find and grep tools for read-only programmatic dispatch.
-- `pi-hashline-edit-pro+6.0.1.patch` keeps one registry identity when Pi exposes a session file after early tool calls, preserving served anchors and reclamation state; it also keeps source type-safe under the local ES2022 and exact-optional checks and exposes processed image payloads and notes to codemode's `image()`.
+- `pi-hashline-edit-pro+6.0.1.patch` is rebased onto 7.0.0. It keeps one registry identity when Pi exposes a session file after early tool calls, preserving served anchors and reclamation state; it also keeps source type-safe under the local ES2022 and exact-optional checks and exposes processed image payloads and notes to codemode's `image()`.
 - `pi-lens+4.3.0.patch` is rebased onto 4.4.4. It refreshes hashline anchors after immediate formatting, avoids duplicate deferred formatting, and runs Fallow alongside the primary language server as an advisory-only auxiliary. Upstream now resolves bundled grammars.
 
 The standalone task checklist lives in `../extensions/tasks/`. It stores versioned snapshots in Pi session history under its own entry type and ignores old pi-tasks state.
@@ -21,7 +21,7 @@ Keep these patches here rather than editing Pi's installed packages without a re
    ```sh
    pi install npm:@ff-labs/pi-fff@0.11.0
    pi install npm:pi-lens@4.4.4
-   pi install npm:pi-hashline-edit-pro@6.2.0
+   pi install npm:pi-hashline-edit-pro@7.0.0
    ```
 
    If they are already installed, run
