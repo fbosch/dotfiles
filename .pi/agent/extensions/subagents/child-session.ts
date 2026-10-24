@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import * as Pi from "@earendil-works/pi-coding-agent";
-import { type ResolvedSpecialist, verifyChildCapabilities } from "./specialist";
 import { selectedMcp } from "./mcp";
+import { type ResolvedSpecialist, verifyChildCapabilities } from "./specialist";
 
 export const CHILD_PROTOCOL_TOOLS = ["worker_question", "worker_update"] as const;
 
@@ -27,7 +27,11 @@ export async function createChildSession(options: ChildSessionOptions) {
   const settings = sdk.SettingsManager.create(cwd, agentDir).getSettings();
   const settingsManager = sdk.SettingsManager.inMemory({
     ...settings,
-    packages: [], extensions: [], skills: [], prompts: [], themes: [],
+    packages: [],
+    extensions: [],
+    skills: [],
+    prompts: [],
+    themes: [],
     cacheWarming: "off",
   });
   const loadedSkills = sdk.loadSkills({
@@ -62,11 +66,22 @@ export async function createChildSession(options: ChildSessionOptions) {
     ? [`Skipped unavailable skills: ${skippedSkills.join(", ")}`]
     : [];
   const errors: string[] = [];
-  const mcp = await selectedMcp({ agentDir, cwd, projectTrusted: options.projectTrusted ?? false,
-    servers: config.mcpServers ?? [], tools: config.tools, create: sdk.createMcpExtension });
+  const mcp = await selectedMcp({
+    agentDir,
+    cwd,
+    projectTrusted: options.projectTrusted ?? false,
+    servers: config.mcpServers ?? [],
+    tools: config.tools,
+    create: sdk.createMcpExtension,
+  });
   const loader = new sdk.DefaultResourceLoader({
-    cwd, agentDir, settingsManager,
-    noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true,
+    cwd,
+    agentDir,
+    settingsManager,
+    noExtensions: true,
+    noSkills: true,
+    noPromptTemplates: true,
+    noThemes: true,
     additionalExtensionPaths: [...config.extensions],
     extensionFactories: [
       sdk.createCodemodeExtension({ models: false }),
@@ -88,13 +103,19 @@ export async function createChildSession(options: ChildSessionOptions) {
     await session.abort();
     const before = errors.length;
     await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });
-    if (errors.length !== before) throw new Error(`Child shutdown failed: ${errors.slice(before).join("; ")}`);
+    if (errors.length !== before)
+      throw new Error(`Child shutdown failed: ${errors.slice(before).join("; ")}`);
     session.dispose();
   };
   try {
     await loader.reload();
     if (loader.getExtensions().errors.length) {
-      throw new Error(`Required extension failed: ${loader.getExtensions().errors.map((error) => `${error.path}: ${error.error}`).join("; ")}`);
+      throw new Error(
+        `Required extension failed: ${loader
+          .getExtensions()
+          .errors.map((error) => `${error.path}: ${error.error}`)
+          .join("; ")}`,
+      );
     }
     runtime = await sdk.ModelRuntime.create({
       authPath: join(agentDir, "auth.json"),
@@ -104,29 +125,48 @@ export async function createChildSession(options: ChildSessionOptions) {
     });
     const selected = { ...config, tools: [...config.tools, ...CHILD_PROTOCOL_TOOLS] };
     const created = await sdk.createAgentSession({
-      cwd, agentDir, settingsManager, modelRuntime: runtime, resourceLoader: loader,
-      sessionManager: sdk.SessionManager.inMemory(cwd), model: options.model,
+      cwd,
+      agentDir,
+      settingsManager,
+      modelRuntime: runtime,
+      resourceLoader: loader,
+      sessionManager: sdk.SessionManager.inMemory(cwd),
+      model: options.model,
       ...(config.thinking === undefined ? {} : { thinkingLevel: config.thinking }),
-      tools: selected.tools, excludeTools: [...config.excludeTools],
+      tools: selected.tools,
+      excludeTools: [...config.excludeTools],
     });
     session = created.session;
     const requiredActiveTools = session.getActiveToolNames();
-    await session.bindExtensions({ onError: (error) => { errors.push(`${error.event}: ${error.error}`); } });
+    await session.bindExtensions({
+      onError: (error) => {
+        errors.push(`${error.event}: ${error.error}`);
+      },
+    });
     await mcp.wait();
     // Extension lazy-loading defaults must not deactivate explicitly selected child tools.
-    session.setActiveToolsByName([...new Set([...requiredActiveTools, ...session.getActiveToolNames()])]);
+    session.setActiveToolsByName([
+      ...new Set([...requiredActiveTools, ...session.getActiveToolNames()]),
+    ]);
     if (errors.length) throw new Error(`Child integration failed: ${errors.join("; ")}`);
-    if (created.modelFallbackMessage || `${session.model?.provider}/${session.model?.id}` !== config.model) {
+    if (
+      created.modelFallbackMessage ||
+      `${session.model?.provider}/${session.model?.id}` !== config.model
+    ) {
       throw new Error(`Child did not retain required model: ${config.model}`);
     }
-    verifyChildCapabilities(selected, [...new Set([...session.getActiveToolNames(), ...session.getCallableToolNames()])]);
+    verifyChildCapabilities(selected, [
+      ...new Set([...session.getActiveToolNames(), ...session.getCallableToolNames()]),
+    ]);
     return { session, close, errors, warnings };
   } catch (cause) {
     const failure = cause instanceof Error ? cause : new Error(String(cause));
     try {
       await close();
     } catch (cleanup) {
-      const uncertain = new Error(`Child startup cleanup is unconfirmed: ${String(cleanup)}`, { cause: failure });
+      const uncertain = new Error(`Child startup cleanup is unconfirmed: ${String(cleanup)}`, {
+        cause: failure,
+      });
       options.onUncertainStartup(uncertain, [loader, runtime, session]);
       throw uncertain;
     }

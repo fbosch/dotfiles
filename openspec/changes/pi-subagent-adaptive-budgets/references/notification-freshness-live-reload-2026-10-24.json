@@ -1,0 +1,82 @@
+{
+  "version": 1,
+  "date": "2026-10-24",
+  "clockObserved": "2026-10-24T14:27:49+0200",
+  "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+  "workerId": "c199c446-34f8-4b0f-8a65-3643c39179c3",
+  "assignmentId": "5b52804d-7652-43af-809e-79b00dce81cb",
+  "questionId": "e5781fba-f0de-4a2f-a897-bcc34893fc50",
+  "questionText": "NOTICE_FRESHNESS_RELOAD_20261024",
+  "replyText": "NOTICE_FRESHNESS_ACK_20261024",
+  "firstTool": {
+    "name": "read",
+    "path": ".pi/agent/extensions/subagents/README.md",
+    "isError": false,
+    "heading": "# Subagents"
+  },
+  "nativeTranscriptChecked": true,
+  "workerFileWritesObserved": false,
+  "checkpointBeforeReply": {
+    "state": "waiting-question",
+    "turnsUsed": 3,
+    "maxTurns": 4,
+    "persistence": "saved"
+  },
+  "delayedQuestionProjection": {
+    "requiresReply": false,
+    "workerState": "released",
+    "liveSession": "released",
+    "assignmentOutcome": "completed",
+    "persistence": "saved",
+    "originalQuestionTextRetained": true
+  },
+  "delayedCompletionProjection": {
+    "workerState": "released",
+    "liveSession": "released",
+    "assignmentId": "5b52804d-7652-43af-809e-79b00dce81cb",
+    "outcome": "completed",
+    "persistence": "saved",
+    "reportAvailable": true,
+    "verified": false
+  },
+  "finalStatus": {
+    "parentSessionId": "01a163d7-67af-759c-947b-c2a8650137e1",
+    "workerId": "c199c446-34f8-4b0f-8a65-3643c39179c3",
+    "specialist": "quick",
+    "state": "released",
+    "liveSession": "released",
+    "currentAssignmentId": "5b52804d-7652-43af-809e-79b00dce81cb",
+    "assignments": [
+      {
+        "assignmentId": "5b52804d-7652-43af-809e-79b00dce81cb",
+        "outcome": "completed",
+        "turnsUsed": 4,
+        "maxTurns": 4,
+        "remainingTurns": 0,
+        "persistence": "saved"
+      }
+    ]
+  },
+  "reportAfterRelease": "NOTICE_FRESHNESS_RELOAD_OK  \nREADME first heading: `# Subagents`  \nExact reply text received: `NOTICE_FRESHNESS_ACK_20261024`  \nchanged_files: none",
+  "checks": {
+    "workerMatches": true,
+    "released": true,
+    "completedAndSaved": true,
+    "marker": true,
+    "heading": true,
+    "correlatedReply": true,
+    "noChanges": true
+  },
+  "verificationScope": "Bounded live question/reply, delayed model-context notice metadata, completion attribution, saved report, and release. Not full runtime acceptance.",
+  "limitations": [
+    "Visual focus, layout, and cancellation confirmation not inspected.",
+    "Native settled-update repetition and cross-continuation receipt attribution not exercised in this probe.",
+    "Queue capacity, in-flight reload/shutdown, classifier failure matrix, and budget calibration remain unverified.",
+    "No crash-durability or OS-sandbox claim."
+  ],
+  "tooling": [
+    "tools.get_goal is unavailable; the checklist remains the work tracker.",
+    "Report mode returns plain text and transcript mode returns tab-delimited TOON; initial JSON decoding assumptions were corrected.",
+    "The codemode store was full; evidence was written directly without clearing unrelated stored state."
+  ]
+}

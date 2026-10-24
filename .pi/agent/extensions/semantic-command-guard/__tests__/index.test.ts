@@ -126,16 +126,12 @@ describe("settings", () => {
 });
 
 describe("local inspection", () => {
-  test.each([
-    "pwd",
-    "rg 'rm -rf' src",
-    "cat file",
-    "echo 'rm -rf src'",
-    "git status",
-    "git diff",
-  ])("skips routine commands: %s", (command) => {
-    expect(inspectCommand(command).kind).toBe("skip");
-  });
+  test.each(["pwd", "rg 'rm -rf' src", "cat file", "echo 'rm -rf src'", "git status", "git diff"])(
+    "skips routine commands: %s",
+    (command) => {
+      expect(inspectCommand(command).kind).toBe("skip");
+    },
+  );
   test.each([
     "rm -rf src",
     "rm -rf dist",

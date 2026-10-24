@@ -15,7 +15,7 @@ The extension directory is `subagents`. Existing `minimal-subagents` history, no
 | `owner.ts`, `health.ts` | Own worker identities, queue capacity, budgets, and cleanup uncertainty |
 | `budget*.ts` | Own budget policy, optional advice, structural outcomes, and budget evidence |
 | `history.ts` | Save complete evidence with the owning parent |
-| `delivery.ts` | Coordinate full-result waits, receipts, and tracked update delivery |
+| `delivery.ts` | Coordinate full-result waits, receipts, and tracked notice delivery |
 | `parent-runtime.ts`, `tools.ts`, `host.ts` | Share launch/inspection/control behavior across parent integrations |
 | `presentation.ts`, `overlay.ts`, `ui.ts` | Render progress and read-only inspection with confirmed cancellation |
 
@@ -81,7 +81,7 @@ Omit `workerId` only for the status list. Status excludes report text, configura
 
 Background completion sends a structural receipt, not the report body. A foreground result or explicit wait returns available full evidence and consumes the concurrent completion notice. A timeout or interrupted background wait leaves its worker alive and preserves later notice delivery. A report is worker evidence, not a verified conclusion.
 
-`WorkerDelivery` owns pending worker updates and their opaque delivery IDs. The host carries those IDs through Pi messages and asks the delivery module to refresh settled assignment state when building model context. Update text, attribution, and saved messages remain unchanged. Active updates stay eligible for a later refresh; settled updates refresh once. Shutdown discards pending delivery state, and IDs from another parent or a previous runtime cannot recreate it.
+`WorkerDelivery` tracks structural notices with opaque delivery IDs. When building model context, the host refreshes settled updates, question status, and receipt metadata while preserving each notice's original attribution. For questions, `requiresReply` is true only for the current question of an available, waiting worker. Repeated projections stay fresh without changing saved messages or question/update text. This is a model-context projection, not a rewrite of displayed historical messages. Shutdown discards tracking, and tokens from another parent or runtime cannot recreate it.
 
 Control with `subagent_control`:
 

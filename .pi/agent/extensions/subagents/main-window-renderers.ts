@@ -1,7 +1,13 @@
-import { InteractiveMode, type ExtensionUIContext, type ToolExecutionComponent } from "@earendil-works/pi-coding-agent";
+import {
+  type ExtensionUIContext,
+  InteractiveMode,
+  type ToolExecutionComponent,
+} from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
 
-export type ToolRendererLookup = (name: string) => ConstructorParameters<typeof ToolExecutionComponent>[4];
+export type ToolRendererLookup = (
+  name: string,
+) => ConstructorParameters<typeof ToolExecutionComponent>[4];
 type CustomUI = ExtensionUIContext["custom"];
 type CustomCall = (...args: Parameters<CustomUI>) => ReturnType<CustomUI>;
 const bridgeKey = Symbol.for("dotfiles:minimal-subagents:main-window-renderers");
@@ -16,10 +22,17 @@ interface RendererHost {
 // Pi 1.3.0 exposes renderer registration but no extension-side lookup. Keep this
 // private UI bridge isolated until Pi offers one; resolve through the main window
 // so built-in defaults and extension resolver ordering stay identical.
-export function installMainWindowRendererAccess(target: unknown = InteractiveMode.prototype): (tui: TUI) => ToolRendererLookup {
-  if (typeof target !== "object" || target === null
-    || !("showExtensionCustom" in target) || typeof target.showExtensionCustom !== "function"
-    || !("getRegisteredToolDefinition" in target) || typeof target.getRegisteredToolDefinition !== "function") {
+export function installMainWindowRendererAccess(
+  target: unknown = InteractiveMode.prototype,
+): (tui: TUI) => ToolRendererLookup {
+  if (
+    typeof target !== "object" ||
+    target === null ||
+    !("showExtensionCustom" in target) ||
+    typeof target.showExtensionCustom !== "function" ||
+    !("getRegisteredToolDefinition" in target) ||
+    typeof target.getRegisteredToolDefinition !== "function"
+  ) {
     throw new Error("Main-window tool renderer access is unavailable in this Pi version");
   }
   const prototype = target as RendererHost;

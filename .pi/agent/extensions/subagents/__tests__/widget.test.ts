@@ -2,26 +2,71 @@ import { expect, test } from "bun:test";
 import { initTheme } from "@earendil-works/pi-coding-agent";
 import { stripTerminalSequences, type TuiMouseEvent } from "@earendil-works/pi-tui";
 import { theme } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme";
-import { createWorkerWidget } from "../widget";
 import type { WorkerSnapshot } from "../owner";
+import { createWorkerWidget } from "../widget";
 
 initTheme("dark", false);
-const click: TuiMouseEvent = { type: "click", button: "left", x: 3, y: 0, screenX: 3, screenY: 0, width: 100, height: 30, shift: false, alt: false, ctrl: false };
+const click: TuiMouseEvent = {
+  type: "click",
+  button: "left",
+  x: 3,
+  y: 0,
+  screenX: 3,
+  screenY: 0,
+  width: 100,
+  height: 30,
+  shift: false,
+  alt: false,
+  ctrl: false,
+};
 function worker(id: string): WorkerSnapshot {
-  return { id, specialist: id, parentSessionId: "parent", createdAt: 0, status: "running", liveSession: "available", currentAssignmentId: "assignment",
-    config: { name: id, description: id, prompt: "Role", model: "fixture/model", maxTurns: 4, tools: [], excludeTools: [], extensions: [], skills: [] },
-    assignments: [{ id: "assignment", prompt: "Task", outcome: "running", maxTurns: 4, turnsUsed: 1, remainingTurns: 3, persistence: "not-attempted", transcript: [] }],
+  return {
+    id,
+    specialist: id,
+    parentSessionId: "parent",
+    createdAt: 0,
+    status: "running",
+    liveSession: "available",
+    currentAssignmentId: "assignment",
+    config: {
+      name: id,
+      description: id,
+      prompt: "Role",
+      model: "fixture/model",
+      maxTurns: 4,
+      tools: [],
+      excludeTools: [],
+      extensions: [],
+      skills: [],
+    },
+    assignments: [
+      {
+        id: "assignment",
+        prompt: "Task",
+        outcome: "running",
+        maxTurns: 4,
+        turnsUsed: 1,
+        remainingTurns: 3,
+        persistence: "not-attempted",
+        transcript: [],
+      },
+    ],
   };
 }
 test("widget header and activity rows open the same worker across resize and state changes", () => {
   let workers = [worker("first"), worker("second")];
   const opened: string[] = [];
-  const widget = createWorkerWidget(() => ({ workers, observation: () => undefined, terminalRows: 30, theme }), theme, (id) => opened.push(id));
+  const widget = createWorkerWidget(
+    () => ({ workers, observation: () => undefined, terminalRows: 30, theme }),
+    theme,
+    (id) => opened.push(id),
+  );
   for (const width of [100, 40]) {
     const lines = widget.render(width).map(stripTerminalSequences);
     const row = lines.findIndex((line) => line.includes("◍ second"));
     expect(row).toBeGreaterThan(0);
-    for (const y of [row, row + 1]) expect(widget.handleMouse?.({ ...click, width, y })?.handled).toBe(true);
+    for (const y of [row, row + 1])
+      expect(widget.handleMouse?.({ ...click, width, y })?.handled).toBe(true);
     expect(widget.handleMouse?.({ ...click, y: 0 })).toBeUndefined();
   }
   expect(opened).toEqual(["second", "second", "second", "second"]);
@@ -49,9 +94,20 @@ test("activity clock runs only for visible running rows and stops on replacement
       tick = callback;
       return {} as ReturnType<typeof setInterval>;
     },
-    clearInterval(_id: ReturnType<typeof setInterval>) { stops++; tick = undefined; },
+    clearInterval(_id: ReturnType<typeof setInterval>) {
+      stops++;
+      tick = undefined;
+    },
   };
-  const widget = createWorkerWidget(() => ({ workers, observation: () => undefined, terminalRows: 30, theme, maxRows: 1 }), theme, () => {}, () => { renders++; }, clock);
+  const widget = createWorkerWidget(
+    () => ({ workers, observation: () => undefined, terminalRows: 30, theme, maxRows: 1 }),
+    theme,
+    () => {},
+    () => {
+      renders++;
+    },
+    clock,
+  );
   const lines = () => widget.render(40).map(stripTerminalSequences);
   expect(lines().join(" ")).toContain("◍ run");
   expect(starts).toBe(1);
@@ -68,11 +124,33 @@ test("activity clock runs only for visible running rows and stops on replacement
   widget.render(40);
   expect(tick).toBeUndefined(); // Row limit shows the question, not the running worker.
   workers = [worker("run")];
-  const hiddenWidget = createWorkerWidget(() => ({ workers, observation: () => undefined, terminalRows: 30, theme, hiddenWorkers: new Set(["run"]) }), theme, () => {}, () => { renders++; }, clock);
+  const hiddenWidget = createWorkerWidget(
+    () => ({
+      workers,
+      observation: () => undefined,
+      terminalRows: 30,
+      theme,
+      hiddenWorkers: new Set(["run"]),
+    }),
+    theme,
+    () => {},
+    () => {
+      renders++;
+    },
+    clock,
+  );
   hiddenWidget.render(40);
   expect(tick).toBeUndefined();
   hiddenWidget.dispose();
-  const shortWidget = createWorkerWidget(() => ({ workers, observation: () => undefined, terminalRows: 8, theme }), theme, () => {}, () => { renders++; }, clock);
+  const shortWidget = createWorkerWidget(
+    () => ({ workers, observation: () => undefined, terminalRows: 8, theme }),
+    theme,
+    () => {},
+    () => {
+      renders++;
+    },
+    clock,
+  );
   shortWidget.render(40);
   expect(tick).toBeUndefined();
   shortWidget.dispose();

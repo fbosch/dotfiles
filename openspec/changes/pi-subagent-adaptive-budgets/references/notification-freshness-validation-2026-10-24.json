@@ -1,0 +1,437 @@
+{
+  "version": 1,
+  "date": "2026-10-24",
+  "head": "49767991",
+  "workingTree": "non-clean; no clean-HEAD causality comparison",
+  "sourceMapping": "Nearest preceding test stack within four log lines; null denotes unavailable source mapping.",
+  "fullProject": {
+    "command": "devenv test",
+    "exitCode": 1,
+    "log": "/tmp/pi-notice-freshness-full.kVxPyL/devenv-test.log",
+    "piExtensions": {
+      "passed": 2512,
+      "reportedFailed": 31,
+      "skipped": 8,
+      "reportedErrors": 1,
+      "enumeratedNamedFailures": 30,
+      "countNote": "Reported counts retained verbatim; the named list alone does not explain the failed total.",
+      "assertions": 15604,
+      "tests": 2551,
+      "files": 262
+    },
+    "piMcp": {
+      "passed": 7,
+      "failed": 6,
+      "tests": 13,
+      "files": 2
+    },
+    "failedTasks": [
+      {
+        "task": "test:fish-greeting",
+        "status": "failed",
+        "logLine": 262,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:ags-gjs",
+        "status": "failed",
+        "logLine": 266,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:skill-suggestions-eval",
+        "status": "failed",
+        "logLine": 329,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:nvim-dekit-terminal",
+        "status": "failed",
+        "logLine": 344,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-mcp",
+        "status": "failed",
+        "logLine": 363,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:all",
+        "status": "dependency failed",
+        "logLine": 783,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:stow",
+        "status": "failed",
+        "logLine": 897,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:runtime-shell",
+        "status": "failed",
+        "logLine": 2347,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "status": "failed",
+        "logLine": 4533,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      }
+    ],
+    "failedCases": [
+      {
+        "task": "test:pi-mcp",
+        "name": "native MCP configuration > sets explicit deferred exposure and converts all request timeouts to seconds",
+        "sourcePath": ".pi/agent/__tests__/mcp.test.ts",
+        "sourceLine": 34,
+        "logLine": 108,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-mcp",
+        "name": "native MCP configuration > passes browser paths and isolated-profile flags correctly with google-chrome on PATH",
+        "sourcePath": ".pi/agent/__tests__/mcp.test.ts",
+        "sourceLine": 136,
+        "logLine": 183,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-mcp",
+        "name": "native MCP configuration > passes browser paths and isolated-profile flags correctly with chromium on PATH",
+        "sourcePath": ".pi/agent/__tests__/mcp.test.ts",
+        "sourceLine": 136,
+        "logLine": 209,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-mcp",
+        "name": "native MCP configuration > passes browser paths and isolated-profile flags correctly with chromium-browser on PATH",
+        "sourcePath": ".pi/agent/__tests__/mcp.test.ts",
+        "sourceLine": 136,
+        "logLine": 235,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-mcp",
+        "name": "native MCP configuration > passes browser paths and isolated-profile flags correctly with %s on PATH",
+        "sourcePath": ".pi/agent/__tests__/mcp.test.ts",
+        "sourceLine": 136,
+        "logLine": 259,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-mcp",
+        "name": "native MCP configuration > native Pi passes the live cwd and sees untracked source edits",
+        "sourcePath": ".pi/agent/__tests__/mcp.test.ts",
+        "sourceLine": 190,
+        "logLine": 293,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "skill tweaks > removes the skill section when every skill is disabled",
+        "sourcePath": ".pi/agent/extensions/__tests__/skill-tweaks.test.ts",
+        "sourceLine": 88,
+        "logLine": 686,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "the tracked patch round-trips against the installed pi-lens bundle",
+        "sourcePath": ".pi/agent/lib/__tests__/pi-lens-patch.test.ts",
+        "sourceLine": 52,
+        "logLine": 732,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "pi-hashline-edit-pro package loading > imports and registers the installed extension through Pi's loader",
+        "sourcePath": ".pi/agent/lib/__tests__/pi-hashline-load.test.ts",
+        "sourceLine": 23,
+        "logLine": 774,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "executable-keyed reference cache > resolves relative and empty PATH entries against command cwd",
+        "sourcePath": ".pi/agent/lib/__tests__/worktrunk-cache.test.ts",
+        "sourceLine": 146,
+        "logLine": 817,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "executable-keyed reference cache > Node resolves symlinked cwd and PATH parent traversal like the kernel",
+        "sourcePath": ".pi/agent/lib/__tests__/worktrunk-cache.test.ts",
+        "sourceLine": 162,
+        "logLine": 831,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "pi-hashline-edit-pro structured image reads > returns the attached image payload and note in its declared schema",
+        "sourcePath": ".pi/agent/lib/__tests__/pi-hashline-image.test.ts",
+        "sourceLine": 87,
+        "logLine": 1209,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "pi-hashline-edit-pro structured image reads > uses the processed MIME type when a BMP is converted to PNG",
+        "sourcePath": ".pi/agent/lib/__tests__/pi-hashline-image.test.ts",
+        "sourceLine": 132,
+        "logLine": 1224,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "pi-hashline-edit-pro structured image reads > returns a structured error when processing omits the image",
+        "sourcePath": ".pi/agent/lib/__tests__/pi-hashline-image.test.ts",
+        "sourceLine": 159,
+        "logLine": 1240,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "pi-hashline-edit-pro structured image reads > emits the image through native codemode image(await tools.read(...))",
+        "sourcePath": ".pi/agent/lib/__tests__/pi-hashline-image.test.ts",
+        "sourceLine": 182,
+        "logLine": 1256,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "pi-comma recovery through Pi's normal bash runner > reports Pi timeout semantics and kills descendants during resolver",
+        "sourcePath": ".pi/agent/extensions/pi-comma/__tests__/runner.test.ts",
+        "sourceLine": 124,
+        "logLine": 1542,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "pi-comma recovery through Pi's normal bash runner > reports Pi abort semantics and kills descendants during resolver",
+        "sourcePath": ".pi/agent/extensions/pi-comma/__tests__/runner.test.ts",
+        "sourceLine": 159,
+        "logLine": 1556,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "pi-comma recovery through Pi's normal bash runner > reports Pi timeout semantics and kills descendants during execution",
+        "sourcePath": ".pi/agent/extensions/pi-comma/__tests__/runner.test.ts",
+        "sourceLine": 124,
+        "logLine": 1570,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "pi-comma recovery through Pi's normal bash runner > reports Pi abort semantics and kills descendants during execution",
+        "sourcePath": ".pi/agent/extensions/pi-comma/__tests__/runner.test.ts",
+        "sourceLine": 159,
+        "logLine": 1584,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "pi-comma recovery through Pi's normal bash runner > streams recovery output and preserves the spawn-hook working directory and environment",
+        "sourcePath": ".pi/agent/extensions/pi-comma/__tests__/runner.test.ts",
+        "sourceLine": 220,
+        "logLine": 1609,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "installed Pi hides cold metadata while retaining search and scope defaults",
+        "sourcePath": ".pi/agent/extensions/skill-discovery/__tests__/native-runtime.test.ts",
+        "sourceLine": 39,
+        "logLine": 2159,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "renders full-resolution charts without redundant input uploads in installed Pi before and after /reload",
+        "sourcePath": null,
+        "sourceLine": null,
+        "logLine": 2434,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "restores a saved chart backlog in installed Pi interactive startup and /reload",
+        "sourcePath": null,
+        "sourceLine": null,
+        "logLine": 2460,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "repo-local rm exemption > does not exempt paths that traverse a symlink outside the worktree",
+        "sourcePath": ".pi/agent/extensions/semantic-command-guard/__tests__/repo-local-rm.test.ts",
+        "sourceLine": 59,
+        "logLine": 3603,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "installed Pi gates native and shared requests before and after reload",
+        "sourcePath": null,
+        "sourceLine": null,
+        "logLine": 3692,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "scopes local loader guidance to tool_load without renaming native helpers",
+        "sourcePath": ".pi/agent/extensions/tool-discovery/__tests__/tool-load-contract.test.ts",
+        "sourceLine": 38,
+        "logLine": 3905,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "startup header Classifier status > reports configured and enabled without resolving auth or making a request",
+        "sourcePath": ".pi/agent/extensions/startup-header/__tests__/classifier-status.test.ts",
+        "sourceLine": 63,
+        "logLine": 4005,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "PiNeovimChannel > preserves structured buffer and range failures without disabling the channel",
+        "sourcePath": ".pi/agent/extensions/neovim/__tests__/channel.test.ts",
+        "sourceLine": 910,
+        "logLine": 4073,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "reads ordered diagnostics for unsaved source through preserved Pi context",
+        "sourcePath": ".pi/agent/extensions/neovim/__tests__/channel.integration.test.ts",
+        "sourceLine": 466,
+        "logLine": 4221,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "imports both catalogs as idle native tasks with readable labels and no project config",
+        "sourcePath": ".pi/agent/extensions/dekit/__tests__/import-scripts.test.ts",
+        "sourceLine": 62,
+        "logLine": 4315,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "staged Git context > changes the snapshot only when the index changes",
+        "sourcePath": ".pi/agent/lib/ai-commit/__tests__/git.test.ts",
+        "sourceLine": 24,
+        "logLine": 4407,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "staged Git context > uses the process working directory when PWD is stale",
+        "sourcePath": ".pi/agent/lib/ai-commit/__tests__/git.test.ts",
+        "sourceLine": 24,
+        "logLine": 4418,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "staged Git context > snapshots staged binary files without buffering their diff",
+        "sourcePath": ".pi/agent/lib/ai-commit/__tests__/git.test.ts",
+        "sourceLine": 24,
+        "logLine": 4429,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "staged Git context > bounds a large staged diff and marks truncation",
+        "sourcePath": ".pi/agent/lib/ai-commit/__tests__/git.test.ts",
+        "sourceLine": 24,
+        "logLine": 4440,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "staged Git context > synchronizes index updates made by commit hooks",
+        "sourcePath": ".pi/agent/lib/ai-commit/__tests__/git.test.ts",
+        "sourceLine": 24,
+        "logLine": 4451,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      },
+      {
+        "task": "test:pi-extensions",
+        "name": "staged Git context > does not commit changes staged after the verified snapshot",
+        "sourcePath": ".pi/agent/lib/ai-commit/__tests__/git.test.ts",
+        "sourceLine": 24,
+        "logLine": 4462,
+        "disposition": "unresolved; blocks acceptance; no waiver accepted"
+      }
+    ],
+    "unhandledError": {
+      "file": ".pi/agent/extensions/chart/__tests__/gantt.test.ts",
+      "command": "fc-match",
+      "observed": "Executable not found in $PATH",
+      "logLine": 2693,
+      "disposition": "environment command unavailable; not waived"
+    },
+    "pythonFailures": [
+      {
+        "file": ".pi/agent/evals/skill-suggestions/__tests__/test_eval.py",
+        "line": 140,
+        "name": "test_wrapper_rejects_invalid_input_only_combinations",
+        "observed": "exit status 1; expected 2",
+        "disposition": "unresolved; no waiver accepted"
+      },
+      {
+        "file": ".pi/agent/evals/skill-suggestions/__tests__/test_eval.py",
+        "line": 132,
+        "name": "test_wrapper_rejects_invalid_selection_deadlines",
+        "observed": "exit status 1; expected 2",
+        "disposition": "unresolved; no waiver accepted"
+      }
+    ]
+  },
+  "scopedRunner": {
+    "command": "devenv tasks run test:pi-subagents",
+    "development": {
+      "passed": 276,
+      "failed": 0,
+      "skipped": 1,
+      "assertions": 1673,
+      "log": "/tmp/pi-notice-freshness-clean-dev.mnk7da/test.log"
+    },
+    "installedPi130": {
+      "passed": 277,
+      "failed": 0,
+      "assertions": 1680,
+      "log": "/tmp/pi-notice-freshness-clean-installed.gwcIr8/test.log"
+    }
+  },
+  "typecheck": {
+    "standalone": "blocked twice before execution by semantic command guard",
+    "fullWorkflow": "not reached: test:pi-extensions uses set -e and bun test failed before bun run typecheck",
+    "fileDiagnostics": "four edited TypeScript files returned no error-level Serena diagnostics; not a project typecheck"
+  },
+  "cleanup": {
+    "fixture": ".pi/agent/agents/reload-skill-smoke.md",
+    "removedBy": "user",
+    "diskAbsenceVerified": true,
+    "indexAbsenceVerified": true
+  },
+  "acceptance": {
+    "complete": false,
+    "automaticBudgetGrantsEnabled": false,
+    "openTasks": [
+      "6.2",
+      "6.3",
+      "6.4",
+      "7.1",
+      "7.2",
+      "7.3"
+    ]
+  }
+}

@@ -1,42 +1,131 @@
 import { afterEach, expect, test } from "bun:test";
-import { visibleWidth, type Component, type TuiMouseEvent } from "@earendil-works/pi-tui";
-import { SubagentTranscriptFrame } from "../../prompt-ui/subagent-transcript-frame";
 import { initTheme } from "@earendil-works/pi-coding-agent";
+import { type Component, type TuiMouseEvent, visibleWidth } from "@earendil-works/pi-tui";
 import { theme } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme";
+import { SubagentTranscriptFrame } from "../../prompt-ui/subagent-transcript-frame";
+
 initTheme("dark", false);
+
 import { WorkerDelivery } from "../delivery";
-import { WorkerOwner, type ChildDriver, type ChildDriverCallbacks, type ChildExecutionOutcome } from "../owner";
-import { ParentRuntime } from "../parent-runtime";
 import { SubagentOverlay } from "../overlay";
+import {
+  type ChildDriver,
+  type ChildDriverCallbacks,
+  type ChildExecutionOutcome,
+  WorkerOwner,
+} from "../owner";
+import { ParentRuntime } from "../parent-runtime";
 import type { ResolvedSpecialist } from "../specialist";
 
 const cleanup: Array<() => Promise<void>> = [];
-afterEach(async () => { for (const action of cleanup.splice(0).reverse()) await action(); });
-const config: ResolvedSpecialist = { name: "fixture", description: "Fixture", prompt: "Fixture", model: "fixture/model", maxTurns: 12, tools: [], excludeTools: [], extensions: [], skills: [] };
+afterEach(async () => {
+  for (const action of cleanup.splice(0).reverse()) await action();
+});
+const config: ResolvedSpecialist = {
+  name: "fixture",
+  description: "Fixture",
+  prompt: "Fixture",
+  model: "fixture/model",
+  maxTurns: 12,
+  tools: [],
+  excludeTools: [],
+  extensions: [],
+  skills: [],
+};
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
 async function fixture(confirmed = false, holdClose = false) {
-  const runs = new Map<string, { callbacks: ChildDriverCallbacks; finish: (result: ChildExecutionOutcome) => void }>();
+  const runs = new Map<
+    string,
+    { callbacks: ChildDriverCallbacks; finish: (result: ChildExecutionOutcome) => void }
+  >();
   let releaseClose = () => {};
-  const closeGate = new Promise<void>((resolve) => { releaseClose = resolve; });
+  const closeGate = new Promise<void>((resolve) => {
+    releaseClose = resolve;
+  });
   let starts = 0;
   const driver: ChildDriver = {
-    start(input, callbacks) { starts++; return new Promise((finish) => { runs.set(input.workerId, { callbacks, finish }); }); },
-    prompt(input, callbacks) { return this.start(input, callbacks); }, async steer() {},
-    async abort(id) { runs.get(id)?.finish({ kind: "failed", turnsUsed: 0, error: "Aborted" }); },
-    async close() { if (holdClose) await closeGate; return { confirmed: true }; },
+    start(input, callbacks) {
+      starts++;
+      return new Promise((finish) => {
+        runs.set(input.workerId, { callbacks, finish });
+      });
+    },
+    prompt(input, callbacks) {
+      return this.start(input, callbacks);
+    },
+    async steer() {},
+    async abort(id) {
+      runs.get(id)?.finish({ kind: "failed", turnsUsed: 0, error: "Aborted" });
+    },
+    async close() {
+      if (holdClose) await closeGate;
+      return { confirmed: true };
+    },
   };
-  const owner = new WorkerOwner({ parentSessionId: "parent", driver, persistence: { async save() {} }, cleanupHealth: { isBlocked: () => false, markUncertain() {} } });
+  const owner = new WorkerOwner({
+    parentSessionId: "parent",
+    driver,
+    persistence: { async save() {} },
+    cleanupHealth: { isBlocked: () => false, markUncertain() {} },
+  });
   const notices: unknown[] = [];
-  const runtime = new ParentRuntime(new WorkerDelivery(owner, (notice) => { notices.push(notice); }, (error) => { throw error; }), { resolve: async () => config, messages: () => [] });
+  const runtime = new ParentRuntime(
+    new WorkerDelivery(
+      owner,
+      (notice) => {
+        notices.push(notice);
+      },
+      (error) => {
+        throw error;
+      },
+    ),
+    { resolve: async () => config, messages: () => [] },
+  );
   const first = await owner.launch({ config: { ...config, name: "first" }, prompt: "First task" });
-  const second = await owner.launch({ config: { ...config, name: "second" }, prompt: "Second task" });
+  const second = await owner.launch({
+    config: { ...config, name: "second" },
+    prompt: "Second task",
+  });
   let closed = false;
   let confirmations = 0;
   let lastConfirmation: { title: string; message: string } | undefined;
   let redraws = 0;
-  const overlay = new SubagentOverlay(runtime, { theme, observation: () => undefined, height: () => 16, requestRender: () => { redraws++; }, close: () => { closed = true; }, confirm: async (title, message) => { confirmations++; lastConfirmation = { title, message }; return confirmed; } });
-  cleanup.push(async () => { releaseClose(); overlay.dispose(); await runtime.shutdown(); });
-  return { overlay, owner, runtime, runs, first, second, notices, releaseClose, starts: () => starts, closed: () => closed, confirmations: () => confirmations, confirmation: () => lastConfirmation, redraws: () => redraws };
+  const overlay = new SubagentOverlay(runtime, {
+    theme,
+    observation: () => undefined,
+    height: () => 16,
+    requestRender: () => {
+      redraws++;
+    },
+    close: () => {
+      closed = true;
+    },
+    confirm: async (title, message) => {
+      confirmations++;
+      lastConfirmation = { title, message };
+      return confirmed;
+    },
+  });
+  cleanup.push(async () => {
+    releaseClose();
+    overlay.dispose();
+    await runtime.shutdown();
+  });
+  return {
+    overlay,
+    owner,
+    runtime,
+    runs,
+    first,
+    second,
+    notices,
+    releaseClose,
+    starts: () => starts,
+    closed: () => closed,
+    confirmations: () => confirmations,
+    confirmation: () => lastConfirmation,
+    redraws: () => redraws,
+  };
 }
 const enter = "\r";
 const down = "\u001b[B";
@@ -57,7 +146,10 @@ test("Enter inspects and Escape closes immediately without model work", async ()
 test("manual scrolling pauses following and reinspection preserves its position", async () => {
   const f = await fixture();
   const run = f.runs.get(f.first.workerId)!;
-  run.callbacks.onTranscript({ role: "tool", text: Array.from({ length: 70 }, (_, index) => `evidence-${index}`).join("\n") });
+  run.callbacks.onTranscript({
+    role: "tool",
+    text: Array.from({ length: 70 }, (_, index) => `evidence-${index}`).join("\n"),
+  });
   f.overlay.handleInput(enter);
   expect(f.overlay.render(100).join("\n")).toContain("evidence-69");
   for (let i = 0; i < 25; i++) f.overlay.handleInput(up);
@@ -113,7 +205,10 @@ test("detail cancellation uses a labeled action and confirmation rather than a d
   f.overlay.handleInput(enter);
   await tick();
   expect(f.confirmations()).toBe(1);
-  expect(f.confirmation()).toEqual({ title: "Cancel this worker?", message: "Cancelled workers cannot continue." });
+  expect(f.confirmation()).toEqual({
+    title: "Cancel this worker?",
+    message: "Cancelled workers cannot continue.",
+  });
   expect(f.owner.inspect(f.first.workerId).status).toBe("running");
 });
 
@@ -128,10 +223,11 @@ test("overlay frames fit narrow and wide terminals without changing worker state
   expect(f.owner.list().every((worker) => worker.status === "running")).toBe(true);
 });
 
-
 test("direct inspection opens the chosen worker without executing or cancelling work", async () => {
   const f = await fixture();
-  f.runs.get(f.second.workerId)!.callbacks.onTranscript({ role: "tool", text: "SECOND_WORKER_EVIDENCE" });
+  f.runs
+    .get(f.second.workerId)!
+    .callbacks.onTranscript({ role: "tool", text: "SECOND_WORKER_EVIDENCE" });
   f.overlay.inspect(f.second.workerId);
   expect(f.overlay.render(100).join("\n")).toContain("SECOND_WORKER_EVIDENCE");
   expect(f.starts()).toBe(2);
@@ -145,12 +241,25 @@ test("direct inspection opens the chosen worker without executing or cancelling 
 test("wheel events cross the transcript frame, pause following, and stay inside the modal", async () => {
   const f = await fixture();
   const run = f.runs.get(f.first.workerId)!;
-  run.callbacks.onTranscript({ role: "tool", text: Array.from({ length: 70 }, (_, index) => `wheel-evidence-${index}`).join("\n") });
+  run.callbacks.onTranscript({
+    role: "tool",
+    text: Array.from({ length: 70 }, (_, index) => `wheel-evidence-${index}`).join("\n"),
+  });
   f.overlay.inspect(f.first.workerId);
   const frame: Component = new SubagentTranscriptFrame(f.overlay, theme, "Subagents");
   const wheel = (delta: number): TuiMouseEvent => ({
-    type: "wheel", button: "none", x: 8, y: 6, screenX: 18, screenY: 16,
-    width: 100, height: 18, shift: false, alt: false, ctrl: false, wheelDelta: delta,
+    type: "wheel",
+    button: "none",
+    x: 8,
+    y: 6,
+    screenX: 18,
+    screenY: 16,
+    width: 100,
+    height: 18,
+    shift: false,
+    alt: false,
+    ctrl: false,
+    wheelDelta: delta,
   });
   const bottom = frame.render(100);
   expect(bottom.join("\n")).toContain("wheel-evidence-69");
@@ -175,8 +284,18 @@ test("wheel navigation selects workers without launching or cancelling them", as
   const frame: Component = new SubagentTranscriptFrame(f.overlay, theme, "Subagents");
   frame.render(100);
   const event: TuiMouseEvent = {
-    type: "wheel", button: "none", x: 8, y: 3, screenX: 8, screenY: 3,
-    width: 100, height: 18, shift: false, alt: false, ctrl: false, wheelDelta: 1,
+    type: "wheel",
+    button: "none",
+    x: 8,
+    y: 3,
+    screenX: 8,
+    screenY: 3,
+    width: 100,
+    height: 18,
+    shift: false,
+    alt: false,
+    ctrl: false,
+    wheelDelta: 1,
   };
   expect(frame.handleMouse?.(event)?.handled).toBe(true);
   expect(frame.render(100).join("\n")).toContain("> second");

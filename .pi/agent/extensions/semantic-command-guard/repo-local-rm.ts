@@ -1,5 +1,5 @@
 import { lstatSync, realpathSync } from "node:fs";
-import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { dirname, isAbsolute, join, parse, relative, resolve, sep } from "node:path";
 
 function isMissingPath(error: unknown): boolean {
   return (
@@ -35,11 +35,7 @@ function repositoryRoot(cwd: string): { cwd: string; root: string } | undefined 
 function isWithin(root: string, candidate: string, allowRoot: boolean): boolean {
   const pathFromRoot = relative(root, candidate);
   if (pathFromRoot === "") return allowRoot;
-  return (
-    pathFromRoot !== ".." &&
-    !pathFromRoot.startsWith(`..${sep}`) &&
-    !isAbsolute(pathFromRoot)
-  );
+  return pathFromRoot !== ".." && !pathFromRoot.startsWith(`..${sep}`) && !isAbsolute(pathFromRoot);
 }
 
 // Reject expansion and compound shell syntax rather than guessing at final targets.
@@ -146,19 +142,25 @@ function targetIsInside(root: string, cwd: string, target: string): boolean {
   const normalizedTarget = resolve(cwd, target);
   if (!isWithin(root, normalizedTarget, false)) return false;
 
-  // Preserve `..` until realpath so symlinks cannot disguise an outside target.
   const absoluteTarget = isAbsolute(target) ? target : `${cwd}${sep}${target}`;
-  let candidate = absoluteTarget;
-  while (true) {
+  const pathRoot = parse(absoluteTarget).root;
+  let candidate = pathRoot;
+  // Resolve each component before applying `..`: Bun normalizes raw paths even with native realpath.
+  for (const component of absoluteTarget.slice(pathRoot.length).split(sep)) {
+    if (component === "" || component === ".") continue;
+    if (component === "..") {
+      candidate = dirname(candidate);
+      continue;
+    }
+    const next = join(candidate, component);
     try {
-      return isWithin(root, realpathSync(candidate), true);
+      candidate = realpathSync.native(next);
     } catch (error) {
       if (!isMissingPath(error)) return false;
-      const parent = dirname(candidate);
-      if (parent === candidate) return false;
-      candidate = parent;
+      candidate = next;
     }
   }
+  return isWithin(root, candidate, false);
 }
 
 export function isRepoLocalRm(command: string, cwd: string): boolean {

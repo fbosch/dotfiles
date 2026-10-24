@@ -158,7 +158,11 @@ test("missing skills are skipped without weakening model, bundle, or baseline pr
   await expect(
     resolveSpecialist("explore", definition({ bundles: ["missing"] }), available),
   ).rejects.toThrow("Required capability bundle");
-  const missing = await resolveSpecialist("explore", definition({ skills: ["analysis", "missing"] }), available);
+  const missing = await resolveSpecialist(
+    "explore",
+    definition({ skills: ["analysis", "missing"] }),
+    available,
+  );
   expect(missing.skills).toEqual([{ name: "analysis", path: skillPath }]);
   expect(missing.skippedSkills).toEqual(["missing"]);
   await expect(
