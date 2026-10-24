@@ -228,6 +228,35 @@ test("honors XDG and hashline overrides while omitting missing integration paths
   expect(args).not.toContain(join(home, ".config", "pi-hashline-edit-pro"));
 });
 
+test.each([false, true])("grants only existing devenv state with XDG override %s", (override) => {
+  const { root, cwd, agent, home } = fixture();
+  const defaultData = join(home, ".local", "share");
+  const data = override ? join(root, "xdg-data") : defaultData;
+  const state = join(data, "devenv");
+  mkdirSync(state, { recursive: true });
+  if (override) mkdirSync(join(defaultData, "devenv"), { recursive: true });
+
+  const args = launchArguments(cwd, agent, home, override ? { XDG_DATA_HOME: data } : {});
+
+  expect(args.slice(args.indexOf(state) - 1, args.indexOf(state) + 1)).toEqual(["--allow", state]);
+  expect(args).not.toContain(data);
+  expect(args).not.toContain(home);
+  if (override) expect(args).not.toContain(join(defaultData, "devenv"));
+});
+
+test("omits missing devenv state and rejects non-directory state", () => {
+  const { cwd, agent, home } = fixture();
+  const data = join(home, ".local", "share");
+  const state = join(data, "devenv");
+  const missingArgs = launchArguments(cwd, agent, home, {});
+  expect(missingArgs).not.toContain(state);
+  expect(missingArgs).not.toContain(data);
+
+  mkdirSync(data, { recursive: true });
+  writeFileSync(state, "not a directory");
+  expect(() => launchArguments(cwd, agent, home, {})).toThrow(`Not a directory: ${state}`);
+});
+
 test.each([false, true])("grants gh extensions read-only with XDG override %s", (override) => {
   const { root, cwd, agent, home } = fixture();
   const data = override ? join(root, "xdg-data") : join(home, ".local", "share");
