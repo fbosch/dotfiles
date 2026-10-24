@@ -1,6 +1,14 @@
 import { describe, expect, test } from "bun:test";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  realpathSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -29,9 +37,10 @@ const mcpServers = JSON.parse(readFileSync(join(agentRoot, "mcp.json"), "utf8"))
 };
 
 describe("native MCP configuration", () => {
-  test("sets explicit deferred exposure and converts all request timeouts to seconds", () => {
+  test("keeps the configured server inventory, request timeouts, and tool exposure", () => {
     expect(mcpServers.autoEnableCodemode).toBe(false);
     expect(Object.keys(mcpServers.mcpServers)).toEqual([
+      "cloudflare",
       "github",
       "context7",
       "serena",
@@ -41,10 +50,12 @@ describe("native MCP configuration", () => {
       "shared-todo",
     ]);
 
-    for (const server of Object.values(mcpServers.mcpServers)) {
+    for (const [name, server] of Object.entries(mcpServers.mcpServers)) {
       expect(server.timeoutMs).toBeUndefined();
-      expect(server.timeout).toBe(30);
-      expect(server.exposure).toBe("deferred");
+      expect(server.timeout ?? 60).toBe(name === "cloudflare" ? 60 : 30);
+      expect(server.exposure ?? "codemode").toBe(
+        name === "chrome-devtools" ? "codemode" : "deferred",
+      );
     }
 
     expect(
@@ -52,7 +63,7 @@ describe("native MCP configuration", () => {
     ).toHaveLength(6);
     expect(
       Object.values(mcpServers.mcpServers).filter(({ url }) => url !== undefined),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
   });
 
   test("launches pinned native servers without a snapshot workspace", () => {
@@ -110,43 +121,37 @@ describe("native MCP configuration", () => {
     expect(args?.[contextIndex + 1]).toBe("ide");
   });
 
-  test.each(["google-chrome", "chromium", "chromium-browser", null])(
-    "passes browser paths and isolated-profile flags correctly with %s on PATH",
-    (browser) => {
-      const chrome = mcpServers.mcpServers["chrome-devtools"];
-      expect(chrome?.command).toBe("sh");
-      expect(chrome?.env).toEqual({
-        npm_config_cache: `${piCache}/npm`,
-        CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: "true",
-        CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: "true",
+  test("attaches Chrome MCP to the existing browser and forwards arguments intact", () => {
+    const chrome = mcpServers.mcpServers["chrome-devtools"];
+    expect(chrome?.command).toBe("sh");
+    expect(chrome?.env).toEqual({
+      npm_config_cache: `${piCache}/npm`,
+      CHROME_DEVTOOLS_MCP_NO_USAGE_STATISTICS: "true",
+      CHROME_DEVTOOLS_MCP_NO_UPDATE_CHECKS: "true",
+    });
+    if (!chrome?.args) throw new Error("Missing Chrome MCP arguments");
+    const directory = mkdtempSync(join(tmpdir(), "pi-chrome argv-"));
+    try {
+      writeFileSync(join(directory, "npx"), '#!/bin/sh\nprintf "%s\\n" "$@"\n', { mode: 0o755 });
+      const extra = "--fixture-argument=æ ø å";
+      const result = spawnSync("/bin/sh", [...chrome.args, extra], {
+        encoding: "utf8",
+        env: { ...process.env, PATH: directory },
       });
-      if (!chrome?.args) throw new Error("Missing Chrome MCP arguments");
-      const directory = mkdtempSync(join(tmpdir(), "pi-chrome argv-"));
-      try {
-        writeFileSync(join(directory, "npx"), '#!/bin/sh\nprintf "%s\\n" "$@"\n', { mode: 0o755 });
-        if (browser) {
-          writeFileSync(join(directory, browser), "#!/bin/sh\nexit 0\n", { mode: 0o755 });
-        }
-        const result = spawnSync("/bin/sh", chrome.args, {
-          encoding: "utf8",
-          env: { ...process.env, PATH: directory },
-        });
-        expect(result.error).toBeUndefined();
-        expect(result.status).toBe(0);
-        expect(result.stdout.trim().split("\n")).toEqual([
-          "--yes",
-          "chrome-devtools-mcp@1.10.1",
-          ...(browser ? [`--executable-path=${join(directory, browser)}`] : []),
-          "--headless",
-          "--isolated",
-          "--no-usage-statistics",
-          "--no-performance-crux",
-        ]);
-      } finally {
-        rmSync(directory, { recursive: true, force: true });
-      }
-    },
-  );
+      expect(result.error).toBeUndefined();
+      expect(result.status).toBe(0);
+      expect(result.stdout.trim().split("\n")).toEqual([
+        "--yes",
+        "chrome-devtools-mcp@1.10.1",
+        "--browser-url=http://127.0.0.1:9222",
+        "--no-usage-statistics",
+        "--no-performance-crux",
+        extra,
+      ]);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
 
   test("native Pi passes the live cwd and sees untracked source edits", () => {
     const temporaryDirectory = mkdtempSync(join(tmpdir(), "pi-mcp-startup-"));
@@ -188,7 +193,7 @@ describe("native MCP configuration", () => {
         expect(result.stdout).toContain("fake_local");
         expect(result.stdout).toContain("fake_read");
         expect(JSON.parse(readFileSync(reportPath, "utf8"))).toEqual({
-          cwd: projectDirectory,
+          cwd: realpathSync(projectDirectory),
           source,
         });
       }

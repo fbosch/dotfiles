@@ -4,25 +4,26 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AgentMessage } from "@earendil-works/pi-agent-core";
 import type { Tool } from "@earendil-works/pi-ai";
+import { resolveTranscriptTools } from "@earendil-works/pi-ai/dist/utils/transcript.js";
 import type {
   BeforeAgentStartEvent,
   BeforeAgentStartEventResult,
   ExtensionAPI,
   ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
-import { getCapabilities, setCapabilities } from "@earendil-works/pi-tui";
-import { resolveTranscriptTools } from "../../node_modules/@earendil-works/pi-ai/dist/utils/transcript.js";
-import { AgentSession } from "../../node_modules/@earendil-works/pi-coding-agent/dist/core/agent-session.js";
+import { AgentSession } from "@earendil-works/pi-coding-agent/dist/core/agent-session.js";
 import {
   type BuildSystemPromptOptions,
   buildSystemPrompt,
   buildSystemPromptSections,
   normalizeBuildSystemPromptOptions,
-} from "../../node_modules/@earendil-works/pi-coding-agent/dist/core/system-prompt.js";
+} from "@earendil-works/pi-coding-agent/dist/core/system-prompt.js";
+import { getCapabilities, setCapabilities } from "@earendil-works/pi-tui";
 import { registerChartGuidance } from "../chart/prompt";
 import instructionFragments from "../instruction-fragments";
 import agentMentions from "../mentions/agent-mentions";
 import projectReferences from "../mentions/project-references";
+import { userStartEvent } from "../shared/__tests__/agent-start-events";
 
 type BeforeAgentStartHandler = (
   event: BeforeAgentStartEvent,
@@ -79,9 +80,8 @@ test("prompt hooks preserve the leading tool set across deferred loads and later
   const context = { cwd, mode: "tui", hasUI: true } as ExtensionContext;
   async function beforeStart(prompt: string) {
     const options = normalizeBuildSystemPromptOptions({ cwd, customPrompt: "Stable base." });
-    const event: BeforeAgentStartEvent = {
-      type: "before_agent_start",
-      prompt,
+    const event = {
+      ...userStartEvent(prompt),
       systemPrompt: buildSystemPrompt(options),
       systemPromptOptions: options,
     };
@@ -132,9 +132,9 @@ test("prompt hooks preserve the leading tool set across deferred loads and later
   const projected = await transform(messages);
   expect(projected[0]).toBe(leading);
   expect(projected[2]).toBe(messages[2]);
-  expect(resolveTranscriptTools(projected, true).requestTools.map(({ name }) => name)).toEqual([
-    "read",
-  ]);
+  expect(
+    resolveTranscriptTools(projected, "additions").requestTools.map(({ name }) => name),
+  ).toEqual(["read"]);
 
   const next = await beforeStart("Continue without delegation");
   expect(next.options.forceSystemPrompt).toBeUndefined();

@@ -30,6 +30,7 @@ export function measureRedraw(component: Component, fullscreen: boolean) {
     clearScreen() {},
     setTitle() {},
     setProgress() {},
+    setProgramStatus() {},
   };
   const tui = fullscreen ? new TuiAltScreen(terminal) : new TuiMainScreen(terminal);
   const input = new Input();

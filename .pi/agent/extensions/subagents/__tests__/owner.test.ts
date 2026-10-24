@@ -230,6 +230,43 @@ test("continuation is refused after cancellation, release, cleanup uncertainty, 
   await expect(restored.owner.continue(history.id, "again")).rejects.toThrow("Cannot continue");
 });
 
+test.each([
+  ["missing", []],
+  ["empty", ["   "]],
+  ["duplicate", ["First question", "Second question"]],
+] as const)(
+  "rejects a %s question without retaining the execution slot",
+  async (_name, questions) => {
+    const { owner, driver } = setup({ capacity: 1 });
+    const execution = deferred<ChildExecutionOutcome>();
+    driver.startBehavior = () => execution.promise;
+    const first = await owner.launch({ config: config(), prompt: "ask a question" });
+    const queued = await owner.launch({ config: config(), prompt: "next task" });
+    const notices: string[] = [];
+    owner.subscribe((event) => {
+      if (event.type === "question") notices.push(event.question.text);
+    });
+    const callbacks = driver.callbacks[0];
+    if (!callbacks) throw new Error("Expected callbacks for the active segment");
+    callbacks.onTurn(2);
+    callbacks.onTurn(1);
+    for (const question of questions) callbacks.onQuestion(question);
+    driver.startBehavior = async () => completed(1);
+    execution.resolve({ kind: "waiting-question", turnsUsed: 2 });
+
+    const result = await owner.wait(first.workerId, first.assignmentId);
+    expect(result.kind).toBe("failed");
+    expect(result.assignment.error).toBe(
+      "Child driver yielded without exactly one correlated question",
+    );
+    expect(result.assignment.turnsUsed).toBe(2);
+    expect(result.worker.pendingQuestion).toBeUndefined();
+    expect(notices).toEqual([]);
+    expect((await owner.wait(queued.workerId, queued.assignmentId)).kind).toBe("completed");
+    await owner.shutdown();
+  },
+);
+
 test("timeouts and interrupted waits leave a background worker running", async () => {
   const { owner, driver } = setup();
   const running = deferred<ChildExecutionOutcome>();
@@ -982,6 +1019,11 @@ test("segment settlement, assignment changes, and release reject stale callbacks
 
   const next = await owner.continue(receipt.workerId, "new assignment", 3, 5);
   oldToolOutcome("failure");
+  oldCallbacks.onQuestion("Stale question");
+  oldCallbacks.onTurn(16);
+  expect(owner.inspect(receipt.workerId).pendingQuestion).toBeUndefined();
+  expect(owner.inspect(receipt.workerId).assignments[0]?.turnsUsed).toBe(15);
+  expect(owner.inspect(receipt.workerId).assignments[1]?.turnsUsed).toBe(0);
   const newCallbacks = driver.callbacks[1]!;
   const newToolOutcome = newCallbacks.onToolOutcome;
   if (!newToolOutcome) throw new Error("Expected continuation budget callback");

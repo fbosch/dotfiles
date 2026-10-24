@@ -1,13 +1,23 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
-import { createBashTool, createLocalBashOperations } from "@earendil-works/pi-coding-agent";
+import { join, resolve } from "node:path";
+import {
+  createBashTool,
+  createLocalBashOperations,
+  SettingsManager,
+} from "@earendil-works/pi-coding-agent";
 import { createSetupFragment } from "../extension";
 
 const temporaryPaths: string[] = [];
 const RUNNER_BACKSTOP_SECONDS = 1;
 
+const agentDir = resolve(import.meta.dir, "../../..");
+const shellPath = SettingsManager.create(agentDir, agentDir, {
+  projectTrusted: false,
+}).getShellPath();
+if (!shellPath) throw new Error("Comma runner fixtures require the configured Pi shell");
+const shellOptions = { shellPath };
 async function fixtureDirectory(): Promise<string> {
   const path = await mkdtemp(join(tmpdir(), "pi-comma-runner-test-"));
   temporaryPaths.push(path);
@@ -81,7 +91,7 @@ printf '%s\\n' ${JSON.stringify(resolved)}
   });
   const tool = createBashTool(root, {
     commandPrefix: setup,
-    operations: createLocalBashOperations(),
+    operations: createLocalBashOperations(shellOptions),
     // Match the direnv wrapper: adjust only the spawned invocation environment.
     spawnHook: ({ command, cwd, env }) => ({
       command,
@@ -190,7 +200,7 @@ describe("pi-comma recovery through Pi's normal bash runner", () => {
         pickerPath: join(root, "picker"),
         nixStore: store,
       }),
-      operations: createLocalBashOperations(),
+      operations: createLocalBashOperations(shellOptions),
       spawnHook: ({ command, cwd, env }) => ({
         command,
         cwd,

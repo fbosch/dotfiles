@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { loadThemeFromPath } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
+import { loadThemeFromPath } from "@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import { LinkTable } from "../src/links";
 import { Option, Store } from "../src/monad";
 import { parse, stretches } from "../src/parse";

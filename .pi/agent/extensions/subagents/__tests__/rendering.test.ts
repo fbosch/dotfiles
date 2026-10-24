@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 import { initTheme, ToolExecutionComponent } from "@earendil-works/pi-coding-agent";
+import { theme } from "@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import {
   type Component,
   Container,
@@ -8,7 +9,6 @@ import {
   TuiAltScreen,
   visibleWidth,
 } from "@earendil-works/pi-tui";
-import { theme } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme";
 import { SubagentTranscriptFrame } from "../../prompt-ui/subagent-transcript-frame";
 import type { WorkerSnapshot } from "../owner";
 import {
@@ -38,6 +38,7 @@ const fixtureTerminal: Terminal = {
   clearFromCursor() {},
   clearScreen() {},
   setTitle() {},
+  setProgramStatus() {},
   setProgress() {},
 };
 const createTui = () => new TuiAltScreen(fixtureTerminal, false);

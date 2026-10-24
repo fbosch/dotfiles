@@ -30,6 +30,7 @@ const terminal: Terminal = {
   clearFromCursor() {},
   clearScreen() {},
   setTitle() {},
+  setProgramStatus() {},
   setProgress() {},
 };
 const click: TuiMouseEvent = {

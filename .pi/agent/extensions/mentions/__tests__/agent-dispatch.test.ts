@@ -187,21 +187,8 @@ async function fixture(
   });
   let id = 0;
   const code = (source: string) => callTool(session, `probe-${++id}`, source);
-  const start = (
-    prompt: string,
-  ): ReturnType<typeof session.extensionRunner.emitBeforeAgentStart> => {
-    const runner = session.extensionRunner;
-    // The two supported SDKs expose different public before-agent-start trigger signatures.
-    const emit = runner.emitBeforeAgentStart;
-    if (emit.length === 2) {
-      return Reflect.apply(emit, runner, [
-        { messageType: "user", prompt, images: undefined },
-        { cwd },
-      ]);
-    }
-    if (emit.length === 3) return emit.call(runner, prompt, undefined, { cwd });
-    throw new Error("Unsupported before-agent-start signature");
-  };
+  const start = (prompt: string) =>
+    session.extensionRunner.emitBeforeAgentStart({ messageType: "user", prompt }, { cwd });
   return {
     session,
     start,

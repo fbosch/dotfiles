@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import type { AssistantMessage, ToolResultMessage } from "@earendil-works/pi-ai";
 import {
-  type BeforeAgentStartEvent,
   type BeforeAgentStartEventResult,
+  type BeforeAgentStartUserEvent,
   createEventBus,
   type ExtensionAPI,
   type ExtensionContext,
@@ -12,6 +12,7 @@ import {
   type TurnEndEventResult,
 } from "@earendil-works/pi-coding-agent";
 import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-classifier-registry";
+import { userStartEvent } from "../../shared/__tests__/agent-start-events";
 import { buildMidTaskPrompt, MAX_MID_TASK_PROMPT_CHARS, sanitizeClassifierText } from "../mid-task";
 import {
   createSkillSelectionExtension,
@@ -89,14 +90,17 @@ function harness(
     if (!handler) throw new Error(`Missing handler: ${kind}`);
     return await handler(event, ctx);
   };
-  const start = async (goal = "Fix the widget", options: Partial<BeforeAgentStartEvent> = {}) => {
+  const start = async (
+    goal = "Fix the widget",
+    options: Partial<BeforeAgentStartUserEvent> = {},
+  ) => {
+    const base = userStartEvent(goal);
     const event = {
-      type: "before_agent_start",
-      prompt: goal,
+      ...base,
       systemPrompt: "instructions",
-      systemPromptOptions: { sections: {}, skills },
+      systemPromptOptions: { ...base.systemPromptOptions, skills },
       ...options,
-    } as unknown as BeforeAgentStartEvent;
+    } satisfies BeforeAgentStartUserEvent;
     sessionManager?.appendMessage({ role: "user", content: goal, timestamp: 1 });
     const result = (await emit("before_agent_start", event)) as
       | BeforeAgentStartEventResult
@@ -434,14 +438,14 @@ describe("turn-end skill suggestions", () => {
     "preserves startup exclusion: %s",
     async (caseName) => {
       const h = harness();
-      const options: Partial<BeforeAgentStartEvent> = {};
+      const options: Partial<BeforeAgentStartUserEvent> = {};
       if (caseName === "image")
         options.images = [{ type: "image", data: "", mimeType: "image/png" }];
       if (caseName === "restricted")
         options.systemPromptOptions = {
-          sections: {},
+          ...userStartEvent("").systemPromptOptions,
           skills: skills.map((skill) => ({ ...skill, disableModelInvocation: true })),
-        } as BeforeAgentStartEvent["systemPromptOptions"];
+        };
       const wasEnabled = config.enabled;
       if (caseName === "disabled") config.enabled = false;
       try {

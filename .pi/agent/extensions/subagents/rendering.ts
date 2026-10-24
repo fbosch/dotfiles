@@ -600,55 +600,34 @@ function decodeTranscriptEntry(entry: { role: string; text: string }): Transcrip
     text: entry.text,
     ...(entry.role === "assistant" ? { assistantText: entry.text } : {}),
   });
-  if (entry.text.length > MAX_TRANSCRIPT_RECORD_CHARS) {
-    return {
-      kind: "invalid",
-      reason: "serialized message exceeds the decode limit; raw saved evidence follows",
-      text: entry.text,
-    };
-  }
+  const invalid = (reason: string): TranscriptRecord => ({
+    kind: "invalid",
+    reason: `${reason}; raw saved evidence follows`,
+    text: entry.text,
+  });
+  if (entry.text.length > MAX_TRANSCRIPT_RECORD_CHARS)
+    return invalid("serialized message exceeds the decode limit");
   if (!entry.text.trimStart().startsWith("{")) return plain();
 
   let parsed: unknown;
   try {
     parsed = JSON.parse(entry.text) as unknown;
   } catch {
-    return entry.text.includes('"role"')
-      ? {
-          kind: "invalid",
-          reason: "malformed serialized message; raw saved evidence follows",
-          text: entry.text,
-        }
-      : plain();
+    return entry.text.includes('"role"') ? invalid("malformed serialized message") : plain();
   }
   if (!isRecord(parsed) || !("role" in parsed)) return plain();
-  if (typeof parsed.role !== "string")
-    return {
-      kind: "invalid",
-      reason: "message role is not a string; raw saved evidence follows",
-      text: entry.text,
-    };
+  if (typeof parsed.role !== "string") return invalid("message role is not a string");
   if (entry.role === "system") {
     const system = match(parsed.role)
       .returnType<TranscriptRecord | undefined>()
       .with(
         "bashExecution",
-        () =>
-          decodeBashExecution(parsed) ?? {
-            kind: "invalid",
-            reason: "invalid bash execution message; raw saved evidence follows",
-            text: entry.text,
-          },
+        () => decodeBashExecution(parsed) ?? invalid("invalid bash execution message"),
       )
       .with(
         "branchSummary",
         "compactionSummary",
-        () =>
-          decodeSummary(parsed) ?? {
-            kind: "invalid",
-            reason: "invalid transcript summary; raw saved evidence follows",
-            text: entry.text,
-          },
+        () => decodeSummary(parsed) ?? invalid("invalid transcript summary"),
       )
       .otherwise(() => undefined);
     if (system) return system;
@@ -661,8 +640,6 @@ function decodeTranscriptEntry(entry: { role: string; text: string }): Transcrip
       INTERNAL_SYSTEM_ROLES.has(parsed.role) &&
       isCustomMessage(parsed)
     )
-      return { kind: "hidden" };
-    if (entry.role === "system" && parsed.role === "system" && isSystemMessage(parsed))
       return { kind: "hidden" };
     const known = [
       "system",
@@ -677,36 +654,21 @@ function decodeTranscriptEntry(entry: { role: string; text: string }): Transcrip
     const reason = known.includes(parsed.role)
       ? `expected ${expectedRole}, found ${parsed.role}`
       : `unknown message role ${singleLine(parsed.role)}`;
-    return { kind: "invalid", reason: `${reason}; raw saved evidence follows`, text: entry.text };
+    return invalid(reason);
   }
 
   return match(parsed.role)
     .returnType<TranscriptRecord>()
     .with("system", () =>
-      isSystemMessage(parsed)
-        ? { kind: "hidden" }
-        : {
-            kind: "invalid",
-            reason: "invalid system envelope; raw saved evidence follows",
-            text: entry.text,
-          },
+      isSystemMessage(parsed) ? { kind: "hidden" } : invalid("invalid system envelope"),
     )
     .with("user", () =>
       isUserMessage(parsed)
         ? { kind: "user", text: userText(parsed) }
-        : {
-            kind: "invalid",
-            reason: "invalid user message envelope; raw saved evidence follows",
-            text: entry.text,
-          },
+        : invalid("invalid user message envelope"),
     )
     .with("assistant", () => {
-      if (!isAssistantMessage(parsed))
-        return {
-          kind: "invalid",
-          reason: "invalid assistant message envelope; raw saved evidence follows",
-          text: entry.text,
-        };
+      if (!isAssistantMessage(parsed)) return invalid("invalid assistant message envelope");
       const assistantText = parsed.content
         .filter((block) => block.type === "text")
         .map((block) => block.text)
@@ -715,19 +677,9 @@ function decodeTranscriptEntry(entry: { role: string; text: string }): Transcrip
     })
     .with("toolResult", () => {
       const result = decodeToolResult(parsed);
-      return result
-        ? { kind: "tool", ...result }
-        : {
-            kind: "invalid",
-            reason: "invalid tool result envelope; raw saved evidence follows",
-            text: entry.text,
-          };
+      return result ? { kind: "tool", ...result } : invalid("invalid tool result envelope");
     })
-    .otherwise((role) => ({
-      kind: "invalid",
-      reason: `unsupported message role ${singleLine(role)}; raw saved evidence follows`,
-      text: entry.text,
-    }));
+    .otherwise((role) => invalid(`unsupported message role ${singleLine(role)}`));
 }
 
 export function workerTranscript(

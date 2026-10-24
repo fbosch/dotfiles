@@ -10,6 +10,7 @@ import type {
   Theme,
 } from "@earendil-works/pi-coding-agent";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
+import { customStartEvent, userStartEvent } from "../../shared/__tests__/agent-start-events";
 import agentMentions, {
   type AgentMention,
   agentMentionForegroundAnsi,
@@ -165,29 +166,22 @@ describe("agent mentions", () => {
       registerMarkdownTransformer() {},
     } as unknown as ExtensionAPI);
     if (!handler) throw new Error("before_agent_start handler missing");
-    const event = {
-      type: "before_agent_start",
-      messageType: "custom",
-      message: {
-        role: "custom",
-        customType: "task-review-request",
-        content: "Task review requested · classifier decision @explore",
-        display: true,
-        timestamp: 1,
-      },
-      systemPrompt: "role and project instructions",
-      systemPromptOptions: { sections: { role: "Role", project: "Project" } },
+    const event = { ...customStartEvent(), systemPrompt: "role and project instructions" };
+    event.message = {
+      ...event.message,
+      customType: "task-review-request",
+      content: "Task review requested · classifier decision @explore",
+      display: true,
+      timestamp: 1,
     };
+    event.systemPromptOptions.sections = { role: "Role", project: "Project" };
     const original = structuredClone(event);
     expect("prompt" in event).toBe(false);
     expect(
-      await handler(
-        event as unknown as BeforeAgentStartEvent,
-        {
-          cwd: temporaryDirectory(),
-          isProjectTrusted: () => true,
-        } as ExtensionContext,
-      ),
+      await handler(event, {
+        cwd: temporaryDirectory(),
+        isProjectTrusted: () => true,
+      } as ExtensionContext),
     ).toBeUndefined();
     expect(event).toEqual(original);
   });
@@ -215,12 +209,9 @@ describe("agent mentions", () => {
     agentMentions(pi, agentDirectory);
 
     const event = {
-      type: "before_agent_start",
-      messageType: "user",
-      prompt: "@explore inspect autocomplete",
+      ...userStartEvent("@explore inspect autocomplete"),
       systemPrompt: "base prompt",
-      systemPromptOptions: {},
-    } as unknown as BeforeAgentStartEvent;
+    };
     const result = await handler?.(event, { cwd: agentDirectory } as ExtensionContext);
 
     expect(result?.systemPrompt).toBeUndefined();
@@ -258,13 +249,7 @@ describe("agent mentions", () => {
     agentMentions(pi);
 
     const result = await handler?.(
-      {
-        messageType: "user",
-        type: "before_agent_start",
-        prompt: "@explore inspect autocomplete",
-        systemPrompt: "base prompt",
-        systemPromptOptions: {},
-      } as unknown as BeforeAgentStartEvent,
+      { ...userStartEvent("@explore inspect autocomplete"), systemPrompt: "base prompt" },
       { cwd: temporaryDirectory() } as ExtensionContext,
     );
 

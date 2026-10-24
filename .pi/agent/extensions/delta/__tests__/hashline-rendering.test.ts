@@ -70,7 +70,9 @@ async function setup() {
     "grep",
     "undo_last_change",
   ]);
-  for (const tool of loadedHashlineTools.filter(({ name }) => ["replace", "insert", "replace_match", "copy", "move"].includes(name))) {
+  for (const tool of loadedHashlineTools.filter(({ name }) =>
+    ["replace", "insert", "replace_match", "copy", "move"].includes(name),
+  )) {
     expect((tool.parameters as { required?: string[] }).required).toContain("path");
   }
   expect(loadedHashlineTools.find(({ name }) => name === "read")?.renderResult).toBeDefined();
@@ -130,6 +132,8 @@ function renderContext(expanded: boolean, isError = false) {
     showImages: false,
     state: {},
     toolCallId: "hashline-render-test",
+    durationMs: undefined,
+    outputPad: 1,
   };
 }
 

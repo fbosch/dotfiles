@@ -9,6 +9,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   rmSync,
   statSync,
@@ -143,10 +144,10 @@ describe("executable-keyed reference cache", () => {
 
   test("resolves relative and empty PATH entries against command cwd", () => {
     process.env.PATH = "bin";
-    expect(identity().path).toBe(wt);
+    expect(identity().path).toBe(realpathSync(wt));
     nativeFile(join(directory, "wt"));
     process.env.PATH = "";
-    expect(identity().path).toBe(join(directory, "wt"));
+    expect(identity().path).toBe(realpathSync(join(directory, "wt")));
     const other = join(directory, "other");
     mkdirSync(other);
     expect(cache.executableIdentity("wt", other)).toBeUndefined();
@@ -159,7 +160,9 @@ describe("executable-keyed reference cache", () => {
     symlinkSync(join(directory, "real/cwd"), linked);
     nativeFile(join(directory, "real/wt"));
     process.env.PATH = "..";
-    expect(cache.executableIdentity("wt", linked)?.realpath).toBe(join(directory, "real/wt"));
+    expect(cache.executableIdentity("wt", linked)?.realpath).toBe(
+      realpathSync(join(directory, "real/wt")),
+    );
     // Bun's realpathSync.native currently normalizes '..' lexically. Verify on Pi's Node runtime.
     const module = join(directory, "reference-cache.ts");
     copyFileSync(join(packageFixture, "node_modules/pi-worktrunk/reference-cache.ts"), module);
@@ -177,7 +180,9 @@ describe("executable-keyed reference cache", () => {
     );
     expect(result.stderr.toString()).toBe("");
     expect(result.exitCode).toBe(0);
-    expect(JSON.parse(result.stdout.toString()).realpath).toBe(join(directory, "real/wt"));
+    expect(JSON.parse(result.stdout.toString()).realpath).toBe(
+      realpathSync(join(directory, "real/wt")),
+    );
   });
 
   test("unset PATH uses Node's standard search rather than command cwd", () => {

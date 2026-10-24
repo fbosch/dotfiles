@@ -168,6 +168,7 @@ class TestTerminal implements Terminal {
   clearScreen(): void {}
   setTitle(): void {}
   setProgress(): void {}
+  setProgramStatus(): void {}
 }
 
 test("an actual fullscreen OSC-8 mouse click opens the clipboard image only once", async () => {

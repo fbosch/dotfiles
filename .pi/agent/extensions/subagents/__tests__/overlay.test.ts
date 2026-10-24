@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from "bun:test";
 import { initTheme } from "@earendil-works/pi-coding-agent";
+import { theme } from "@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import { type Component, type TuiMouseEvent, visibleWidth } from "@earendil-works/pi-tui";
-import { theme } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme";
 import { SubagentTranscriptFrame } from "../../prompt-ui/subagent-transcript-frame";
 
 initTheme("dark", false);

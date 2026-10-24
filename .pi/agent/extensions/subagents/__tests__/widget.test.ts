@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { initTheme } from "@earendil-works/pi-coding-agent";
+import { theme } from "@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import { stripTerminalSequences, type TuiMouseEvent } from "@earendil-works/pi-tui";
-import { theme } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme";
 import type { WorkerSnapshot } from "../owner";
 import { createWorkerWidget } from "../widget";
 

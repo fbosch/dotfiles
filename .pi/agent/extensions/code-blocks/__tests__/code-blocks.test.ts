@@ -124,6 +124,7 @@ describe("code block rendering", () => {
       clearScreen: () => {},
       setTitle: () => {},
       setProgress: () => {},
+      setProgramStatus: () => {},
     } as Terminal);
     const internals = tui as unknown as {
       beforeTerminalStart: () => void;

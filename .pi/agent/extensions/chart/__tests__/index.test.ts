@@ -6,11 +6,14 @@ import { inflateSync } from "node:zlib";
 import type {
   ExtensionAPI,
   ExtensionContext,
-  Theme,
-  ThemeColor,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
+import { ToolExecutionComponent } from "@earendil-works/pi-coding-agent/dist/modes/interactive/components/tool-execution.js";
+import type {
+  Theme,
+  ThemeColor,
+} from "@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import {
   getCapabilities,
   getCellDimensions,
@@ -21,7 +24,6 @@ import {
   Text,
 } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
-import { ToolExecutionComponent } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/components/tool-execution.js";
 import chartExtension, {
   chartBarParameters,
   chartBezierParameters,

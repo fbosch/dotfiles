@@ -830,6 +830,8 @@ describe("standalone tasks checklist", () => {
       expanded: false,
       showImages: false,
       isError: false,
+      durationMs: undefined,
+      outputPad: 1,
     };
     const theme = { fg: (_color: string, text: string) => text } as unknown as Theme;
     expect(tool.renderShell).toBe("self");

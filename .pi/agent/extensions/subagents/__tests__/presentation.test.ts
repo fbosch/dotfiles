@@ -86,6 +86,54 @@ test("completed workers leave the widget while stopping remains visible", () => 
   expect(rows[1]).toContain("1m 5s");
 });
 
+test("budget warning clears on release or continuation while history retains partial evidence", () => {
+  const base = worker("exhausted", "idle");
+  const assignment = base.assignments[0];
+  if (!assignment) throw new Error("Expected fixture assignment");
+  const exhausted: WorkerSnapshot = {
+    ...base,
+    assignments: [
+      { ...assignment, outcome: "budget-exhausted", partialReport: "Partial findings" },
+    ],
+  };
+  expect(widgetLines({ ...defaults, workers: [exhausted] })).toEqual([
+    "! Turn budget exhausted; inspect partial evidence",
+  ]);
+
+  const released: WorkerSnapshot = { ...exhausted, status: "released", liveSession: "released" };
+  expect(widgetLines({ ...defaults, workers: [released] })).toEqual([]);
+  expect(workerDetails(released)).toContain("Partial findings");
+
+  const continued: WorkerSnapshot = {
+    ...exhausted,
+    status: "running",
+    currentAssignmentId: "next",
+    assignments: [...exhausted.assignments, { ...assignment, id: "next" }],
+  };
+  const rows = widgetLines({ ...defaults, workers: [continued] });
+  expect(rows[0]).toBe("● Agents");
+  expect(rows.some((line) => line.includes("Turn budget exhausted"))).toBe(false);
+  expect(workerDetails(continued)).toContain("Partial findings");
+});
+
+test("releasing an exhausted worker does not hide a history save failure", () => {
+  const base = worker("released", "released");
+  const assignment = base.assignments[0];
+  if (!assignment) throw new Error("Expected fixture assignment");
+  expect(
+    widgetLines({
+      ...defaults,
+      workers: [
+        {
+          ...base,
+          liveSession: "released",
+          assignments: [{ ...assignment, outcome: "budget-exhausted", persistence: "failed" }],
+        },
+      ],
+    }),
+  ).toEqual(["! History save failed; inspect in-memory evidence"]);
+});
+
 test("row count is configurable and foreground rows can be excluded", () => {
   const rows = widgetLines({
     ...defaults,

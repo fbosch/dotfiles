@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { initTheme } from "@earendil-works/pi-coding-agent";
+import { theme } from "@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import { stripTerminalSequences, Text, type TuiMouseEvent } from "@earendil-works/pi-tui";
-import { theme } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme";
 import { inspectable, type WorkerRenderState, type WorkerTarget } from "../interaction";
 import { renderCall, renderResult } from "../rendering";
 
