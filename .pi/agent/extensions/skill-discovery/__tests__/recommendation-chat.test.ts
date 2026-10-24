@@ -8,6 +8,7 @@ import {
   type ExtensionContext,
 } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
+import { resolveSkillVisibility } from "../../shared/skill-visibility";
 import { createSkillSelectionExtension, type SkillSelectionAttempt } from "../selection";
 
 type RecommendationData = { skills: string[] };
@@ -31,7 +32,7 @@ function harness(attempt: SkillSelectionAttempt) {
       timeoutMs: 2400,
       maxRecommendations: 3,
     }),
-    getDisabledNames: () => new Set(),
+    getVisibility: (_context, skills, prompt) => resolveSkillVisibility(skills, {}, {}, prompt),
     selectSkillsDetailed: async () => attempt,
   })({
     events: createEventBus(),

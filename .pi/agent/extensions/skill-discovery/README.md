@@ -1,6 +1,6 @@
 # Skill discovery
 
-One extension owns on-demand `skill_search` and automatic classifier recommendations. Both use the full discovered catalog; explicit-only skills and agent-specific invocation restrictions are excluded.
+One extension owns prompt skill visibility, on-demand `skill_search`, and automatic classifier recommendations. The shared skill visibility module resolves invocation restrictions and warm/cold policy; search and recommendations use its eligible catalog. Explicit-only skills and agent-specific invocation restrictions are excluded.
 
 The initial prompt advertises only skills explicitly listed in global or project `skillTweaks.warmSkills`. Project scope alone does not pre-warm a skill. Project `coldSkills` overrides the warm lists; all other permitted skills remain searchable through `skill_search`. Skill bodies still load on demand. Invocation restrictions still apply to search and automatic recommendations. Restricted agents without a declared search tool and reader retain their permitted catalog. Automatic selection appends each new recommendation as a name, `SKILL.md` path, and the same bounded description the classifier evaluated. The agent still reads the skill before using it; recommendations never load skill bodies or override instructions.
 

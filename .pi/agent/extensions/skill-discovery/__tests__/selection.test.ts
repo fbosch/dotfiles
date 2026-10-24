@@ -8,12 +8,12 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { createEventBus, SessionManager } from "@earendil-works/pi-coding-agent";
 import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-classifier-registry";
+import { resolveSkillVisibility } from "../../shared/skill-visibility";
 import { SKILL_ADVISORY_MESSAGE } from "../advisory-state";
 import {
   createSkillSelectionExtension,
   createSkillSelectionRequest,
   DEFAULT_SKILL_SELECTION_CONFIG,
-  eligibleSkillCandidates,
   formatSkillRecommendations,
   parseSkillSelectionResponse,
   parseSkillSelectionResponseDetailed,
@@ -132,15 +132,6 @@ function scores(values: Record<string, number>): SkillSelectionResult {
 }
 
 describe("skill selection", () => {
-  test("keeps only model-invocable and non-denied skills, independent of catalog order", () => {
-    const candidates = eligibleSkillCandidates(
-      [skill("zeta"), skill("hidden", { disableModelInvocation: true }), skill("alpha")],
-      new Set(["zeta"]),
-    );
-
-    expect(candidates).toEqual([{ name: "alpha", description: "alpha description" }]);
-  });
-
   test("builds independent relevance questions without skill bodies or denial metadata", () => {
     const request = createSkillSelectionRequest("Write a concise guide", [
       { name: "writing-clearly", description: "Improve documentation prose." },
@@ -359,7 +350,7 @@ describe("skill selection", () => {
     const prompts: string[] = [];
     const { handler, statusCommand } = lifecycleHarness({
       getConfig: () => ENABLED_CONFIG,
-      getDisabledNames: () => new Set(),
+      getVisibility: (_context, skills, prompt) => resolveSkillVisibility(skills, {}, {}, prompt),
       selectSkillsDetailed: async (prompt) => {
         prompts.push(prompt);
         return { ok: true, value: scores({ "writing-clearly": 0.9 }) };
@@ -413,7 +404,13 @@ describe("skill selection", () => {
   test("returns append-only advice without changing the cache-stable prompt sections", async () => {
     const handler = extensionHarness({
       getConfig: () => ENABLED_CONFIG,
-      getDisabledNames: () => new Set(["security-and-hardening"]),
+      getVisibility: (_context, skills, prompt) =>
+        resolveSkillVisibility(
+          skills,
+          { skillTweaks: { disableModelInvocation: ["security-and-hardening"] } },
+          {},
+          prompt,
+        ),
       selectSkillsDetailed: async (_prompt, candidates) => {
         expect(candidates.map(({ name }) => name)).toEqual(["writing-clearly"]);
         return { ok: true, value: scores({ "writing-clearly": 0.91 }) };
@@ -447,7 +444,7 @@ describe("skill selection", () => {
     let evaluated = "";
     const handler = extensionHarness({
       getConfig: () => ENABLED_CONFIG,
-      getDisabledNames: () => new Set(),
+      getVisibility: (_context, skills, prompt) => resolveSkillVisibility(skills, {}, {}, prompt),
       selectSkillsDetailed: async (_prompt, candidates) => {
         evaluated = candidates[0]?.description ?? "";
         return { ok: true, value: scores({ "writing-clearly": 0.9 }) };
@@ -472,7 +469,13 @@ describe("skill selection", () => {
     let calls = 0;
     const handler = extensionHarness({
       getConfig: () => ENABLED_CONFIG,
-      getDisabledNames: () => new Set(["security-and-hardening"]),
+      getVisibility: (_context, skills, prompt) =>
+        resolveSkillVisibility(
+          skills,
+          { skillTweaks: { disableModelInvocation: ["security-and-hardening"] } },
+          {},
+          prompt,
+        ),
       selectSkillsDetailed: async () => {
         calls += 1;
         return { ok: true, value: scores({ "writing-clearly": 0.9 }) };
@@ -498,7 +501,7 @@ describe("skill selection", () => {
     let calls = 0;
     const handler = extensionHarness({
       getConfig: () => ENABLED_CONFIG,
-      getDisabledNames: () => new Set<string>(),
+      getVisibility: (_context, skills, prompt) => resolveSkillVisibility(skills, {}, {}, prompt),
       selectSkillsDetailed: async () => {
         calls += 1;
         return { ok: true, value: scores({ "writing-clearly": 0.9 }) };
@@ -518,7 +521,7 @@ describe("skill selection", () => {
     const calls: string[] = [];
     const handler = extensionHarness({
       getConfig: () => ENABLED_CONFIG,
-      getDisabledNames: () => new Set<string>(),
+      getVisibility: (_context, skills, prompt) => resolveSkillVisibility(skills, {}, {}, prompt),
       selectSkillsDetailed: async (prompt) => {
         calls.push(prompt);
         return {
@@ -551,7 +554,7 @@ describe("skill selection", () => {
     let authCalls = 0;
     const { handler, statusCommand } = lifecycleHarness({
       getConfig: () => ENABLED_CONFIG,
-      getDisabledNames: () => new Set<string>(),
+      getVisibility: (_context, skills, prompt) => resolveSkillVisibility(skills, {}, {}, prompt),
     });
     const ctx = {
       ...context(),
@@ -606,7 +609,7 @@ describe("skill selection", () => {
     let clock = 10;
     const unavailable = lifecycleHarness({
       getConfig: () => ENABLED_CONFIG,
-      getDisabledNames: () => new Set<string>(),
+      getVisibility: (_context, skills, prompt) => resolveSkillVisibility(skills, {}, {}, prompt),
       fetch: async () => {
         throw new Error("offline");
       },
@@ -635,7 +638,7 @@ describe("skill selection", () => {
 
     const noMatch = lifecycleHarness({
       getConfig: () => ENABLED_CONFIG,
-      getDisabledNames: () => new Set<string>(),
+      getVisibility: (_context, skills, prompt) => resolveSkillVisibility(skills, {}, {}, prompt),
       fetch: async () =>
         new Response(
           JSON.stringify({

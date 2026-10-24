@@ -3,9 +3,7 @@ import {
   type BeforeAgentStartEvent,
   type ExtensionAPI,
   type ExtensionContext,
-  getAgentDir,
   parseSkillBlock,
-  SettingsManager,
   type Skill,
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
@@ -16,7 +14,7 @@ import {
   requestClassifier,
 } from "../../lib/classifier";
 import { fullSkillCatalog } from "../shared/skill-prompt";
-import { disabledSkillNames } from "../skill-tweaks";
+import { configuredSkillVisibility } from "../shared/skill-visibility";
 import {
   admitSkillAdvisories,
   MAX_SKILL_ADVISORY_CHARS,
@@ -107,16 +105,12 @@ function normalizeCandidates(candidates: readonly SkillCandidate[]): SkillCandid
     : normalized;
 }
 
-export function eligibleSkillCandidates(
-  skills: readonly Skill[] | undefined,
-  disabledNames: ReadonlySet<string>,
-): SkillCandidate[] {
-  if (skills === undefined) return [];
-
+function skillCandidates(skills: readonly Skill[]): SkillCandidate[] {
   return normalizeCandidates(
-    skills
-      .filter((skill) => skill.disableModelInvocation === false && !disabledNames.has(skill.name))
-      .map((skill) => ({ name: skill.name, description: compactDescription(skill.description) })),
+    skills.map((skill) => ({
+      name: skill.name,
+      description: compactDescription(skill.description),
+    })),
   );
 }
 
@@ -390,21 +384,6 @@ function candidateAdvisories(
   });
 }
 
-function disabledNamesForContext(
-  context: ExtensionContext,
-  systemPrompt: string,
-  _skills: readonly Skill[],
-): ReadonlySet<string> {
-  const settings = SettingsManager.create(context.cwd, getAgentDir(), {
-    projectTrusted: context.isProjectTrusted(),
-  });
-  return disabledSkillNames(
-    settings.getGlobalSettings(),
-    settings.getProjectSettings(),
-    systemPrompt,
-  );
-}
-
 export interface SkillSelectionStatus {
   readonly enabled: boolean;
   readonly eventCount: number;
@@ -421,11 +400,7 @@ export interface SkillSelectionStatus {
 interface SkillSelectionExtensionDependencies {
   selectSkillsDetailed?: typeof selectSkillsWithClassifierDetailed;
   getConfig?: (context: ExtensionContext) => SkillSelectionConfig;
-  getDisabledNames?: (
-    context: ExtensionContext,
-    systemPrompt: string,
-    skills: readonly Skill[],
-  ) => ReadonlySet<string>;
+  getVisibility?: typeof configuredSkillVisibility;
   fetch?: ClassifierFetch;
   now?: () => number;
 }
@@ -436,7 +411,7 @@ export function createSkillSelectionExtension(
   const selectSkillsDetailed =
     dependencies.selectSkillsDetailed ?? selectSkillsWithClassifierDetailed;
   const getConfig = dependencies.getConfig ?? configuredSkillSelection;
-  const getDisabledNames = dependencies.getDisabledNames ?? disabledNamesForContext;
+  const getVisibility = dependencies.getVisibility ?? configuredSkillVisibility;
   const now = dependencies.now ?? Date.now;
   let status: SkillSelectionStatus = {
     enabled: false,
@@ -501,16 +476,16 @@ export function createSkillSelectionExtension(
 
       const skills = fullSkillCatalog(pi.events, event.systemPromptOptions);
       let config: SkillSelectionConfig;
-      let disabledNames: ReadonlySet<string>;
+      let eligibleSkills: readonly Skill[];
       try {
         config = getConfig(context);
         if (!config.enabled) return skip("disabled", false);
-        disabledNames = getDisabledNames(context, event.systemPrompt, skills);
+        eligibleSkills = getVisibility(context, skills, event.systemPrompt).recommendableSkills;
       } catch {
         return skip("config-error", false);
       }
 
-      const allCandidates = eligibleSkillCandidates(skills, disabledNames);
+      const allCandidates = skillCandidates(eligibleSkills);
       if (allCandidates.length === 0) return skip("no-candidates", true);
       if (allCandidates.length > MAX_CATALOG_SKILLS) return skip("too-many-candidates", true);
 

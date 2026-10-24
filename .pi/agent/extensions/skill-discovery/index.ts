@@ -4,7 +4,6 @@ import {
   type ExtensionAPI,
   getAgentDir,
   SettingsManager,
-  type Skill,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import {
@@ -12,8 +11,8 @@ import {
   type DiscoveryMatch,
   rankDiscovery,
 } from "../../lib/discovery-ranking";
-import { canDiscoverSkills, fullSkillCatalog } from "../shared/skill-prompt";
-import { coldSkillNames, disabledSkillNames } from "../skill-tweaks";
+import { fullSkillCatalog } from "../shared/skill-prompt";
+import { configuredSkillVisibility } from "../shared/skill-visibility";
 import { resolveClassifierToolDiscoveryConfig } from "../tool-discovery";
 import { createSkillSelectionExtension } from "./selection";
 
@@ -67,46 +66,20 @@ export function searchSkillsBm25(
     .slice(0, limit);
 }
 
-export function searchableSkills(
-  skills: readonly Skill[] | undefined,
-  disabled: ReadonlySet<string>,
-): SearchableSkill[] {
-  return (skills ?? [])
-    .filter((skill) => !skill.disableModelInvocation && !disabled.has(skill.name))
-    .map((skill) => ({
-      name: skill.name,
-      description: skill.description,
-      filePath: skill.filePath,
-    }));
-}
-
 export default function skillDiscovery(
   pi: ExtensionAPI,
   selectionDependencies: Parameters<typeof createSkillSelectionExtension>[0] = {},
 ): void {
   let catalog: SearchableSkill[] = [];
   pi.on("before_agent_start", (event, ctx) => {
-    const skills = fullSkillCatalog(pi.events, event.systemPromptOptions);
-    const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
-      projectTrusted: ctx.isProjectTrusted(),
-    });
-    const excluded = disabledSkillNames(
-      settings.getGlobalSettings(),
-      settings.getProjectSettings(),
+    const visibility = configuredSkillVisibility(
+      ctx,
+      fullSkillCatalog(pi.events, event.systemPromptOptions),
       event.systemPrompt,
     );
-    catalog = searchableSkills(skills, excluded);
-    if (canDiscoverSkills(event.systemPromptOptions)) {
-      const cold = coldSkillNames(
-        settings.getGlobalSettings(),
-        settings.getProjectSettings(),
-        skills,
-      );
-      event.systemPromptOptions.skills = skills.filter(
-        (skill) =>
-          !cold.has(skill.name) && !excluded.has(skill.name) && !skill.disableModelInvocation,
-      );
-    }
+    catalog = visibility.eligibleSkills;
+    const promptSkills = visibility.promptSkills(event.systemPromptOptions);
+    if (promptSkills !== undefined) event.systemPromptOptions.skills = promptSkills;
   });
   createSkillSelectionExtension(selectionDependencies)(pi);
 

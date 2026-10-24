@@ -9,6 +9,7 @@ import {
   type Skill,
 } from "@earendil-works/pi-coding-agent";
 import { customStartEvent, userStartEvent } from "../../shared/__tests__/agent-start-events";
+import { resolveSkillVisibility } from "../../shared/skill-visibility";
 import {
   createSkillSelectionExtension,
   DEFAULT_SKILL_SELECTION_CONFIG,
@@ -47,7 +48,7 @@ function harness() {
   } as unknown as ExtensionContext;
   createSkillSelectionExtension({
     getConfig: () => ({ ...DEFAULT_SKILL_SELECTION_CONFIG, enabled: true }),
-    getDisabledNames: () => new Set(),
+    getVisibility: (_context, skills, prompt) => resolveSkillVisibility(skills, {}, {}, prompt),
     selectSkillsDetailed: (_prompt, _candidates, _config, options) =>
       new Promise((resolve, reject) => pending.push({ options, resolve, reject })),
   })({

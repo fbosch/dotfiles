@@ -49,8 +49,6 @@ test.skipIf(pi === null)(
           "--api-key",
           "runtime-fixture-not-a-real-key",
           "-e",
-          resolve(import.meta.dir, "../../skill-tweaks/index.ts"),
-          "-e",
           resolve(import.meta.dir, "fixtures/runtime.ts"),
           "-p",
           "Verify skill filtering without generating a model response.",

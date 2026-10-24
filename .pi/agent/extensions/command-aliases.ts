@@ -7,7 +7,7 @@ import {
   SettingsManager,
   type Skill,
 } from "@earendil-works/pi-coding-agent";
-import { disabledSkillNames } from "./skill-tweaks";
+import { resolveSkillVisibility } from "./shared/skill-visibility";
 
 interface CommandAlias {
   trigger: string;
@@ -80,7 +80,8 @@ function discoverSkills(context: { cwd: string; isProjectTrusted(): boolean }): 
 
   return {
     skills,
-    configuredDisabledNames: disabledSkillNames(globalSettings, projectSettings),
+    configuredDisabledNames: resolveSkillVisibility(skills, globalSettings, projectSettings)
+      .disabledNames,
   };
 }
 

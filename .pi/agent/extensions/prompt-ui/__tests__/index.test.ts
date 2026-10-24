@@ -115,6 +115,7 @@ type EditorFactory = Exclude<
 test("uses MCP extension status in the footer and refreshes the editor after compaction", async () => {
   const handlers = new Map<string, (event: unknown, ctx: ExtensionContext) => unknown>();
   let renderRequests = 0;
+  let workingVisible = true;
   let editor: { render(width: number): string[] } | undefined;
   let footer: ReturnType<FooterFactory> | undefined;
   const tui = {
@@ -145,7 +146,9 @@ test("uses MCP extension status in the footer and refreshes the editor after com
     select: async () => undefined,
     confirm: async () => false,
     input: async () => undefined,
-    setWorkingVisible() {},
+    setWorkingVisible(visible: boolean) {
+      workingVisible = visible;
+    },
     setWidget() {},
     setFooter(factory: FooterFactory | undefined) {
       if (factory !== undefined) footer = factory(tui, theme, footerData);
@@ -180,6 +183,19 @@ test("uses MCP extension status in the footer and refreshes the editor after com
   expect(editor).toBeDefined();
   expect(footer).toBeDefined();
   expect(editor?.render(100).join("\n")).not.toMatch(/\b(?:Plan|Build)\b/);
+  expect(workingVisible).toBe(false);
+  try {
+    for (let run = 0; run < 2; run++) {
+      await handlers.get("agent_start")?.({}, ctx);
+      const workingFooter = stripTerminalSequences(footer?.render(120).join("\n") ?? "");
+      expect(workingFooter).toContain("working");
+      await handlers.get("agent_settled")?.({}, ctx);
+      const idleFooter = stripTerminalSequences(footer?.render(120).join("\n") ?? "");
+      expect(idleFooter).not.toContain("working");
+    }
+  } finally {
+    await handlers.get("agent_settled")?.({}, ctx);
+  }
   extensionStatuses.set("mcp", "MCP 2/6!");
   for (const [capFile, icon] of [
     ["/native/nono/capabilities.json", ""],

@@ -1,13 +1,12 @@
 import {
-  type BeforeAgentStartEvent,
-  type ExtensionAPI,
+  type ExtensionContext,
   getAgentDir,
   SettingsManager,
   type Skill,
 } from "@earendil-works/pi-coding-agent";
-import { activeAgentName } from "../shared/active-agent";
-import { isRecord } from "../shared/is-record";
-import { canDiscoverSkills, fullSkillCatalog } from "../shared/skill-prompt";
+import { activeAgentName } from "./active-agent";
+import { isRecord } from "./is-record";
+import { canDiscoverSkills } from "./skill-prompt";
 
 function configuredSkillNames(
   value: unknown,
@@ -67,7 +66,7 @@ function configuredSkillNames(
   return disabled;
 }
 
-export function disabledSkillNames(
+function disabledSkillNames(
   globalSettings: unknown,
   projectSettings: unknown,
   systemPrompt?: string,
@@ -106,7 +105,7 @@ function visibilityNames(
   return new Set(names.map((name: string) => name.trim()));
 }
 
-export function coldSkillNames(
+function coldSkillNames(
   globalSettings: unknown,
   projectSettings: unknown,
   skills: readonly Skill[],
@@ -132,43 +131,46 @@ export function coldSkillNames(
   );
 }
 
-function configuredDisabledSkillNames(
-  context: { cwd: string; isProjectTrusted(): boolean },
-  systemPrompt: string,
-  hideCold: boolean,
+export function resolveSkillVisibility(
   skills: readonly Skill[],
+  globalSettings: unknown,
+  projectSettings: unknown,
+  systemPrompt?: string,
+) {
+  const disabledNames = disabledSkillNames(globalSettings, projectSettings, systemPrompt);
+  const eligibleSkills = skills.filter(
+    (skill) => !skill.disableModelInvocation && !disabledNames.has(skill.name),
+  );
+  return {
+    disabledNames,
+    eligibleSkills,
+    // Automatic recommendations require an explicit invocation flag before sending metadata.
+    recommendableSkills: eligibleSkills.filter((skill) => skill.disableModelInvocation === false),
+    promptSkills(options: Parameters<typeof canDiscoverSkills>[0]) {
+      const hidden = new Set(options.hiddenTools);
+      const readerAvailable = options.selectedTools?.some(
+        (name) => !hidden.has(name) && (name === "read" || name === "bash"),
+      );
+      if (!readerAvailable) return undefined;
+      if (!canDiscoverSkills(options)) return eligibleSkills;
+      const cold = coldSkillNames(globalSettings, projectSettings, skills);
+      return eligibleSkills.filter((skill) => !cold.has(skill.name));
+    },
+  };
+}
+
+export function configuredSkillVisibility(
+  context: Pick<ExtensionContext, "cwd" | "isProjectTrusted">,
+  skills: readonly Skill[],
+  systemPrompt?: string,
 ) {
   const settings = SettingsManager.create(context.cwd, getAgentDir(), {
     projectTrusted: context.isProjectTrusted(),
   });
-  const global = settings.getGlobalSettings();
-  const project = settings.getProjectSettings();
-  return new Set([
-    ...disabledSkillNames(global, project, systemPrompt),
-    ...(hideCold ? coldSkillNames(global, project, skills) : []),
-  ]);
-}
-
-function fileReadTool(event: BeforeAgentStartEvent): "read" | "bash" | undefined {
-  const { selectedTools, hiddenTools } = event.systemPromptOptions;
-  const declared = selectedTools.filter((name) => !hiddenTools.includes(name));
-  if (declared.includes("read")) return "read";
-  if (declared.includes("bash")) return "bash";
-  return undefined;
-}
-
-export default function skillTweaks(pi: ExtensionAPI): void {
-  pi.on("before_agent_start", (event, context) => {
-    const skills = fullSkillCatalog(pi.events, event.systemPromptOptions);
-    const disabledNames = configuredDisabledSkillNames(
-      context,
-      event.systemPrompt,
-      canDiscoverSkills(event.systemPromptOptions),
-      skills,
-    );
-    if (fileReadTool(event) === undefined) return;
-    event.systemPromptOptions.skills = skills.filter(
-      (skill) => !disabledNames.has(skill.name) && !skill.disableModelInvocation,
-    );
-  });
+  return resolveSkillVisibility(
+    skills,
+    settings.getGlobalSettings(),
+    settings.getProjectSettings(),
+    systemPrompt,
+  );
 }

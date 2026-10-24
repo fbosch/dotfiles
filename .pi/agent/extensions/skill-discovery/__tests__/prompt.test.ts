@@ -17,7 +17,6 @@ import {
 } from "@earendil-works/pi-coding-agent/dist/core/system-prompt.js";
 import { customStartEvent, userStartEvent } from "../../shared/__tests__/agent-start-events";
 import { fullSkillCatalog } from "../../shared/skill-prompt";
-import skillTweaks from "../../skill-tweaks";
 import skillDiscovery from "../index";
 import { DEFAULT_SKILL_SELECTION_CONFIG } from "../selection";
 
@@ -31,7 +30,7 @@ afterEach(() => {
 });
 
 type Handler = (event: BeforeAgentStartEvent, ctx: ExtensionContext) => unknown;
-function harness(reverse = false, warmSkills = ["bun", "manual", "denied", "explicit-only"]) {
+function harness(warmSkills = ["bun", "manual", "denied", "explicit-only"]) {
   const cwd = mkdtempSync(join(tmpdir(), "pi-skill-prompt-"));
   directories.push(cwd);
   process.env.PI_CODING_AGENT_DIR = cwd;
@@ -63,17 +62,9 @@ function harness(reverse = false, warmSkills = ["bun", "manual", "denied", "expl
     registerEntryRenderer() {},
     appendEntry() {},
   } as unknown as ExtensionAPI;
-  const discovery = () =>
-    skillDiscovery(pi, {
-      getConfig: () => ({ ...DEFAULT_SKILL_SELECTION_CONFIG, enabled: false }),
-    });
-  if (reverse) {
-    skillTweaks(pi);
-    discovery();
-  } else {
-    discovery();
-    skillTweaks(pi);
-  }
+  skillDiscovery(pi, {
+    getConfig: () => ({ ...DEFAULT_SKILL_SELECTION_CONFIG, enabled: false }),
+  });
   const skills: Skill[] = ["bun", "local", "manual", "denied", "explicit-only"].map((name) => ({
     name,
     description: `${name} specialized workflow`,
@@ -129,34 +120,31 @@ function harness(reverse = false, warmSkills = ["bun", "manual", "denied", "expl
   };
 }
 
-test.each([false, true])(
-  "search retains the full catalog in either hook order, reverse=%s",
-  async (reverse) => {
-    const h = harness(reverse);
-    const initial = await h.start();
-    expect(initial.options.skills.map((skill) => skill.name)).toEqual(["bun"]);
-    expect(initial.prompt).toContain("<name>bun</name>");
-    expect(initial.prompt).not.toContain("<name>local</name>");
-    expect(initial.prompt).toContain(
-      "For specialized work not covered by the advertised skills, use skill_search",
-    );
-    expect(initial.prompt).toContain("Read the selected SKILL.md");
-    expect(initial.prompt).toContain("Explicit /skill:name");
-    expect(initial.options.sections.other).toBe("Keep this section.");
-    expect(initial.catalog).toEqual(h.skills);
-    for (const name of ["bun", "local"]) {
-      const found = await h.search(name);
-      expect(found.details).toMatchObject({ matches: [name], rankingSource: "lexical" });
-      expect(JSON.stringify(found.content)).toContain(`/skills/${name}/SKILL.md`);
-    }
-    for (const name of ["manual", "denied", "explicit-only"]) {
-      expect((await h.search(name)).details).toMatchObject({ matches: [] });
-    }
-    const next = await h.start();
-    expect(next.catalog).toEqual(h.skills);
-    expect(next.options.skills.map((skill) => skill.name)).toEqual(["bun"]);
-  },
-);
+test("search retains the full catalog after prompt filtering and across requests", async () => {
+  const h = harness();
+  const initial = await h.start();
+  expect(initial.options.skills.map((skill) => skill.name)).toEqual(["bun"]);
+  expect(initial.prompt).toContain("<name>bun</name>");
+  expect(initial.prompt).not.toContain("<name>local</name>");
+  expect(initial.prompt).toContain(
+    "For specialized work not covered by the advertised skills, use skill_search",
+  );
+  expect(initial.prompt).toContain("Read the selected SKILL.md");
+  expect(initial.prompt).toContain("Explicit /skill:name");
+  expect(initial.options.sections.other).toBe("Keep this section.");
+  expect(initial.catalog).toEqual(h.skills);
+  for (const name of ["bun", "local"]) {
+    const found = await h.search(name);
+    expect(found.details).toMatchObject({ matches: [name], rankingSource: "lexical" });
+    expect(JSON.stringify(found.content)).toContain(`/skills/${name}/SKILL.md`);
+  }
+  for (const name of ["manual", "denied", "explicit-only"]) {
+    expect((await h.search(name)).details).toMatchObject({ matches: [] });
+  }
+  const next = await h.start();
+  expect(next.catalog).toEqual(h.skills);
+  expect(next.options.skills.map((skill) => skill.name)).toEqual(["bun"]);
+});
 
 test.each(["read", "bash"])(
   "warm metadata and skill search work with the %s reader and custom starts",
@@ -186,7 +174,7 @@ test("a hidden reader does not enable discovery-only routing", async () => {
   expect(result.options.skills).toEqual(h.skills);
 });
 test("an empty warm list still exposes skill discovery", async () => {
-  const h = harness(false, []);
+  const h = harness([]);
   const result = await h.start();
   expect(result.options.skills).toEqual([]);
   expect(result.prompt).toContain("use skill_search");
@@ -194,7 +182,7 @@ test("an empty warm list still exposes skill discovery", async () => {
 });
 
 test("a global warm list can explicitly advertise a project-scoped skill", async () => {
-  const h = harness(false, ["local"]);
+  const h = harness(["local"]);
   expect((await h.start()).options.skills.map((skill) => skill.name)).toEqual(["local"]);
 });
 
