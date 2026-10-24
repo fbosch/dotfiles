@@ -13,8 +13,8 @@ separately elsewhere, so it cannot mask a lifecycle result.
 
 ## Run
 
-Requires the existing Pi/Caliper installation, Python with PyYAML, installed
-`@gotgenes/pi-subagents`, production model catalogs, and working model and classifier
+Requires the existing Pi/Caliper installation, Python with PyYAML, the local production
+subagent runner, production model catalogs, and working model and classifier
 credentials. These commands make live calls. All grading is deterministic;
 there is no LLM judge.
 
@@ -58,6 +58,10 @@ which translates configured `*-fast` aliases to the base model with priority
 service. Traces record actual parent and worker model/thinking selections and
 outgoing model IDs/service tiers. Assertions compare these with the snapshot.
 Specialist model overrides fail, even if a later retry succeeds.
+The fixture uses the production runner and child-session lifecycle with an isolated
+capability catalog containing only model translation, instruction loading, and
+the read-only fixture. Worker and assignment IDs, continuations, and steering use
+the current `subagent`, `subagent_result`, and `subagent_control` contracts.
 
 Optional model arguments must name a configured model. The old `gpt-5.5:low`
 invocation is intentionally rejected unless that model becomes configured.
@@ -96,7 +100,7 @@ Routine progress is a decision probe, not a live-worker scenario.
 
 ## Isolation and evidence
 
-Each attempt has a disposable HOME and synthetic workspace. The extension allowlist contains native subagents, the model translation hook,
+Each attempt has a disposable HOME and synthetic workspace. The extension allowlist contains the production subagent runner, the model translation hook,
 instruction fragments, subagent-checkpoint, and the fixture. The actual instruction
 loader injects only the copied orchestration index; model tools can explicitly
 read the copied sibling references as well as the copied swarm skill. Model tools

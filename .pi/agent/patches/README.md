@@ -3,12 +3,10 @@
 Tracked patches preserve local changes to pinned Pi extensions:
 - `@ff-labs+pi-fff+0.11.0.patch` disables FFF's native watcher on macOS, forwards Git-status metadata for `@` suggestions, and marks the bounded find and grep tools for read-only programmatic dispatch.
 - `pi-hashline-edit-pro+6.0.1.patch` keeps one registry identity when Pi exposes a session file after early tool calls, preserving served anchors and reclamation state; it also keeps source type-safe under the local ES2022 and exact-optional checks and exposes processed image payloads and notes to codemode's `image()`.
-- `pi-lens+4.3.0.patch` refreshes and returns hashline anchors after immediate autoformatting, so formatter mutations do not leave the model with stale edit references; it also avoids duplicate deferred formatting and resolves bundled grammars.
-- `pi-worktrunk+0.8.0.patch` adds a persistent Worktrunk command-reference cache. Worktrunk remains an unconfigured installed leftover; it is not listed in `settings.json` and is intentionally not installed or loaded by this guide.
+- `pi-lens+4.3.0.patch` is rebased onto 4.4.4. It refreshes hashline anchors after immediate formatting, avoids duplicate deferred formatting, and runs Fallow alongside the primary language server as an advisory-only auxiliary. Upstream now resolves bundled grammars.
 
 The standalone task checklist lives in `../extensions/tasks/`. It stores versioned snapshots in Pi session history under its own entry type and ignores old pi-tasks state.
 
-The `@gotgenes/pi-subagents` patch was retired for 21.8.1: upstream now declares host-provided `typebox` as a peer dependency.
 
 Pi runtime and dependency patches live in `~/nixos/modules/development/ai/pi/` and apply when Nix builds Pi. Dotfiles carries only extension patches.
 
@@ -22,7 +20,7 @@ Keep these patches here rather than editing Pi's installed packages without a re
 
    ```sh
    pi install npm:@ff-labs/pi-fff@0.11.0
-   pi install npm:pi-lens@4.3.0
+   pi install npm:pi-lens@4.4.4
    pi install npm:pi-hashline-edit-pro@6.2.0
    ```
 
@@ -30,6 +28,18 @@ Keep these patches here rather than editing Pi's installed packages without a re
    `bun run --cwd "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}" patch:packages`.
 
 3. Restart Pi to load the patched extensions.
+
+### Fallow diagnostics
+
+The Fallow auxiliary starts for JavaScript and TypeScript files only when an
+ancestor contains `.fallowrc.json`, `.fallowrc.jsonc`, `fallow.toml`, or
+`.fallow.toml`. It prefers that project's `node_modules/.bin/fallow-lsp`,
+then tries PATH. It never installs Fallow automatically.
+
+Fallow findings stay advisory, including diagnostics at error severity.
+The primary language server, such as `tsc`, continues to provide type errors.
+Add `fallow` to `lsp.disabledServers` to disable the auxiliary. The existing
+Pi Lens trust, capacity, and secondary-session policies still apply.
 
 `settings.json` routes Pi's npm operations through `lib/pi-npm.ts`. After a
 successful local npm install, update, or uninstall, the runner applies patches
@@ -67,29 +77,10 @@ a warning and continue with the unpatched package so Pi can start. Run `patch:pa
 explicitly when maintaining patches; that command remains strict and fails on unknown
 contents, mixed states, or patch conflicts.
 
-## Cache behavior
-
-References are stored under
-`${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}/cache/pi-worktrunk/`. Entries are keyed by
-`GENERATOR_REVISION`, the selected and resolved executable paths, and the binary's
-device, inode, mode, size, nanosecond mtime, and ctime. Resolving the path catches
-Nix upgrades and rollbacks even when timestamps are normalized.
-
-Each lookup resolves `wt` using Pi's inherited PATH and command cwd. Identities
-are checked around cache reads and discovery. Failed, cancelled, malformed, or
-partial help discovery is not persisted, and references from a changed executable
-are discarded. Script wrappers and unsupported platforms use live discovery
-without caching. Aliases, repository identity, and activity markers remain fresh.
-
-Cache reads are bounded and validated. Writes use private, exclusive temporary
-files, flush their contents, then rename them atomically. Corrupt or unwritable
-cache files do not prevent live discovery. Bump `GENERATOR_REVISION` when changing
-reference generation, parsing, formatting, or the persisted schema.
-
 ## Updating or removing the patch
 
 1. Review the new upstream package before changing its pin. Retire this patch if
-   upstream supplies the cache.
+   upstream supplies the customization.
 2. Develop changes in a disposable package copy, then regenerate the affected
    patch with patch-package. Keep the package identity and original patch filename
    intact. Recalculate the affected `targets.tsv` rows from the exact pristine

@@ -97,7 +97,13 @@ in
       '';
     };
 
-    "test:caliper-skill-eval".exec = "python3 -m unittest discover -s tests -p 'caliper*test.py'";
+    "test:caliper-skill-eval".exec = ''
+      set -euo pipefail
+      python3 -m unittest discover -s tests -p 'caliper*test.py'
+      cd .pi/agent
+      bun run sdk:sync
+      bun test evals/orchestration/__tests__
+    '';
     "test:skill-suggestions-eval".exec = "python3 -m unittest discover -s .pi/agent/evals/skill-suggestions/__tests__ -p 'test_eval.py'";
     "test:writing-clearly".exec = ''
       set -euo pipefail
@@ -414,7 +420,6 @@ in
       set -euo pipefail
       cd .pi/agent
       bun test \
-        extensions/__tests__/subagent-steering-notice.test.ts \
         extensions/skill-discovery/__tests__/recommendation-chat.test.ts \
         extensions/tasks
       bun run typecheck

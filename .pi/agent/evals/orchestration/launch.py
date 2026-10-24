@@ -42,7 +42,7 @@ def prepare(repo: Path, run_root: Path, evidence: Path, without: bool,
                   if (entry["model"], entry["thinking"]) == (chosen, level))
     catalog["parent"] = {key: preset[key] for key in ("model", "thinking", "source")}
     extensions = [
-        agent / "npm/node_modules/@gotgenes/pi-subagents/src/index.ts",
+        fixture / "runner.ts",
         agent / "extensions/openai-capabilities.ts",
         agent / "extensions/instruction-fragments.ts",
         agent / "extensions/subagent-checkpoint/index.ts",
@@ -71,14 +71,15 @@ def prepare(repo: Path, run_root: Path, evidence: Path, without: bool,
     (evidence / "models.json").write_text(json.dumps(models, indent=2))
     (evidence / "catalog.json").write_text(json.dumps(catalog, indent=2))
     (evidence / "models-store.json").write_text(json.dumps(model_config.snapshot_store(repo, catalog), indent=2))
-    package = agent / "npm/node_modules/@gotgenes/pi-subagents/package.json"
+    runner = agent / "extensions/subagents"
     metadata = {
         "instructions_enabled": not without,
         "instruction_sha256": instruction_hashes,
         "extensions": {str(p.relative_to(repo)): hashlib.sha256(p.read_bytes()).hexdigest() for p in extensions},
-        "subagents_version": json.loads(package.read_text())["version"],
+        "runner_sha256": {str(p.relative_to(repo)): hashlib.sha256(p.read_bytes()).hexdigest()
+                          for p in sorted(runner.glob("*.ts"))},
         "catalog": catalog,
-        "protocol": "production-model-orchestration-v2",
+        "protocol": "production-model-orchestration-v3",
     }
     (evidence / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
     config = {**metadata, "evidence": str(evidence), "extensions": list(map(str, extensions)),
@@ -103,7 +104,6 @@ def configure_attempt(home: Path, agent: Path, config: dict, trace: Path, case: 
     }
     agent.mkdir(parents=True, exist_ok=True)
     (agent / "settings.json").write_text(json.dumps(settings))
-    (agent / "subagents.json").write_text('{"maxConcurrent":3,"abortAllOnInterrupt":true}\n')
     shutil.copy2(Path(config["evidence"]) / "models.json", agent / "models.json")
     shutil.copy2(Path(config["evidence"]) / "models-store.json", agent / "models-store.json")
     instruction_directory = agent / "instructions/orchestration"
@@ -111,20 +111,14 @@ def configure_attempt(home: Path, agent: Path, config: dict, trace: Path, case: 
     if config["instructions_enabled"]:
         shutil.copytree(Path(config["evidence"]) / "instructions/orchestration", instruction_directory, dirs_exist_ok=True)
     (agent / "agents").mkdir(exist_ok=True)
-    # Separate directories avoid Explore.md/explore.md collisions on macOS while
-    # retaining the native registry's case-sensitive canonical agent names.
-    disabled = work / ".pi/agents"
-    disabled.mkdir(parents=True)
-    for name in ("Explore", "Plan", "general-purpose"):
-        (disabled / f"{name}.md").write_text("---\nenabled: false\n---\n")
     for name, definition in catalog["agents"].items():
         # Preserve role descriptions and execution presets. Bodies are bounded
         # fixture instructions, not an evaluation of production skill prompts.
         (agent / "agents" / f"{name}.md").write_text(
             "---\n" + f"description: {json.dumps(definition['description'])}\n"
-            "prompt_mode: replace\n" + f"model: {definition['model']}\n"
+            f"model: {definition['model']}\n"
             f"thinking: {definition['thinking']}\n"
-            "max_turns: 8\ntools: read, grep, find, ls, eval_gate\n---\n"
+            "max_turns: 8\nhard_max_turns: 8\ntools: read, grep, find, ls, eval_gate\nbundles: []\nskills: []\n---\n"
             f"You are the {name} specialist. {definition['description']}\n"
             "Perform only the assigned read-only task. Cite files and evidence. "
             "Do not edit or execute shell commands. Report new evidence or blockers to the parent. "

@@ -65,9 +65,9 @@ def result_for(events, call):
 
 
 def worker_id(events, spawn):
-    match = re.search(r"Agent ID: ([\w.-]+)", result_for(events, spawn)["text"])
-    assert match, "Native spawn did not return an agent ID"
-    return match[1]
+    result = json.loads(result_for(events, spawn)["text"])
+    assert result.get("workerId") and result.get("assignmentId"), "Native spawn did not return worker/assignment IDs"
+    return result["workerId"]
 
 
 def child_read(events, filename, token=None):
@@ -132,9 +132,9 @@ def check_events(events: list[dict], expected: dict, case: str) -> None:
     assert finals, "No response"
     final = finals[-1]["text"]
     all_spawns = calls(events, "subagent")
-    spawns = [e for e in all_spawns if not e["input"].get("resume")]
+    spawns = all_spawns
     if case in ("direct", "routine"):
-        assert not any(e["tool"] in ("subagent", "assess_subagent_checkpoint", "steer_subagent", "eval_gate") for e in parents), "Unnecessary orchestration"
+        assert not any(e["tool"] in ("subagent", "assess_subagent_checkpoint", "subagent_control", "eval_gate") for e in parents), "Unnecessary orchestration"
         if case == "routine":
             assert json.loads(final).get("intervene") is False, "Routine update incorrectly requires intervention"
         else:
@@ -158,11 +158,11 @@ def check_events(events: list[dict], expected: dict, case: str) -> None:
         return
     if case.startswith("selection-") or case == "delegation":
         role = case.removeprefix("selection-") if case.startswith("selection-") else "explore"
-        assert len(spawns) == 1 and spawns[0]["input"]["subagent_type"] == role, "Wrong specialist selection"
+        assert len(spawns) == 1 and spawns[0]["input"]["specialist"] == role, "Wrong specialist selection"
         target = {"explore": "badge.ts", "debug": "ratio.ts", "review": "access.ts"}[role]
         read, _ = child_source_evidence(events, target)
         if case == "delegation":
-            assert 1 <= spawns[0]["input"].get("max_turns", 0) <= 8, "Worker budget missing or excessive"
+            assert 1 <= spawns[0]["input"].get("maxTurns", 0) <= 8, "Worker budget missing or excessive"
             prompt = spawns[0]["input"]["prompt"].lower()
             assert "src" in prompt and "renderbadge" in prompt, "Delegation omitted target or known context"
             assert re.search(r"read.only|do not (?:edit|modify)|no (?:edits|writes)", prompt), "Delegation omitted read-only constraint"
@@ -178,7 +178,7 @@ def check_events(events: list[dict], expected: dict, case: str) -> None:
         assert events.index(read) > events.index(spawns[0]), "Worker read predates delegation"
         return
     if case == "parallel":
-        assert len(spawns) == 2 and all(e["input"].get("run_in_background") is True for e in spawns), "Independent work was not launched in parallel"
+        assert len(spawns) == 2 and all(e["input"].get("foreground") is False for e in spawns), "Independent work was not launched in parallel"
         arrivals = [e for e in events if e["kind"] == "barrier-arrived"]
         passes = [e for e in events if e["kind"] == "barrier-passed"]
         assert len(arrivals) == len(passes) == 2 and {e["key"] for e in arrivals} == {"left", "right"}, "Missing two-worker overlap evidence"
@@ -201,9 +201,11 @@ def check_events(events: list[dict], expected: dict, case: str) -> None:
         assert expected["handoff"] in final, "Missing integrated handoff"
         return
     if case == "resume":
-        assert len(spawns) == 1 and len(all_spawns) == 2, "Continuation spawned a fresh worker"
-        resume = next(e for e in all_spawns if e["input"].get("resume"))
-        assert resume["input"]["resume"] == worker_id(events, spawns[0]), "Wrong resume ID"
+        continuations = [e for e in calls(events, "subagent_control") if e["input"].get("request", {}).get("action") == "continue"]
+        assert len(spawns) == len(continuations) == 1, "Continuation spawned a fresh worker"
+        resume = continuations[0]
+        assert resume["input"]["request"]["workerId"] == worker_id(events, spawns[0]), "Wrong resume ID"
+        assert worker_id(events, resume) == worker_id(events, spawns[0]), "Continuation returned a different worker"
         first_read, first_final = child_read(events, "first.txt", expected["first"])
         second_read, _ = child_read(events, "second.txt", expected["second"])
         assert first_read["session"] == second_read["session"], "Resume did not reuse the worker session"
@@ -234,13 +236,15 @@ def check_events(events: list[dict], expected: dict, case: str) -> None:
 
 def check_steering(events, expected, spawns, final):
     assessments = calls(events, "assess_subagent_checkpoint")
-    steers = calls(events, "steer_subagent")
+    steers = [e for e in calls(events, "subagent_control") if e["input"].get("request", {}).get("action") == "steer"]
     assert len(spawns) == len(assessments) == len(steers) == 1, "Expected one spawn, assessment, and steer"
     spawn, assessment, steer = spawns[0], assessments[0], steers[0]
-    assert spawn["input"].get("run_in_background") is True, "Worker must remain available for steering"
-    assert 1 <= spawn["input"].get("max_turns", 0) <= 8, "Worker budget missing or excessive"
+    assert spawn["input"].get("foreground") is False, "Worker must remain available for steering"
+    assert 1 <= spawn["input"].get("maxTurns", 0) <= 8, "Worker budget missing or excessive"
     agent_id = worker_id(events, spawn)
-    assert assessment["input"]["agentId"] == steer["input"]["agent_id"] == agent_id, "Checkpoint/steer addressed the wrong worker"
+    assert assessment["input"]["agentId"] == steer["input"]["request"]["workerId"] == agent_id, "Checkpoint/steer addressed the wrong worker"
+    assert steer["input"]["request"]["assignmentId"] == json.loads(result_for(events, spawn)["text"])["assignmentId"], "Steering addressed the wrong assignment"
+    result_for(events, steer)
     assert assessment["input"]["checkpointKind"] == "scope-change", "Wrong checkpoint classification"
     assessed = result_for(events, assessment)
     assert json.loads(assessed["text"])["status"] == "assessed", "Live classifier assessment unavailable or abstained; not a steering pass"
@@ -255,7 +259,7 @@ def check_steering(events, expected, spawns, final):
     _, report = child_read(events, "assigned.txt", expected["assigned"])
     marker = next(e["marker"] for e in events if e["kind"] == "challenge")
     assert marker not in spawn["input"]["prompt"], "Marker leaked before steering"
-    assert marker in steer["input"]["message"] and marker in report["text"], "Worker did not acknowledge steering-only marker"
+    assert marker in steer["input"]["request"]["text"] and marker in report["text"], "Worker did not acknowledge steering-only marker"
     assert expected["assigned"] in final, "Parent did not integrate the worker result"
 
 
@@ -271,7 +275,7 @@ def check(case: str | None = None) -> None:
     assert isinstance(case, str), "Missing scenario ID"
     summary = {"case": case, "checkpoint_calls": len(calls(events, "assess_subagent_checkpoint")),
                "instruction_reference_reads": instruction_reference_reads(events, expected),
-               "missing_turn_budgets": sum("max_turns" not in call["input"] for call in calls(events, "subagent")),
+               "missing_turn_budgets": sum("maxTurns" not in call["input"] for call in calls(events, "subagent")),
                "passed": False}
     try:
         check_events(events, expected, case)

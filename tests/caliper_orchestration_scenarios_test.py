@@ -26,11 +26,13 @@ def trace_for(case):
     events = [{"kind": "instructions", "parent": True, "loaded": True}]
 
     def spawn(role, number, prompt="read-only src renderBadge return file and line; verify exported; do not execute commands", resume=None):
-        args = {"subagent_type": role, "prompt": prompt, "run_in_background": True, "max_turns": 8}
+        args = {"specialist": role, "prompt": prompt, "foreground": False, "maxTurns": 8}
+        tool = "subagent"
         if resume:
-            args["resume"] = resume
-        events.append({"kind": "call", "parent": True, "session": "parent", "id": f"spawn{number}", "tool": "subagent", "input": args})
-        events.append({"kind": "result", "id": f"spawn{number}", "tool": "subagent", "text": f"Agent ID: worker{number}", "error": False})
+            tool = "subagent_control"
+            args = {"request": {"action": "continue", "workerId": resume, "prompt": prompt, "maxTurns": 8}}
+        events.append({"kind": "call", "parent": True, "session": "parent", "id": f"spawn{number}", "tool": tool, "input": args})
+        events.append({"kind": "result", "id": f"spawn{number}", "tool": tool, "text": json.dumps({"workerId": resume or f"worker{number}", "assignmentId": f"assignment{number}"}), "error": False})
 
     def report(filename, text, child="child1"):
         identifier = "read-" + filename
@@ -86,7 +88,7 @@ class ScenarioGraderTests(unittest.TestCase):
             if case == "delegation":
                 spawn["input"]["prompt"] = "Find it"
             else:
-                spawn["input"]["subagent_type"] = "quick"
+                spawn["input"]["specialist"] = "quick"
             with self.subTest(case=case), self.assertRaises(AssertionError):
                 CHECK.check_events(events, EXPECTED, case)
 
@@ -101,7 +103,7 @@ class ScenarioGraderTests(unittest.TestCase):
             elif mode == "same-worker":
                 arrivals[1]["session"] = arrivals[0]["session"]
             else:
-                CHECK.calls(events, "subagent")[1]["input"]["run_in_background"] = False
+                CHECK.calls(events, "subagent")[1]["input"]["foreground"] = True
             with self.subTest(mode=mode), self.assertRaises(AssertionError):
                 CHECK.check_events(events, EXPECTED, "parallel")
 
@@ -120,11 +122,12 @@ class ScenarioGraderTests(unittest.TestCase):
     def test_resume_requires_original_worker_and_session(self):
         for mode in ("fresh", "wrong-id", "wrong-session"):
             events = trace_for("resume")
-            resume = CHECK.calls(events, "subagent")[1]
+            resume = CHECK.calls(events, "subagent_control")[0]
             if mode == "fresh":
-                del resume["input"]["resume"]
+                resume["tool"] = "subagent"
+                resume["input"] = {"specialist": "quick", "prompt": "second.txt"}
             elif mode == "wrong-id":
-                resume["input"]["resume"] = "someone-else"
+                resume["input"]["request"]["workerId"] = "someone-else"
             else:
                 next(e for e in events if e.get("id") == "read-second.txt" and e["kind"] == "call")["session"] = "other-child"
             with self.subTest(mode=mode), self.assertRaises(AssertionError):
@@ -145,7 +148,7 @@ class ScenarioGraderTests(unittest.TestCase):
     def test_parallel_lifecycle_is_not_graded_as_budget_syntax(self):
         events = trace_for("parallel")
         for spawn in CHECK.calls(events, "subagent"):
-            del spawn["input"]["max_turns"]
+            del spawn["input"]["maxTurns"]
         CHECK.check_events(events, EXPECTED, "parallel")
 
     def test_evidence_identifier_can_be_nested_in_json(self):
@@ -174,7 +177,7 @@ class ScenarioGraderTests(unittest.TestCase):
             events = trace_for("delegation")
             args = CHECK.calls(events, "subagent")[0]["input"]
             if field == "budget":
-                del args["max_turns"]
+                del args["maxTurns"]
             elif field == "export":
                 args["prompt"] = args["prompt"].replace("exported", "definition")
             else:

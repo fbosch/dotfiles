@@ -44,11 +44,11 @@ def make_steering_trace():
         {
             "kind": "call", "id": "spawn", "parent": True, "session": "parent-session",
             "tool": "subagent", "input": {
-                "run_in_background": True, "max_turns": 4,
+                "specialist": "quick", "foreground": False, "maxTurns": 4,
                 "prompt": "Read assigned.txt and report its contents.",
             },
         },
-        {"kind": "result", "id": "spawn", "tool": "subagent", "text": "Agent ID: child-42", "error": False},
+        {"kind": "result", "id": "spawn", "tool": "subagent", "text": '{"workerId":"child-42","assignmentId":"assignment-42"}', "error": False},
         {
             "kind": "call", "id": "child-gate", "parent": False, "session": "child-session",
             "tool": "eval_gate", "input": {"action": "wait"},
@@ -75,13 +75,13 @@ def make_steering_trace():
         },
         {
             "kind": "call", "id": "steer", "parent": True, "session": "parent-session",
-            "tool": "steer_subagent", "input": {
-                "agent_id": "child-42", "message": f"Stay in scope; read assigned.txt only. {MARKER}",
+            "tool": "subagent_control", "input": {
+                "request": {"action": "steer", "workerId": "child-42", "assignmentId": "assignment-42", "text": f"Stay in scope; read assigned.txt only. {MARKER}"},
             },
         },
         {
-            "kind": "result", "id": "steer", "tool": "steer_subagent",
-            "text": "Steering message sent to agent child-42", "error": False,
+            "kind": "result", "id": "steer", "tool": "subagent_control",
+            "text": '{"workerId":"child-42","currentAssignmentId":"assignment-42"}', "error": False,
         },
         {"kind": "released", "child": "child-session", "agentId": "child-42"},
         {
@@ -99,10 +99,10 @@ def make_steering_trace():
         {"kind": "assistant", "parent": False, "session": "child-session", "text": f"assigned.txt contains {ASSIGNED}; acknowledged {MARKER}.", "stopReason": "stop", "hasToolCalls": False},
         {
             "kind": "call", "id": "parent-result", "parent": True, "session": "parent-session",
-            "tool": "get_subagent_result", "input": {"agent_id": "child-42"},
+            "tool": "subagent_result", "input": {"request": {"mode": "report", "workerId": "child-42"}},
         },
         {
-            "kind": "result", "id": "parent-result", "tool": "get_subagent_result",
+            "kind": "result", "id": "parent-result", "tool": "subagent_result",
             "text": f"assigned.txt contains {ASSIGNED}", "error": False,
         },
         {"kind": "assistant", "parent": True, "session": "parent-session", "text": f"Verified assigned.txt contains {ASSIGNED}.", "stopReason": "stop", "hasToolCalls": False},
@@ -206,8 +206,15 @@ class CaliperOrchestrationCheckTests(unittest.TestCase):
 
     def test_rejects_steering_or_assessment_for_the_wrong_worker(self):
         events = make_steering_trace()
-        next(event for event in events if event.get("id") == "steer")["input"]["agent_id"] = "child-elsewhere"
+        next(event for event in events if event.get("id") == "steer")["input"]["request"]["workerId"] = "child-elsewhere"
         with self.assertRaisesRegex(AssertionError, "addressed the wrong worker"):
+            CHECK.check_events(events, EXPECTED, "steering")
+
+    def test_rejects_steering_for_the_wrong_assignment(self):
+        events = make_steering_trace()
+        steer = next(event for event in events if event.get("id") == "steer")
+        steer["input"]["request"]["assignmentId"] = "another-assignment"
+        with self.assertRaisesRegex(AssertionError, "wrong assignment"):
             CHECK.check_events(events, EXPECTED, "steering")
 
     def test_rejects_assessment_after_steering(self):
@@ -349,6 +356,8 @@ class CaliperOrchestrationLaunchTests(unittest.TestCase):
         self.assertEqual({path.name for path in snapshots.iterdir()}, {"index.md", "assignments.md", "coordination.md", "routing.md", "supervision.md"})
         self.assertFalse((self.evidence / "orchestration.md").exists())
         self.assertEqual(len(self.config["extensions"]), 5)
+        self.assertTrue(any(path.endswith("evals/orchestration/runner.ts") for path in self.config["extensions"]))
+        self.assertIn(".pi/agent/extensions/subagents/production.ts", metadata["runner_sha256"])
         self.assertTrue(any(path.endswith("openai-capabilities.ts") for path in self.config["extensions"]))
         self.assertEqual(json.loads((self.runtime / "home/.pi/agent/settings.json").read_text()), {})
 
@@ -370,7 +379,11 @@ class CaliperOrchestrationLaunchTests(unittest.TestCase):
         self.assertEqual(settings["packages"], [])
         self.assertEqual(settings["extensions"], self.config["extensions"])
         self.assertEqual((agent / "auth.json").read_text(), "private-auth")
-        self.assertIn("model: openai-codex/mock-review", (agent / "agents/review.md").read_text())
+        review = yaml.safe_load((agent / "agents/review.md").read_text().split("---")[1])
+        self.assertEqual(review["model"], "openai-codex/mock-review")
+        self.assertEqual(review["hard_max_turns"], 8)
+        self.assertEqual(review["bundles"], [])
+        self.assertEqual(review["skills"], [])
         copied_instructions = agent / "instructions/orchestration"
         self.assertEqual(
             {path.name for path in copied_instructions.iterdir()},
@@ -381,13 +394,11 @@ class CaliperOrchestrationLaunchTests(unittest.TestCase):
             (self.evidence / "instructions/orchestration/index.md").read_text(),
         )
         self.assertFalse((agent / "instructions/orchestration.md").exists())
-        self.assertEqual(json.loads((agent / "subagents.json").read_text())["maxConcurrent"], 3)
         self.assertTrue((agent / "models.json").exists())
         self.assertTrue((home / ".agents/skills/swarm/SKILL.md").exists())
         self.assertTrue((work / "left.txt").exists())
         self.assertIn("explore.md", [p.name for p in (agent / "agents").iterdir()])
         self.assertNotIn("Explore.md", [p.name for p in (agent / "agents").iterdir()])
-        self.assertIn("enabled: false", (work / ".pi/agents/Explore.md").read_text())
         expected = json.loads((self.root / "trace.jsonl").with_suffix(".expected.json").read_text())
         self.assertEqual(expected["instruction_reference_files"], [
             "assignments.md", "coordination.md", "index.md", "routing.md", "supervision.md",

@@ -1,9 +1,10 @@
 import { randomUUID } from "node:crypto";
-import { appendFileSync, readFileSync, readdirSync, realpathSync } from "node:fs";
+import { appendFileSync, readdirSync, readFileSync, realpathSync } from "node:fs";
 import { resolve, sep } from "node:path";
 import { StringEnum } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { isRecord } from "../../extensions/shared/is-record";
 
 interface Rendezvous {
   promise: Promise<void>;
@@ -82,12 +83,12 @@ export default function orchestrationFixture(pi: ExtensionAPI): void {
     "find",
     "ls",
     "subagent",
-    "get_subagent_result",
-    "steer_subagent",
+    "subagent_result",
+    "subagent_control",
     "assess_subagent_checkpoint",
     "eval_gate",
-    "notify_parent",
-    "ask_parent",
+    "worker_update",
+    "worker_question",
   ]);
   const root = realpathSync(work);
   const home = process.env.HOME ?? "";
@@ -152,7 +153,8 @@ export default function orchestrationFixture(pi: ExtensionAPI): void {
       const path =
         "path" in event.input && typeof event.input.path === "string" ? event.input.path : ".";
       if (!allowedPath(path))
-        denial = "Reads and searches are limited to fixture files, copied swarm skill, and copied orchestration references";
+        denial =
+          "Reads and searches are limited to fixture files, copied swarm skill, and copied orchestration references";
       if (
         event.toolName === "find" &&
         typeof event.input.pattern === "string" &&
@@ -160,15 +162,21 @@ export default function orchestrationFixture(pi: ExtensionAPI): void {
       )
         denial = "Find pattern must stay within the fixture";
     }
-    if (event.toolName === "subagent" && !event.input.resume) {
-      if (
-        typeof event.input.subagent_type !== "string" ||
-        !(event.input.subagent_type in catalog.agents)
-      )
+    if (event.toolName === "subagent") {
+      if (typeof event.input.specialist !== "string" || !(event.input.specialist in catalog.agents))
         denial = "Choose a configured specialist from the fixture catalog";
       if (event.input.model !== undefined || event.input.thinking !== undefined)
         denial = "Specialists must retain their configured model and thinking settings";
-      if (typeof event.input.max_turns === "number" && event.input.max_turns > 8)
+      if (typeof event.input.maxTurns === "number" && event.input.maxTurns > 8)
+        denial = "Worker budget exceeds eight turns";
+    }
+    if (
+      event.toolName === "subagent_control" &&
+      isRecord(event.input.request) &&
+      event.input.request.action === "continue"
+    ) {
+      const request = event.input.request;
+      if (typeof request.maxTurns === "number" && request.maxTurns > 8)
         denial = "Worker budget exceeds eight turns";
     }
     if (denial) {
@@ -190,11 +198,12 @@ export default function orchestrationFixture(pi: ExtensionAPI): void {
     record("result", { id: event.toolCallId, tool: event.toolName, text, error: event.isError });
     if (
       parent &&
-      event.toolName === "steer_subagent" &&
+      event.toolName === "subagent_control" &&
       !event.isError &&
-      /^Steering message (?:sent|queued)/u.test(text)
+      isRecord(event.input.request) &&
+      event.input.request.action === "steer"
     ) {
-      record("released", { child: state.child, agentId: event.input.agent_id });
+      record("released", { child: state.child, agentId: event.input.request.workerId });
       state.released.resolve();
     }
   });

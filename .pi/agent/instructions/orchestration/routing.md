@@ -1,9 +1,9 @@
 # Routing and presets
 
+- Work directly when relevant context is already loaded and delegation adds no specialist benefit, unless the entrypoint or routing rules below require delegation.
 - When a specialized agent fits the task, prefer it over `general`. Use `general` only when no specialized agent applies or the task genuinely spans several specialties.
 - Delegate visualization to `visualizer` when requested directly or indirectly, or when a visual would help explain the response. Route before visualization-specific tool discovery, data collection, aggregation, or rendering; simplicity is not a reason to do that work in the parent. Pass the question, known evidence or bounded source locations, and constraints. The worker owns collection through visual validation; the parent resolves material ambiguity and publishes the validated result.
 - Verify agent availability and permissions before delegating, then launch the selected specialist using the context already supplied. When the user names artifacts for delegated inspection, pass those paths directly; do not read the artifacts first to prepare the worker's prompt. Pass already-collected evidence without collecting it again. If delegation is unavailable or prohibited, report that limitation before using a permitted direct fallback.
-- For an explicit mention, use the injected catalog to identify the selected specialist and its initial allowance. Do not reread agent definitions or task artifacts for launch preparation; normal runner preflight validates configuration and capabilities.
 
 ## Role boundaries
 
@@ -18,7 +18,7 @@
 ## Model and thinking presets
 
 Explicit mentions use the specialist's configured model and thinking defaults unless the user requests an override. Do not select a new preset or inspect the role file merely to launch a named specialist.
-These presets apply only when launching `specialist: "general"`. Select the lowest-cost fit and pass both `model` and `thinking`. Other specialists use their configured defaults. Continuation retains the original model and thinking level; it does not accept overrides.
+For `general`, select the lowest-cost fitting preset below and pass both `model` and `thinking`.
 
 | Task complexity | Use when | Model | Thinking |
 | --- | --- | --- | --- |

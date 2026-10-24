@@ -161,23 +161,6 @@
           ".eslintrc.json"
         ]
       },
-      "fallow": {
-        "name": "Fallow",
-        "command": "fallow-lsp",
-        "args": [],
-        "extensions": [
-          ".js",
-          ".jsx",
-          ".ts",
-          ".tsx"
-        ],
-        "rootMarkers": [
-          ".fallowrc.json",
-          ".fallowrc.jsonc",
-          "fallow.toml",
-          ".fallow.toml"
-        ]
-      },
       "html-custom": {
         "name": "HTML Language Server",
         "command": "vscode-html-language-server",

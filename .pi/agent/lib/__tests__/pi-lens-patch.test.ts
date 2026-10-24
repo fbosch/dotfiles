@@ -2,6 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, resolve } from "node:path";
+import { runInNewContext } from "node:vm";
 
 const agentRoot = resolve(import.meta.dir, "../..");
 const patchPath = resolve(agentRoot, "patches/pi-lens+4.3.0.patch");
@@ -22,7 +23,7 @@ test("pi-lens refreshes hashline anchors after immediate formatting", () => {
   expect(patch).toContain('readTool.execute("pi-lens-format-hashline-refresh"');
   expect(patch).toContain("+    formatChanged,");
   expect(patch).toContain("result.formatChanged && deps.hashlineRefresh");
-  expect(patch).toContain("observedDispatchOutcome.result.formatChanged && deps.hashlineRefresh");
+  expect(patch).toContain("observedDispatchOutcome?.result?.formatChanged && deps.hashlineRefresh");
   expect(patch).toContain('!getFlag("immediate-format")');
   expect(patch).toContain("deps.shouldDeferFormat?.() ?? true");
   expect(patch).toContain("shouldDeferFormat()");
@@ -32,10 +33,24 @@ test("pi-lens refreshes hashline anchors after immediate formatting", () => {
 });
 
 test("pi-lens locates its packaged grammars from the bundled runtime", () => {
-  const patch = readFileSync(patchPath, "utf8");
-
-  expect(patch).toContain('deps.resolvePackage("pi-lens/package.json")');
-  expect(patch).toContain('path73.join(packageGrammars, "tree-sitter-typescript.wasm")');
+  const bundle = readFileSync(installedBundle, "utf8");
+  const start = bundle.indexOf("      bundledGrammarsDir() {");
+  const end = bundle.indexOf("      _vendoredGrammarsDir;", start);
+  expect(start).toBeGreaterThan(-1);
+  expect(end).toBeGreaterThan(start);
+  const grammarDirectory = resolve(agentRoot, "npm/node_modules/pi-lens/grammars");
+  const client = runInNewContext(
+    `({ ${bundle.slice(start, end).replace("import.meta.url", JSON.stringify(installedBundle))} })`,
+    {
+      resolvePackagePath: (_module: string, asset: string) => {
+        expect(asset).toBe("grammars");
+        return grammarDirectory;
+      },
+      fs69: { existsSync: (path: string) => path === grammarDirectory },
+    },
+  );
+  expect(client.bundledGrammarsDir()).toBe(grammarDirectory);
+  expect(client.bundledGrammarsDir()).toBe(grammarDirectory);
 });
 
 test("the tracked patch round-trips against the installed pi-lens bundle", () => {

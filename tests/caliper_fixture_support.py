@@ -15,7 +15,8 @@ def seed_repo(repo: Path) -> Path:
     for name in ("check.py", "launch.py", "model_config.py", "scenario.py"):
         shutil.copy2(EVAL / name, fixture / name)
     for path in (
-        agent / "npm/node_modules/@gotgenes/pi-subagents/src/index.ts",
+        fixture / "runner.ts",
+        agent / "extensions/subagents/production.ts",
         agent / "extensions/openai-capabilities.ts",
         agent / "extensions/instruction-fragments.ts",
         agent / "extensions/subagent-checkpoint/index.ts",
@@ -23,7 +24,7 @@ def seed_repo(repo: Path) -> Path:
     ):
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text("// offline extension fixture\n")
-    (agent / "npm/node_modules/@gotgenes/pi-subagents/package.json").write_text('{"version":"21.7.1"}')
+
     (agent / "settings.json").write_text(json.dumps({
         "defaultProvider": "openai-codex",
         "defaultModel": "mock-parent-fast",

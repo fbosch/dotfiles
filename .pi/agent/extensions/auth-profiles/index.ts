@@ -503,6 +503,10 @@ export default function authProfiles(
   const limitSeenUntil = new Map<string, number>();
   const fallbackPins = new Map<string, { owner: string; until: number }>();
   const fallbackRequestOwners = new Map<string, string>();
+  const retryOwners = new Set<string>();
+  let pendingQuotaRetry:
+    | { provider: string; exhaustedOwner: string; messageEntryId: string }
+    | undefined;
   const fallbackKey = (providerId: string, owner: string) => `${providerId}\0${owner}`;
   const fallbackRoute: FallbackOwnerRoute = {
     pinned(providerId) {
@@ -797,6 +801,7 @@ export default function authProfiles(
   });
 
   pi.on("session_shutdown", () => {
+    clearQuotaRetry();
     usageGeneration += 1;
     usageContext = undefined;
     authStartupOwner?.dispose();
@@ -888,7 +893,7 @@ export default function authProfiles(
           }
           publishProfileStatus(ctx);
           ctx.ui.notify(
-            `${exhaustedOwner} reached its Codex usage limit; switched Codex to ${next.profile}. Retry the request.`,
+            `${exhaustedOwner} reached its Codex usage limit; switched Codex to ${next.profile}.`,
             "warning",
           );
         } catch (error) {
@@ -964,7 +969,7 @@ export default function authProfiles(
       authStartupState = { ...authStartupState, observations: observeUsage(status) };
       authStartupOwner?.update();
       ctx.ui.notify(
-        `${exhaustedOwner} reached its Anthropic usage limit; switched Anthropic to ${next}. Retry the request.`,
+        `${exhaustedOwner} reached its Anthropic usage limit; switched Anthropic to ${next}.`,
         "warning",
       );
     });
@@ -972,6 +977,7 @@ export default function authProfiles(
   const routedProviders = new Set([codexProviderId, ...PROFILE_FALLBACK_PROVIDERS]);
 
   pi.on("before_provider_headers", async (_event, ctx) => {
+    pendingQuotaRetry = undefined;
     await fallbackPromise;
     await profileOperationTail;
     const provider = ctx.model?.provider;
@@ -1006,7 +1012,6 @@ export default function authProfiles(
       const owner =
         fallbackRequestOwners.get(ANTHROPIC_PROVIDER_ID) ??
         currentFallbackOwner(ANTHROPIC_PROVIDER_ID);
-      fallbackRequestOwners.delete(ANTHROPIC_PROVIDER_ID);
       if (owner !== undefined) await rotateAnthropicOwner(ctx, owner, limit);
       return;
     }
@@ -1015,6 +1020,47 @@ export default function authProfiles(
     const resetAt = providerAdapter.usageLimitResetAtFromMessage(event.message.errorMessage, now());
     if (resetAt === undefined) return;
     await rotateCodexOwner(ctx, resetAt, requestOwner(codexProviderId));
+  });
+
+  const clearQuotaRetry = () => {
+    pendingQuotaRetry = undefined;
+    retryOwners.clear();
+  };
+  pi.on("before_agent_start", clearQuotaRetry);
+  pi.on("agent_settled", clearQuotaRetry);
+
+  pi.on("turn_end", (event, ctx) => {
+    pendingQuotaRetry = undefined;
+    if (event.message.role !== "assistant" || event.message.stopReason !== "error") return;
+    const provider = ctx.model?.provider;
+    if (provider !== codexProviderId && provider !== ANTHROPIC_PROVIDER_ID) return;
+    const exhaustedOwner = requestOwner(provider);
+    if ((limitSeenUntil.get(fallbackKey(provider, exhaustedOwner)) ?? 0) <= now()) return;
+    pendingQuotaRetry = { provider, exhaustedOwner, messageEntryId: event.messageEntryId };
+  });
+
+  pi.on("agent_before_settle", (event, ctx) => {
+    const retry = pendingQuotaRetry;
+    pendingQuotaRetry = undefined;
+    if (retry === undefined || event.outcome !== "error" || ctx.model?.provider !== retry.provider) {
+      return;
+    }
+    const next = currentFallbackOwner(retry.provider);
+    if (next === undefined || next === retry.exhaustedOwner) return;
+    const nextKey = fallbackKey(retry.provider, next);
+    if (retryOwners.has(nextKey)) return;
+    retryOwners.add(fallbackKey(retry.provider, retry.exhaustedOwner));
+    retryOwners.add(nextKey);
+    ctx.ui.notify(`Retrying with ${next}'s ${retry.provider === codexProviderId ? "Codex" : "Anthropic"} login.`, "info");
+    // Error turns end the low-level loop even when turn_end requests continuation.
+    // Omit only the failed response so settlement can resume the existing context.
+    return {
+      entries: [
+        ...event.entries,
+        { type: "context_edit" as const, targetId: retry.messageEntryId, replacement: null },
+      ],
+      continue: true,
+    };
   });
 
   pi.registerCommand("profiles", {
