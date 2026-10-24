@@ -7,7 +7,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { activeAgentName } from "../shared/active-agent";
 import { isRecord } from "../shared/is-record";
-import { fullSkillCatalog, replaceSkillCatalog } from "../shared/skill-prompt";
+import { canDiscoverSkills, fullSkillCatalog } from "../shared/skill-prompt";
 
 function configuredSkillNames(
   value: unknown,
@@ -19,7 +19,7 @@ function configuredSkillNames(
 
   const unknownFields = Object.keys(value).filter(
     (field) =>
-      !["disableModelInvocation", "modelInvocationAgents", "coldSkills", "warmSkills"].includes(
+      !["disableModelInvocation", "modelInvocationAgents", "warmSkills", "coldSkills"].includes(
         field,
       ),
   );
@@ -87,6 +87,7 @@ export function disabledSkillNames(
   ];
   return new Set(names);
 }
+
 function visibilityNames(
   settings: unknown,
   scope: string,
@@ -100,9 +101,8 @@ function visibilityNames(
   if (
     !Array.isArray(names) ||
     names.some((name) => typeof name !== "string" || name.trim().length === 0)
-  ) {
+  )
     throw new Error(`${scope} skillTweaks.${field}: expected an array of non-empty names`);
-  }
   return new Set(names.map((name: string) => name.trim()));
 }
 
@@ -115,37 +115,34 @@ export function coldSkillNames(
     isRecord(globalSettings) &&
     isRecord(globalSettings.skillTweaks) &&
     globalSettings.skillTweaks.coldSkills !== undefined
-  ) {
+  )
     throw new Error("global skillTweaks.coldSkills: use warmSkills for global visibility");
-  }
   const globalWarm = visibilityNames(globalSettings, "global", "warmSkills");
   const projectWarm = visibilityNames(projectSettings, "project", "warmSkills");
   const projectCold = visibilityNames(projectSettings, "project", "coldSkills");
-  // Discovery scope, not resolved filesystem location, distinguishes project skills from Stow-linked user skills.
+  // Project discovery alone must not advertise the whole repository's skill catalog.
   return new Set(
     skills
-      .filter((skill) => {
-        if (projectCold.has(skill.name)) return true;
-        if (projectWarm.has(skill.name)) return false;
-        if (skill.sourceInfo.scope === "project") return false;
-        return !globalWarm.has(skill.name);
-      })
+      .filter(
+        (skill) =>
+          projectCold.has(skill.name) ||
+          (!projectWarm.has(skill.name) && !globalWarm.has(skill.name)),
+      )
       .map((skill) => skill.name),
   );
 }
 
 function configuredDisabledSkillNames(
   context: { cwd: string; isProjectTrusted(): boolean },
-  systemPrompt?: string,
-  hideCold = false,
-  skills: readonly Skill[] = [],
+  systemPrompt: string,
+  hideCold: boolean,
+  skills: readonly Skill[],
 ) {
   const settings = SettingsManager.create(context.cwd, getAgentDir(), {
     projectTrusted: context.isProjectTrusted(),
   });
   const global = settings.getGlobalSettings();
   const project = settings.getProjectSettings();
-  // Cold skills are hidden from the prompt, not denied to the search tool.
   return new Set([
     ...disabledSkillNames(global, project, systemPrompt),
     ...(hideCold ? coldSkillNames(global, project, skills) : []),
@@ -153,27 +150,11 @@ function configuredDisabledSkillNames(
 }
 
 function fileReadTool(event: BeforeAgentStartEvent): "read" | "bash" | undefined {
-  const selectedTools = event.systemPromptOptions.selectedTools ?? [];
-  if (selectedTools.includes("read")) return "read";
-  if (selectedTools.includes("bash")) return "bash";
+  const { selectedTools, hiddenTools } = event.systemPromptOptions;
+  const declared = selectedTools.filter((name) => !hiddenTools.includes(name));
+  if (declared.includes("read")) return "read";
+  if (declared.includes("bash")) return "bash";
   return undefined;
-}
-
-export function applySkillTweaks(
-  systemPrompt: string,
-  skills: readonly Skill[] | undefined,
-  disabledNames: ReadonlySet<string>,
-  readTool: "read" | "bash" | undefined,
-): string {
-  if (skills === undefined || disabledNames.size === 0 || readTool === undefined) {
-    return systemPrompt;
-  }
-
-  return replaceSkillCatalog(
-    systemPrompt,
-    skills.filter((skill) => !disabledNames.has(skill.name)),
-    readTool,
-  );
 }
 
 export default function skillTweaks(pi: ExtensionAPI): void {
@@ -182,7 +163,7 @@ export default function skillTweaks(pi: ExtensionAPI): void {
     const disabledNames = configuredDisabledSkillNames(
       context,
       event.systemPrompt,
-      (event.systemPromptOptions.selectedTools ?? []).includes("skill_search"),
+      canDiscoverSkills(event.systemPromptOptions),
       skills,
     );
     if (fileReadTool(event) === undefined) return;

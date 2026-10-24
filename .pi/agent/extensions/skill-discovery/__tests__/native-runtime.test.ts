@@ -6,7 +6,7 @@ import { join, resolve } from "node:path";
 
 const pi = Bun.which("pi");
 test.skipIf(pi === null)(
-  "installed Pi hides cold metadata while retaining search and scope defaults",
+  "installed Pi advertises only explicit warm skills while retaining search and recommendations",
   () => {
     const root = mkdtempSync(join(tmpdir(), "pi-skill-runtime-"));
     try {
@@ -32,10 +32,7 @@ test.skipIf(pi === null)(
           skillTweaks: { warmSkills: ["global-warm"], disableModelInvocation: ["explicit-only"] },
         }),
       );
-      writeFileSync(
-        join(project, ".pi", "settings.json"),
-        JSON.stringify({ skillTweaks: { coldSkills: ["xstate"] } }),
-      );
+      writeFileSync(join(project, ".pi", "settings.json"), JSON.stringify({}));
       const output = execFileSync(
         pi ?? "pi",
         [
@@ -71,7 +68,7 @@ test.skipIf(pi === null)(
       expect(report.coldVisible).toBe(false);
       expect(report.globalColdVisible).toBe(false);
       expect(report.globalWarmVisible).toBe(true);
-      expect(report.localWarmVisible).toBe(true);
+      expect(report.localWarmVisible).toBe(false);
       expect(report.explicitOnlyVisible).toBe(false);
       expect(report.structuredColdVisible).toBe(false);
       expect(report.structuredGlobalColdVisible).toBe(false);

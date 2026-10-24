@@ -3,6 +3,8 @@ when:
   tools:
     any:
       - subagent
+      - subagent_result
+      - subagent_control
 ---
 
 # Subagent orchestration

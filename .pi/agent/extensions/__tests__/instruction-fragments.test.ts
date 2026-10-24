@@ -86,7 +86,7 @@ describe("instruction fragments", () => {
         type: "before_agent_start",
         prompt: "Use the snapshot",
         systemPrompt: "base prompt",
-        systemPromptOptions: {},
+        systemPromptOptions: normalizeBuildSystemPromptOptions({ cwd: agentDirectory }),
       } as BeforeAgentStartEvent;
       expect(handler?.(event, {} as ExtensionContext)).toBeUndefined();
       const fragments = event.systemPromptOptions.sections?.global_instruction_fragments;
@@ -311,7 +311,7 @@ describe("instruction fragments", () => {
     );
   });
 
-  test("injects fragments for available tools, including inactive deferred tools", () => {
+  test("injects conditional fragments only for declared tools", () => {
     const agentDirectory = temporaryDirectory();
     const instructionsDirectory = join(agentDirectory, "instructions");
     mkdirSync(instructionsDirectory);
@@ -337,7 +337,7 @@ describe("instruction fragments", () => {
             ctx: ExtensionContext,
           ) => BeforeAgentStartEventResult | undefined)
         | undefined;
-      let availableTools = ["subagent", "tasks", "ffgrep"];
+      const availableTools = ["subagent", "tasks", "ffgrep"];
       const pi = {
         getAllTools: () => availableTools.map((name) => ({ name })),
         on(event: string, registeredHandler: typeof handler) {
@@ -351,6 +351,7 @@ describe("instruction fragments", () => {
         systemPrompt: "base prompt",
         systemPromptOptions: normalizeBuildSystemPromptOptions({
           cwd: agentDirectory,
+          selectedTools: ["subagent", "tasks"],
           sections: { other: "Keep this section." },
         }),
       } as BeforeAgentStartEvent;
@@ -367,13 +368,13 @@ describe("instruction fragments", () => {
         "# Subagent orchestration\n\n# Task tracking",
       );
 
-      availableTools = ["tasks"];
+      event.systemPromptOptions.selectedTools = ["tasks"];
       handler?.(event, {} as ExtensionContext);
       expect(event.systemPromptOptions.sections?.global_instruction_fragments).toBe(
         "# Task tracking",
       );
 
-      availableTools = ["read"];
+      event.systemPromptOptions.selectedTools = ["read"];
       expect(handler?.(event, {} as ExtensionContext)).toBeUndefined();
       expect(event.systemPromptOptions.sections?.global_instruction_fragments).toBe("");
       expect(event.systemPromptOptions.sections?.other).toBe("Keep this section.");

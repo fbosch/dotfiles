@@ -143,8 +143,7 @@ async function harness(options?: {
     activeTools,
     startSession: async () => {
       const handler = sessionHandlers.get("session_start");
-      if (handler === undefined) throw new Error("session_start handler was not registered");
-      await handler({ type: "session_start", reason: "startup" }, context);
+      await handler?.({ type: "session_start", reason: "startup" }, context);
     },
     context,
     invoke: (args: object, signal?: AbortSignal) =>
@@ -225,13 +224,14 @@ function resultTask(details: unknown): string {
 }
 
 for (const filename of ["justfile", "Justfile", ".justfile", "package.json", "devenv.nix"]) {
-  test(`activates dekit when ${filename} exists at the project root`, async () => {
+  test(`keeps dekit searchable but undeclared when ${filename} exists at the project root`, async () => {
     const h = await harness({ includePackage: false });
     const contents =
       filename === "package.json" ? JSON.stringify({ scripts: { test: "true" } }) : "";
     await writeFile(join(h.cwd, filename), contents);
     await h.startSession();
-    expect(h.activeTools).toEqual(["read", "bash", "dekit"]);
+    expect(h.activeTools).toEqual(["read", "bash"]);
+    expect(h.tool).toMatchObject({ name: "dekit", exposure: "deferred", defaultActive: false });
   });
 }
 

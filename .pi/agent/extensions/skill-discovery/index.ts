@@ -12,15 +12,13 @@ import {
   type DiscoveryMatch,
   rankDiscovery,
 } from "../../lib/discovery-ranking";
-import { fullSkillCatalog, replaceSkillCatalog } from "../shared/skill-prompt";
+import { canDiscoverSkills, fullSkillCatalog } from "../shared/skill-prompt";
 import { coldSkillNames, disabledSkillNames } from "../skill-tweaks";
 import { resolveClassifierToolDiscoveryConfig } from "../tool-discovery";
 import { createSkillSelectionExtension } from "./selection";
 
 const MAX_MATCHES = 10;
 const DEFAULT_MATCHES = 3;
-const SEARCH_GUIDANCE =
-  "\n\nSkills provide specialized instructions. Use skill_search to search available skills by task or name, then read the selected SKILL.md before following it. Explicit /skill:name commands remain available.";
 
 export interface SearchableSkill {
   name: string;
@@ -69,18 +67,6 @@ export function searchSkillsBm25(
     .slice(0, limit);
 }
 
-export function compactSkillPrompt(
-  prompt: string,
-  skills: readonly Skill[],
-  cold: ReadonlySet<string>,
-  disabled: ReadonlySet<string>,
-  readTool: "read" | "bash",
-): string {
-  const visible = skills.filter((skill) => !cold.has(skill.name) && !disabled.has(skill.name));
-  const filtered = replaceSkillCatalog(prompt, visible, readTool);
-  return filtered.includes(SEARCH_GUIDANCE) ? filtered : filtered + SEARCH_GUIDANCE;
-}
-
 export function searchableSkills(
   skills: readonly Skill[] | undefined,
   disabled: ReadonlySet<string>,
@@ -110,24 +96,17 @@ export default function skillDiscovery(
       event.systemPrompt,
     );
     catalog = searchableSkills(skills, excluded);
-    const selected = event.systemPromptOptions.selectedTools ?? [];
-    // Do not hide the catalog in restricted agents that cannot search or read skills.
-    if (!selected.includes("skill_search")) return;
-    const readTool = selected.includes("read")
-      ? "read"
-      : selected.includes("bash")
-        ? "bash"
-        : undefined;
-    if (readTool === undefined) return;
-    const cold = coldSkillNames(
-      settings.getGlobalSettings(),
-      settings.getProjectSettings(),
-      skills,
-    );
-    event.systemPromptOptions.skills = skills.filter(
-      (skill) =>
-        !cold.has(skill.name) && !excluded.has(skill.name) && !skill.disableModelInvocation,
-    );
+    if (canDiscoverSkills(event.systemPromptOptions)) {
+      const cold = coldSkillNames(
+        settings.getGlobalSettings(),
+        settings.getProjectSettings(),
+        skills,
+      );
+      event.systemPromptOptions.skills = skills.filter(
+        (skill) =>
+          !cold.has(skill.name) && !excluded.has(skill.name) && !skill.disableModelInvocation,
+      );
+    }
   });
   createSkillSelectionExtension(selectionDependencies)(pi);
 
@@ -139,7 +118,7 @@ export default function skillDiscovery(
         "Search available skills by name or task. Returns paths to read the selected SKILL.md; does not load skill instructions automatically.",
       promptSnippet: "Find relevant skills before reading their instructions",
       promptGuidelines: [
-        "Use skill_search to discover relevant specialist skills not listed in the visible catalog, then read their SKILL.md before following them.",
+        "For specialized work not covered by the advertised skills, use skill_search to find relevant skills by task or name. Read the selected SKILL.md before following it. Explicit /skill:name commands remain available.",
       ],
       parameters: Type.Object(
         {

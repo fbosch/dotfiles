@@ -6,6 +6,7 @@ import type {
 
 const coordinationTools = new Set([
   "codemode",
+  "tool_search",
   "tasks",
   "ask_user_question",
   "subagent_result",

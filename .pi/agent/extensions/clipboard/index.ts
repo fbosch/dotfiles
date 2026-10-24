@@ -1,10 +1,12 @@
 import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { INACTIVE_SPECIALIST_TOOL } from "../../lib/tool-exposure";
 import { readClipboardText, writeClipboardText } from "./clipboard";
 
 export default function clipboardExtension(pi: ExtensionAPI): void {
   pi.registerTool(
     defineTool({
+      ...INACTIVE_SPECIALIST_TOOL,
       name: "clipboard_read",
       label: "Read clipboard",
       description:
@@ -34,6 +36,7 @@ export default function clipboardExtension(pi: ExtensionAPI): void {
 
   pi.registerTool(
     defineTool({
+      ...INACTIVE_SPECIALIST_TOOL,
       name: "clipboard_write",
       label: "Write clipboard",
       description:

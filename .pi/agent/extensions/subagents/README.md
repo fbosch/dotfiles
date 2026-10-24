@@ -48,13 +48,13 @@ Every child retains the central authentication, model, classifier, command-polic
 
 ## Parent tools
 
-These are the active contracts, not aliases for the old runner's tools. Routed commands use `requestSubagentLaunch` over Pi's event bus and share the same `ParentRuntime` as tool calls.
+`subagent`, `subagent_result`, and `subagent_control` are deferred. Discover each tool with `tool_search` when needed; loading one does not load its siblings. These are the current contracts, not aliases for the old runner's tools. Routed commands use `requestSubagentLaunch` over Pi's event bus and share the same `ParentRuntime` as tool calls.
 
 ### Explicit mentions
 
 `@specialist` keeps the parent as a launch-first coordinator. The mention extension supplies the selected role descriptions and default initial allowances, without role bodies. The parent prepares focused assignments from the request and existing context rather than reading task files or agent definitions first.
 
-Direct and nested codemode tool calls enforce this ordering. With multiple mentions, investigation remains blocked until all selected specialists have launched or a launched prerequisite returns evidence for parent verification. Failed or malformed launch results do not release the restriction. Clarification, checklists, and native worker coordination remain available. Each new request and session cleanup resets the restriction.
+Direct and nested codemode tool calls enforce this ordering. With multiple mentions, investigation remains blocked until all selected specialists have launched or a launched prerequisite returns evidence for parent verification. Failed or malformed launch results do not release the restriction. Tool discovery, clarification, checklists, and native worker coordination remain available. Each new request and session cleanup resets the restriction.
 
 Independent workers need read-only scope or disjoint write ownership and background launches before waits. Dependencies and shared writes remain serial; the parent verifies prerequisite reports before launching downstream work. The guard permits a staged verification step after a known worker's report; the parent still owns dependency and write-ownership decisions. All launches use normal runner preflight, permissions, approvals, and budget ceilings.
 

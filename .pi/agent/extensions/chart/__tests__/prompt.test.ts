@@ -27,13 +27,14 @@ function createHandler(toolNames: readonly string[]): BeforeAgentStartHandler {
   return handler;
 }
 
-function createEvent(): BeforeAgentStartEvent {
+function createEvent(selectedTools: string[] = ["read", "chart_gantt"]): BeforeAgentStartEvent {
   return {
     type: "before_agent_start",
     prompt: "Show a chart",
     systemPrompt: "base prompt",
     systemPromptOptions: normalizeBuildSystemPromptOptions({
       cwd: "/tmp",
+      selectedTools,
       sections: { other: "Keep this section." },
     }),
   } as BeforeAgentStartEvent;
@@ -46,7 +47,7 @@ function setImageCapability(images: "kitty" | "iterm2" | null): void {
 }
 
 describe("chart prompt guidance", () => {
-  test("mentions deferred charts when an available chart tool can render in the TUI", () => {
+  test("loads detailed guidance for a declared chart tool that can render in the TUI", () => {
     setImageCapability("kitty");
     const event = createEvent();
     expect(createHandler(["read", "chart_gantt"])(event, tuiContext)).toBeUndefined();
@@ -61,6 +62,17 @@ describe("chart prompt guidance", () => {
     expect(guidance).not.toContain("chart_gantt");
     expect(event.systemPromptOptions.sections?.other).toBe("Keep this section.");
     expect(event.systemPromptOptions.forceSystemPrompt).toBeUndefined();
+  });
+
+  test("keeps registered deferred charts discoverable without their detailed guidance", () => {
+    setImageCapability("kitty");
+    const event = createEvent(["read", "tool_search"]);
+    createHandler(["read", "chart_gantt"])(event, tuiContext);
+    expect(event.systemPromptOptions.sections?.chart_visuals).toContain(
+      "discover one chart_* tool with tool_search",
+    );
+    expect(event.systemPromptOptions.sections?.chart_visuals).not.toContain("12 nodes");
+    expect(event.systemPromptOptions.sections?.chart_visuals).not.toContain("balanced values");
   });
 
   test.each([

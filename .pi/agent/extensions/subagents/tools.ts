@@ -1,6 +1,7 @@
 import type { ExtensionAPI, ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
 import { Box, type Component, Spacer } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
+import { INACTIVE_SPECIALIST_TOOL } from "../../lib/tool-exposure";
 import {
   inspectable,
   type OpenWorker,
@@ -96,8 +97,12 @@ export function registerParentTools(
 ): LaunchCards {
   const cards = new LaunchCards(lookup);
   pi.registerTool({
+    ...INACTIVE_SPECIALIST_TOOL,
     name: "subagent",
     label: "Launch specialist",
+    promptGuidelines: [
+      "Discover subagent_result or subagent_control with tool_search when worker inspection or control is needed; loading subagent does not load these tools.",
+    ],
     description:
       "Launch one named specialist. Background is the default; foreground returns its report or blocking question. Optional inherited context contains only parent narrative text. maxTurns is the initial allowance; hardMaxTurns may only lower a configured specialist ceiling. A report is evidence, not verification.",
     parameters: Type.Object({
@@ -192,6 +197,7 @@ export function registerParentTools(
     },
   });
   pi.registerTool({
+    ...INACTIVE_SPECIALIST_TOOL,
     name: "subagent_result",
     label: "Inspect specialist",
     description:
@@ -247,6 +253,7 @@ export function registerParentTools(
     },
   });
   pi.registerTool({
+    ...INACTIVE_SPECIALIST_TOOL,
     name: "subagent_control",
     label: "Control specialist",
     description:

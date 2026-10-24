@@ -692,9 +692,7 @@ describe("auth profile prompt status", () => {
       ["auth-profile", "fbb · Codex via jpb"],
     ]);
     expect(await codexKey()).toBe("codex-jpb");
-    expect(notifications.at(-1)).toBe(
-      "fbb reached its Codex usage limit; switched Codex to jpb.",
-    );
+    expect(notifications.at(-1)).toBe("fbb reached its Codex usage limit; switched Codex to jpb.");
 
     await providerResponse?.(
       {
@@ -708,9 +706,7 @@ describe("auth profile prompt status", () => {
     );
     expect(statuses.at(-1)).toEqual(["auth-profile", "fbb · Codex via ct"]);
     expect(await codexKey()).toBe("codex-ct");
-    expect(notifications.at(-1)).toBe(
-      "jpb reached its Codex usage limit; switched Codex to ct.",
-    );
+    expect(notifications.at(-1)).toBe("jpb reached its Codex usage limit; switched Codex to ct.");
     // The bound profile keeps serving fallback providers and /login.
     expect(statuses.every(([, value]) => value?.startsWith("fbb") === true)).toBe(true);
   });

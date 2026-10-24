@@ -1042,7 +1042,11 @@ export default function authProfiles(
   pi.on("agent_before_settle", (event, ctx) => {
     const retry = pendingQuotaRetry;
     pendingQuotaRetry = undefined;
-    if (retry === undefined || event.outcome !== "error" || ctx.model?.provider !== retry.provider) {
+    if (
+      retry === undefined ||
+      event.outcome !== "error" ||
+      ctx.model?.provider !== retry.provider
+    ) {
       return;
     }
     const next = currentFallbackOwner(retry.provider);
@@ -1051,7 +1055,10 @@ export default function authProfiles(
     if (retryOwners.has(nextKey)) return;
     retryOwners.add(fallbackKey(retry.provider, retry.exhaustedOwner));
     retryOwners.add(nextKey);
-    ctx.ui.notify(`Retrying with ${next}'s ${retry.provider === codexProviderId ? "Codex" : "Anthropic"} login.`, "info");
+    ctx.ui.notify(
+      `Retrying with ${next}'s ${retry.provider === codexProviderId ? "Codex" : "Anthropic"} login.`,
+      "info",
+    );
     // Error turns end the low-level loop even when turn_end requests continuation.
     // Omit only the failed response so settlement can resume the existing context.
     return {

@@ -2,7 +2,11 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { createAssistantMessageEventStream, type AssistantMessage, type CredentialStore } from "@earendil-works/pi-ai";
+import {
+  type AssistantMessage,
+  type CredentialStore,
+  createAssistantMessageEventStream,
+} from "@earendil-works/pi-ai";
 import {
   type AgentBeforeSettleEvent,
   type BoundaryResult,
@@ -40,7 +44,11 @@ function response(provider: string, errorMessage?: string): AssistantMessage {
     ...(errorMessage === undefined ? {} : { errorMessage }),
     timestamp: 1_000_000,
     usage: {
-      input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0,
+      input: 0,
+      output: 0,
+      cacheRead: 0,
+      cacheWrite: 0,
+      totalTokens: 0,
       cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
     },
   };
@@ -52,10 +60,13 @@ async function fixture(provider = "openai-codex", available = ["fbb", "jpb", "ct
   await mkdir(join(root, "auth-profiles"));
   process.env.PI_CODING_AGENT_DIR = root;
   for (const profile of ["fbb", "jpb", "ct"]) {
-    await writeFile(authPathFor(profile, root), JSON.stringify({
-      "openai-codex": { type: "api_key", key: `codex-${profile}` },
-      anthropic: { type: "oauth", access: profile, refresh: profile, expires: 9_999_999_999_999 },
-    }));
+    await writeFile(
+      authPathFor(profile, root),
+      JSON.stringify({
+        "openai-codex": { type: "api_key", key: `codex-${profile}` },
+        anthropic: { type: "oauth", access: profile, refresh: profile, expires: 9_999_999_999_999 },
+      }),
+    );
   }
   const handlers = new Map<string, Array<(event: never, ctx: ExtensionContext) => unknown>>();
   const pi = {
@@ -67,80 +78,141 @@ async function fixture(provider = "openai-codex", available = ["fbb", "jpb", "ct
   } as unknown as ExtensionAPI;
   let currentTime = 1_000_000;
   const baseSelection: ProfileSelection = {
-    profile: "fbb", profileOrder: ["fbb", "jpb", "ct", "default"],
-    source: "host default", host: { name: "fixture", source: "system hostname" },
-    hostPreferences: ["fbb", "jpb", "ct"], repositoryPreferences: [],
+    profile: "fbb",
+    profileOrder: ["fbb", "jpb", "ct", "default"],
+    source: "host default",
+    host: { name: "fixture", source: "system hostname" },
+    hostPreferences: ["fbb", "jpb", "ct"],
+    repositoryPreferences: [],
     fallbackReason: "confirmed usage",
   };
-  const extension = (pi: ExtensionAPI) => authProfiles(pi, {
-    now: () => currentTime,
-    providerAdapter: {
-      ...createOpenAiCodexProfileAdapter(root),
-      createCredentialStore: (profile) => createCredentialStore(authPathFor(profile, root)),
-    },
-    selectProfile: async (_ctx, options) => {
-      if (options?.excludedProfiles === undefined) return baseSelection;
-      const next = baseSelection.profileOrder.find(
-        (profile) => available.includes(profile) && !options.excludedProfiles?.has(profile),
-      );
-      return next === undefined
-        ? { ...baseSelection, fallbackReason: "credential availability" }
-        : { ...baseSelection, profile: next };
-    },
-    usageCollector: async () => ({
-      schema: "fbb.pi-auth-profiles-usage/v1", diagnostics: [],
-      profiles: ["fbb", "jpb", "ct"].map((profileLabel) => ({
-        profileLabel, active: profileLabel === "fbb", urgency: "unknown",
-        usage: [], anthropicUsage: [{ windowId: "primary", remaining: available.includes(profileLabel) ? 50 : 0 }],
-      })),
-    }),
-  });
+  const extension = (pi: ExtensionAPI) =>
+    authProfiles(pi, {
+      now: () => currentTime,
+      providerAdapter: {
+        ...createOpenAiCodexProfileAdapter(root),
+        createCredentialStore: (profile) => createCredentialStore(authPathFor(profile, root)),
+      },
+      selectProfile: async (_ctx, options) => {
+        if (options?.excludedProfiles === undefined) return baseSelection;
+        const next = baseSelection.profileOrder.find(
+          (profile) => available.includes(profile) && !options.excludedProfiles?.has(profile),
+        );
+        return next === undefined
+          ? { ...baseSelection, fallbackReason: "credential availability" }
+          : { ...baseSelection, profile: next };
+      },
+      usageCollector: async () => ({
+        schema: "fbb.pi-auth-profiles-usage/v1",
+        diagnostics: [],
+        profiles: ["fbb", "jpb", "ct"].map((profileLabel) => ({
+          profileLabel,
+          active: profileLabel === "fbb",
+          urgency: "unknown",
+          usage: [],
+          anthropicUsage: [
+            { windowId: "primary", remaining: available.includes(profileLabel) ? 50 : 0 },
+          ],
+        })),
+      }),
+    });
   extension(pi);
   const manager = SessionManager.inMemory(root);
   manager.appendMessage({ role: "user", content: "Complete the task", timestamp: currentTime });
   const completed = response(provider);
-  completed.content = [{ type: "toolCall", id: "completed-tool", name: "write", arguments: { path: "done" } }];
+  completed.content = [
+    { type: "toolCall", id: "completed-tool", name: "write", arguments: { path: "done" } },
+  ];
   completed.stopReason = "toolUse";
   manager.appendMessage(completed);
-  manager.appendMessage({ role: "toolResult", toolCallId: "completed-tool", toolName: "write", content: [{ type: "text", text: "Already written" }], isError: false, timestamp: currentTime });
+  manager.appendMessage({
+    role: "toolResult",
+    toolCallId: "completed-tool",
+    toolName: "write",
+    content: [{ type: "text", text: "Already written" }],
+    isError: false,
+    timestamp: currentTime,
+  });
   const store = await createCredentialStore(authPathFor("fbb", root));
   const runtime = {
-    login: async () => { throw new Error("Unexpected login"); },
+    login: async () => {
+      throw new Error("Unexpected login");
+    },
     credentials: { store: store as CredentialStore },
   };
   const notifications: string[] = [];
   const ctx = {
-    cwd: root, isProjectTrusted: () => false, mode: "tui", model: { provider },
-    modelRegistry: { runtime, refresh: async () => undefined }, sessionManager: manager,
+    cwd: root,
+    isProjectTrusted: () => false,
+    mode: "tui",
+    model: { provider },
+    modelRegistry: { runtime, refresh: async () => undefined },
+    sessionManager: manager,
     ui: { notify: (message: string) => notifications.push(message), setStatus() {} },
   } as unknown as ExtensionContext;
   async function emit(event: ExtensionEvent) {
     const results: unknown[] = [];
-    for (const handler of handlers.get(event.type) ?? []) results.push(await handler(event as never, ctx));
+    for (const handler of handlers.get(event.type) ?? [])
+      results.push(await handler(event as never, ctx));
     return results;
   }
   await emit({ type: "session_start", reason: "startup" });
   const preview = () => ({
     contextEntries: manager.buildSessionProjection().entries,
     contextMessages: manager.buildSessionContext().messages,
-    llmMessages: [], pendingMessages: [], canContinue: false,
+    llmMessages: [],
+    pendingMessages: [],
+    canContinue: false,
   });
   async function finish(message: AssistantMessage, outcome: TurnEndEvent["outcome"] = "error") {
     await emit({ type: "message_end", message });
     const messageEntryId = manager.appendMessage(message);
-    await emit({ type: "turn_end", message, messageEntryId, turnIndex: 0, toolResults: [], toolResultEntryIds: [], entries: [], continue: false, outcome, context: preview() });
+    await emit({
+      type: "turn_end",
+      message,
+      messageEntryId,
+      turnIndex: 0,
+      toolResults: [],
+      toolResultEntryIds: [],
+      entries: [],
+      continue: false,
+      outcome,
+      context: preview(),
+    });
     return messageEntryId;
   }
   async function settle(outcome: AgentBeforeSettleEvent["outcome"] = "error") {
-    const results = await emit({ type: "agent_before_settle", entries: [], continue: false, outcome, context: preview() });
+    const results = await emit({
+      type: "agent_before_settle",
+      entries: [],
+      continue: false,
+      outcome,
+      context: preview(),
+    });
     return results.find((value) => value !== undefined) as BoundaryResult | undefined;
   }
   return {
-    emit, finish, settle, manager, notifications, extension, root,
+    emit,
+    finish,
+    settle,
+    manager,
+    notifications,
+    extension,
+    root,
     startRequest: () => emit({ type: "before_provider_headers", headers: {} }),
-    headersLimit: (status = 429) => emit({ type: "after_provider_response", status, headers: { "x-codex-primary-used-percent": "100", "x-codex-primary-reset-after-seconds": "60" } }),
+    headersLimit: (status = 429) =>
+      emit({
+        type: "after_provider_response",
+        status,
+        headers: {
+          "x-codex-primary-used-percent": "100",
+          "x-codex-primary-reset-after-seconds": "60",
+        },
+      }),
     credential: () => runtime.credentials.store.read(provider),
-    advance: (ms: number) => { currentTime += ms; },
+    advance: (ms: number) => {
+      currentTime += ms;
+    },
   };
 }
 
@@ -150,13 +222,25 @@ for (const provider of ["openai-codex", "anthropic"]) {
     const initialContext = f.manager.buildSessionContext().messages;
     for (const owner of ["jpb", "ct"]) {
       await f.startRequest();
-      const failedId = await f.finish(response(provider, provider === "anthropic" ? anthropicLimit : codexLimit));
+      const failedId = await f.finish(
+        response(provider, provider === "anthropic" ? anthropicLimit : codexLimit),
+      );
       const retry = await f.settle();
-      expect(retry).toEqual({ entries: [{ type: "context_edit", targetId: failedId, replacement: null }], continue: true });
+      expect(retry).toEqual({
+        entries: [{ type: "context_edit", targetId: failedId, replacement: null }],
+        continue: true,
+      });
       const credential = await f.credential();
-      expect(credential?.type === "api_key" ? credential.key : credential?.type === "oauth" ? credential.access : undefined).toBe(provider === "anthropic" ? owner : `codex-${owner}`);
+      expect(
+        credential?.type === "api_key"
+          ? credential.key
+          : credential?.type === "oauth"
+            ? credential.access
+            : undefined,
+      ).toBe(provider === "anthropic" ? owner : `codex-${owner}`);
       for (const entry of retry?.entries ?? []) {
-        if (entry.type === "context_edit") f.manager.appendContextEdit(entry.targetId, entry.replacement);
+        if (entry.type === "context_edit")
+          f.manager.appendContextEdit(entry.targetId, entry.replacement);
       }
       expect(f.manager.buildSessionContext().messages).toEqual(initialContext);
       expect(await f.settle()).toBeUndefined();
@@ -228,38 +312,71 @@ test("quota resets cannot loop back to a previously attempted owner", async () =
   expect(await f.settle()).toBeUndefined();
 });
 
-
 test("installed Pi automatically completes the original prompt after quota failover", async () => {
   const f = await fixture();
   const sdk = await import("@earendil-works/pi-coding-agent");
-  const settingsManager = sdk.SettingsManager.inMemory({ cacheWarming: "off", retry: { enabled: false } });
+  const settingsManager = sdk.SettingsManager.inMemory({
+    cacheWarming: "off",
+    retry: { enabled: false },
+  });
   const modelRuntime = await sdk.ModelRuntime.create({
-    authPath: authPathFor("fbb", f.root), modelsPath: join(f.root, "models.json"),
-    modelsStorePath: join(f.root, "catalog.json"), refreshOnCreate: false, allowModelNetwork: false,
+    authPath: authPathFor("fbb", f.root),
+    modelsPath: join(f.root, "models.json"),
+    modelsStorePath: join(f.root, "catalog.json"),
+    refreshOnCreate: false,
+    allowModelNetwork: false,
   });
   // Native Codex accepts OAuth only; use a synthetic provider for fixture API keys.
   modelRuntime.registerNativeProvider({
-    id: "openai-codex", name: "Fixture Codex", getModels: () => [],
-    auth: { apiKey: { name: "Fixture key", resolve: async ({ credential }) =>
-      credential?.key === undefined ? undefined : { auth: { apiKey: credential.key } },
-    } },
-    stream: () => { throw new Error("Unexpected network request"); },
-    streamSimple: () => { throw new Error("Unexpected network request"); },
+    id: "openai-codex",
+    name: "Fixture Codex",
+    getModels: () => [],
+    auth: {
+      apiKey: {
+        name: "Fixture key",
+        resolve: async ({ credential }) =>
+          credential?.key === undefined ? undefined : { auth: { apiKey: credential.key } },
+      },
+    },
+    stream: () => {
+      throw new Error("Unexpected network request");
+    },
+    streamSimple: () => {
+      throw new Error("Unexpected network request");
+    },
   });
   const loader = new sdk.DefaultResourceLoader({
-    cwd: f.root, agentDir: f.root, settingsManager,
-    noExtensions: true, noSkills: true, noPromptTemplates: true, noThemes: true, noContextFiles: true,
+    cwd: f.root,
+    agentDir: f.root,
+    settingsManager,
+    noExtensions: true,
+    noSkills: true,
+    noPromptTemplates: true,
+    noThemes: true,
+    noContextFiles: true,
     extensionFactories: [f.extension],
   });
   await loader.reload();
   expect(loader.getExtensions().errors).toEqual([]);
   const { session } = await sdk.createAgentSession({
-    cwd: f.root, agentDir: f.root, modelRuntime, resourceLoader: loader, settingsManager,
-    sessionManager: sdk.SessionManager.inMemory(f.root), tools: [],
+    cwd: f.root,
+    agentDir: f.root,
+    modelRuntime,
+    resourceLoader: loader,
+    settingsManager,
+    sessionManager: sdk.SessionManager.inMemory(f.root),
+    tools: [],
     model: {
-      id: "fixture", name: "fixture", provider: "openai-codex", api: "openai-codex-responses",
-      baseUrl: "https://example.invalid", reasoning: false, input: ["text"],
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 1000,
+      id: "fixture",
+      name: "fixture",
+      provider: "openai-codex",
+      api: "openai-codex-responses",
+      baseUrl: "https://example.invalid",
+      reasoning: false,
+      input: ["text"],
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+      contextWindow: 128000,
+      maxTokens: 1000,
     },
   });
   const errors: string[] = [];
@@ -272,7 +389,8 @@ test("installed Pi automatically completes the original prompt after quota failo
       credentials.push((await modelRuntime.getAuth("openai-codex"))?.auth.apiKey);
       const message = response("openai-codex", credentials.length === 1 ? codexLimit : undefined);
       const stream = createAssistantMessageEventStream();
-      if (message.stopReason === "error") stream.push({ type: "error", reason: "error", error: message });
+      if (message.stopReason === "error")
+        stream.push({ type: "error", reason: "error", error: message });
       else stream.push({ type: "done", reason: "stop", message });
       stream.end();
       return stream;
@@ -282,7 +400,11 @@ test("installed Pi automatically completes the original prompt after quota failo
     expect(credentials).toEqual(["codex-fbb", "codex-jpb"]);
     const context = session.sessionManager.buildSessionContext().messages;
     expect(context.filter((message) => message.role === "user")).toHaveLength(1);
-    expect(context.at(-1)).toMatchObject({ role: "assistant", stopReason: "stop", content: [{ type: "text", text: "Done" }] });
+    expect(context.at(-1)).toMatchObject({
+      role: "assistant",
+      stopReason: "stop",
+      content: [{ type: "text", text: "Done" }],
+    });
   } finally {
     await session.abort();
     await session.extensionRunner.emit({ type: "session_shutdown", reason: "quit" });

@@ -1,8 +1,8 @@
 # Skill discovery
 
-One extension owns on-demand `skill_search` and automatic classifier recommendations. Both use the full discovered catalog, including cold skills; explicit-only skills and agent-specific invocation restrictions are excluded.
+One extension owns on-demand `skill_search` and automatic classifier recommendations. Both use the full discovered catalog; explicit-only skills and agent-specific invocation restrictions are excluded.
 
-Warm skills remain in Pi's structured prompt. Cold skills stay out of the catalog sent to the agent. Automatic selection appends each new recommendation as a name, `SKILL.md` path, and the same bounded description the classifier evaluated. The agent still reads the skill before using it; recommendations never load skill bodies or override instructions.
+The initial prompt advertises only skills explicitly listed in global or project `skillTweaks.warmSkills`. Project scope alone does not pre-warm a skill. Project `coldSkills` overrides the warm lists; all other permitted skills remain searchable through `skill_search`. Skill bodies still load on demand. Invocation restrictions still apply to search and automatic recommendations. Restricted agents without a declared search tool and reader retain their permitted catalog. Automatic selection appends each new recommendation as a name, `SKILL.md` path, and the same bounded description the classifier evaluated. The agent still reads the skill before using it; recommendations never load skill bodies or override instructions.
 
 `skill_search` ranks names and descriptions through the shared classifier, with BM25 fallback when classification is unavailable. Automatic recommendations use independent relevance scores and add nothing on missing credentials, timeouts, aborts, malformed responses, image prompts, or other classifier failures. Explicit `/skill:name` invocations bypass automatic selection. Neither path sends skill bodies; automatic selection sends the user prompt and bounded candidate metadata to the configured classifier.
 

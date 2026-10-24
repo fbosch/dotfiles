@@ -9,7 +9,7 @@ import browserExtension from "..";
 
 type StartHandler = (event: BeforeAgentStartEvent) => void;
 
-function createHarness() {
+function createHarness(active = true) {
   const tools: ToolDefinition[] = [];
   let handler: StartHandler | undefined;
   let visibleNames: readonly string[] | undefined;
@@ -27,6 +27,7 @@ function createHarness() {
     systemPrompt: "base prompt",
     systemPromptOptions: normalizeBuildSystemPromptOptions({
       cwd: "/tmp",
+      selectedTools: active ? tools.map((tool) => tool.name) : ["read", "tool_search"],
       sections: { other: "Keep this section." },
     }),
   } as BeforeAgentStartEvent;
@@ -35,6 +36,7 @@ function createHarness() {
     tools,
     showTools(names: readonly string[]) {
       visibleNames = names;
+      event.systemPromptOptions.selectedTools = [...names];
     },
     start() {
       if (handler === undefined) throw new Error("browser prompt handler was not registered");
@@ -45,19 +47,24 @@ function createHarness() {
 }
 
 describe("browser routing guidance", () => {
-  test("advertises MCP workflows before deferred tools are activated", () => {
-    const h = createHarness();
+  test("keeps deferred workflows searchable without loading their detailed guidance", () => {
+    const h = createHarness(false);
     expect(
       h.tools.every((tool) => tool.exposure === "deferred" && tool.defaultActive === false),
     ).toBe(true);
     const guidance = h.start();
-    expect(guidance).toContain("Use native `browser_*` tools first");
-    expect(guidance).toContain("Chrome MCP and Firefox MCP");
-    expect(guidance).toContain("tool_search");
+    expect(guidance).toContain("discover native browser_* tools with tool_search");
+    expect(guidance).not.toContain("backend:");
+    expect(guidance).not.toContain("bounded multi-step");
+    for (const tool of h.tools) expect(guidance).not.toContain(`- ${tool.name}:`);
+  });
+
+  test("loads workflow details for declared tools", () => {
+    const h = createHarness();
+    const guidance = h.start();
     expect(guidance).toContain('backend: "chrome"');
     expect(guidance).toContain('backend: "firefox"');
     expect(guidance).toContain("Omitting backend selects agent-browser with Lightpanda");
-    expect(guidance).toContain("existing MCP page");
     for (const tool of h.tools) expect(guidance).toContain(`- ${tool.name}:`);
     expect(guidance).toContain("deterministic interaction");
     expect(guidance).toContain("bounded multi-step");

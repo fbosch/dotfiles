@@ -21,6 +21,8 @@ import {
   requestClassifier,
 } from "../../lib/classifier";
 
+import { INACTIVE_SPECIALIST_TOOL } from "../../lib/tool-exposure";
+
 export type { ClassifierRegistry } from "../../lib/classifier";
 
 const MAX_RESULT_BYTES = 50_000;
@@ -186,6 +188,7 @@ export async function askClassifierQuestion(
 export default function typesafeQuestionExtension(pi: ExtensionAPI): void {
   pi.registerTool(
     defineTool({
+      ...INACTIVE_SPECIALIST_TOOL,
       name: "typesafe_question",
       label: "TypeSafe question",
       description:

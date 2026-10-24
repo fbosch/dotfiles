@@ -186,51 +186,55 @@ describe("agent mentions", () => {
     expect(event).toEqual(original);
   });
 
-  test("adds the routing instruction only when the subagent tool is active", async () => {
-    const agentDirectory = temporaryDirectory();
-    mkdirSync(join(agentDirectory, "agents"));
-    writeFileSync(
-      join(agentDirectory, "agents", "explore.md"),
-      "---\ndescription: Explore\nmax_turns: 12\n---\nExplore only.\n",
-    );
-    let handler:
-      | ((
-          event: BeforeAgentStartEvent,
-          ctx: ExtensionContext,
-        ) => BeforeAgentStartEventResult | undefined)
-      | undefined;
-    const pi = {
-      on(event: string, registeredHandler: typeof handler) {
-        if (event === "before_agent_start") handler = registeredHandler;
-      },
-      getActiveTools: () => ["subagent"],
-      registerMarkdownTransformer() {},
-    } as unknown as ExtensionAPI;
-    agentMentions(pi, agentDirectory);
+  test.each([true, false])(
+    "routes mentions for active or discoverable subagents, active=%s",
+    async (active) => {
+      const agentDirectory = temporaryDirectory();
+      mkdirSync(join(agentDirectory, "agents"));
+      writeFileSync(
+        join(agentDirectory, "agents", "explore.md"),
+        "---\ndescription: Explore\nmax_turns: 12\n---\nExplore only.\n",
+      );
+      let handler:
+        | ((
+            event: BeforeAgentStartEvent,
+            ctx: ExtensionContext,
+          ) => BeforeAgentStartEventResult | undefined)
+        | undefined;
+      const pi = {
+        on(event: string, registeredHandler: typeof handler) {
+          if (event === "before_agent_start") handler = registeredHandler;
+        },
+        getActiveTools: () => (active ? ["subagent"] : ["read", "tool_search"]),
+        getAllTools: () => [{ name: "subagent", exposure: "deferred" }],
+        registerMarkdownTransformer() {},
+      } as unknown as ExtensionAPI;
+      agentMentions(pi, agentDirectory);
 
-    const event = {
-      ...userStartEvent("@explore inspect autocomplete"),
-      systemPrompt: "base prompt",
-    };
-    const result = await handler?.(event, { cwd: agentDirectory } as ExtensionContext);
+      const event = {
+        ...userStartEvent("@explore inspect autocomplete"),
+        systemPrompt: "base prompt",
+      };
+      const result = await handler?.(event, { cwd: agentDirectory } as ExtensionContext);
 
-    expect(result?.systemPrompt).toBeUndefined();
-    expect(event.systemPromptOptions.forceSystemPrompt).toBeUndefined();
-    expect(result?.message).toEqual({
-      customType: "explicit-subagent-invocation",
-      content: agentMentionInstruction([
-        { name: "explore", description: "Explore", defaultMaxTurns: 12 },
-      ]),
-      display: false,
-      details: { agents: ["explore"] },
-    });
-    expect(result?.message?.content).toContain("only to the current user request");
-    expect(
-      await handler?.({ ...event, prompt: "Continue without delegation" }, {
-        cwd: agentDirectory,
-      } as ExtensionContext),
-    ).toBeUndefined();
-  });
+      expect(result?.systemPrompt).toBeUndefined();
+      expect(event.systemPromptOptions.forceSystemPrompt).toBeUndefined();
+      expect(result?.message).toEqual({
+        customType: "explicit-subagent-invocation",
+        content: agentMentionInstruction([
+          { name: "explore", description: "Explore", defaultMaxTurns: 12 },
+        ]),
+        display: false,
+        details: { agents: ["explore"] },
+      });
+      expect(result?.message?.content).toContain("only to the current user request");
+      expect(
+        await handler?.({ ...event, prompt: "Continue without delegation" }, {
+          cwd: agentDirectory,
+        } as ExtensionContext),
+      ).toBeUndefined();
+    },
+  );
 
   test("does not route mentions when the subagent tool is unavailable", async () => {
     let handler:
@@ -244,6 +248,7 @@ describe("agent mentions", () => {
         if (event === "before_agent_start") handler = registeredHandler;
       },
       getActiveTools: () => ["read"],
+      getAllTools: () => [],
       registerMarkdownTransformer() {},
     } as unknown as ExtensionAPI;
     agentMentions(pi);

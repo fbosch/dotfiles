@@ -1,4 +1,5 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
+import { registerDeclaredToolGuidance } from "../shared/declared-tool-guidance";
 
 const WORKFLOWS = {
   browser_open:
@@ -12,23 +13,26 @@ const WORKFLOWS = {
 };
 
 export function registerBrowserGuidance(pi: ExtensionAPI): void {
-  pi.on("before_agent_start", (event) => {
-    event.systemPromptOptions.sections ??= {};
-    event.systemPromptOptions.sections.browser_workflows = "";
-    // Deferred tools are available before activation; excluded tools are absent from this registry.
+  registerDeclaredToolGuidance(pi, "browser_workflows", (declared) => {
     const available = new Set(
       pi
         .getAllTools()
         .filter((tool) => tool.exposure !== "hidden")
         .map((tool) => tool.name),
     );
-    const workflows = Object.entries(WORKFLOWS).filter(([name]) => available.has(name));
-    if (workflows.length === 0) return;
+    const workflows = Object.entries(WORKFLOWS).filter(
+      ([name]) => available.has(name) && declared.has(name),
+    );
+    if (workflows.length === 0) {
+      return Object.keys(WORKFLOWS).some((name) => available.has(name))
+        ? "For browser work, discover native browser_* tools with tool_search before using raw DevTools or the agent-browser CLI."
+        : "";
+    }
 
-    event.systemPromptOptions.sections.browser_workflows = [
+    return [
       "Use native `browser_*` tools first for supported browser work, including Chrome MCP and Firefox MCP. Do not default to raw DevTools MCP calls or run agent-browser through bash.",
       "Discover each required browser tool with Pi's `tool_search`. These tools are deferred; `tool_load` does not activate them. Follow this local routing guidance when other browser skills describe only the CLI.",
-      ...(available.has("browser_run")
+      ...(declared.has("browser_run")
         ? [
             "Prefer `browser_run` for supported multi-step flows over separate browser_act or raw MCP calls, even when individual steps are obvious. Unique input matches already run deterministically. Use browser_snapshot and browser_act for inspection, a single explicit action, or a step browser_run cannot express.",
           ]

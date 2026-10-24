@@ -1,17 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { formatSkillsForPrompt, type Skill } from "@earendil-works/pi-coding-agent";
-import { applySkillTweaks, disabledSkillNames } from "../skill-tweaks";
-
-function skill(name: string, disableModelInvocation = false): Skill {
-  return {
-    name,
-    description: `${name} description`,
-    filePath: `/skills/${name}/SKILL.md`,
-    baseDir: `/skills/${name}`,
-    sourceInfo: {} as Skill["sourceInfo"],
-    disableModelInvocation,
-  };
-}
+import { coldSkillNames, disabledSkillNames } from "../skill-tweaks";
 
 describe("skill tweaks", () => {
   test("combines global and project disableModelInvocation names", () => {
@@ -56,39 +44,20 @@ describe("skill tweaks", () => {
     ).toEqual(new Set());
   });
 
-  test("hides configured skills without mutating discovered metadata", () => {
-    const skills = [skill("grilling"), skill("writing-clearly")];
-    const prompt = `base${formatSkillsForPrompt(skills, "read")}\n\nend`;
-
-    const tweaked = applySkillTweaks(prompt, skills, new Set(["grilling"]), "read");
-
-    expect(tweaked).not.toContain("<name>grilling</name>");
-    expect(tweaked).toContain("<name>writing-clearly</name>");
-    expect(tweaked).toContain("\n\nend");
-    expect(skills.map(({ disableModelInvocation }) => disableModelInvocation)).toEqual([
-      false,
-      false,
-    ]);
+  test.each([
+    { disableModelInvocation: "grilling" },
+    { disableModelInvocation: [""] },
+    { modelInvocationAgents: { "mermaid-diagrams": [] } },
+    { modelInvocationAgents: { "mermaid-diagrams": [""] } },
+    { unexpected: true },
+  ])("rejects invalid invocation restrictions: %j", (skillTweaks) => {
+    expect(() => disabledSkillNames({ skillTweaks }, {})).toThrow();
   });
-
-  test.each(["read", "bash"] as const)(
-    "empties a disabled skill catalog while preserving host prose for %s",
-    (readTool) => {
-      const skills = [skill("grilling")];
-      const formatted = formatSkillsForPrompt(skills, readTool);
-      const prefix = formatted.slice(0, formatted.indexOf("<available_skills>"));
-      const prompt = `base${formatted}\n\nend`;
-
-      const tweaked = applySkillTweaks(prompt, skills, new Set(["grilling"]), readTool);
-
-      expect(tweaked).toBe(`base${prefix}\n\nend`);
-    },
-  );
-
-  test("leaves prompts unchanged when no overrides are configured", () => {
-    const skills = [skill("writing-clearly")];
-    const prompt = formatSkillsForPrompt(skills, "read");
-
-    expect(applySkillTweaks(prompt, skills, new Set(), "read")).toBe(prompt);
-  });
+});
+test.each([
+  { global: { skillTweaks: { warmSkills: "bun" } }, project: {} },
+  { global: {}, project: { skillTweaks: { coldSkills: [""] } } },
+  { global: { skillTweaks: { coldSkills: ["bun"] } }, project: {} },
+])("visibility settings reject malformed or unsupported scope: %j", ({ global, project }) => {
+  expect(() => coldSkillNames(global, project, [])).toThrow();
 });

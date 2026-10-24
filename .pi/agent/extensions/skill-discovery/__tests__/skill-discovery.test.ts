@@ -1,8 +1,8 @@
 import { describe, expect, test } from "bun:test";
-import { formatSkillsForPrompt, type Skill } from "@earendil-works/pi-coding-agent";
+import type { Skill } from "@earendil-works/pi-coding-agent";
 import { rankDiscovery } from "../../../lib/discovery-ranking";
-import { applySkillTweaks, coldSkillNames, disabledSkillNames } from "../../skill-tweaks";
-import { compactSkillPrompt, searchableSkills, searchSkillsBm25 } from "../index";
+import { disabledSkillNames } from "../../skill-tweaks";
+import { searchableSkills, searchSkillsBm25 } from "../index";
 
 const skills: Skill[] = [
   { name: "bun", description: "Run JavaScript tests and scripts" },
@@ -15,9 +15,7 @@ const skills: Skill[] = [
   sourceInfo: {} as Skill["sourceInfo"],
   disableModelInvocation: false,
 }));
-const cold = new Set(["xstate"]);
 const disabled = new Set(["grilling"]);
-const prompt = `before${formatSkillsForPrompt(skills, "read")}\n\nafter`;
 
 describe("skill discovery", () => {
   test("BM25 ranks names and descriptions with bounded results", () => {
@@ -25,7 +23,7 @@ describe("skill discovery", () => {
     expect(searchSkillsBm25(skills, "unknown term")).toEqual([]);
   });
 
-  test("hot and cold skills are searchable; explicit-only skills are excluded", () => {
+  test("all scopes are searchable; explicit-only skills are excluded", () => {
     const candidates = searchableSkills(skills, disabled);
     expect(candidates.map((skill) => skill.name)).toEqual(["bun", "xstate"]);
     expect(searchSkillsBm25(candidates, "xstate").map((hit) => hit.name)).toEqual(["xstate"]);
@@ -37,95 +35,15 @@ describe("skill discovery", () => {
     ).toEqual([]);
   });
 
-  test("prompt retains hot metadata but omits cold and explicit-only metadata", () => {
-    const compact = compactSkillPrompt(prompt, skills, cold, disabled, "read");
-    expect(compact).toContain("Run JavaScript tests and scripts");
-    expect(compact).not.toContain("XState machines");
-    expect(compact).not.toContain("Interrogate a decision");
-    expect(compact).toContain("Use skill_search");
-    expect(compact).toStartWith("before");
-    expect(compact).toContain("\n\nafter");
-  });
-  test("native skills wrapper survives filtering without leaking cold metadata", () => {
-    const xml = formatSkillsForPrompt(skills, "read");
-    const catalog = xml.slice(xml.indexOf("<available_skills>"));
-    const native = `before\n\n<skills>\nThe following skills provide specialized instructions for specific tasks.\nUse the read tool.\n${catalog}\n</skills>\n\nafter`;
-    const compact = compactSkillPrompt(native, skills, cold, disabled, "read");
-    expect(compact).toContain("<skills>\nThe following skills");
-    expect(compact).toContain("</skills>\n\nafter");
-    expect(compact).not.toContain("<name>xstate</name>");
-    expect(compact).not.toContain("<name>grilling</name>");
-    expect(compact).toContain("<name>bun</name>");
-    expect(compactSkillPrompt(compact, skills, cold, disabled, "read")).toBe(compact);
-  });
-
-  test("empty hot catalog still exposes discovery guidance", () => {
-    const compact = compactSkillPrompt(
-      prompt,
-      skills,
-      new Set(skills.map((skill) => skill.name)),
-      disabled,
-      "read",
-    );
-    expect(compact).not.toContain("<available_skills>");
-    expect(compact).toContain("skill_search");
-  });
-
-  test("skill-tweaks cannot restore cold metadata after discovery", () => {
-    const compact = compactSkillPrompt(prompt, skills, cold, disabled, "read");
-    const tweaked = applySkillTweaks(compact, skills, new Set([...cold, ...disabled]), "read");
-    expect(tweaked).not.toContain("XState machines");
-    expect(tweaked).toContain("Run JavaScript tests");
-    expect(tweaked).toContain("skill_search");
-  });
-
-  test("global allowlist defaults new user skills cold without disabling search", () => {
-    const global = { skillTweaks: { warmSkills: ["bun"], disableModelInvocation: ["grilling"] } };
-    expect([...coldSkillNames(global, {}, skills)]).toEqual(["xstate", "grilling"]);
-    expect([...disabledSkillNames(global, {})]).toEqual(["grilling"]);
-    expect(searchableSkills(skills, disabled).map((skill) => skill.name)).toEqual([
-      "bun",
-      "xstate",
-    ]);
-  });
-
-  test("project discovery scope stays warm regardless of global allowlist", () => {
-    const local = skills.map((skill) => ({
-      ...skill,
-      sourceInfo: { ...skill.sourceInfo, scope: "project" as const },
-    }));
-    expect([...coldSkillNames({}, {}, local)]).toEqual([]);
-    expect([...coldSkillNames({}, { skillTweaks: { coldSkills: ["xstate"] } }, local)]).toEqual([
-      "xstate",
-    ]);
-    const user = local.map((skill) => ({
-      ...skill,
-      sourceInfo: { ...skill.sourceInfo, scope: "user" as const },
-    }));
-    expect([...coldSkillNames({}, {}, user)]).toEqual(["bun", "xstate", "grilling"]);
-  });
-
-  test("project warm override promotes global skills but cannot bypass invocation restrictions", () => {
-    const project = { skillTweaks: { warmSkills: ["xstate", "grilling"], coldSkills: ["bun"] } };
-    expect([...coldSkillNames({ skillTweaks: { warmSkills: ["bun"] } }, project, skills)]).toEqual([
-      "bun",
-    ]);
+  test("project settings cannot bypass global invocation restrictions", () => {
     const denied = disabledSkillNames(
       { skillTweaks: { disableModelInvocation: ["grilling"] } },
-      project,
+      { skillTweaks: { disableModelInvocation: [] } },
     );
-    expect(searchableSkills(skills, denied).map((skill) => skill.name)).not.toContain("grilling");
+    expect(searchableSkills(skills, denied).map((skill) => skill.name)).toEqual(["bun", "xstate"]);
   });
 
-  test("malformed visibility settings fail explicitly", () => {
-    expect(() => coldSkillNames({ skillTweaks: { warmSkills: "bun" } }, {}, skills)).toThrow();
-    expect(() => coldSkillNames({}, { skillTweaks: { coldSkills: [""] } }, skills)).toThrow();
-    expect(() => coldSkillNames({ skillTweaks: { coldSkills: ["xstate"] } }, {}, skills)).toThrow(
-      "use warmSkills",
-    );
-  });
-
-  test("shared classifier failure falls back to BM25 cold matches", async () => {
+  test("shared classifier failure falls back to BM25 matches", async () => {
     const catalog = searchableSkills(skills, disabled);
     const lexical = searchSkillsBm25(catalog, "xstate");
     const ranked = await rankDiscovery(catalog, lexical, "xstate", 3, {

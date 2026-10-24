@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, realpathSync, statSync } from "node:fs";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import { type ExtensionAPI, getAgentDir, parseFrontmatter } from "@earendil-works/pi-coding-agent";
+import { registerDeclaredToolGuidance } from "./shared/declared-tool-guidance";
 
 export const INSTRUCTION_FRAGMENTS_START = "<global_instruction_fragments>";
 export const INSTRUCTION_FRAGMENTS_END = "</global_instruction_fragments>";
@@ -240,14 +241,7 @@ export default function instructionFragments(pi: ExtensionAPI): void {
   // Keep one coherent snapshot per extension generation; /reload invokes this again.
   const globalInstructionFragments = loadGlobalInstructionFragments();
 
-  pi.on("before_agent_start", (event) => {
-    // Deferred tools remain available in Pi's registry; excluded tools are removed before this hook runs.
-    const fragments = instructionFragmentsForTools(
-      globalInstructionFragments,
-      pi.getAllTools().map((tool) => tool.name),
-    );
-    // Structured sections preserve the leading prompt and deferred-tool load points.
-    event.systemPromptOptions.sections ??= {};
-    event.systemPromptOptions.sections.global_instruction_fragments = fragments;
-  });
+  registerDeclaredToolGuidance(pi, "global_instruction_fragments", (declared) =>
+    instructionFragmentsForTools(globalInstructionFragments, [...declared]),
+  );
 }
