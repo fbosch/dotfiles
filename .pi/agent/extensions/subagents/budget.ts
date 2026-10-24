@@ -120,11 +120,14 @@ export function assignmentCeiling(
 
 export function budgetTaskKind(specialist: string): BudgetTaskKind {
   // Only closed categories cross the classifier boundary, never arbitrary specialist names.
-  if (["explore", "lookup", "quick", "patterns"].includes(specialist)) return "discovery";
-  if (["general", "refactor"].includes(specialist)) return "implementation";
-  if (["analyze", "review", "adversarial", "debug", "spec"].includes(specialist)) return "analysis";
-  if (["test", "validate"].includes(specialist)) return "testing";
-  return specialist === "benchmark" ? "benchmark" : "other";
+  return match(specialist)
+    .returnType<BudgetTaskKind>()
+    .with("explore", "lookup", "quick", "patterns", () => "discovery")
+    .with("general", "refactor", () => "implementation")
+    .with("analyze", "review", "adversarial", "debug", "spec", () => "analysis")
+    .with("test", "validate", () => "testing")
+    .with("benchmark", () => "benchmark")
+    .otherwise(() => "other");
 }
 
 export class AssignmentBudget {
@@ -215,17 +218,17 @@ export class AssignmentBudget {
 
   observe(outcome: BudgetToolOutcome): void {
     if (this.restored) return;
+    const consecutiveFailures = match(outcome)
+      .with("failure", () => this.progress.consecutiveFailures + 1)
+      .with("success", () => 0)
+      .with("unknown", () => this.progress.consecutiveFailures)
+      .exhaustive();
     this.progress = {
       completedTools: this.progress.completedTools + 1,
       verifiedSuccesses: this.progress.verifiedSuccesses + Number(outcome === "success"),
       failures: this.progress.failures + Number(outcome === "failure"),
       unknownOutcomes: this.progress.unknownOutcomes + Number(outcome === "unknown"),
-      consecutiveFailures:
-        outcome === "failure"
-          ? this.progress.consecutiveFailures + 1
-          : outcome === "success"
-            ? 0
-            : this.progress.consecutiveFailures,
+      consecutiveFailures,
     };
   }
 
@@ -377,19 +380,25 @@ export class AssignmentBudget {
           this.grants++;
           this.revision++;
         }
+        const { kind, reason } = match({ grant, incomplete, automaticReady, sufficientEvidence })
+          .returnType<Pick<BudgetDecision, "kind" | "reason">>()
+          .with({ grant: true }, () => ({ kind: "granted", reason: "productive" }))
+          .with({ incomplete: true }, () => ({ kind: "advised", reason: "automatic-not-ready" }))
+          .with({ automaticReady: false }, () => ({ kind: "advised", reason: "advisory" }))
+          .with({ sufficientEvidence: false }, () => ({
+            kind: "wrap-up",
+            reason: "insufficient-evidence",
+          }))
+          .with({ sufficientEvidence: true }, () => ({
+            kind: "wrap-up",
+            reason: "insufficient-confidence",
+          }))
+          .exhaustive();
         return {
           ...base,
           probability: value.probability,
-          kind: grant ? "granted" : automaticReady ? "wrap-up" : "advised",
-          reason: grant
-            ? "productive"
-            : incomplete
-              ? "automatic-not-ready"
-              : !automaticReady
-                ? "advisory"
-                : !sufficientEvidence
-                  ? "insufficient-evidence"
-                  : "insufficient-confidence",
+          kind,
+          reason,
           grantedTurns: grant ? proposedTurns : 0,
           ...(incomplete ? { diagnostic: true } : {}),
         };

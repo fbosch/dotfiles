@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, stat } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { ToolExecutionComponent } from "@earendil-works/pi-coding-agent/dist/modes/interactive/components/tool-execution.js";
 import {
   getCapabilities,
   Image,
@@ -9,7 +10,6 @@ import {
   type Terminal,
   TuiAltScreen,
 } from "@earendil-works/pi-tui";
-import { ToolExecutionComponent } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/components/tool-execution.js";
 import {
   getOpenCommand,
   installImageOpenClickHandler,
@@ -41,6 +41,7 @@ class TestTerminal implements Terminal {
   clearScreen(): void {}
   setTitle(): void {}
   setProgress(): void {}
+  setProgramStatus(): void {}
 }
 
 function pngData(widthPx = 13, heightPx = 7): { base64: string; bytes: Buffer } {

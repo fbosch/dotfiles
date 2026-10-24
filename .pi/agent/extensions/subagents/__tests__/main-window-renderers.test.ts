@@ -18,6 +18,7 @@ const terminal: Terminal = {
   clearFromCursor() {},
   clearScreen() {},
   setTitle() {},
+  setProgramStatus() {},
   setProgress() {},
 };
 type CustomCall = (

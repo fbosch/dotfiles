@@ -1,5 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -12,6 +11,7 @@ import type {
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { visibleWidth } from "@earendil-works/pi-tui";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import deltaExtension, {
   applyDiffTheme,
   boundDiffOutput,
@@ -416,7 +416,9 @@ describe("Delta extension", () => {
     const registeredTools: string[] = [];
     let rendererRegistrations = 0;
     const pi = {
-      registerToolRenderer: () => { rendererRegistrations++; },
+      registerToolRenderer: () => {
+        rendererRegistrations++;
+      },
       registerEntryRenderer: () => {},
       on: () => {},
       registerTool(tool: ToolDefinition) {
@@ -555,6 +557,8 @@ describe("Delta extension", () => {
       expanded: false,
       invalidate: () => {},
       isError: false,
+      durationMs: undefined,
+      outputPad: 1,
       isPartial: false,
       lastComponent: undefined,
       showImages: false,
@@ -584,7 +588,6 @@ describe("Delta extension", () => {
 
     expect(emptyRendered).toEqual([""]);
   });
-
 
   test("rerenders full unified context when a diff is expanded", async () => {
     let tool: ToolDefinition | undefined;
@@ -818,6 +821,8 @@ describe("Delta extension", () => {
       expanded: false,
       invalidate: () => {},
       isError: false,
+      durationMs: undefined,
+      outputPad: 1,
       isPartial: false,
       lastComponent: undefined,
       showImages: false,
@@ -864,6 +869,8 @@ describe("Delta extension", () => {
       expanded: false,
       invalidate: () => {},
       isError: false,
+      durationMs: undefined,
+      outputPad: 1,
       isPartial: false,
       lastComponent: undefined,
       showImages: false,

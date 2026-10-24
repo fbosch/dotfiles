@@ -146,6 +146,7 @@ class TestTerminal implements Terminal {
   clearScreen(): void {}
   setTitle(): void {}
   setProgress(): void {}
+  setProgramStatus(): void {}
 }
 
 describe("subagent session links", () => {
@@ -442,6 +443,8 @@ describe("subagent session links", () => {
       expanded: true,
       showImages: false,
       isError: false,
+      durationMs: undefined,
+      outputPad: 1,
     };
     const output = Array.from({ length: 8 }, (_, index) => `line ${index + 1}`).join("\n");
 
@@ -567,10 +570,10 @@ describe("subagent session links", () => {
       onShow: (component) => {
         try {
           component.render(76);
-          component.handleInput?.("\u001b[H");
+          component.handleInput?.("\u001b[1;5H");
           firstRaw = component.render(76).join("\n");
           first = stripTerminalSequences(firstRaw);
-          component.handleInput?.("\u001b[F");
+          component.handleInput?.("\u001b[1;5F");
           last = stripTerminalSequences(component.render(76).join("\n"));
           component.handleInput?.("\u001b[5~");
           previousPage = stripTerminalSequences(component.render(76).join("\n"));

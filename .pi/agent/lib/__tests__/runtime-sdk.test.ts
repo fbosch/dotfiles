@@ -1,5 +1,5 @@
 import { afterEach, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
@@ -42,7 +42,7 @@ test("resolves the SDK belonging to a symlinked installation binary", () => {
   writeFileSync(join(root, "bin/pi"), "");
   const link = join(workspace(), "pi");
   symlinkSync(join(root, "bin/pi"), link);
-  expect(resolveRuntimeSdk(link)).toEqual({ directory, version: "1.4.0" });
+  expect(resolveRuntimeSdk(link)).toEqual({ directory: realpathSync(directory), version: "1.4.0" });
 });
 
 test("refuses an unresolved wrapper instead of using local development dependencies", () => {
@@ -72,7 +72,9 @@ test("maps the installed SDK family and detects stale editor configuration", () 
   mkdirSync(sibling);
   writeFileSync(join(sibling, "package.json"), '{"name":"@earendil-works/pi-ai"}');
   const sdk = inspectRuntimeSdk(directory);
-  expect(runtimeSdkConfig(sdk).compilerOptions.paths["@earendil-works/pi-ai"]).toEqual([sibling]);
+  expect(runtimeSdkConfig(sdk).compilerOptions.paths["@earendil-works/pi-ai"]).toEqual([
+    realpathSync(sibling),
+  ]);
   const agent = workspace();
   expect(() => syncRuntimeSdk(agent, sdk, true)).toThrow("declarations are stale");
   syncRuntimeSdk(agent, sdk);

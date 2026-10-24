@@ -124,8 +124,11 @@ export function widgetLines(options: {
   )
     warnings.push("! Assignment failed; inspect history");
   if (
-    live.some((worker) =>
-      worker.assignments.some((assignment) => assignment.outcome === "budget-exhausted"),
+    live.some(
+      (worker) =>
+        worker.liveSession === "available" &&
+        worker.assignments.find((assignment) => assignment.id === worker.currentAssignmentId)
+          ?.outcome === "budget-exhausted",
     )
   )
     warnings.push("! Turn budget exhausted; inspect partial evidence");

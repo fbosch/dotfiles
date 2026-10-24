@@ -33,7 +33,8 @@ beforeAll(async () => {
   const native = await createNativeClassifierRegistry();
   const model = native.findOfType("classifier", "openrouter", "typesafe/jev-1.13");
   if (!model) throw new Error("Missing native Jev fixture");
-  textModel = model;
+  // Keep the incompatible candidate text-only even when the native catalog gains image support.
+  textModel = { ...model, input: ["text"] };
   const vision = native.findOfType("classifier", "openrouter", "typesafe/jev-1.14");
   if (!vision) throw new Error("Missing Jev 1.14 fixture");
   imageModel = {

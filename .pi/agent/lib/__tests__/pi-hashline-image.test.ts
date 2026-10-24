@@ -3,10 +3,10 @@ import { cpSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from "node:fs
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { ExtensionToolContext, ToolDefinition } from "@earendil-works/pi-coding-agent";
+import { loadExtensions } from "@earendil-works/pi-coding-agent/dist/core/extensions/loader.js";
+import { executeCodemode } from "@earendil-works/pi-coding-agent/dist/extensions/codemode/execute.js";
 import { Resvg } from "@resvg/resvg-js";
 import { Value } from "typebox/value";
-import { loadExtensions } from "../../node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/loader.js";
-import { executeCodemode } from "../../node_modules/@earendil-works/pi-coding-agent/dist/extensions/codemode/execute.js";
 import { applyPiPatches } from "../pi-npm";
 
 const agentRoot = resolve(import.meta.dir, "../..");

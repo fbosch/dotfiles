@@ -9,8 +9,8 @@ import type {
   SessionEntry,
   Theme,
 } from "@earendil-works/pi-coding-agent";
+import { loadThemeFromPath } from "@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import type { Component, TUI } from "@earendil-works/pi-tui";
-import { loadThemeFromPath } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import stretchtext from "../index";
 
 const theme = loadThemeFromPath(

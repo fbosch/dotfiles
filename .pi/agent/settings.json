@@ -53,6 +53,7 @@
   "terminal": {
     "imageWidthCells": 80
   },
+  "shellPath": "/run/current-system/sw/bin/bash",
   "npmCommand": [
     "bash",
     "-c",

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import { resolve } from "node:path";
-import { loadExtensions } from "../../node_modules/@earendil-works/pi-coding-agent/dist/core/extensions/loader.js";
+import { loadExtensions } from "@earendil-works/pi-coding-agent/dist/core/extensions/loader.js";
 
 const agentRoot = resolve(import.meta.dir, "../..");
 const extensionPath = resolve(agentRoot, "npm/node_modules/pi-hashline-edit-pro/index.ts");
@@ -21,8 +21,8 @@ describe("pi-hashline-edit-pro package loading", () => {
     const extension = result.extensions[0];
     if (!extension) throw new Error("Hashline extension failed to load");
     expect([...extension.tools.keys()].sort()).toEqual([
-      "anchor_grep",
       "copy",
+      "grep",
       "insert",
       "move",
       "read",

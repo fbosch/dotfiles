@@ -6,12 +6,12 @@ import type {
   KeybindingsManager,
   Theme,
 } from "@earendil-works/pi-coding-agent";
-import type { TUI } from "@earendil-works/pi-tui";
 import {
   getEditorTheme,
   loadThemeFromPath,
   theme,
-} from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
+} from "@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
+import type { TUI } from "@earendil-works/pi-tui";
 import { AgentMentionCache, type AgentMentionCacheFileSystem } from "../../mentions/agent-mentions";
 import { PromptEditor, type PromptEditorState, type PromptRenderInput } from "../prompt-editor";
 

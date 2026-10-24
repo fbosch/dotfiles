@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import { initTheme, ToolExecutionComponent } from "@earendil-works/pi-coding-agent";
+import { theme } from "@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import { stripTerminalSequences, type Terminal, TuiAltScreen } from "@earendil-works/pi-tui";
-import { theme } from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme";
 import type { workerStatus } from "../delivery";
 import { registerParentTools } from "../tools";
 import { createWorkerWidget } from "../widget";
@@ -22,6 +22,7 @@ const terminal: Terminal = {
   clearFromCursor() {},
   clearScreen() {},
   setTitle() {},
+  setProgramStatus() {},
   setProgress() {},
 };
 function fixture() {

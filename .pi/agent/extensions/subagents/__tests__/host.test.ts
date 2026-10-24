@@ -426,6 +426,7 @@ test("completion updates the mounted worker card while retaining a hidden model 
       clearFromCursor() {},
       clearScreen() {},
       setTitle() {},
+      setProgramStatus() {},
       setProgress() {},
     },
     false,

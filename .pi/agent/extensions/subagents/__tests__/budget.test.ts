@@ -72,6 +72,66 @@ test("usable advisory checks do not spend extra turns", async () => {
   expect(budget.snapshot()).toMatchObject({ automaticGrants: 0, checks: 1 });
 });
 
+test.each([
+  ["automatic", 0.9, "success", 0.9, "granted", "productive"],
+  ["automatic", 0.9, "success", 0.5, "wrap-up", "insufficient-confidence"],
+  ["automatic", 0.9, "unknown", 0.5, "wrap-up", "insufficient-evidence"],
+  ["automatic", undefined, "unknown", 1, "advised", "automatic-not-ready"],
+  ["advisory", 0.9, "unknown", 1, "advised", "advisory"],
+] as const)(
+  "%s budget with threshold %s, %s progress, and probability %s records %s / %s",
+  async (mode, confidenceThreshold, outcome, probability, kind, reason) => {
+    const budget = new AssignmentBudget(16, {
+      mode,
+      hardMaxTurns: 24,
+      ...(confidenceThreshold === undefined ? {} : { confidenceThreshold }),
+      advisor: async () => ({ kind: "judgment", probability }),
+    });
+    budget.observe(outcome);
+    const result = await budget.beforeModel(15, () => true);
+    const granted = kind === "granted";
+    expect(result.maxTurns).toBe(granted ? 20 : 16);
+    expect(result.decision).toMatchObject({
+      kind,
+      reason,
+      probability,
+      revision: 0,
+      turnsUsed: 14,
+      proposedTurns: 4,
+      grantedTurns: granted ? 4 : 0,
+    });
+    expect(result.decision?.diagnostic).toBe(reason === "automatic-not-ready" ? true : undefined);
+    expect(budget.snapshot()).toMatchObject({
+      grantedTurns: result.maxTurns,
+      automaticGrants: granted ? 1 : 0,
+      revision: granted ? 1 : 0,
+      checks: 1,
+      decisions: [result.decision],
+    });
+  },
+);
+
+test("unknown outcomes preserve a failure streak and success resets it", () => {
+  const budget = new AssignmentBudget(16);
+  for (const [outcome, consecutiveFailures] of [
+    ["failure", 1],
+    ["unknown", 1],
+    ["failure", 2],
+    ["success", 0],
+    ["unknown", 0],
+  ] as const) {
+    budget.observe(outcome);
+    expect(budget.snapshot()?.progress.consecutiveFailures).toBe(consecutiveFailures);
+  }
+  expect(budget.snapshot()?.progress).toEqual({
+    completedTools: 5,
+    verifiedSuccesses: 1,
+    failures: 2,
+    unknownOutcomes: 2,
+    consecutiveFailures: 0,
+  });
+});
+
 test("two automatic increments are bounded even when the ceiling has more space", async () => {
   const budget = automatic();
   expect((await budget.beforeModel(15, () => true)).maxTurns).toBe(20);

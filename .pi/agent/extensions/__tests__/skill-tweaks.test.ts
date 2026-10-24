@@ -37,11 +37,7 @@ describe("skill tweaks", () => {
       new Set(["ascii-visualizer", "mermaid-diagrams"]),
     );
     expect(
-      disabledSkillNames(
-        settings,
-        {},
-        '<active_agent name="review"/>\n\n# Environment',
-      ),
+      disabledSkillNames(settings, {}, '<active_agent name="review"/>\n\n# Environment'),
     ).toEqual(new Set(["ascii-visualizer", "mermaid-diagrams"]));
   });
 
@@ -56,11 +52,7 @@ describe("skill tweaks", () => {
     };
 
     expect(
-      disabledSkillNames(
-        settings,
-        {},
-        '<active_agent name="visualizer"/>\n\n# Environment',
-      ),
+      disabledSkillNames(settings, {}, '<active_agent name="visualizer"/>\n\n# Environment'),
     ).toEqual(new Set());
   });
 
@@ -79,14 +71,19 @@ describe("skill tweaks", () => {
     ]);
   });
 
-  test("removes the skill section when every skill is disabled", () => {
-    const skills = [skill("grilling")];
-    const prompt = `base${formatSkillsForPrompt(skills, "bash")}\n\nend`;
+  test.each(["read", "bash"] as const)(
+    "empties a disabled skill catalog while preserving host prose for %s",
+    (readTool) => {
+      const skills = [skill("grilling")];
+      const formatted = formatSkillsForPrompt(skills, readTool);
+      const prefix = formatted.slice(0, formatted.indexOf("<available_skills>"));
+      const prompt = `base${formatted}\n\nend`;
 
-    const tweaked = applySkillTweaks(prompt, skills, new Set(["grilling"]), "bash");
+      const tweaked = applySkillTweaks(prompt, skills, new Set(["grilling"]), readTool);
 
-    expect(tweaked).toBe("base\n\nend");
-  });
+      expect(tweaked).toBe(`base${prefix}\n\nend`);
+    },
+  );
 
   test("leaves prompts unchanged when no overrides are configured", () => {
     const skills = [skill("writing-clearly")];

@@ -32,6 +32,8 @@ const context: RenderContext = {
   expanded: false,
   showImages: false,
   isError: false,
+  durationMs: undefined,
+  outputPad: 1,
 };
 const sent =
   "Steering message sent to agent agent-æøå. The agent will process it after its current tool execution.\nCurrent state: 12k tokens · 3 tool uses · context 20% full";

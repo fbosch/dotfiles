@@ -319,8 +319,8 @@ interface ActiveSegment {
   readonly token: string;
   readonly assignmentId: AssignmentId;
   readonly purpose: QueueJob["purpose"];
-  readonly questionText: { value?: string };
-  readonly observedTurns: { value: number };
+  questionText?: string;
+  observedTurns: number;
 }
 
 const DEFAULT_CAPACITY = 6;
@@ -678,7 +678,6 @@ export class WorkerOwner {
       worker.config.name,
     );
     previous.budget.invalidate();
-    previous.budget.invalidate();
     worker.assignments.set(assignmentId, assignment);
     worker.currentAssignmentId = assignmentId;
     worker.status = "queued";
@@ -705,7 +704,6 @@ export class WorkerOwner {
     this.removeQueued(worker.id);
     const assignment = this.requireAssignment(worker, worker.currentAssignmentId);
     assignment.budget.invalidate();
-    assignment.budget.invalidate();
     delete worker.pendingQuestion;
     if (worker.sessionStarted) {
       worker.status = "stopping";
@@ -728,7 +726,6 @@ export class WorkerOwner {
     delete worker.pendingQuestion;
     const assignment = this.requireAssignment(worker, worker.currentAssignmentId);
     assignment.budget.invalidate();
-    assignment.budget.invalidate();
     assignment.outcome = "stopping";
     this.emitState(worker);
     void this.closeCancelledIdle(worker, assignment);
@@ -740,7 +737,6 @@ export class WorkerOwner {
     if (!active) throw new Error(`Cannot cancel worker in ${worker.status} state`);
     worker.status = "stopping";
     const assignment = this.requireAssignment(worker, active.assignmentId);
-    assignment.budget.invalidate();
     assignment.budget.invalidate();
     assignment.outcome = "stopping";
     this.emitState(worker);
@@ -760,7 +756,6 @@ export class WorkerOwner {
       return this.snapshot(worker);
     if (worker.status !== "idle" && worker.status !== "cancelled")
       throw new Error(`Cannot release worker in ${worker.status} state`);
-    for (const assignment of worker.assignments.values()) assignment.budget.invalidate();
     for (const assignment of worker.assignments.values()) assignment.budget.invalidate();
     worker.status = "releasing";
     this.emitState(worker);
@@ -791,9 +786,6 @@ export class WorkerOwner {
   shutdown(): Promise<void> {
     if (this.shutdownPromise) return this.shutdownPromise;
     this.shuttingDown = true;
-    for (const worker of this.workers.values()) {
-      for (const assignment of worker.assignments.values()) assignment.budget.invalidate();
-    }
     for (const worker of this.workers.values()) {
       for (const assignment of worker.assignments.values()) assignment.budget.invalidate();
     }
@@ -1062,15 +1054,13 @@ export class WorkerOwner {
     assignment.outcome = "running";
     const remaining = assignment.budget.maxTurns - assignment.turnsUsed;
     const token = randomUUID();
-    const questionText: { value?: string } = {};
-    const observedTurns = { value: assignment.turnsUsed };
-    worker.active = {
+    const active: ActiveSegment = {
       token,
       assignmentId: assignment.id,
       purpose: job.purpose,
-      questionText,
-      observedTurns,
+      observedTurns: assignment.turnsUsed,
     };
+    worker.active = active;
     this.emitState(worker);
 
     const isCurrent = () => worker.active?.token === token;
@@ -1083,7 +1073,7 @@ export class WorkerOwner {
       worker.active.assignmentId === assignment.id &&
       worker.status === "running" &&
       assignment.outcome === "running" &&
-      questionText.value === undefined &&
+      active.questionText === undefined &&
       worker.pendingQuestion === undefined &&
       !this.shuttingDown &&
       !this.cleanupHealth.isBlocked();
@@ -1091,11 +1081,11 @@ export class WorkerOwner {
       onQuestion: (text) => {
         if (!isCurrent() || worker.status === "stopping" || worker.status === "cleanup-unknown")
           return;
-        if (questionText.value !== undefined) {
-          questionText.value = "";
+        if (active.questionText !== undefined) {
+          active.questionText = "";
           return;
         }
-        questionText.value = text.trim();
+        active.questionText = text.trim();
         assignment.budget.invalidate();
       },
       onUpdate: (text) => {
@@ -1124,7 +1114,7 @@ export class WorkerOwner {
           turnsUsed > assignment.budget.maxTurns
         )
           return;
-        observedTurns.value = Math.max(observedTurns.value, turnsUsed);
+        active.observedTurns = Math.max(active.observedTurns, turnsUsed);
         assignment.turnsUsed = Math.max(assignment.turnsUsed, turnsUsed);
         const remainingTurns = Math.max(0, assignment.budget.maxTurns - turnsUsed);
         this.emit({
@@ -1203,8 +1193,7 @@ export class WorkerOwner {
   ): void {
     if (worker.active?.token !== token) return;
     assignment.budget.invalidate();
-    assignment.budget.invalidate();
-    assignment.turnsUsed = Math.max(assignment.turnsUsed, worker.active.observedTurns.value);
+    assignment.turnsUsed = Math.max(assignment.turnsUsed, worker.active.observedTurns);
     if (error instanceof UnconfirmedChildStartupError) {
       this.markCleanupUnknown(worker, assignment, error.message);
       return;
@@ -1242,7 +1231,6 @@ export class WorkerOwner {
     const active = worker.active;
     if (!active || active.token !== token) return;
     assignment.budget.invalidate();
-    assignment.budget.invalidate();
     if (
       !Number.isSafeInteger(result.turnsUsed) ||
       result.turnsUsed < assignment.turnsUsed ||
@@ -1256,7 +1244,7 @@ export class WorkerOwner {
       );
       return;
     }
-    assignment.turnsUsed = Math.max(result.turnsUsed, active.observedTurns.value);
+    assignment.turnsUsed = Math.max(result.turnsUsed, active.observedTurns);
     if (worker.status === "cleanup-unknown") {
       this.retainPartialOutcome(assignment, result);
       this.emitState(worker);
@@ -1268,7 +1256,7 @@ export class WorkerOwner {
       return;
     }
     if (result.kind === "waiting-question") {
-      const text = active.questionText.value;
+      const text = active.questionText;
       if (!text) {
         this.settleSegmentFailure(
           worker,
@@ -1398,7 +1386,6 @@ export class WorkerOwner {
     assignment: MutableAssignment,
     diagnostic: string,
   ): void {
-    assignment.budget.invalidate();
     assignment.budget.invalidate();
     worker.status = "cleanup-unknown";
     assignment.outcome = "cleanup-unknown";

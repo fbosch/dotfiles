@@ -8,13 +8,13 @@ import type {
   ExtensionContext,
   KeybindingsManager,
 } from "@earendil-works/pi-coding-agent";
-import { getKeybindings, stripTerminalSequences, type TUI } from "@earendil-works/pi-tui";
 import {
   getEditorTheme,
   loadThemeFromPath,
   setThemeInstance,
   theme,
-} from "../../../node_modules/@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
+} from "@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
+import { getKeybindings, stripTerminalSequences, type TUI } from "@earendil-works/pi-tui";
 import promptUi from "../index";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../../../", import.meta.url));
