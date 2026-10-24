@@ -3,43 +3,6 @@ import { shutdownChartRuntime } from "./loader";
 import { registerChartTools } from "./metadata";
 import { registerChartGuidance } from "./prompt";
 
-export type {
-  BarParameters,
-  BezierParameters,
-  BoxplotParameters,
-  DonutParameters,
-  DumbbellParameters,
-  GanttParameters,
-  HeatmapParameters,
-  HistogramParameters,
-  LineParameters,
-  NetworkParameters,
-  PieParameters,
-  ScatterParameters,
-  StackedBarParameters,
-  TreemapParameters,
-  TreeParameters,
-  WaterfallParameters,
-} from "./metadata";
-export {
-  chartBarParameters,
-  chartBezierParameters,
-  chartBoxplotParameters,
-  chartDonutParameters,
-  chartDumbbellParameters,
-  chartGanttParameters,
-  chartHeatmapParameters,
-  chartHistogramParameters,
-  chartLineParameters,
-  chartNetworkParameters,
-  chartPieParameters,
-  chartScatterParameters,
-  chartStackedBarParameters,
-  chartTreemapParameters,
-  chartTreeParameters,
-  chartWaterfallParameters,
-} from "./metadata";
-
 export default function (pi: ExtensionAPI): void {
   registerChartTools(pi);
   registerChartGuidance(pi);

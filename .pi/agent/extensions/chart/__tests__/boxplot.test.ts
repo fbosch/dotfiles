@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import assert from "node:assert/strict";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { getPngDimensions, setCapabilities, setCellDimensions } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
-import { createBoxplotChartTool, createPieChartTool } from "../metadata";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
+import { createChartTool } from "../metadata";
 import { type BoxplotChartInput, chartBoxplotParameters } from "../schemas";
 import { rasterizeSvg } from "../types";
 import {
@@ -137,7 +137,7 @@ describe("boxplot", () => {
     ];
     for (const candidate of invalid)
       await expect(
-        createBoxplotChartTool().execute(
+        createChartTool("boxplot").execute(
           "bad",
           candidate as never,
           undefined,
@@ -260,7 +260,7 @@ describe("boxplot", () => {
     }
   });
   test("returns exact text/details in TUI and PNG in print, replays by discriminator, and reuses the result slot", async () => {
-    const tool = createBoxplotChartTool();
+    const tool = createChartTool("boxplot");
     const { type: _type, ...parameters } = input;
     const tui = await tool.execute("tui", parameters, undefined, undefined, context("tui"));
     expect(tui.content.map((part) => part.type)).toEqual(["text"]);
@@ -276,7 +276,7 @@ describe("boxplot", () => {
     ).rejects.toThrow();
     setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
     setCellDimensions({ widthPx: 9, heightPx: 18 });
-    const render = createPieChartTool().renderResult;
+    const render = createChartTool("pie").renderResult;
     assert(render);
     let wake = () => {};
     let ready = new Promise<void>((resolve) => {

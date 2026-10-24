@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import assert from "node:assert/strict";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { getPngDimensions, setCapabilities, setCellDimensions } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
-import { createPieChartTool, createStackedBarChartTool } from "../metadata";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
+import { createChartTool } from "../metadata";
 import { chartStackedBarParameters, type StackedBarChartInput } from "../schemas";
 import { rasterizeSvg } from "../types";
 import {
@@ -219,11 +219,10 @@ describe("stacked bar", () => {
       { xLabel: " " },
       { yLabel: "a".repeat(41) },
       { extra: true },
-      { type: "stacked_bar" },
     ];
     for (const bad of invalid) {
       await expect(
-        createStackedBarChartTool().execute(
+        createChartTool("stacked_bar").execute(
           "bad",
           { ...parameters, ...bad } as never,
           undefined,
@@ -315,7 +314,7 @@ describe("stacked bar", () => {
   });
 
   test("print uses the worker, TUI defers images, and cancellation fails before execution", async () => {
-    const tool = createStackedBarChartTool();
+    const tool = createChartTool("stacked_bar");
     const { type: _type, ...parameters } = input;
     const tui = await tool.execute("tui", parameters, undefined, undefined, context("tui"));
     expect(tui.content.map((part) => part.type)).toEqual(["text"]);
@@ -333,7 +332,7 @@ describe("stacked bar", () => {
 
   test("replays by saved discriminator, retains the cached component and rejects malformed replay", async () => {
     const { type: _type, ...parameters } = input;
-    const tui = await createStackedBarChartTool().execute(
+    const tui = await createChartTool("stacked_bar").execute(
       "replay",
       { ...parameters, normalize: true },
       undefined,
@@ -342,7 +341,7 @@ describe("stacked bar", () => {
     );
     setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
     setCellDimensions({ widthPx: 16, heightPx: 38 });
-    const render = createPieChartTool().renderResult;
+    const render = createChartTool("pie").renderResult;
     assert(render);
     let wake = () => {};
     let ready = new Promise<void>((resolve) => {

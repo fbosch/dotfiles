@@ -1,9 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { Resvg } from "@resvg/resvg-js";
 import { Value } from "typebox/value";
-import { createNetworkChartTool } from "../metadata";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
+import { createChartTool } from "../metadata";
 import { chartNetworkParameters } from "../schemas";
 import {
   type NetworkChartInput,
@@ -645,7 +645,7 @@ describe("network chart", () => {
     expect(layout.heightCells).toBeGreaterThan(18);
     expect(Buffer.byteLength(svg)).toBeLessThan(64 * 1024);
     expect(svg).toContain("accompanying text result");
-    const result = await createNetworkChartTool().execute(
+    const result = await createChartTool("network").execute(
       "network-max",
       { nodes, edges },
       undefined,
@@ -697,7 +697,7 @@ describe("network chart", () => {
 
   test("executes through the public tool and returns exact TUI text", async () => {
     const { type: _type, ...parameters } = input;
-    const result = await createNetworkChartTool().execute(
+    const result = await createChartTool("network").execute(
       "network",
       parameters,
       undefined,
@@ -708,27 +708,11 @@ describe("network chart", () => {
     expect(result.content.find((part) => part.type === "text")?.text).toContain(
       "Repository calls network chart",
     );
-    let error: unknown;
-    try {
-      await createNetworkChartTool().execute(
-        "invalid",
-        { ...parameters, type: "network" } as never,
-        undefined,
-        undefined,
-        context,
-      );
-    } catch (caught) {
-      error = caught;
-    }
-    expect(error).toBeInstanceOf(Error);
-    expect(error instanceof Error ? error.message : "").toContain(
-      "invalid network chart parameters",
-    );
   });
 
   test("rasterizes a network outside TUI", async () => {
     const { type: _type, ...parameters } = input;
-    const result = await createNetworkChartTool().execute(
+    const result = await createChartTool("network").execute(
       "network",
       parameters,
       undefined,

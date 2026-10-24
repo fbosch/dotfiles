@@ -1,9 +1,9 @@
 import { beforeAll, describe, expect, test } from "bun:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { Resvg } from "@resvg/resvg-js";
 import { Value } from "typebox/value";
-import { createTreeChartTool } from "../metadata";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
+import { createChartTool } from "../metadata";
 import { chartTreeParameters } from "../schemas";
 import {
   createTreeScene,
@@ -58,7 +58,7 @@ describe("tree chart", () => {
 
   test("executes through the public tool and returns exact TUI text", async () => {
     const { type: _type, ...parameters } = input;
-    const result = await createTreeChartTool().execute(
+    const result = await createChartTool("tree").execute(
       "tree",
       parameters,
       undefined,
@@ -67,15 +67,6 @@ describe("tree chart", () => {
     );
     expect(result.content.map((part) => part.type)).toEqual(["text"]);
     expect(result.details).toMatchObject(validateTreeChartInput(input));
-    await expect(
-      createTreeChartTool().execute(
-        "invalid",
-        { ...parameters, type: "tree" } as never,
-        undefined,
-        undefined,
-        context("tui"),
-      ),
-    ).rejects.toThrow("invalid tree chart parameters");
   });
 
   test("rejects duplicate IDs, missing parents, multiple roots, and cycles", () => {

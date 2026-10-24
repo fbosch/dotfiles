@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import assert from "node:assert/strict";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { getPngDimensions, setCapabilities, setCellDimensions } from "@earendil-works/pi-tui";
 import type { SceneNode, SceneRect } from "@tanstack/charts";
 import { Value } from "typebox/value";
-import { createPieChartTool, createTreemapChartTool } from "../metadata";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
+import { createChartTool } from "../metadata";
 import {
   chartTreemapParameters,
   hasBoundedTreemapHierarchy,
@@ -327,11 +327,10 @@ describe("treemap", () => {
       { unit: "x".repeat(23) },
       { unit: null },
       { extra: true },
-      { type: "treemap" },
     ];
     for (const bad of badInputs) {
       await expect(
-        createTreemapChartTool().execute(
+        createChartTool("treemap").execute(
           "bad",
           { ...parameters, ...bad } as never,
           undefined,
@@ -339,8 +338,7 @@ describe("treemap", () => {
           context("tui"),
         ),
       ).rejects.toThrow();
-      if (!("type" in bad))
-        expect(deserializeTreemapChartDetails({ ...details(), ...bad })).toBeUndefined();
+      expect(deserializeTreemapChartDetails({ ...details(), ...bad })).toBeUndefined();
     }
     expect(hasBoundedTreemapHierarchy({ data: [deep] })).toBe(false);
     for (const bad of [
@@ -432,7 +430,7 @@ describe("treemap", () => {
     }
   }, 15_000);
   test("print uses the worker, TUI defers images, and cancellation fails before execution", async () => {
-    const tool = createTreemapChartTool();
+    const tool = createChartTool("treemap");
     const { type: _type, ...parameters } = input;
     const tui = await tool.execute("tui", parameters, undefined, undefined, context("tui"));
     expect(tui.content.map((part) => part.type)).toEqual(["text"]);
@@ -450,7 +448,7 @@ describe("treemap", () => {
 
   test("replays by saved discriminator, retains the cached component and rejects malformed replay", async () => {
     const { type: _type, ...parameters } = input;
-    const tui = await createTreemapChartTool().execute(
+    const tui = await createChartTool("treemap").execute(
       "replay",
       parameters,
       undefined,
@@ -459,7 +457,7 @@ describe("treemap", () => {
     );
     setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
     setCellDimensions({ widthPx: 16, heightPx: 38 });
-    const render = createPieChartTool().renderResult;
+    const render = createChartTool("pie").renderResult;
     assert(render);
     let wake = () => {};
     let ready = new Promise<void>((resolve) => {

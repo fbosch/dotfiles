@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import assert from "node:assert/strict";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { getPngDimensions, setCapabilities, setCellDimensions } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { LazyChartComponent } from "../lazy";
-import { createHistogramChartTool } from "../metadata";
+import { createChartTool } from "../metadata";
 import { chartHistogramParameters, type HistogramChartInput } from "../schemas";
 import { rasterizeSvg } from "../types";
 import {
@@ -100,6 +100,7 @@ describe("histogram", () => {
 
   test("exposes a bounded discriminator-free schema and rejects malformed inputs", async () => {
     expect(Value.Check(chartHistogramParameters, { data: [1] })).toBe(true);
+    expect(Value.Check(chartHistogramParameters, { data: [1], type: "histogram" })).toBe(false);
     const invalid: unknown[] = [
       {},
       { data: [] },
@@ -107,14 +108,13 @@ describe("histogram", () => {
       { data: [null] },
       { data: ["1"] },
       { data: [{ value: 1 }] },
-      { data: [1], type: "histogram" },
       { data: [1], weights: [1] },
       ...[0, 51, 1.5, "2", null].map((bins) => ({ data: [1], bins })),
       { data: [1], title: "x".repeat(81) },
       { data: [1], xLabel: "x".repeat(41) },
     ];
     for (const input of invalid) expect(Value.Check(chartHistogramParameters, input)).toBe(false);
-    const tool = createHistogramChartTool();
+    const tool = createChartTool("histogram");
     for (const data of [[Number.NaN], [Infinity], [-Infinity]]) {
       expect(() => parse(data)).toThrow();
       await expect(
@@ -262,7 +262,7 @@ describe("histogram", () => {
   });
 
   test("executes in TUI and print modes and reuses the result component", async () => {
-    const tool = createHistogramChartTool();
+    const tool = createChartTool("histogram");
     const input = { data: [-2, -1, 0, 0, 2], bins: 4 };
     const tui = await tool.execute("histogram", input, undefined, undefined, context("tui"));
     expect(tui.content).toHaveLength(1);

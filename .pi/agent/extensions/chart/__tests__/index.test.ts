@@ -24,7 +24,10 @@ import {
   Text,
 } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
-import chartExtension, {
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
+import chartExtension from "../index";
+import { createChartTool } from "../metadata";
+import {
   chartBarParameters,
   chartBezierParameters,
   chartDonutParameters,
@@ -34,7 +37,7 @@ import chartExtension, {
   chartPieParameters,
   chartScatterParameters,
   chartTreeParameters,
-} from "../index";
+} from "../schemas";
 import {
   ChartComponent,
   rasterizeSvg,
@@ -1006,5 +1009,47 @@ describe("pie chart", () => {
     await expect(
       execute("chart_pie", { data: rows }, controller.signal, undefined, printContext),
     ).rejects.toThrow("aborted");
+  });
+});
+
+describe("chart tool lifecycle", () => {
+  test("accepts a redundant type discriminator for every chart type", async () => {
+    const pie = await createChartTool("pie").execute(
+      "pie",
+      { data: rows, type: "pie" } as never,
+      undefined,
+      undefined,
+      withToolExecution(tuiContext),
+    );
+    const histogram = await createChartTool("histogram").execute(
+      "histogram",
+      { data: [1, 2, 2, 3], type: "histogram" } as never,
+      undefined,
+      undefined,
+      withToolExecution(tuiContext),
+    );
+    expect(pie.content.map((part) => part.type)).toEqual(["text"]);
+    expect(histogram.content.map((part) => part.type)).toEqual(["text"]);
+  });
+
+  test("names the chart type when rejecting invalid input", async () => {
+    await expect(
+      createChartTool("histogram").execute(
+        "bad",
+        { data: "1,2" } as never,
+        undefined,
+        undefined,
+        withToolExecution(tuiContext),
+      ),
+    ).rejects.toThrow("invalid histogram chart parameters");
+    await expect(
+      createChartTool("stacked_bar").execute(
+        "bad",
+        { categories: [] } as never,
+        undefined,
+        undefined,
+        withToolExecution(tuiContext),
+      ),
+    ).rejects.toThrow("invalid stacked bar chart parameters");
   });
 });

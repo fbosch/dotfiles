@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import assert from "node:assert/strict";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { getPngDimensions, setCapabilities, setCellDimensions } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
-import { createPieChartTool, createWaterfallChartTool } from "../metadata";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
+import { createChartTool } from "../metadata";
 import { chartWaterfallParameters, type WaterfallChartInput } from "../schemas";
 import { rasterizeSvg } from "../types";
 import {
@@ -203,7 +203,7 @@ describe("waterfall", () => {
     ];
     for (const bad of invalid) {
       await expect(
-        createWaterfallChartTool().execute(
+        createChartTool("waterfall").execute(
           "bad",
           { ...parameters, ...bad } as never,
           undefined,
@@ -247,7 +247,7 @@ describe("waterfall", () => {
   });
 
   test("executes in TUI/print, replays by discriminator, preserves cached result identity, and fails visibly on malformed replay", async () => {
-    const tool = createWaterfallChartTool();
+    const tool = createChartTool("waterfall");
     const { type: _type, ...parameters } = input;
     const tui = await tool.execute("tui", parameters, undefined, undefined, context("tui"));
     expect(tui.content.map((part) => part.type)).toEqual(["text"]);
@@ -263,7 +263,7 @@ describe("waterfall", () => {
     ).rejects.toThrow();
     setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
     setCellDimensions({ widthPx: 16, heightPx: 38 });
-    const render = createPieChartTool().renderResult;
+    const render = createChartTool("pie").renderResult;
     assert(render);
     let wake = () => {};
     let ready = new Promise<void>((resolve) => {

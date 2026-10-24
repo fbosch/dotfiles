@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import assert from "node:assert/strict";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { getPngDimensions, setCapabilities, setCellDimensions } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
-import { createDumbbellChartTool, createPieChartTool } from "../metadata";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
+import { createChartTool } from "../metadata";
 import { chartDumbbellParameters, type DumbbellChartInput } from "../schemas";
 import { rasterizeSvg } from "../types";
 import {
@@ -170,11 +170,10 @@ describe("dumbbell", () => {
       { xLabel: " " },
       { yLabel: "a".repeat(41) },
       { extra: true },
-      { type: "dumbbell" },
     ];
     for (const bad of invalid) {
       await expect(
-        createDumbbellChartTool().execute(
+        createChartTool("dumbbell").execute(
           "bad",
           { ...parameters, ...bad } as never,
           undefined,
@@ -260,7 +259,7 @@ describe("dumbbell", () => {
   });
 
   test("executes through the shared worker in print mode, defers TUI rasterization and honors cancellation", async () => {
-    const tool = createDumbbellChartTool();
+    const tool = createChartTool("dumbbell");
     const { type: _type, ...parameters } = input;
     const tui = await tool.execute("tui", parameters, undefined, undefined, context("tui"));
     expect(tui.content.map((part) => part.type)).toEqual(["text"]);
@@ -278,7 +277,7 @@ describe("dumbbell", () => {
 
   test("replays by discriminator, retains the cached component and shows malformed replay failures", async () => {
     const { type: _type, ...parameters } = input;
-    const tui = await createDumbbellChartTool().execute(
+    const tui = await createChartTool("dumbbell").execute(
       "replay",
       parameters,
       undefined,
@@ -287,7 +286,7 @@ describe("dumbbell", () => {
     );
     setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
     setCellDimensions({ widthPx: 16, heightPx: 38 });
-    const render = createPieChartTool().renderResult;
+    const render = createChartTool("pie").renderResult;
     assert(render);
     let wake = () => {};
     let ready = new Promise<void>((resolve) => {

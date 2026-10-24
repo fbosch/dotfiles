@@ -1,10 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionContext, Theme } from "@earendil-works/pi-coding-agent";
-import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { getPngDimensions, setCapabilities, setCellDimensions } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { LazyChartComponent } from "../lazy";
-import { createBezierChartTool, createPieChartTool } from "../metadata";
+import { createChartTool } from "../metadata";
 import { type BezierChartInput, chartBezierParameters } from "../schemas";
 import { rasterizeSvg } from "../types";
 import {
@@ -53,7 +53,6 @@ describe("bezier", () => {
       { ...input, control2: null },
       { ...input, end: { x: 0 } },
       { ...input, start: { x: 0, y: 0, label: "A" } },
-      { ...input, type: "bezier" },
       { ...input, data: [] },
       ...[null, "true", 1].map((showControls) => ({ ...input, showControls })),
       ...[NaN, Infinity, -Infinity, 1e9 + 1, -1e9 - 1, "1", null].flatMap((coordinate) =>
@@ -67,7 +66,7 @@ describe("bezier", () => {
       { ...input, title: "x".repeat(81) },
       { ...input, xLabel: "x".repeat(41) },
     ];
-    const tool = createBezierChartTool();
+    const tool = createChartTool("bezier");
     for (const value of invalid) {
       expect(Value.Check(chartBezierParameters, value)).toBe(false);
       await expect(
@@ -260,7 +259,7 @@ describe("bezier", () => {
   });
 
   test("returns text in TUI, PNG outside TUI, reuses result slots and honors cancellation", async () => {
-    const tool = createBezierChartTool();
+    const tool = createChartTool("bezier");
     const result = await tool.execute("curve", input, undefined, undefined, context("tui"));
     expect(result.content).toHaveLength(1);
     expect(result.details).toMatchObject({ type: "bezier", ...input, showControls: false });
@@ -293,7 +292,7 @@ test("replays saved bezier details by discriminator and retains the completed im
   setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
   setCellDimensions({ widthPx: 9, heightPx: 18 });
   const ready = Promise.withResolvers<string[]>();
-  const component = createPieChartTool().renderResult?.(
+  const component = createChartTool("pie").renderResult?.(
     { content: [], details: JSON.parse(JSON.stringify(details)) },
     { expanded: false, isPartial: false },
     theme,

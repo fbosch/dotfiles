@@ -28,11 +28,9 @@ set -U FZF_ENABLE_OPEN_PREVIEW 1
 set -U FZF_PREVIEW_DIR_CMD lt
 set -gx COREPACK_ENABLE_STRICT 0
 
-
-# headroom proxy
-set -gx OPENAI_BASE_URL http://127.0.0.1:8787/v1
-set -gx ANTHROPIC_BASE_URL http://127.0.0.1:8787
-
+# Clear stale proxy endpoints inherited from terminals started before Headroom was removed.
+set --erase --global ANTHROPIC_BASE_URL
+set --erase --global OPENAI_BASE_URL
 # Pinentry-curses must target this shell's terminal, not an inherited TTY.
 set -gx GPG_TTY (tty 2>/dev/null || echo /dev/tty)
 set -U nvm_default_version 20

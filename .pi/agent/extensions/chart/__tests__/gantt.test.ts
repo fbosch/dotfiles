@@ -1,11 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import { execFileSync } from "node:child_process";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { getPngDimensions } from "@earendil-works/pi-tui";
 import { Resvg } from "@resvg/resvg-js";
 import { Value } from "typebox/value";
-import { createGanttChartTool } from "../metadata";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
+import { createChartTool } from "../metadata";
 import { chartGanttParameters } from "../schemas";
 import { rasterizeSvg } from "../types";
 import {
@@ -287,7 +287,7 @@ describe("gantt chart", () => {
 
   test("executes in TUI and print modes", async () => {
     const { type: _type, ...parameters } = input;
-    const tool = createGanttChartTool();
+    const tool = createChartTool("gantt");
     const tuiResult = await tool.execute(
       "gantt-tui",
       parameters,

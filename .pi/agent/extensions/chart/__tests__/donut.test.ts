@@ -1,8 +1,8 @@
 import { expect, test } from "bun:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import { Value } from "typebox/value";
-import { createDonutChartTool } from "../metadata";
+import { withToolExecution } from "../../__tests__/fixtures/tool-context";
+import { createChartTool } from "../metadata";
 import { chartDonutParameters, type DonutChartInput, donutChartVariant } from "../schemas";
 import {
   donutChartRenderer,
@@ -122,7 +122,7 @@ test("donut chart keeps bounded layout and executes through the public TUI and p
     donutChartRenderer.getLayout(bounded, { widthPx: 9, heightPx: 18 }, 60).heightCells,
   ).toBeLessThanOrEqual(8);
 
-  const tool = createDonutChartTool();
+  const tool = createChartTool("donut");
   const result = await (tool.execute as NonNullable<typeof tool.execute>).call(
     tool,
     "chart_donut",

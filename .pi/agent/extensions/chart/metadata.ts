@@ -1,14 +1,17 @@
 import type { ExtensionAPI, Theme, ToolDefinition } from "@earendil-works/pi-coding-agent";
 import { type Component, Text } from "@earendil-works/pi-tui";
-import type { TSchema } from "typebox";
+import type { Static, TSchema } from "typebox";
 import { Value } from "typebox/value";
 import { LazyChartComponent } from "./lazy";
-import { loadChartRuntime, loadChartType } from "./loader";
-import { type ChartTypeId, chartTypeIds, isChartTypeId } from "./registry";
+import { loadChartRuntime } from "./loader";
 import {
-  type BarParameters,
-  type BezierParameters,
-  type BoxplotParameters,
+  type ChartDescriptor,
+  type ChartTypeId,
+  chartRegistry,
+  chartTypeIds,
+  isChartTypeId,
+} from "./registry";
+import {
   chartBarParameters,
   chartBezierParameters,
   chartBoxplotParameters,
@@ -25,74 +28,21 @@ import {
   chartTreemapParameters,
   chartTreeParameters,
   chartWaterfallParameters,
-  type DonutParameters,
-  type DumbbellParameters,
-  type GanttParameters,
-  type HeatmapParameters,
-  type HistogramParameters,
   hasBoundedTreemapHierarchy,
   type LineParameters,
-  type NetworkParameters,
-  type PieParameters,
-  type ScatterParameters,
-  type StackedBarParameters,
-  type TreemapParameters,
-  type TreeParameters,
-  type WaterfallParameters,
 } from "./schemas";
-import type { BarChartDetails, BarChartInput } from "./types/bar";
-import type { BezierChartDetails, BezierChartInput } from "./types/bezier";
-import type { BoxplotChartDetails, BoxplotChartInput } from "./types/boxplot";
-import type { DonutChartDetails, DonutChartInput } from "./types/donut";
-import type { DumbbellChartDetails, DumbbellChartInput } from "./types/dumbbell";
-import type { GanttChartDetails, GanttChartInput } from "./types/gantt";
-import type { HeatmapChartDetails, HeatmapChartInput } from "./types/heatmap";
-import type { HistogramChartDetails, HistogramChartInput } from "./types/histogram";
-import type { LineChartDetails, LineChartInput } from "./types/line";
-import type { NetworkChartDetails, NetworkChartInput } from "./types/network";
-import type { PieChartDetails, PieChartInput } from "./types/pie";
-import type { ScatterChartDetails, ScatterChartInput } from "./types/scatter";
-import type { StackedBarChartDetails, StackedBarChartInput } from "./types/stacked-bar";
-import type { TreeChartDetails, TreeChartInput } from "./types/tree";
-import type { TreemapChartDetails, TreemapChartInput } from "./types/treemap";
-import type { WaterfallChartDetails, WaterfallChartInput } from "./types/waterfall";
+import type { ChartDetails } from "./types";
+import type { LineChartInput } from "./types/line";
 
-export type {
-  BarParameters,
-  BezierParameters,
-  BoxplotParameters,
-  DonutParameters,
-  DumbbellParameters,
-  GanttParameters,
-  HeatmapParameters,
-  HistogramParameters,
-  LineParameters,
-  NetworkParameters,
-  PieParameters,
-  ScatterParameters,
-  StackedBarParameters,
-  TreemapParameters,
-  TreeParameters,
-  WaterfallParameters,
-} from "./schemas";
-export {
-  chartBarParameters,
-  chartBezierParameters,
-  chartBoxplotParameters,
-  chartDonutParameters,
-  chartDumbbellParameters,
-  chartGanttParameters,
-  chartHeatmapParameters,
-  chartHistogramParameters,
-  chartLineParameters,
-  chartNetworkParameters,
-  chartPieParameters,
-  chartScatterParameters,
-  chartStackedBarParameters,
-  chartTreemapParameters,
-  chartTreeParameters,
-  chartWaterfallParameters,
-} from "./schemas";
+type ChartToolSpec<TParams extends TSchema> = {
+  readonly label: string;
+  readonly description: string;
+  readonly promptSnippet: string;
+  readonly parameters: TParams;
+  /** Rejects input before the chart module loads, for checks the schema cannot express. */
+  readonly preflight?: (parameters: unknown) => boolean;
+  readonly toInput?: (parameters: Static<TParams>) => unknown;
+};
 
 function renderChartCall() {
   // Keep the self-shell empty until the async chart result has a stable height.
@@ -147,137 +97,6 @@ function assertParameters(schema: TSchema, parameters: unknown, name: string): v
   }
 }
 
-export function createPieChartTool(): ToolDefinition<typeof chartPieParameters, PieChartDetails> {
-  return {
-    name: "chart_pie",
-    label: "Chart pie",
-    description: "Render a compact pie chart from labeled nonnegative values.",
-    promptSnippet: "Render compact pie charts",
-    parameters: chartPieParameters,
-    async execute(_toolCallId, parameters: PieParameters, signal, _onUpdate, ctx) {
-      signal?.throwIfAborted();
-      assertParameters(chartPieParameters, parameters, "pie");
-      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("pie")]);
-      signal?.throwIfAborted();
-      const input: PieChartInput = { ...parameters, type: "pie" };
-      if (!Value.Check(module.pieChartVariant, input))
-        throw new Error("invalid pie chart parameters");
-      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
-      const details = module.pieChartRenderer.createDetails(
-        module.pieChartRenderer.parseParameters(input),
-        settings,
-      );
-      const text = module.pieChartRenderer.getSummary(details);
-      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
-      const png = await runtime.rasterizeSvg(
-        runtime.renderChartSvg(module.pieChartRenderer, details, ctx.ui.theme),
-        signal,
-        { fontFamily: settings.fontFamily },
-      );
-      return {
-        content: [
-          { type: "text" as const, text },
-          { type: "image" as const, data: png, mimeType: "image/png" },
-        ],
-        details,
-      };
-    },
-    renderShell: "self",
-    renderCall: renderChartCall,
-    renderResult(result, _options, theme, context) {
-      return renderChartResult("pie", result, theme, context);
-    },
-  };
-}
-export function createDonutChartTool(): ToolDefinition<
-  typeof chartDonutParameters,
-  DonutChartDetails
-> {
-  return {
-    name: "chart_donut",
-    label: "Chart donut",
-    description: "Render a compact donut chart from labeled nonnegative values.",
-    promptSnippet: "Render compact donut charts",
-    parameters: chartDonutParameters,
-    async execute(_toolCallId, parameters: DonutParameters, signal, _onUpdate, ctx) {
-      signal?.throwIfAborted();
-      assertParameters(chartDonutParameters, parameters, "donut");
-      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("donut")]);
-      signal?.throwIfAborted();
-      const input: DonutChartInput = { ...parameters, type: "donut" };
-      if (!Value.Check(module.donutChartVariant, input))
-        throw new Error("invalid donut chart parameters");
-      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
-      const details = module.donutChartRenderer.createDetails(
-        module.donutChartRenderer.parseParameters(input),
-        settings,
-      );
-      const text = module.donutChartRenderer.getSummary(details);
-      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
-      const png = await runtime.rasterizeSvg(
-        runtime.renderChartSvg(module.donutChartRenderer, details, ctx.ui.theme),
-        signal,
-        { fontFamily: settings.fontFamily },
-      );
-      return {
-        content: [
-          { type: "text" as const, text },
-          { type: "image" as const, data: png, mimeType: "image/png" },
-        ],
-        details,
-      };
-    },
-    renderShell: "self",
-    renderCall: renderChartCall,
-    renderResult(result, _options, theme, context) {
-      return renderChartResult("donut", result, theme, context);
-    },
-  };
-}
-
-export function createBarChartTool(): ToolDefinition<typeof chartBarParameters, BarChartDetails> {
-  return {
-    name: "chart_bar",
-    label: "Chart bar",
-    description: "Render a compact horizontal bar chart from labeled signed values.",
-    promptSnippet: "Render compact horizontal bar charts",
-    parameters: chartBarParameters,
-    async execute(_toolCallId, parameters: BarParameters, signal, _onUpdate, ctx) {
-      signal?.throwIfAborted();
-      assertParameters(chartBarParameters, parameters, "bar");
-      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("bar")]);
-      signal?.throwIfAborted();
-      const input: BarChartInput = { ...parameters, type: "bar" };
-      if (!Value.Check(module.barChartVariant, input))
-        throw new Error("invalid bar chart parameters");
-      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
-      const details = module.barChartRenderer.createDetails(
-        module.barChartRenderer.parseParameters(input),
-        settings,
-      );
-      const text = module.barChartRenderer.getSummary(details);
-      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
-      const png = await runtime.rasterizeSvg(
-        runtime.renderChartSvg(module.barChartRenderer, details, ctx.ui.theme),
-        signal,
-        { fontFamily: settings.fontFamily },
-      );
-      return {
-        content: [
-          { type: "text" as const, text },
-          { type: "image" as const, data: png, mimeType: "image/png" },
-        ],
-        details,
-      };
-    },
-    renderShell: "self",
-    renderCall: renderChartCall,
-    renderResult(result, _options, theme, context) {
-      return renderChartResult("bar", result, theme, context);
-    },
-  };
-}
-
 function normalizeLineInput(parameters: LineParameters): LineChartInput {
   if (parameters.xType === "numeric") {
     const { data: rows, xType: _xType, ...options } = parameters;
@@ -296,660 +115,182 @@ function normalizeLineInput(parameters: LineParameters): LineChartInput {
   return { ...options, type: "line", xType: "temporal", data };
 }
 
-export function createLineChartTool(): ToolDefinition<
-  typeof chartLineParameters,
-  LineChartDetails
-> {
-  return {
-    name: "chart_line",
+// Registration closures keep each tool's concrete parameter and details types, which a union of tools loses.
+const deferredRegistrations = new Map<ChartTypeId, (pi: ExtensionAPI) => void>();
+
+function defineChartTool<TParams extends TSchema, TDetails extends ChartDetails>(
+  type: ChartTypeId,
+  descriptor: ChartDescriptor<TDetails>,
+  spec: ChartToolSpec<TParams>,
+): ToolDefinition<TParams, TDetails> {
+  const name = type.replaceAll("_", " ");
+  const tool: ToolDefinition<TParams, TDetails> = {
+    name: `chart_${type}`,
+    label: spec.label,
+    description: spec.description,
+    promptSnippet: spec.promptSnippet,
+    parameters: spec.parameters,
+    async execute(_toolCallId, parameters, signal, _onUpdate, ctx) {
+      signal?.throwIfAborted();
+      if (spec.preflight?.(parameters) === false) {
+        throw new Error(`invalid ${name} chart parameters`);
+      }
+      assertParameters(spec.parameters, parameters, name);
+      const [runtime] = await Promise.all([loadChartRuntime(), descriptor.load()]);
+      signal?.throwIfAborted();
+      const input = spec.toInput?.(parameters) ?? { ...parameters, type };
+      const chart = await descriptor.prepare(input, () =>
+        runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted()),
+      );
+      if (chart === undefined) throw new Error(`invalid ${name} chart parameters`);
+      const text = chart.summary;
+      if (ctx.mode === "tui")
+        return { content: [{ type: "text" as const, text }], details: chart.details };
+      const png = await runtime.rasterizeSvg(chart.renderSvg(runtime, ctx.ui.theme), signal, {
+        fontFamily: chart.settings.fontFamily,
+      });
+      return {
+        content: [
+          { type: "text" as const, text },
+          { type: "image" as const, data: png, mimeType: "image/png" },
+        ],
+        details: chart.details,
+      };
+    },
+    renderShell: "self",
+    renderCall: renderChartCall,
+    renderResult(result, _options, theme, context) {
+      return renderChartResult(type, result, theme, context);
+    },
+  };
+  deferredRegistrations.set(type, (pi) => pi.registerTool({ ...tool, exposure: "deferred" }));
+  return tool;
+}
+
+const chartTools = {
+  pie: defineChartTool("pie", chartRegistry.pie, {
+    label: "Chart pie",
+    description: "Render a compact pie chart from labeled nonnegative values.",
+    promptSnippet: "Render compact pie charts",
+    parameters: chartPieParameters,
+  }),
+  donut: defineChartTool("donut", chartRegistry.donut, {
+    label: "Chart donut",
+    description: "Render a compact donut chart from labeled nonnegative values.",
+    promptSnippet: "Render compact donut charts",
+    parameters: chartDonutParameters,
+  }),
+  bar: defineChartTool("bar", chartRegistry.bar, {
+    label: "Chart bar",
+    description: "Render a compact horizontal bar chart from labeled signed values.",
+    promptSnippet: "Render compact horizontal bar charts",
+    parameters: chartBarParameters,
+  }),
+  line: defineChartTool("line", chartRegistry.line, {
     label: "Chart line",
     description:
       "Render a single-series numeric or temporal line chart with optional gaps and markers.",
     promptSnippet: "Render single-series line charts",
     parameters: chartLineParameters,
-    async execute(_toolCallId, parameters: LineParameters, signal, _onUpdate, ctx) {
-      signal?.throwIfAborted();
-      assertParameters(chartLineParameters, parameters, "line");
-      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("line")]);
-      signal?.throwIfAborted();
-      const input = normalizeLineInput(parameters);
-      if (!Value.Check(module.lineChartVariant, input))
-        throw new Error("invalid line chart parameters");
-      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
-      const details = module.lineChartRenderer.createDetails(
-        module.lineChartRenderer.parseParameters(input),
-        settings,
-      );
-      const text = module.lineChartRenderer.getSummary(details);
-      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
-      const png = await runtime.rasterizeSvg(
-        runtime.renderChartSvg(module.lineChartRenderer, details, ctx.ui.theme),
-        signal,
-        { fontFamily: settings.fontFamily },
-      );
-      return {
-        content: [
-          { type: "text" as const, text },
-          { type: "image" as const, data: png, mimeType: "image/png" },
-        ],
-        details,
-      };
-    },
-    renderShell: "self",
-    renderCall: renderChartCall,
-    renderResult(result, _options, theme, context) {
-      return renderChartResult("line", result, theme, context);
-    },
-  };
-}
-
-export function createScatterChartTool(): ToolDefinition<
-  typeof chartScatterParameters,
-  ScatterChartDetails
-> {
-  return {
-    name: "chart_scatter",
+    toInput: normalizeLineInput,
+  }),
+  scatter: defineChartTool("scatter", chartRegistry.scatter, {
     label: "Chart scatter",
     description:
       "Render a single-series scatter chart with fixed-size dots and optional point labels.",
     promptSnippet: "Render single-series scatter charts",
     parameters: chartScatterParameters,
-    async execute(_toolCallId, parameters: ScatterParameters, signal, _onUpdate, ctx) {
-      signal?.throwIfAborted();
-      assertParameters(chartScatterParameters, parameters, "scatter");
-      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("scatter")]);
-      signal?.throwIfAborted();
-      const input: ScatterChartInput = { ...parameters, type: "scatter" };
-      if (!Value.Check(module.scatterChartVariant, input))
-        throw new Error("invalid scatter chart parameters");
-      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
-      const details = module.scatterChartRenderer.createDetails(
-        module.scatterChartRenderer.parseParameters(input),
-        settings,
-      );
-      const text = module.scatterChartRenderer.getSummary(details);
-      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
-      const png = await runtime.rasterizeSvg(
-        runtime.renderChartSvg(module.scatterChartRenderer, details, ctx.ui.theme),
-        signal,
-        { fontFamily: settings.fontFamily },
-      );
-      return {
-        content: [
-          { type: "text" as const, text },
-          { type: "image" as const, data: png, mimeType: "image/png" },
-        ],
-        details,
-      };
-    },
-    renderShell: "self",
-    renderCall: renderChartCall,
-    renderResult(result, _options, theme, context) {
-      return renderChartResult("scatter", result, theme, context);
-    },
-  };
-}
-
-export function createHistogramChartTool(): ToolDefinition<
-  typeof chartHistogramParameters,
-  HistogramChartDetails
-> {
-  return {
-    name: "chart_histogram",
+  }),
+  histogram: defineChartTool("histogram", chartRegistry.histogram, {
     label: "Chart histogram",
     description:
       "Render a count histogram from 1-200 finite numeric samples with automatic equal-width bins or an optional bin count (1-50). Optional title, xLabel, and yLabel (default Count).",
     promptSnippet: "Render count histograms from numeric samples",
     parameters: chartHistogramParameters,
-    async execute(_toolCallId, parameters: HistogramParameters, signal, _onUpdate, ctx) {
-      signal?.throwIfAborted();
-      if (!Value.Check(chartHistogramParameters, parameters))
-        throw new Error("invalid histogram chart parameters");
-      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("histogram")]);
-      signal?.throwIfAborted();
-      const input: HistogramChartInput = { ...parameters, type: "histogram" };
-      if (!Value.Check(module.histogramChartVariant, input))
-        throw new Error("invalid histogram chart parameters");
-      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
-      const details = module.histogramChartRenderer.createDetails(
-        module.histogramChartRenderer.parseParameters(input),
-        settings,
-      );
-      const text = module.histogramChartRenderer.getSummary(details);
-      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
-      const png = await runtime.rasterizeSvg(
-        runtime.renderChartSvg(module.histogramChartRenderer, details, ctx.ui.theme),
-        signal,
-        { fontFamily: settings.fontFamily },
-      );
-      return {
-        content: [
-          { type: "text" as const, text },
-          { type: "image" as const, data: png, mimeType: "image/png" },
-        ],
-        details,
-      };
-    },
-    renderShell: "self",
-    renderCall: renderChartCall,
-    renderResult(result, _options, theme, context) {
-      return renderChartResult("histogram", result, theme, context);
-    },
-  };
-}
-
-export function createBezierChartTool(): ToolDefinition<
-  typeof chartBezierParameters,
-  BezierChartDetails
-> {
-  return {
-    name: "chart_bezier",
+  }),
+  bezier: defineChartTool("bezier", chartRegistry.bezier, {
     label: "Chart bezier",
     description:
       "Render one exact cubic Bezier segment from start, control1, control2, and end x/y points (finite, ±1,000,000,000). Equal X/Y pixels per unit. Optional showControls (default false), title, xLabel, and yLabel. No sample interpolation.",
     promptSnippet: "Render exact cubic Bezier curves",
     parameters: chartBezierParameters,
-    async execute(_toolCallId, parameters: BezierParameters, signal, _onUpdate, ctx) {
-      signal?.throwIfAborted();
-      if (!Value.Check(chartBezierParameters, parameters))
-        throw new Error("invalid bezier chart parameters");
-      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("bezier")]);
-      signal?.throwIfAborted();
-      const input: BezierChartInput = { ...parameters, type: "bezier" };
-      if (!Value.Check(module.bezierChartVariant, input))
-        throw new Error("invalid bezier chart parameters");
-      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
-      const details = module.bezierChartRenderer.createDetails(
-        module.bezierChartRenderer.parseParameters(input),
-        settings,
-      );
-      const text = module.bezierChartRenderer.getSummary(details);
-      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
-      const png = await runtime.rasterizeSvg(
-        runtime.renderChartSvg(module.bezierChartRenderer, details, ctx.ui.theme),
-        signal,
-        { fontFamily: settings.fontFamily },
-      );
-      return {
-        content: [
-          { type: "text" as const, text },
-          { type: "image" as const, data: png, mimeType: "image/png" },
-        ],
-        details,
-      };
-    },
-    renderShell: "self",
-    renderCall: renderChartCall,
-    renderResult(result, _options, theme, context) {
-      return renderChartResult("bezier", result, theme, context);
-    },
-  };
-}
-
-export function createHeatmapChartTool(): ToolDefinition<
-  typeof chartHeatmapParameters,
-  HeatmapChartDetails
-> {
-  return {
-    name: "chart_heatmap",
+  }),
+  heatmap: defineChartTool("heatmap", chartRegistry.heatmap, {
     label: "Chart heatmap",
     description:
       "Render a labeled heatmap: rows and columns each contain 1-12 unique nonblank labels (1-22 characters, trimmed). Data is a matching rectangular number|null matrix (at most 144 cells), finite values ±1,000,000,000; null means missing, not zero. Optional colorScale sequential (default) or diverging (symmetric about zero), showValues (default false, at most 36 cells), title (1-80 characters). For readable output, prefer modest row/column counts and bounded value ranges; normalize or summarize extreme dynamic ranges. Includes a color legend and exact text summary.",
     promptSnippet: "Render labeled matrix heatmaps with explicit missing cells",
     parameters: chartHeatmapParameters,
-    async execute(_toolCallId, parameters: HeatmapParameters, signal, _onUpdate, ctx) {
-      signal?.throwIfAborted();
-      if (!Value.Check(chartHeatmapParameters, parameters))
-        throw new Error("invalid heatmap chart parameters");
-      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("heatmap")]);
-      signal?.throwIfAborted();
-      const input: HeatmapChartInput = { ...parameters, type: "heatmap" };
-      if (!Value.Check(module.heatmapChartVariant, input))
-        throw new Error("invalid heatmap chart parameters");
-      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
-      const details = module.heatmapChartRenderer.createDetails(
-        module.heatmapChartRenderer.parseParameters(input),
-        settings,
-      );
-      const text = module.heatmapChartRenderer.getSummary(details);
-      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
-      const png = await runtime.rasterizeSvg(
-        runtime.renderChartSvg(module.heatmapChartRenderer, details, ctx.ui.theme),
-        signal,
-        { fontFamily: settings.fontFamily },
-      );
-      return {
-        content: [
-          { type: "text" as const, text },
-          { type: "image" as const, data: png, mimeType: "image/png" },
-        ],
-        details,
-      };
-    },
-    renderShell: "self",
-    renderCall: renderChartCall,
-    renderResult(result, _options, theme, context) {
-      return renderChartResult("heatmap", result, theme, context);
-    },
-  };
-}
-
-export function createBoxplotChartTool(): ToolDefinition<
-  typeof chartBoxplotParameters,
-  BoxplotChartDetails
-> {
-  return {
-    name: "chart_boxplot",
+  }),
+  boxplot: defineChartTool("boxplot", chartRegistry.boxplot, {
     label: "Chart box plot",
     description:
       "Render horizontal box plots from groups of raw samples: 1-12 groups with unique trimmed nonblank labels (1-22 characters), each with 1-200 finite values within ±1,000,000,000. Type-7 quartiles, actual-sample whiskers within 1.5×IQR fences. Optional showOutliers (default true; hidden outliers retain the domain), title (1-80), xLabel and yLabel (1-40).",
     promptSnippet: "Render box plots comparing sample distributions",
     parameters: chartBoxplotParameters,
-    async execute(_toolCallId, parameters: BoxplotParameters, signal, _onUpdate, ctx) {
-      signal?.throwIfAborted();
-      if (!Value.Check(chartBoxplotParameters, parameters))
-        throw new Error("invalid boxplot chart parameters");
-      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("boxplot")]);
-      signal?.throwIfAborted();
-      const input: BoxplotChartInput = { ...parameters, type: "boxplot" };
-      if (!Value.Check(module.boxplotChartVariant, input))
-        throw new Error("invalid boxplot chart parameters");
-      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
-      const details = module.boxplotChartRenderer.createDetails(
-        module.boxplotChartRenderer.parseParameters(input),
-        settings,
-      );
-      const text = module.boxplotChartRenderer.getSummary(details);
-      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
-      const png = await runtime.rasterizeSvg(
-        runtime.renderChartSvg(module.boxplotChartRenderer, details, ctx.ui.theme),
-        signal,
-        { fontFamily: settings.fontFamily },
-      );
-      return {
-        content: [
-          { type: "text" as const, text },
-          { type: "image" as const, data: png, mimeType: "image/png" },
-        ],
-        details,
-      };
-    },
-    renderShell: "self",
-    renderCall: renderChartCall,
-    renderResult(result, _options, theme, context) {
-      return renderChartResult("boxplot", result, theme, context);
-    },
-  };
-}
-
-export function createWaterfallChartTool(): ToolDefinition<
-  typeof chartWaterfallParameters,
-  WaterfallChartDetails
-> {
-  return {
-    name: "chart_waterfall",
+  }),
+  waterfall: defineChartTool("waterfall", chartRegistry.waterfall, {
     label: "Chart waterfall",
     description:
       "Render a horizontal waterfall from start and 1-12 ordered deltas {label, value}. Labels are trimmed, nonblank, 1-22 characters. Start, signed deltas, and every running total must be finite within ±1,000,000,000. Final total is calculated. Blue increase and orange decrease bars with connectors and a semantic legend. Optional title (1-80), xLabel and yLabel (1-40).",
     promptSnippet: "Render cumulative changes as waterfall charts",
     parameters: chartWaterfallParameters,
-    async execute(_toolCallId, parameters: WaterfallParameters, signal, _onUpdate, ctx) {
-      signal?.throwIfAborted();
-      if (!Value.Check(chartWaterfallParameters, parameters))
-        throw new Error("invalid waterfall chart parameters");
-      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("waterfall")]);
-      signal?.throwIfAborted();
-      const input: WaterfallChartInput = { ...parameters, type: "waterfall" };
-      if (!Value.Check(module.waterfallChartVariant, input))
-        throw new Error("invalid waterfall chart parameters");
-      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
-      const details = module.waterfallChartRenderer.createDetails(
-        module.waterfallChartRenderer.parseParameters(input),
-        settings,
-      );
-      const text = module.waterfallChartRenderer.getSummary(details);
-      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
-      const png = await runtime.rasterizeSvg(
-        runtime.renderChartSvg(module.waterfallChartRenderer, details, ctx.ui.theme),
-        signal,
-        { fontFamily: settings.fontFamily },
-      );
-      return {
-        content: [
-          { type: "text" as const, text },
-          { type: "image" as const, data: png, mimeType: "image/png" },
-        ],
-        details,
-      };
-    },
-    renderShell: "self",
-    renderCall: renderChartCall,
-    renderResult(result, _options, theme, context) {
-      return renderChartResult("waterfall", result, theme, context);
-    },
-  };
-}
-
-export function createDumbbellChartTool(): ToolDefinition<
-  typeof chartDumbbellParameters,
-  DumbbellChartDetails
-> {
-  return {
-    name: "chart_dumbbell",
+  }),
+  dumbbell: defineChartTool("dumbbell", chartRegistry.dumbbell, {
     label: "Chart dumbbell",
     description:
       "Render independent horizontal paired dots from data: 1-12 {label, before, after} rows. Unique trimmed nonblank labels (1-22 characters); finite coordinates ±1,000,000,000. Optional beforeLabel/afterLabel (1-22, defaults Before/After), showDifferences (default false; signed after - before, not percent), title (1-80), xLabel/yLabel (1-40). Blue Before ring and orange After dot, with a legend; colors identify series, not good/bad. Exact values remain in the text summary.",
     promptSnippet: "Render paired values as dumbbell charts",
     parameters: chartDumbbellParameters,
-    async execute(_toolCallId, parameters: DumbbellParameters, signal, _onUpdate, ctx) {
-      signal?.throwIfAborted();
-      if (!Value.Check(chartDumbbellParameters, parameters))
-        throw new Error("invalid dumbbell chart parameters");
-      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("dumbbell")]);
-      signal?.throwIfAborted();
-      const input: DumbbellChartInput = { ...parameters, type: "dumbbell" };
-      if (!Value.Check(module.dumbbellChartVariant, input))
-        throw new Error("invalid dumbbell chart parameters");
-      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
-      const details = module.dumbbellChartRenderer.createDetails(
-        module.dumbbellChartRenderer.parseParameters(input),
-        settings,
-      );
-      const text = module.dumbbellChartRenderer.getSummary(details);
-      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
-      const png = await runtime.rasterizeSvg(
-        runtime.renderChartSvg(module.dumbbellChartRenderer, details, ctx.ui.theme),
-        signal,
-        { fontFamily: settings.fontFamily },
-      );
-      return {
-        content: [
-          { type: "text" as const, text },
-          { type: "image" as const, data: png, mimeType: "image/png" },
-        ],
-        details,
-      };
-    },
-    renderShell: "self",
-    renderCall: renderChartCall,
-    renderResult(result, _options, theme, context) {
-      return renderChartResult("dumbbell", result, theme, context);
-    },
-  };
-}
-
-export function createStackedBarChartTool(): ToolDefinition<
-  typeof chartStackedBarParameters,
-  StackedBarChartDetails
-> {
-  return {
-    name: "chart_stacked_bar",
+  }),
+  stacked_bar: defineChartTool("stacked_bar", chartRegistry.stacked_bar, {
     label: "Chart stacked bar",
     description:
       "Render horizontal stacked bars for nonnegative composition: 1-12 unique trimmed categories and 1-6 uniquely named series {name, values}, each aligned with categories. Labels are 1-22 characters; values are finite 0..1,000,000,000 and category totals must be finite. Signed changes belong in chart_waterfall. Optional normalize (default false) displays 100% per nonzero category; zero totals stay zero. Includes every series in the legend and exact raw values/totals in the summary. Optional title (1-80), xLabel/yLabel (1-40); all text trimmed and nonblank.",
     promptSnippet: "Render nonnegative compositions as stacked bar charts",
     parameters: chartStackedBarParameters,
-    async execute(_toolCallId, parameters: StackedBarParameters, signal, _onUpdate, ctx) {
-      signal?.throwIfAborted();
-      if (!Value.Check(chartStackedBarParameters, parameters))
-        throw new Error("invalid stacked bar chart parameters");
-      const [runtime, module] = await Promise.all([
-        loadChartRuntime(),
-        loadChartType("stacked_bar"),
-      ]);
-      signal?.throwIfAborted();
-      const input: StackedBarChartInput = { ...parameters, type: "stacked_bar" };
-      if (!Value.Check(module.stackedBarChartVariant, input))
-        throw new Error("invalid stacked bar chart parameters");
-      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
-      const details = module.stackedBarChartRenderer.createDetails(
-        module.stackedBarChartRenderer.parseParameters(input),
-        settings,
-      );
-      const text = module.stackedBarChartRenderer.getSummary(details);
-      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
-      const png = await runtime.rasterizeSvg(
-        runtime.renderChartSvg(module.stackedBarChartRenderer, details, ctx.ui.theme),
-        signal,
-        { fontFamily: settings.fontFamily },
-      );
-      return {
-        content: [
-          { type: "text" as const, text },
-          { type: "image" as const, data: png, mimeType: "image/png" },
-        ],
-        details,
-      };
-    },
-    renderShell: "self",
-    renderCall: renderChartCall,
-    renderResult(result, _options, theme, context) {
-      return renderChartResult("stacked_bar", result, theme, context);
-    },
-  };
-}
-
-export function createTreemapChartTool(): ToolDefinition<
-  typeof chartTreemapParameters,
-  TreemapChartDetails
-> {
-  return {
-    name: "chart_treemap",
+  }),
+  treemap: defineChartTool("treemap", chartRegistry.treemap, {
     label: "Chart treemap",
     description:
       "Render hierarchical bundle, directory, or module sizes as area-proportional treemap tiles. Data is 1-6 top-level nodes, at most 64 nodes total and 4 levels. Each node has label (1-22 characters, trimmed and unique among siblings) and exactly one of finite nonnegative value or nonempty children. Parents aggregate children without double-counting; aggregate totals must be finite and at least one leaf positive. Top-level colors, fitted hierarchical labels and sizes, exact summary including hidden/zero leaves. For readable output, use short labels and balanced values; extreme value skew makes small tiles disappear. Optional title (1-80) and unit (1-22), trimmed and nonblank.",
     promptSnippet: "Render hierarchical sizes as treemaps",
     parameters: chartTreemapParameters,
-    async execute(_toolCallId, parameters: TreemapParameters, signal, _onUpdate, ctx) {
-      signal?.throwIfAborted();
-      if (
-        !hasBoundedTreemapHierarchy(parameters) ||
-        !Value.Check(chartTreemapParameters, parameters)
-      )
-        throw new Error("invalid treemap chart parameters");
-      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("treemap")]);
-      signal?.throwIfAborted();
-      const input: TreemapChartInput = { ...parameters, type: "treemap" };
-      if (!Value.Check(module.treemapChartVariant, input))
-        throw new Error("invalid treemap chart parameters");
-      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
-      const details = module.treemapChartRenderer.createDetails(
-        module.treemapChartRenderer.parseParameters(input),
-        settings,
-      );
-      const text = module.treemapChartRenderer.getSummary(details);
-      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
-      const png = await runtime.rasterizeSvg(
-        runtime.renderChartSvg(module.treemapChartRenderer, details, ctx.ui.theme),
-        signal,
-        { fontFamily: settings.fontFamily },
-      );
-      return {
-        content: [
-          { type: "text" as const, text },
-          { type: "image" as const, data: png, mimeType: "image/png" },
-        ],
-        details,
-      };
-    },
-    renderShell: "self",
-    renderCall: renderChartCall,
-    renderResult(result, _options, theme, context) {
-      return renderChartResult("treemap", result, theme, context);
-    },
-  };
-}
-
-export function createGanttChartTool(): ToolDefinition<
-  typeof chartGanttParameters,
-  GanttChartDetails
-> {
-  return {
-    name: "chart_gantt",
+    preflight: hasBoundedTreemapHierarchy,
+  }),
+  gantt: defineChartTool("gantt", chartRegistry.gantt, {
     label: "Chart Gantt",
     description:
       "Render a deterministic task timeline from 1-64 ordered tasks. Tasks have finite start/end values, optional groups and progress, optional dependencies, and named milestones. Uses TanStack interval marks with dependency overlays. For readable output, prefer about 16 tasks and modest milestone counts, especially with maxHeightCells. Optional title and xLabel.",
     promptSnippet: "Render deterministic Gantt task timelines",
     parameters: chartGanttParameters,
-    async execute(_toolCallId, parameters: GanttParameters, signal, _onUpdate, ctx) {
-      signal?.throwIfAborted();
-      if (!Value.Check(chartGanttParameters, parameters))
-        throw new Error("invalid gantt chart parameters");
-      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("gantt")]);
-      signal?.throwIfAborted();
-      const input: GanttChartInput = { ...parameters, type: "gantt" };
-      if (!Value.Check(module.ganttChartVariant, input))
-        throw new Error("invalid gantt chart parameters");
-      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
-      const details = module.ganttChartRenderer.createDetails(
-        module.ganttChartRenderer.parseParameters(input),
-        settings,
-      );
-      const text = module.ganttChartRenderer.getSummary(details);
-      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
-      const png = await runtime.rasterizeSvg(
-        runtime.renderChartSvg(module.ganttChartRenderer, details, ctx.ui.theme),
-        signal,
-        { fontFamily: settings.fontFamily },
-      );
-      return {
-        content: [
-          { type: "text" as const, text },
-          { type: "image" as const, data: png, mimeType: "image/png" },
-        ],
-        details,
-      };
-    },
-    renderShell: "self",
-    renderCall: renderChartCall,
-    renderResult(result, _options, theme, context) {
-      return renderChartResult("gantt", result, theme, context);
-    },
-  };
-}
-
-export function createNetworkChartTool(): ToolDefinition<
-  typeof chartNetworkParameters,
-  NetworkChartDetails
-> {
-  return {
-    name: "chart_network",
+  }),
+  network: defineChartTool("network", chartRegistry.network, {
     label: "Chart network",
     description:
       "Render a deterministic layered directed network or call graph from 1-64 nodes and up to 128 edges. Nodes have unique trimmed ids and labels, optional groups; edges reference node ids and may have labels. Multiple parents, disconnected nodes, cycles, self-loops, and duplicate display labels are supported. For readable output, prefer about 12 nodes and 25 edges or fewer; dense reciprocal or self-loop graphs can overlap, so use short labels or split the graph. Optional title and maxHeightCells (8-64 terminal cells); omitted maxHeightCells preserves the natural network height.",
     promptSnippet: "Render layered network and call-graph charts",
     parameters: chartNetworkParameters,
-    async execute(_toolCallId, parameters: NetworkParameters, signal, _onUpdate, ctx) {
-      signal?.throwIfAborted();
-      if (!Value.Check(chartNetworkParameters, parameters))
-        throw new Error("invalid network chart parameters");
-      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("network")]);
-      signal?.throwIfAborted();
-      const input: NetworkChartInput = { ...parameters, type: "network" };
-      if (!Value.Check(module.networkChartVariant, input))
-        throw new Error("invalid network chart parameters");
-      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
-      const details = module.networkChartRenderer.createDetails(
-        module.networkChartRenderer.parseParameters(input),
-        settings,
-      );
-      const text = module.networkChartRenderer.getSummary(details);
-      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
-      const png = await runtime.rasterizeSvg(
-        runtime.renderChartSvg(module.networkChartRenderer, details, ctx.ui.theme),
-        signal,
-        { fontFamily: settings.fontFamily },
-      );
-      return {
-        content: [
-          { type: "text" as const, text },
-          { type: "image" as const, data: png, mimeType: "image/png" },
-        ],
-        details,
-      };
-    },
-    renderShell: "self",
-    renderCall: renderChartCall,
-    renderResult(result, _options, theme, context) {
-      return renderChartResult("network", result, theme, context);
-    },
-  };
-}
-
-export function createTreeChartTool(): ToolDefinition<
-  typeof chartTreeParameters,
-  TreeChartDetails
-> {
-  return {
-    name: "chart_tree",
+  }),
+  tree: defineChartTool("tree", chartRegistry.tree, {
     label: "Chart tree",
     description:
       "Render a left-to-right tidy hierarchy tree from 1-64 flat parent-reference nodes. Each node has a unique trimmed id, optional parentId, and trimmed label. The data must form one connected acyclic hierarchy with exactly one root. For readable output, prefer about 32 nodes or fewer and split broad or deep hierarchies; use short labels. Optional title (1-80 characters).",
     promptSnippet: "Render tidy hierarchy trees from parent-reference nodes",
     parameters: chartTreeParameters,
-    async execute(_toolCallId, parameters: TreeParameters, signal, _onUpdate, ctx) {
-      signal?.throwIfAborted();
-      if (!Value.Check(chartTreeParameters, parameters))
-        throw new Error("invalid tree chart parameters");
-      const [runtime, module] = await Promise.all([loadChartRuntime(), loadChartType("tree")]);
-      signal?.throwIfAborted();
-      const input: TreeChartInput = { ...parameters, type: "tree" };
-      if (!Value.Check(module.treeChartVariant, input))
-        throw new Error("invalid tree chart parameters");
-      const settings = runtime.createChartSettings(ctx.cwd, ctx.isProjectTrusted());
-      const details = module.treeChartRenderer.createDetails(
-        module.treeChartRenderer.parseParameters(input),
-        settings,
-      );
-      const text = module.treeChartRenderer.getSummary(details);
-      if (ctx.mode === "tui") return { content: [{ type: "text" as const, text }], details };
-      const png = await runtime.rasterizeSvg(
-        runtime.renderChartSvg(module.treeChartRenderer, details, ctx.ui.theme),
-        signal,
-        { fontFamily: settings.fontFamily },
-      );
-      return {
-        content: [
-          { type: "text" as const, text },
-          { type: "image" as const, data: png, mimeType: "image/png" },
-        ],
-        details,
-      };
-    },
-    renderShell: "self",
-    renderCall: renderChartCall,
-    renderResult(result, _options, theme, context) {
-      return renderChartResult("tree", result, theme, context);
-    },
-  };
-}
+  }),
+} satisfies Record<ChartTypeId, unknown>;
 
-function registerDeferredChartTool<TParams extends TSchema, TDetails>(
-  pi: ExtensionAPI,
-  tool: ToolDefinition<TParams, TDetails>,
-): void {
-  pi.registerTool({ ...tool, exposure: "deferred" });
-}
+type ChartTools = typeof chartTools;
 
-const chartToolRegistrars: Record<ChartTypeId, (pi: ExtensionAPI) => void> = {
-  pie: (pi) => registerDeferredChartTool(pi, createPieChartTool()),
-  donut: (pi) => registerDeferredChartTool(pi, createDonutChartTool()),
-  bar: (pi) => registerDeferredChartTool(pi, createBarChartTool()),
-  scatter: (pi) => registerDeferredChartTool(pi, createScatterChartTool()),
-  line: (pi) => registerDeferredChartTool(pi, createLineChartTool()),
-  histogram: (pi) => registerDeferredChartTool(pi, createHistogramChartTool()),
-  bezier: (pi) => registerDeferredChartTool(pi, createBezierChartTool()),
-  heatmap: (pi) => registerDeferredChartTool(pi, createHeatmapChartTool()),
-  boxplot: (pi) => registerDeferredChartTool(pi, createBoxplotChartTool()),
-  waterfall: (pi) => registerDeferredChartTool(pi, createWaterfallChartTool()),
-  dumbbell: (pi) => registerDeferredChartTool(pi, createDumbbellChartTool()),
-  stacked_bar: (pi) => registerDeferredChartTool(pi, createStackedBarChartTool()),
-  gantt: (pi) => registerDeferredChartTool(pi, createGanttChartTool()),
-  network: (pi) => registerDeferredChartTool(pi, createNetworkChartTool()),
-  tree: (pi) => registerDeferredChartTool(pi, createTreeChartTool()),
-  treemap: (pi) => registerDeferredChartTool(pi, createTreemapChartTool()),
-};
+export function createChartTool<K extends ChartTypeId>(type: K): ChartTools[K] {
+  return chartTools[type];
+}
 
 export function registerChartTools(pi: ExtensionAPI): void {
-  for (const type of chartTypeIds) chartToolRegistrars[type](pi);
+  for (const type of chartTypeIds) {
+    const register = deferredRegistrations.get(type);
+    if (register === undefined) throw new Error(`chart tool ${type} was not defined`);
+    register(pi);
+  }
 }

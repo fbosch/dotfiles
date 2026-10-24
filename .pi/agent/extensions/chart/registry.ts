@@ -1,22 +1,40 @@
 import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { Component } from "@earendil-works/pi-tui";
-import type { ChartDetails, ChartLayout, ChartRenderer } from "./types";
+import type { TSchema } from "typebox";
+import { Value } from "typebox/value";
+import type { ChartDetails, ChartLayout, ChartSettings, ChartTheme, ChartType } from "./types";
 
 type ChartRuntime = typeof import("./types");
 
 export type LoadedChartComponent = Component & { update(theme: Theme): void };
 
-type ChartDefinition<TModule, TDetails extends ChartDetails, TLayout extends ChartLayout> = {
+type ChartDefinition<
+  TModule,
+  TParameters extends TSchema,
+  TData,
+  TDetails extends ChartDetails,
+  TLayout extends ChartLayout,
+> = {
   load: () => Promise<TModule>;
-  renderer: (module: TModule) => ChartRenderer<TDetails, TLayout> & {
-    deserializeDetails(value: unknown): TDetails | undefined;
-  };
+  renderer: (module: TModule) => ChartType<TParameters, TData, TDetails, TLayout>;
   fallbackText: string;
 };
 
-export type ChartDescriptor = {
+export type PreparedChart<TDetails extends ChartDetails> = {
+  readonly details: TDetails;
+  readonly settings: ChartSettings;
+  readonly summary: string;
+  renderSvg(runtime: ChartRuntime, theme: ChartTheme): string;
+};
+
+export type ChartDescriptor<TDetails extends ChartDetails = ChartDetails> = {
   readonly load: () => Promise<unknown>;
   readonly isLoaded: () => boolean;
+  /** Resolves undefined when the input fails the chart's variant schema; settings are only created for valid input. */
+  readonly prepare: (
+    input: unknown,
+    createSettings: () => ChartSettings,
+  ) => Promise<PreparedChart<TDetails> | undefined>;
   readonly createComponent: (
     runtime: Promise<ChartRuntime>,
     details: unknown,
@@ -26,9 +44,15 @@ export type ChartDescriptor = {
   ) => Promise<LoadedChartComponent | string>;
 };
 
-function defineChart<TModule, TDetails extends ChartDetails, TLayout extends ChartLayout>(
-  definition: ChartDefinition<TModule, TDetails, TLayout>,
-): ChartDescriptor & { readonly load: () => Promise<TModule> } {
+function defineChart<
+  TModule,
+  TParameters extends TSchema,
+  TData,
+  TDetails extends ChartDetails,
+  TLayout extends ChartLayout,
+>(
+  definition: ChartDefinition<TModule, TParameters, TData, TDetails, TLayout>,
+): ChartDescriptor<TDetails> & { readonly load: () => Promise<TModule> } {
   let cachedModule: Promise<TModule> | undefined;
 
   const load = (): Promise<TModule> => {
@@ -39,6 +63,18 @@ function defineChart<TModule, TDetails extends ChartDetails, TLayout extends Cha
   return {
     load,
     isLoaded: () => cachedModule !== undefined,
+    prepare: async (input, createSettings) => {
+      const renderer = definition.renderer(await load());
+      if (!Value.Check(renderer.parameters, input)) return undefined;
+      const settings = createSettings();
+      const details = renderer.createDetails(renderer.parseParameters(input), settings);
+      return {
+        details,
+        settings,
+        summary: renderer.getSummary(details),
+        renderSvg: (runtime, theme) => runtime.renderChartSvg(renderer, details, theme),
+      };
+    },
     createComponent: async (runtimePromise, details, theme, requestRender, fallbackText) => {
       const [runtime, module] = await Promise.all([runtimePromise, load()]);
       const renderer = definition.renderer(module);
@@ -138,6 +174,9 @@ export type ChartTypeId = keyof typeof chartRegistry;
 export type ChartModules = {
   [K in ChartTypeId]: Awaited<ReturnType<(typeof chartRegistry)[K]["load"]>>;
 };
+
+export type ChartDetailsOf<K extends ChartTypeId> =
+  (typeof chartRegistry)[K] extends ChartDescriptor<infer TDetails> ? TDetails : never;
 
 export const chartTypeIds = Object.keys(chartRegistry) as ChartTypeId[];
 
