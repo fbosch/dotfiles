@@ -53,7 +53,6 @@ install-hooks:
 install-pi:
     bun install --frozen-lockfile --cwd "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}"
     bun run --cwd "${PI_CODING_AGENT_DIR:-$HOME/.pi/agent}" sdk:sync
-    bash .pi/agent/runtime-patches/apply.sh
     pi --no-sandbox --approve --help >/dev/null
 
 # Install dependencies and build all Vicinae extensions for first use.

@@ -8,6 +8,7 @@
 /subagent-sessions/
 /fff/
 /mcp-cache.json
+/mcp-npx-cache.json
 /mcp-onboarding.json
 /node_modules/
 /npm/
@@ -21,3 +22,4 @@
 /web-search-cache
 /cache
 /crashes.json
+/bin

@@ -10,7 +10,7 @@ The standalone task checklist lives in `../extensions/tasks/`. It stores version
 
 The `@gotgenes/pi-subagents` patch was retired for 21.8.1: upstream now declares host-provided `typebox` as a peer dependency.
 
-The runtime patch under `../runtime-patches/` keeps `proper-lockfile@4.1.2` compatible with Bun's Proxy-backed filesystem. `just install-pi` applies these patches after dependency installation.
+Pi runtime and dependency patches live in `~/nixos/modules/development/ai/pi/` and apply when Nix builds Pi. Dotfiles carries only extension patches.
 
 Keep these patches here rather than editing Pi's installed packages without a reproducible source.
 

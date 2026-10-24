@@ -112,6 +112,16 @@
     ]
   },
   "classifier": {
+    "toolOutputPilot": {
+      "mode": "shadow",
+      "approvedCommands": [
+        {
+          "cwd": "/home/fbb/nixos",
+          "command": "node /tmp/pi-tool-output-pilot-eval.mjs",
+          "goal": "Identify final results, constraints, and contradictory evidence"
+        }
+      ]
+    },
     "enabled": true,
     "commandGuard": {
       "enabled": true,

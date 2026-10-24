@@ -41,7 +41,7 @@ export function readPackagePatchTargets(manifestPath: string): PatchTargets {
     const [kind, packageName, patchFilename, targetPath, beforeText, afterText, extra] =
       line.split("\t");
     if (
-      (kind !== "package" && kind !== "runtime") ||
+      kind !== "package" ||
       !packageName ||
       !patchFilename ||
       !targetPath ||
@@ -59,7 +59,6 @@ export function readPackagePatchTargets(manifestPath: string): PatchTargets {
     if (before === after) {
       throw new Error(`${manifestPath}:${index + 1}: preimage and postimage must differ`);
     }
-    if (kind === "runtime") continue;
 
     const key = manifestKey(packageName, patchFilename);
     const targets = entries.get(key) ?? [];

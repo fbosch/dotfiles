@@ -60,3 +60,7 @@ Jev's image support is experimental and has stricter [format and dimension limit
 Pi's current System One adapter rejects image input. The OpenRouter bridge converts images to the [documented multimodal Decisions format](https://openrouter.ai/docs/guides/community/multimodal-decisions) while retaining native authentication, question mapping, answer parsing, and usage accounting. Unexpected transport or payload shapes fail before sending. Remove the bridge when Pi supports OpenRouter images natively.
 
 The opt-in installed-SDK test takes `PI_CLASSIFIER_RUNTIME_MODULE`, the absolute path to the installed Pi coding-agent SDK's `dist/index.js`. It probes both native and tool-facing paths with mocked HTTP, without launching a nested Pi sandbox or sending a billed request.
+
+## Tool-output shadow pilot
+
+The optional [tool-output pilot](../tool-output-pilot/settings.md) ranks explicitly approved Bash output without shortening tool results. It is off by default, requires global command approvals, and obeys `classifier.enabled`. Shadow mode sends eligible output to the configured text classifier and adds latency and cost; it does not save context tokens.
