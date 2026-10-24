@@ -61,6 +61,6 @@ Pi's current System One adapter rejects image input. The OpenRouter bridge conve
 
 The opt-in installed-SDK test takes `PI_CLASSIFIER_RUNTIME_MODULE`, the absolute path to the installed Pi coding-agent SDK's `dist/index.js`. It probes both native and tool-facing paths with mocked HTTP, without launching a nested Pi sandbox or sending a billed request.
 
-## Tool-output shadow pilot
+## Local output previews
 
-The optional [tool-output pilot](../tool-output-pilot/settings.md) ranks explicitly approved Bash output without shortening tool results. It is off by default, requires global command approvals, and obeys `classifier.enabled`. Shadow mode sends eligible output to the configured text classifier and adds latency and cost; it does not save context tokens.
+[Bash output previews](../tool-output-pilot/settings.md) use deterministic excerpts and local artifacts, not a classifier. They require trusted-project opt-in through `toolOutput.enabled` and do not use `classifier.enabled`.

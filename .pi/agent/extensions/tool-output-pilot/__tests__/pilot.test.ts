@@ -324,3 +324,43 @@ test("installed hashline reader retrieves preview artifacts with paginated ancho
   expect(text).not.toContain("Progress 202:");
   expect(text).toMatch(/[a-z]{5}│/u);
 }, 20_000);
+
+test("mixed fixture retains buried constraints and revisions without retaining whole progress blocks", async () => {
+  const headings = [
+    "SYNTHETIC CASE mixed. A staged deployment simulation. Exit zero means capture succeeded.",
+    "Progress only. Object scanning is underway; this block contains no outcome.",
+    "CONSTRAINT: Run only on the staging host. Database schema 7 is required; schema 6 is incompatible.",
+    "Progress only. Artifact enumeration continues; counters do not establish readiness.",
+    "REVISION: Earlier readiness was based on stale cache data. Current readiness is NO; production release is prohibited.",
+    "FINAL: Simulation complete. Use the current readiness and host/schema constraints above.",
+  ];
+  const text = headings
+    .map((heading, i) =>
+      Array.from(
+        { length: 20 },
+        (_, j) =>
+          `${(j === 0 ? heading : `Progress block ${i}, tick ${j}: synthetic objects enumerated; no additional findings.`).padEnd(199, " ")}\n`,
+      ).join(""),
+    )
+    .join("");
+  const h = await harness();
+  const start = performance.now();
+  const changed = await h.run(result(text));
+  const elapsedMs = performance.now() - start;
+  const preview = changed?.content?.[0];
+  if (preview?.type !== "text") throw new Error("Fixture was not previewed");
+  expect(await readFile(String(h.records[0]?.artifactPath), "utf8")).toBe(text);
+  expect(preview.text).toContain(headings[2] ?? "");
+  expect(preview.text).toContain(headings[4] ?? "");
+  expect(preview.text).toContain(headings[5] ?? "");
+  expect(Buffer.byteLength(preview.text)).toBeLessThan(6000);
+  console.info(
+    JSON.stringify({
+      fixture: "mixed",
+      originalBytes: Buffer.byteLength(text),
+      previewBytes: Buffer.byteLength(preview.text),
+      elapsedMs,
+      classifierCalls: 0,
+    }),
+  );
+});
