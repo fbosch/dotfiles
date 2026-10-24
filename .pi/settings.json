@@ -1,4 +1,7 @@
 {
+  "defaultProvider": "openai-codex",
+  "defaultModel": "gpt-6.1-sol-fast",
+  "defaultThinkingLevel": "medium",
   "skillTweaks": {
     "coldSkills": [
       "xstate",
