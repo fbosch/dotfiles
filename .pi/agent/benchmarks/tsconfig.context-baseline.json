@@ -2,6 +2,10 @@
   "extends": "../tsconfig.json",
   "include": [
     "context-baseline.ts",
-    "__tests__/context-baseline.test.ts"
+    "context-masking-replay.ts",
+    "__tests__/context-baseline.test.ts",
+    "__tests__/context-masking-replay.test.ts",
+    "context-masking-recall-probe.ts",
+    "__tests__/context-masking-recall-probe.test.ts"
   ]
 }

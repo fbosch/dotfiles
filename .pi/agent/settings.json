@@ -35,6 +35,9 @@
       "overflow"
     ]
   },
+  "contextMasking": {
+    "enabled": true
+  },
   "quickReplies": {
     "enabled": true
   },

@@ -1,0 +1,127 @@
+import { mkdir, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import {
+  type ExtensionAPI,
+  type ExtensionContext,
+  getAgentDir,
+  type SessionBoundaryDraft,
+  SettingsManager,
+  type TurnEndEvent,
+  type TurnEndEventResult,
+} from "@earendil-works/pi-coding-agent";
+import {
+  estimateTokens,
+  type MaskCandidate,
+  type MaskingSettings,
+  parseSettings,
+  placeholder,
+  selectMasks,
+} from "./policy";
+
+export const CUSTOM_TYPE = "context-masking";
+
+function loadSettings(ctx: ExtensionContext): MaskingSettings {
+  const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
+    projectTrusted: ctx.isProjectTrusted(),
+  });
+  if (settings.drainErrors().length > 0) throw new Error("Invalid settings");
+  return parseSettings(settings.getGlobalSettings());
+}
+
+interface Dependencies {
+  settings: (ctx: ExtensionContext) => MaskingSettings;
+  artifactRoot: () => string;
+}
+
+const safeName = (value: string): string => value.replace(/[^A-Za-z0-9_-]/gu, "_");
+
+async function writeArtifacts(
+  root: string,
+  sessionId: string,
+  candidates: readonly MaskCandidate[],
+): Promise<{ candidate: MaskCandidate; path: string }[]> {
+  const dir = join(root, safeName(sessionId));
+  await mkdir(dir, { recursive: true, mode: 0o700 });
+  const written: { candidate: MaskCandidate; path: string }[] = [];
+  for (const candidate of candidates) {
+    const path = join(dir, `${safeName(candidate.entryId)}.txt`);
+    try {
+      await writeFile(path, candidate.text, { mode: 0o600 });
+      written.push({ candidate, path });
+    } catch {
+      // Never hide a result that cannot be read back.
+    }
+  }
+  return written;
+}
+
+export function registerContextMasking(
+  pi: Pick<ExtensionAPI, "on">,
+  dependencies: Dependencies = {
+    settings: loadSettings,
+    artifactRoot: () => join(getAgentDir(), "cache", "context-masking"),
+  },
+): void {
+  pi.on(
+    "turn_end",
+    async (event: TurnEndEvent, ctx: ExtensionContext): Promise<TurnEndEventResult | undefined> => {
+      let settings: MaskingSettings;
+      try {
+        settings = dependencies.settings(ctx);
+      } catch {
+        return undefined;
+      }
+      if (!settings.enabled) return undefined;
+      const usage = ctx.getContextUsage();
+      if (usage?.tokens == null || usage.contextWindow <= 0) return undefined;
+      if (usage.tokens < settings.triggerRatio * usage.contextWindow) return undefined;
+
+      const candidates = selectMasks(event.context.contextEntries, settings);
+      const written = await writeArtifacts(
+        dependencies.artifactRoot(),
+        ctx.sessionManager.getSessionId(),
+        candidates,
+      );
+      const edits = written.map(({ candidate, path }) => ({
+        candidate,
+        text: placeholder(candidate, path),
+      }));
+      const freedTokens = estimateTokens(
+        edits.reduce((sum, e) => sum + e.candidate.text.length - e.text.length, 0),
+      );
+      // A batch that frees little would still rewrite history and cost a cache rebuild.
+      if (edits.length === 0 || freedTokens < settings.minFreedRatio * usage.tokens)
+        return undefined;
+
+      const drafts: SessionBoundaryDraft[] = edits.map(
+        ({ candidate, text }): SessionBoundaryDraft => ({
+          type: "context_edit",
+          targetId: candidate.entryId,
+          replacement: { content: [{ type: "text", text }] },
+        }),
+      );
+      drafts.push({
+        type: "custom",
+        customType: CUSTOM_TYPE,
+        data: {
+          masked: edits.length,
+          freedTokens,
+          tokensBefore: usage.tokens,
+          contextWindow: usage.contextWindow,
+        },
+      });
+      if (ctx.hasUI) {
+        ctx.ui.notify(
+          `Masked ${edits.length} old tool results (about ${Math.round(freedTokens / 1000)}k tokens).`,
+          "info",
+        );
+      }
+      // Boundary results replace earlier proposals, so keep entries other handlers proposed.
+      return { entries: [...event.entries, ...drafts] };
+    },
+  );
+}
+
+export default function contextMasking(pi: ExtensionAPI): void {
+  registerContextMasking(pi);
+}

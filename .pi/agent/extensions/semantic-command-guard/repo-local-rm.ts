@@ -39,7 +39,7 @@ function isWithin(root: string, candidate: string, allowRoot: boolean): boolean 
 }
 
 // Reject expansion and compound shell syntax rather than guessing at final targets.
-function parseSimpleRm(command: string): string[] | undefined {
+export function parseLiteralWords(command: string): string[] | undefined {
   if (/[\r\n]/.test(command)) return undefined;
 
   const words: string[] = [];
@@ -101,7 +101,12 @@ function parseSimpleRm(command: string): string[] | undefined {
 
   if (quote !== undefined) return undefined;
   flush();
-  if (words[0] !== "rm") return undefined;
+  return words;
+}
+
+export function parseSimpleRm(command: string): string[] | undefined {
+  const words = parseLiteralWords(command);
+  if (words?.[0] !== "rm") return undefined;
 
   const targets: string[] = [];
   let options = true;
@@ -138,7 +143,7 @@ function parseSimpleRm(command: string): string[] | undefined {
   return targets.length > 0 ? targets : undefined;
 }
 
-function targetIsInside(root: string, cwd: string, target: string): boolean {
+export function targetIsInside(root: string, cwd: string, target: string): boolean {
   const normalizedTarget = resolve(cwd, target);
   if (!isWithin(root, normalizedTarget, false)) return false;
 

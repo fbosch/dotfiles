@@ -86,6 +86,31 @@ function harness(
   return { call, handlers, notifications, prompts, ctx, controller };
 }
 
+test.each(["shadow", "confirm"])("skips verified /tmp file mutations in %s mode", async (mode) => {
+  let calls = 0;
+  const h = harness(
+    async () => {
+      calls += 1;
+      return FLAGGED;
+    },
+    () => ({ classifier: { commandGuard: { enabled: true, mode } } }),
+    async () => false,
+    "/",
+  );
+  for (const command of [
+    "rm -f /tmp/command-guard-missing",
+    "mv /tmp/command-guard-old /tmp/command-guard-new",
+    "truncate -s 0 /tmp/command-guard-output",
+    "chmod 600 /tmp/command-guard-output",
+  ]) {
+    expect(await h.call(command)).toBeUndefined();
+    await flush();
+  }
+  expect(calls).toBe(0);
+  expect(h.prompts).toHaveLength(0);
+  expect(h.notifications).toHaveLength(0);
+});
+
 describe("settings", () => {
   test.each([
     undefined,
@@ -448,7 +473,7 @@ describe("confirm mode", () => {
       root,
     );
 
-    for (const command of ["rm -rf ../outside", 'rm -rf "$HOME"']) {
+    for (const command of ["rm -rf /var/command-guard-outside", 'rm -rf "$HOME"']) {
       expect(await h.call(command)).toEqual({
         block: true,
         reason: "Bash command was not approved.",

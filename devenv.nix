@@ -373,7 +373,7 @@ in
     "test:pi-context-baseline".exec = ''
       set -euo pipefail
       cd .pi/agent
-      bun test benchmarks/__tests__/context-baseline.test.ts
+      bun test benchmarks/__tests__/context-baseline.test.ts benchmarks/__tests__/context-masking-replay.test.ts benchmarks/__tests__/context-masking-recall-probe.test.ts
       node_modules/.bin/tsc --project benchmarks/tsconfig.context-baseline.json
     '';
     "test:pi-diff-rendering-extension".exec = ''

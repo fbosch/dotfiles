@@ -12,6 +12,7 @@ import { confirmCommandPermission } from "../prompt-ui/command-permission";
 import { isRecord } from "../shared/is-record";
 import { flaggedRisks, inspectCommand } from "./inspection";
 import { isRepoLocalRm } from "./repo-local-rm";
+import { isTmpFileMutation } from "./tmp-file-mutation";
 
 interface CommandGuardSettings {
   readonly enabled: boolean;
@@ -125,7 +126,12 @@ export default function semanticCommandGuard(
       const hardReason = catastrophicCommandReason(command);
       if (hardReason) return confirming ? block(hardReason) : undefined;
     }
-    if (inspection.kind === "skip" || isRepoLocalRm(command, cwd)) return;
+    if (
+      inspection.kind === "skip" ||
+      isTmpFileMutation(command, cwd) ||
+      isRepoLocalRm(command, cwd)
+    )
+      return;
     // shortcut: shadow mode samples one in-flight command to bound background cost.
     // Confirm mode must assess every selected call; it never uses this skip.
     if (!confirming && shadowPending) return;

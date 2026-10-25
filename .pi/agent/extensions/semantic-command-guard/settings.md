@@ -81,6 +81,13 @@ strictly inside the Git worktree. Shell expansion, globs, compound commands,
 worktree-root or outside targets, and paths resolving outside through symlinks
 remain under review.
 
+Standalone literal file mutations also skip classification when every operand
+resolves strictly inside `/tmp`: `rm`, `rmdir`, `unlink`, `mv`, `truncate`,
+`chmod`, `chown`, `touch`, `tee`, and `shred`, with supported options. Relative
+paths use the working directory. Mixed targets, `/tmp` itself, symlink escapes,
+unknown options, shell expansion, compound commands, and inline code remain
+under review. This exemption does not bypass catastrophic-command checks.
+
 Commands longer than 16,000 characters are not truncated. Shadow mode skips
 them with a warning; confirm mode blocks them.
 
