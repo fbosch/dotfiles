@@ -1,4 +1,7 @@
-import type { AgentMessage, SessionEntry } from "@earendil-works/pi-coding-agent";
+import type { ContextEvent, SessionEntry } from "@earendil-works/pi-coding-agent";
+
+type AgentMessage = ContextEvent["messages"][number];
+
 import { isMatching, P } from "ts-pattern";
 import { MARKER } from "./policy";
 
@@ -23,10 +26,11 @@ const oneLine = (text: string): string => {
   return line.length > MAX_CALL_CHARS ? `${line.slice(0, MAX_CALL_CHARS - 1)}…` : line;
 };
 
-function describeCall(name: string, args: unknown): string {
+function describeCall(args: unknown): string | undefined {
   if (isMatching({ command: P.string }, args)) return oneLine(args.command);
   if (isMatching({ path: P.string }, args)) return oneLine(args.path);
-  return oneLine(JSON.stringify(args ?? {}));
+  const json = JSON.stringify(args ?? {});
+  return json === "{}" ? undefined : oneLine(json);
 }
 
 /** Tool-call descriptions by tool-result entry ID, for the results named in `ids`. */
@@ -43,7 +47,8 @@ function callsFor(branch: readonly SessionEntry[], ids: ReadonlySet<string>): Ma
     for (const block of entry.message.content) {
       const resultId = block.type === "toolCall" ? resultCalls.get(block.id) : undefined;
       if (block.type === "toolCall" && resultId !== undefined) {
-        described.set(resultId, describeCall(block.name, block.arguments));
+        const call = describeCall(block.arguments);
+        if (call !== undefined) described.set(resultId, call);
       }
     }
   }
@@ -61,8 +66,9 @@ export function buildIndex(
 ): string | undefined {
   const items = new Map<string, MaskedItem>();
   for (const entry of branch) {
-    if (!isMatching(RecordPattern, entry)) continue;
-    for (const item of entry.data.items) items.set(item.entryId, item);
+    const record: unknown = entry;
+    if (!isMatching(RecordPattern, record)) continue;
+    for (const item of record.data.items) items.set(item.entryId, item);
   }
   const hidden = [...items.values()].filter(
     (item) => !visibleIds.has(item.entryId) && exists(item.path),

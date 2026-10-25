@@ -12,9 +12,22 @@ import type {
 import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-classifier-registry";
 import { type ClassifierRequestResult, createClassifierRequester } from "../../../lib/classifier";
 import { readJsonConfig } from "../../../lib/extension-config";
+import { readNonoCapabilities } from "../../../lib/nono-capabilities";
 import semanticCommandGuard, { resolveCommandGuardSettings } from "../index";
 import { flaggedRisks, inspectCommand } from "../inspection";
-import { readNonoCapabilities } from "../sandbox";
+import type { SandboxGrants } from "../sandbox";
+
+function capabilityFile(root: string, access: "read" | "readwrite"): string {
+  return JSON.stringify({
+    fs: [{ path: root, access, is_file: false, source: "user" }],
+    deny_paths: [],
+    applied_bypasses: [],
+    allowed_commands: [],
+    blocked_commands: [],
+    allowed_domains: [],
+    net_blocked: false,
+  });
+}
 
 const ENABLED = { classifier: { commandGuard: { enabled: true } } };
 const FLAGGED: ClassifierRequestResult = {
@@ -45,7 +58,7 @@ function harness(
   loadSettings: () => unknown = () => ENABLED,
   confirm: (signal: AbortSignal | undefined) => Promise<boolean> = async () => false,
   cwd: string = "/private-workspace",
-  loadSandbox: typeof import("../sandbox").readNonoCapabilities = () => undefined,
+  loadSandbox: () => SandboxGrants | undefined = () => undefined,
 ) {
   const handlers = new Map<string, (event: unknown, ctx: ExtensionContext) => unknown>();
   const notifications: string[] = [];
@@ -155,26 +168,12 @@ test("uses current capability-file grants and falls back to review for invalid m
     root,
     () => readNonoCapabilities(capFile),
   );
-  writeFileSync(
-    capFile,
-    JSON.stringify({
-      fs: [{ path: root, access: "readwrite", is_file: false }],
-      deny_paths: [],
-      net_blocked: false,
-    }),
-  );
+  writeFileSync(capFile, capabilityFile(root, "readwrite"));
   h.handlers.get("session_start")?.({}, h.ctx);
   expect(await h.call("rm -f file")).toBeUndefined();
   expect(requests).toBe(0);
   expect(h.notifications).toEqual([]);
-  writeFileSync(
-    capFile,
-    JSON.stringify({
-      fs: [{ path: root, access: "read", is_file: false }],
-      deny_paths: [],
-      net_blocked: false,
-    }),
-  );
+  writeFileSync(capFile, capabilityFile(root, "read"));
   expect(await h.call("rm -f file")).toMatchObject({ block: true });
   writeFileSync(capFile, "invalid");
   h.handlers.get("session_start")?.({}, h.ctx);

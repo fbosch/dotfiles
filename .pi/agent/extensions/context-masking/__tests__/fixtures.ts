@@ -11,7 +11,12 @@ const usage = {
 
 // Builds a real session so tests exercise Pi's own projection and context edits.
 export function sessionWith(
-  turns: readonly { resultChars: number; tool?: string; image?: boolean }[],
+  turns: readonly {
+    resultChars: number;
+    tool?: string;
+    image?: boolean;
+    args?: Record<string, string>;
+  }[],
 ) {
   const manager = SessionManager.inMemory("/work");
   manager.appendMessage({ role: "user", content: "task", timestamp: 0 });
@@ -20,7 +25,7 @@ export function sessionWith(
     const toolName = turn.tool ?? "read";
     manager.appendMessage({
       role: "assistant",
-      content: [{ type: "toolCall", id: `call${i}`, name: toolName, arguments: {} }],
+      content: [{ type: "toolCall", id: `call${i}`, name: toolName, arguments: turn.args ?? {} }],
       api: "openai-responses",
       provider: "openai",
       model: "m",

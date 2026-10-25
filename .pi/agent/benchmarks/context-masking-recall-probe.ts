@@ -26,6 +26,8 @@ export interface ProbeCase {
   answer: string;
   /** Whether answering requires the masked content at all. */
   needsRecall: boolean;
+  /** Compact after masking with a summary that omits the placeholder, as a lossy summary would. */
+  compacted?: boolean;
 }
 
 const filler = (label: string, lines: number) =>
@@ -80,6 +82,20 @@ export function probeCases(token = () => randomBytes(4).toString("hex")): ProbeC
       question: "What is the value of SHARD_SALT in src/config.ts? Reply with only the value.",
       answer: salt,
       needsRecall: true,
+    },
+    {
+      name: "compacted-command",
+      tool: "bash",
+      args: { command: "./scripts/collect-diagnostics.sh" },
+      files: {},
+      maskedText: [filler("diag", 80), `migration checksum: ${checksum}`, filler("tail", 40)].join(
+        "\n",
+      ),
+      question:
+        "Earlier, the diagnostics script printed a migration checksum. What was it? Reply with only the checksum.",
+      answer: checksum,
+      needsRecall: true,
+      compacted: true,
     },
     {
       name: "control",
@@ -167,7 +183,7 @@ export async function buildSession(
       timestamp: Date.now(),
     });
   }
-  manager.appendMessage(
+  const closingId = manager.appendMessage(
     assistant([
       {
         type: "text",
@@ -185,6 +201,16 @@ export async function buildSession(
     artifactPath,
   );
   manager.appendContextEdit(maskedId, { content: [{ type: "text", text }] });
+  manager.appendCustomEntry("context-masking", {
+    items: [{ entryId: maskedId, toolName: probe.tool, path: artifactPath }],
+  });
+  if (probe.compacted) {
+    manager.appendCompaction(
+      "The user asked why the nightly migration job is slow. The batch directories under jobs/ were missing, so the job had nothing to process.",
+      closingId,
+      60_000,
+    );
+  }
 
   const header = manager.getHeader();
   const sessionFile = join(dir, "session.jsonl");
@@ -263,12 +289,17 @@ function run(
   });
 }
 
-async function probeOnce(probe: ProbeCase, model: string, dir: string) {
+async function probeOnce(
+  probe: ProbeCase,
+  model: string,
+  dir: string,
+  extraArgs: readonly string[] = [],
+) {
   const { sessionFile, artifactPath, cwd } = await buildSession(probe, dir);
   const before = (await readFile(sessionFile, "utf8")).trim().split("\n").length;
   const result = await run(
     PI_BIN,
-    ["-p", "--session", sessionFile, "--model", model, probe.question],
+    ["-p", ...extraArgs, "--session", sessionFile, "--model", model, probe.question],
     cwd,
     600_000,
   );
@@ -291,15 +322,31 @@ async function main(): Promise<void> {
   const [models = "openai-codex/gpt-6-luna-fast", repeatsArg = "2"] = process.argv.slice(2);
   const repeats = Number(repeatsArg);
   const root = join(tmpdir(), `context-masking-probe-${Date.now()}`);
-  const jobs: { model: string; probe: ProbeCase; dir: string }[] = [];
+  // PROBE_ISOLATE=1 runs only the compacted case with every other extension disabled, once with
+  // context-masking loaded and once without, so the saved-results index is the only difference.
+  const isolate = process.env.PROBE_ISOLATE === "1";
+  const maskingDir = join(import.meta.dir, "..", "extensions", "context-masking");
+  const arms: { arm: string; args: string[] }[] = isolate
+    ? [
+        { arm: "index", args: ["-ne", "-e", maskingDir] },
+        { arm: "no-index", args: ["-ne"] },
+      ]
+    : [{ arm: "full", args: [] }];
+  const cases = probeCases().filter((probe) => !isolate || probe.compacted);
+  const jobs: { model: string; probe: ProbeCase; dir: string; arm: string; args: string[] }[] = [];
   for (const model of models.split(",")) {
     for (let r = 0; r < repeats; r++) {
-      for (const probe of probeCases())
-        jobs.push({
-          model,
-          probe,
-          dir: join(root, `${model.replace(/\W/gu, "_")}-${probe.name}-${r}`),
-        });
+      for (const probe of cases) {
+        for (const { arm, args } of arms) {
+          jobs.push({
+            model,
+            probe,
+            arm,
+            args,
+            dir: join(root, `${model.replace(/\W/gu, "_")}-${probe.name}-${arm}-${r}`),
+          });
+        }
+      }
     }
   }
   const results: Record<string, unknown>[] = [];
@@ -307,9 +354,9 @@ async function main(): Promise<void> {
   // Bounded concurrency keeps provider rate limits and local Pi startup load reasonable.
   const worker = async (): Promise<void> => {
     for (let job = queue.shift(); job !== undefined; job = queue.shift()) {
-      const outcome = await probeOnce(job.probe, job.model, job.dir);
-      results.push({ model: job.model, case: job.probe.name, ...outcome });
-      console.error(`${job.model} ${job.probe.name}: ${JSON.stringify(outcome)}`);
+      const outcome = await probeOnce(job.probe, job.model, job.dir, job.args);
+      results.push({ model: job.model, case: job.probe.name, arm: job.arm, ...outcome });
+      console.error(`${job.model} ${job.probe.name} ${job.arm}: ${JSON.stringify(outcome)}`);
     }
   };
   await Promise.all([worker(), worker(), worker(), worker()]);

@@ -33,7 +33,7 @@ At the end of a turn, if context usage is at or above the trigger, the extension
 1. Selects tool results older than the protected turns that are at least `minResultChars` long. Results that contain images, or that are already masked or omitted, stay as they are.
 2. Writes each result's text to `~/.pi/agent/cache/context-masking/<session-id>/<entry-id>.txt`, readable only by you. A result that cannot be written is not masked.
 3. Replaces each result in future model context with a placeholder that names the tool, its size, and the file path, using Pi `context_edit` entries.
-4. Records a `context-masking` custom entry with the number of results masked and the estimated tokens freed.
+4. Records a `context-masking` custom entry with the number of results masked, the estimated tokens freed, and each hidden result's entry ID, tool, and file path.
 
 The raw session file keeps every original result, and `/tree` navigation to a point before the edit shows the originals again.
 
@@ -44,6 +44,12 @@ To see a hidden result again, the model calls `read` on the path in the placehol
 Masking runs as a batch, then history stays append-only until the next batch. Each batch changes context from the first masked result onward, so the next request rewrites the provider's prompt cache from that point. `minFreedRatio` stops small batches that would cost a cache rebuild for little gain.
 
 Pi re-estimates context from the edited projection as soon as a masking batch is committed, before its own compaction check. If masking frees enough, compaction does not run on that turn. When masking cannot keep context under Pi's compaction threshold, normal compaction, including `pi-compaction-model`, still runs; its summary then sees placeholders instead of the hidden results.
+
+## After compaction
+
+A compaction summary can drop placeholders and their file paths, which would leave hidden results unreachable. After a compaction, the extension adds an index of saved results to each request, right after the compaction summary. The index lists each result whose placeholder is no longer in context, with its tool, command or path, and file. It lists at most 40 results, newest first, and skips files that no longer exist.
+
+The index is built from session entries, not from the summary, so it works whichever extension writes the summary. It is added per request rather than stored in the session. It changes only when a new compaction lands, so it does not break the prompt cache between compactions. It is added even when `enabled` is `false`, because earlier batches may still hide results.
 
 ## Limits
 

@@ -7,11 +7,12 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { INTERACTIVE_CLASSIFIER_TIMEOUT_MS, requestClassifier } from "../../lib/classifier";
 import { cachedJsonConfigReader } from "../../lib/extension-config";
+import { readNonoCapabilities } from "../../lib/nono-capabilities";
 import { catastrophicCommandReason } from "../catastrophic-command-guard";
 import { confirmCommandPermission } from "../prompt-ui/command-permission";
 import { isRecord } from "../shared/is-record";
 import { flaggedRisks, inspectCommand } from "./inspection";
-import { commandFitsSandbox, readNonoCapabilities } from "./sandbox";
+import { commandFitsSandbox, type SandboxGrants } from "./sandbox";
 
 interface CommandGuardSettings {
   readonly enabled: boolean;
@@ -42,7 +43,7 @@ export function resolveCommandGuardSettings(settings: unknown): CommandGuardSett
 interface Dependencies {
   loadSettings: () => unknown;
   request: typeof requestClassifier;
-  loadSandbox: typeof readNonoCapabilities;
+  loadSandbox: () => SandboxGrants | undefined;
 }
 
 type BlockedCall = { block: true; reason: string };
@@ -54,7 +55,7 @@ export default function semanticCommandGuard(
     // Read on every Bash call; reparse only when settings.json changes.
     loadSettings: cachedJsonConfigReader(() => join(getAgentDir(), "settings.json")),
     request: requestClassifier,
-    loadSandbox: readNonoCapabilities,
+    loadSandbox: () => readNonoCapabilities(),
   },
 ): void {
   let shadowPending: AbortController | undefined;

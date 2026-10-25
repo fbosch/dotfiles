@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { commandFitsSandbox, type NonoCapabilities, readNonoCapabilities } from "../sandbox";
+import { commandFitsSandbox, type SandboxGrants } from "../sandbox";
 
 const roots: string[] = [];
 afterEach(() => {
@@ -12,51 +12,15 @@ afterEach(() => {
 function fixture() {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "guard-capabilities-")));
   roots.push(root);
-  const capabilities: NonoCapabilities = {
+  const capabilities: { fs: SandboxGrants["fs"][number][]; deny_paths: string[] } = {
     fs: [{ path: root, access: "readwrite", is_file: false }],
     deny_paths: [],
   };
   return { root, capabilities };
 }
 
-test("reads runtime grants without leaking or depending on profile source paths", () => {
-  const { root, capabilities } = fixture();
-  const path = join(root, "capabilities.json");
-  writeFileSync(path, JSON.stringify({ ...capabilities, net_blocked: false }));
-  expect(readNonoCapabilities(path)).toEqual(capabilities);
-  writeFileSync(path, JSON.stringify({ ...capabilities, net_blocked: true }));
-  expect(readNonoCapabilities(path)).toEqual(capabilities);
-});
-
-test.each([
-  "",
-  "not-json",
-  "null",
-  "{}",
-  JSON.stringify({ fs: [], net_blocked: false }),
-  JSON.stringify({ fs: [], net_blocked: false, deny_paths: [1] }),
-  JSON.stringify({
-    fs: [{ path: "/tmp", access: "execute", is_file: false }],
-    net_blocked: false,
-    deny_paths: [],
-  }),
-  JSON.stringify({
-    fs: [{ path: "relative", access: "readwrite", is_file: false }],
-    net_blocked: false,
-    deny_paths: [],
-  }),
-])("does not trust malformed capability data: %s", (contents) => {
+test("does not grant exemptions without sandbox grants", () => {
   const { root } = fixture();
-  const path = join(root, "invalid.json");
-  writeFileSync(path, contents);
-  expect(readNonoCapabilities(path)).toBeUndefined();
-});
-
-test("does not grant exemptions for missing sandbox metadata", () => {
-  expect(readNonoCapabilities("")).toBeUndefined();
-  expect(readNonoCapabilities("relative.json")).toBeUndefined();
-  const { root } = fixture();
-  expect(readNonoCapabilities(join(root, "missing.json"))).toBeUndefined();
   expect(commandFitsSandbox("rm -f file", root, undefined)).toBe(false);
 });
 

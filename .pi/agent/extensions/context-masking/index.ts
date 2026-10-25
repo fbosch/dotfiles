@@ -68,19 +68,22 @@ export function registerContextMasking(
   let cached: { compactionId: string; text: string | undefined } | undefined;
   pi.on("context", (event, ctx) => {
     const branch = ctx.sessionManager.getBranch();
-    const compaction = branch.findLast((entry) => entry.type === "compaction");
-    if (compaction === undefined) return undefined;
-    if (cached?.compactionId !== compaction.id) {
+    let compactionId: string | undefined;
+    for (const entry of branch) if (entry.type === "compaction") compactionId = entry.id;
+    if (compactionId === undefined) return undefined;
+    let current = cached;
+    if (current?.compactionId !== compactionId) {
       const visible = new Set(
         ctx.sessionManager
           .buildSessionProjection()
           .entries.filter((entry) => entry.messages.length > 0)
           .map((entry) => entry.sourceEntry.id),
       );
-      cached = { compactionId: compaction.id, text: buildIndex(branch, visible, existsSync) };
+      current = { compactionId, text: buildIndex(branch, visible, existsSync) };
+      cached = current;
     }
-    if (cached.text === undefined) return undefined;
-    const messages = withIndex(event.messages, cached.text);
+    if (current.text === undefined) return undefined;
+    const messages = withIndex(event.messages, current.text);
     return messages === undefined ? undefined : { messages };
   });
   pi.on(

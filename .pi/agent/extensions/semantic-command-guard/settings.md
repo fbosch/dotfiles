@@ -78,7 +78,7 @@ deletion, overwriting, destructive Git operations, network transfers, and
 inline code. Simple reads and ordinary Git inspection skip classification.
 
 File operations skip semantic review only when every resolved access matches
-the runtime filesystem grants in `NONO_CAP_FILE`. Reads require `read` or
+the runtime filesystem grants in `NONO_CAP_FILE`, parsed by `lib/nono-capabilities.ts`. Reads require `read` or
 `readwrite`; mutations require `write` or `readwrite`. File grants match exactly,
 and directory grants include descendants. No worktree or `/tmp` exemptions
 are hardcoded. Narrow the nono profile to narrow the agent's permitted scope.
