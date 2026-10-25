@@ -1,0 +1,135 @@
+import { afterEach, expect, test } from "bun:test";
+import { link, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import type { SessionEntry } from "@earendil-works/pi-coding-agent";
+import { RECALL_LIMITS, recallSaved, registerRecall } from "../recall";
+import { sessionWith } from "./fixtures";
+
+const roots: string[] = [];
+afterEach(async () => {
+  for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
+});
+
+async function fixture(texts: string[]) {
+  const root = await mkdtemp(join(tmpdir(), "recall-test-"));
+  roots.push(root);
+  const { manager, resultIds } = sessionWith(texts.map(() => ({ resultChars: 1_000 })));
+  const dir = join(root, manager.getSessionId());
+  await mkdir(dir);
+  const paths: string[] = [];
+  for (const [i, text] of texts.entries()) {
+    const path = join(dir, `${resultIds[i]}.txt`);
+    await writeFile(path, text);
+    paths.push(path);
+  }
+  manager.appendCustomEntry("context-masking", {
+    items: paths.map((path, i) => ({
+      path,
+      entryId: resultIds[i],
+      toolName: "read",
+    })),
+  });
+  return { root, manager, paths, resultIds };
+}
+
+test("returns the relevant passage with its exact saved path and line numbers", async () => {
+  const f = await fixture([
+    "routine passed",
+    `${"routine passed\n".repeat(120)}Archived audit receipt: audit-æøå-1234\nfinished`,
+  ]);
+  const report = await recallSaved(f.manager.getBranch(), f.root, "old audit receipt");
+  expect(report.passages).toHaveLength(1);
+  expect(report.text).toContain("audit-æøå-1234");
+  expect(report.text).toContain("121│Archived audit receipt");
+  expect(report.text).toContain(f.paths[1] ?? "");
+  expect(report.scanned).toBe(2);
+  expect(report.skipped).toBe(0);
+  expect(report.limited).toBe(false);
+});
+
+test("distinguishes no match from unreadable or missing artifacts", async () => {
+  const f = await fixture(["routine passed"]);
+  expect((await recallSaved(f.manager.getBranch(), f.root, "audit receipt")).passages).toHaveLength(
+    0,
+  );
+  await rm(f.paths[0] ?? "");
+  const report = await recallSaved(f.manager.getBranch(), f.root, "audit receipt");
+  expect(report.skipped).toBe(1);
+  expect(report.scanned).toBe(0);
+});
+
+test("does not read unrecorded results, arbitrary paths, or symlinks", async () => {
+  const f = await fixture(["routine passed"]);
+  const secret = join(f.root, "secret.txt");
+  await writeFile(secret, "audit receipt: forbidden");
+  f.manager.appendCustomEntry("context-masking", {
+    items: [
+      { entryId: f.resultIds[0], toolName: "read", path: secret },
+      { entryId: "absent-entry", toolName: "read", path: f.paths[0] },
+    ],
+  });
+  let report = await recallSaved(f.manager.getBranch(), f.root, "audit receipt");
+  expect(report.scanned).toBe(0);
+  expect(report.text).not.toContain("forbidden");
+  await rm(f.paths[0] ?? "");
+  await symlink(secret, f.paths[0] ?? "");
+  f.manager.appendCustomEntry("context-masking", {
+    items: [{ entryId: f.resultIds[0], toolName: "read", path: f.paths[0] }],
+  });
+  report = await recallSaved(f.manager.getBranch(), f.root, "audit receipt");
+  expect(report.scanned).toBe(0);
+  expect(report.skipped).toBe(1);
+});
+
+test("rejects symlinked session directories", async () => {
+  const f = await fixture(["audit receipt: forbidden"]);
+  const original = join(f.root, f.manager.getSessionId());
+  const moved = join(f.root, "moved");
+  await mkdir(moved);
+  const name = `${f.resultIds[0]}.txt`;
+  await link(f.paths[0] ?? "", join(moved, name));
+  await rm(original, { recursive: true });
+  await symlink(moved, original);
+  const report = await recallSaved(f.manager.getBranch(), f.root, "audit");
+  expect(report.scanned).toBe(0);
+  expect(report.skipped).toBe(1);
+});
+
+test("reports scan limits and bounds returned output", async () => {
+  const f = await fixture([`audit receipt: found\n${"x".repeat(RECALL_LIMITS.fileBytes * 2)}`]);
+  const report = await recallSaved(f.manager.getBranch(), f.root, "audit receipt");
+  expect(report.bytes).toBe(RECALL_LIMITS.fileBytes);
+  expect(report.limited).toBe(true);
+  expect(report.text.length).toBeLessThanOrEqual(RECALL_LIMITS.outputChars);
+  expect(report.text).toContain("found");
+});
+
+test("rejects invalid queries, supports cancellation, and follows only supplied branch records", async () => {
+  const f = await fixture(["audit receipt: found"]);
+  await expect(recallSaved(f.manager.getBranch(), f.root, " ", 1)).rejects.toThrow();
+  await expect(recallSaved(f.manager.getBranch(), f.root, "audit", 4)).rejects.toThrow();
+  await expect(
+    recallSaved(f.manager.getBranch(), f.root, "audit", 1, AbortSignal.abort()),
+  ).rejects.toThrow();
+  const withoutRecords: SessionEntry[] = f.manager.getBranch().filter((e) => e.type !== "custom");
+  expect((await recallSaved(withoutRecords, f.root, "audit")).scanned).toBe(0);
+});
+
+test("registers recall as an optional deferred tool without changing the active tool set", () => {
+  const tools: { name: string; exposure: string | undefined }[] = [];
+  registerRecall({
+    registerTool: (tool) => {
+      tools.push({ name: tool.name, exposure: tool.exposure });
+    },
+  });
+  expect(tools[0]).toMatchObject({ name: "recall", exposure: "deferred" });
+});
+
+test("returns the matching region of an oversized line", async () => {
+  const f = await fixture([
+    `${"x".repeat(2_000)} audit receipt: audit-long-line ${"y".repeat(2_000)}`,
+  ]);
+  const report = await recallSaved(f.manager.getBranch(), f.root, "audit receipt");
+  expect(report.text).toContain("audit-long-line");
+});

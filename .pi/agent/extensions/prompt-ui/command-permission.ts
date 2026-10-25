@@ -88,6 +88,8 @@ export async function confirmCommandPermission(
                 1,
                 Math.min(
                   body.length,
+                  // Leave transcript context visible instead of filling tall terminals.
+                  12,
                   tui.terminal.rows - header.length - footer.length - help.length - rangeRows - 2,
                 ),
               );

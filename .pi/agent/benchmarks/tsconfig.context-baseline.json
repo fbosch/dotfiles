@@ -6,6 +6,12 @@
     "__tests__/context-baseline.test.ts",
     "__tests__/context-masking-replay.test.ts",
     "context-masking-recall-probe.ts",
-    "__tests__/context-masking-recall-probe.test.ts"
+    "__tests__/context-masking-recall-probe.test.ts",
+    "context-compaction-eval.ts",
+    "context-compaction-classify.ts",
+    "__tests__/context-compaction.test.ts",
+    "context-pruning-recall.ts",
+    "context-artifact-discovery-probe.ts",
+    "__tests__/context-pruning-recall.test.ts"
   ]
 }

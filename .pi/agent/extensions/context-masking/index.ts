@@ -19,6 +19,7 @@ import {
   placeholder,
   selectMasks,
 } from "./policy";
+import { registerRecall } from "./recall";
 
 export const CUSTOM_TYPE = "context-masking";
 
@@ -153,4 +154,5 @@ export function registerContextMasking(
 
 export default function contextMasking(pi: ExtensionAPI): void {
   registerContextMasking(pi);
+  registerRecall(pi);
 }

@@ -3,7 +3,12 @@ import { dirname, isAbsolute, join, parse, relative, resolve, sep } from "node:p
 
 /** The subset of nono's runtime grants that decides access. */
 export interface AccessGrants {
-  fs: ReadonlyArray<{ path: string; access: "read" | "write" | "readwrite"; is_file: boolean }>;
+  fs: ReadonlyArray<{
+    path: string;
+    access: "read" | "write" | "readwrite";
+    is_file: boolean;
+    source?: string;
+  }>;
   deny_paths: readonly string[];
 }
 
@@ -15,13 +20,13 @@ export type AccessDecision =
   | { kind: "ungranted"; path: string }
   | { kind: "unresolved" };
 
-export function within(root: string, candidate: string): boolean {
+function within(root: string, candidate: string): boolean {
   const suffix = relative(root, candidate);
   return suffix !== ".." && !suffix.startsWith(`..${sep}`) && !isAbsolute(suffix);
 }
 
 /** Resolves symlinks (including dangling ones) before applying "..", then returns an absolute path. */
-export function canonicalPath(cwd: string, target: string): string | undefined {
+function canonicalPath(cwd: string, target: string): string | undefined {
   const absolute = isAbsolute(target) ? target : `${realpathSync(cwd)}${sep}${target}`;
   const walk = (path: string, depth: number): string | undefined => {
     if (depth > 40) return undefined;

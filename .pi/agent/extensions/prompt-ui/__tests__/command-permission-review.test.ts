@@ -125,17 +125,26 @@ describe("command consent review", () => {
     );
   });
 
-  test("uses tall terminals and keeps the flag cause visible while scrolling", async () => {
-    const command = `printf '%s' '${"payload ".repeat(1300)}FINAL_TARGET'; rm out`;
+  test("keeps large multiline previews compact even on tall terminals", async () => {
+    const command = [
+      "printf '%s' '",
+      ...Array.from({ length: 100 }, (_, index) => `payload row ${index}`),
+      "FINAL_TARGET' > out; rm out",
+    ].join("\n");
     await review(command, (component, terminal) => {
-      terminal.rows = 48;
-      expect(component.render(100).length).toBeGreaterThan(30);
-      expect(component.render(100).length).toBeLessThanOrEqual(terminal.rows);
-      component.handleInput?.("\u001b[F");
-      const commandEnd = plain(component);
-      expect(commandEnd).toContain("FINAL_TARGET");
-      expect(commandEnd).toContain("Working directory: /workspace");
-      expect(commandEnd).toContain("Flagged: possible destructive changes.");
+      for (const rows of [24, 48, 120, 18]) {
+        terminal.rows = rows;
+        component.handleInput?.("\u001b[H");
+        expect(component.render(100).length).toBeLessThanOrEqual(Math.min(24, rows));
+        expect(plain(component)).toContain("Command");
+        component.handleInput?.("\u001b[F");
+        const commandEnd = plain(component);
+        expect(commandEnd).toContain("FINAL_TARGET");
+        expect(commandEnd).toContain("Working directory: /workspace");
+        expect(commandEnd).toContain("Flagged: possible destructive changes.");
+        expect(commandEnd).toContain("Run command");
+        expect(commandEnd).toContain("Cancel");
+      }
     });
   });
 });

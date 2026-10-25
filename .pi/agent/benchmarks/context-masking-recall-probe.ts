@@ -121,7 +121,7 @@ const USAGE = {
 
 // shortcut: synthetic history uses a foreign provider so Pi normalizes it for the probe model;
 // replace with recorded sessions if foreign-history conversion turns out to change behavior.
-function assistant(content: unknown[]) {
+export function assistant(content: unknown[]) {
   return {
     role: "assistant" as const,
     content,
@@ -263,7 +263,7 @@ export function scoreRun(
   return { recalledArtifact, reranOriginal, toolCalls, correct: finalText.includes(probe.answer) };
 }
 
-function run(
+export function run(
   command: string,
   args: string[],
   cwd: string,

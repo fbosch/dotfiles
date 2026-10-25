@@ -34,7 +34,10 @@ function describeCall(args: unknown): string | undefined {
 }
 
 /** Tool-call descriptions by tool-result entry ID, for the results named in `ids`. */
-function callsFor(branch: readonly SessionEntry[], ids: ReadonlySet<string>): Map<string, string> {
+export function callsFor(
+  branch: readonly SessionEntry[],
+  ids: ReadonlySet<string>,
+): Map<string, string> {
   const resultCalls = new Map<string, string>();
   for (const entry of branch) {
     if (ids.has(entry.id) && entry.type === "message" && entry.message.role === "toolResult") {
@@ -55,6 +58,16 @@ function callsFor(branch: readonly SessionEntry[], ids: ReadonlySet<string>): Ma
   return described;
 }
 
+export function savedItems(branch: readonly SessionEntry[]): Map<string, MaskedItem> {
+  const items = new Map<string, MaskedItem>();
+  for (const entry of branch) {
+    const record: unknown = entry;
+    if (!isMatching(RecordPattern, record)) continue;
+    for (const item of record.data.items) items.set(item.entryId, item);
+  }
+  return items;
+}
+
 /**
  * Lists masked results whose placeholders a compaction has removed from context, so their
  * saved files stay discoverable. `visibleIds` are source entries still in model context.
@@ -64,12 +77,7 @@ export function buildIndex(
   visibleIds: ReadonlySet<string>,
   exists: (path: string) => boolean,
 ): string | undefined {
-  const items = new Map<string, MaskedItem>();
-  for (const entry of branch) {
-    const record: unknown = entry;
-    if (!isMatching(RecordPattern, record)) continue;
-    for (const item of record.data.items) items.set(item.entryId, item);
-  }
+  const items = savedItems(branch);
   const hidden = [...items.values()].filter(
     (item) => !visibleIds.has(item.entryId) && exists(item.path),
   );
