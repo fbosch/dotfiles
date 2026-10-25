@@ -51,6 +51,7 @@ __pycache__
 ^/\.config/waybar/scripts/update-checker$
 ^/\.config/zsh/\.zcompdump.*$
 ^/justfile$
+^/GLOSSARY.md$
 ^/devenv\.nix$
 ^/devenv\.yaml$
 ^/devenv\.lock$
