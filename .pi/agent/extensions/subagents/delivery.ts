@@ -90,6 +90,32 @@ export class WorkerDelivery {
   private closing = false;
   private readonly foreground = new Set<string>();
   private readonly presentationListeners = new Set<() => void>();
+  private readonly inspectedAssignments = new Set<string>();
+
+  hasInspectedEvidence(assignmentId: string): boolean {
+    return this.inspectedAssignments.has(assignmentId);
+  }
+
+  private acknowledgeEvidence(workerId: string, assignmentId?: string): void {
+    const worker = this.owner.inspect(workerId);
+    const id = assignmentId ?? worker.currentAssignmentId;
+    const assignment = worker.assignments.find((item) => item.id === id);
+    if (assignment?.outcome !== "budget-exhausted" || this.inspectedAssignments.has(id)) return;
+    this.inspectedAssignments.add(id);
+    for (const listener of this.presentationListeners) listener();
+  }
+
+  report(workerId: string, assignmentId?: string): string {
+    const report = this.owner.report(workerId, assignmentId);
+    if (report.length > 0) this.acknowledgeEvidence(workerId, assignmentId);
+    return report;
+  }
+
+  transcript(workerId: string, options: Parameters<WorkerOwner["transcript"]>[1] = {}) {
+    const page = this.owner.transcript(workerId, options);
+    if (page.entries.length > 0) this.acknowledgeEvidence(workerId, options.assignmentId);
+    return page;
+  }
 
   foregroundWorkerIds(): ReadonlySet<string> {
     return new Set(this.foreground);
@@ -209,6 +235,9 @@ export class WorkerDelivery {
           },
         )
         .exhaustive();
+      if (result.kind === "budget-exhausted" && result.assignment.partialReport) {
+        this.acknowledgeEvidence(workerId, assignmentId);
+      }
       return waitEvidence(result);
     } finally {
       delivery.waiters--;

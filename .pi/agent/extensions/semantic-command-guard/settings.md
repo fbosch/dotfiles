@@ -42,12 +42,9 @@ TUI approvals use the orange inline permission prompt in `prompt-ui`, with
 `Run command` and `Cancel`. RPC keeps its standard confirmation dialog because
 it does not support custom terminal components.
 
-The warning shows the first local source match for each operation name and
-positive indicator used in the lexical assessment, with its line and column.
-These matches explain the assessment input, not the classifier's reasoning.
-Quoted data and comments can trigger warnings. The guard does not resolve
-execution, targets, or effects, so a name inside a `printf` payload is not proof
-of a shell operation. Source matches stay local and never enter classifier input.
+The warning shows the flag cause: possible destructive changes, a local data
+upload, or both. The guard's lexical summary does not establish actual execution,
+targets, or effects.
 
 The TUI keeps the risk category and decision controls outside a bounded review
 pane. Use `PgUp`/`PgDn` to scroll, `Home`/`End` for the beginning and end,

@@ -101,6 +101,7 @@ export function widgetLines(options: {
   now?: number;
   activityFrame?: number;
   hiddenWorkers?: ReadonlySet<string>;
+  hasInspectedEvidence?: (assignmentId: string) => boolean;
   theme?: DisplayTheme;
   agentName?: (name: string) => string;
   onWorkerRows?: (workerId: string, start: number, end: number) => void;
@@ -120,7 +121,13 @@ export function widgetLines(options: {
     warnings.push("! History save failed; inspect in-memory evidence");
   if (live.some(({ interpretation }) => interpretation.hasFailedAssignment))
     warnings.push("! Assignment failed; inspect history");
-  if (live.some(({ interpretation }) => interpretation.currentBudgetExhausted))
+  if (
+    live.some(
+      ({ worker, interpretation }) =>
+        interpretation.currentBudgetExhausted &&
+        !options.hasInspectedEvidence?.(worker.currentAssignmentId),
+    )
+  )
     warnings.push("! Turn budget exhausted; inspect partial evidence");
   const active = live
     .filter(({ worker }) => priority(worker) < 4 && !options.hiddenWorkers?.has(worker.id))

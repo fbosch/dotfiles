@@ -96,6 +96,29 @@ test("budget warning clears on release or continuation while history retains par
       { ...assignment, outcome: "budget-exhausted", partialReport: "Partial findings" },
     ],
   };
+  const acknowledged = { ...defaults, hasInspectedEvidence: (id: string) => id === "assignment" };
+  expect(widgetLines({ ...acknowledged, workers: [exhausted] })).toEqual([]);
+  expect(workerDetails(exhausted)).toContain("Partial findings");
+  expect(
+    widgetLines({
+      ...acknowledged,
+      workers: [
+        {
+          ...exhausted,
+          assignments: [{ ...assignment, outcome: "budget-exhausted", persistence: "failed" }],
+        },
+      ],
+    }),
+  ).toEqual(["! History save failed; inspect in-memory evidence"]);
+  const unread: WorkerSnapshot = {
+    ...exhausted,
+    id: "unread",
+    currentAssignmentId: "other",
+    assignments: [{ ...assignment, outcome: "budget-exhausted", id: "other" }],
+  };
+  expect(widgetLines({ ...acknowledged, workers: [exhausted, unread] })).toEqual([
+    "! Turn budget exhausted; inspect partial evidence",
+  ]);
   expect(widgetLines({ ...defaults, workers: [exhausted] })).toEqual([
     "! Turn budget exhausted; inspect partial evidence",
   ]);

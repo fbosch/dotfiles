@@ -11,37 +11,57 @@ import {
 import { theme } from "@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import { stripTerminalSequences } from "@earendil-works/pi-tui";
 import { withToolExecution } from "../../__tests__/fixtures/tool-context";
-import deltaExtension, { loadHashlineDeltaTools } from "../index";
+import { registerHashlineRendering } from "../hashline-rendering";
+import diffRenderingExtension, {
+  loadHashlineDiffTools,
+  registerDiffRenderingExtension,
+} from "../index";
+import { color, lineBackground } from "../presentation";
 import { registerHashlineReadRendering } from "../read-rendering";
 
 type Resolver = Parameters<
   Parameters<typeof registerHashlineReadRendering>[0]["registerToolRenderer"]
 >[0];
 const cleanup: string[] = [];
+const shutdowns: (() => Promise<void>)[] = [];
 afterEach(async () => {
+  for (const shutdown of shutdowns.splice(0)) await shutdown();
   for (const path of cleanup.splice(0)) await rm(path, { recursive: true, force: true });
 });
 initTheme("dark", false);
-async function setup() {
-  const cwd = await mkdtemp(join(tmpdir(), "delta-hashline-render-"));
+async function setup(live = false) {
+  const cwd = await mkdtemp(join(tmpdir(), "diffRendering-hashline-render-"));
   cleanup.push(cwd);
   const path = join(cwd, "source.ts");
   const destination = join(cwd, "destination.ts");
   await writeFile(path, 'const name = "æøå";\nconst count = 2;\n');
   await writeFile(destination, "export const target = true;\n");
-  const tools = new Map((await loadHashlineDeltaTools()).map((tool) => [tool.name, tool]));
+  const tools = new Map((await loadHashlineDiffTools()).map((tool) => [tool.name, tool]));
   const resolvers: Resolver[] = [];
-  deltaExtension({
+  const hooks = new Map<string, (event: unknown, ctx: ExtensionContext) => Promise<void>>();
+  const pi = {
     registerToolRenderer: (resolver: Resolver) => resolvers.push(resolver),
-    registerTool() {},
+    registerTool: (tool: ToolDefinition) => tools.set(tool.name, tool),
     registerEntryRenderer() {},
     registerCommand() {},
-    on() {},
-  } as unknown as ExtensionAPI & Parameters<typeof registerHashlineReadRendering>[0]);
+    on: (event: string, hook: (event: unknown, ctx: ExtensionContext) => Promise<void>) =>
+      hooks.set(event, hook),
+  } as unknown as ExtensionAPI & Parameters<typeof registerHashlineReadRendering>[0];
+  if (live) {
+    registerHashlineRendering(pi);
+    registerDiffRenderingExtension(pi, { config: { editPreviews: true }, columns: () => 180 });
+  } else diffRenderingExtension(pi);
   const ctx = withToolExecution({
     cwd,
     sessionManager: { getSessionId: () => cwd },
   } as ExtensionContext);
+  if (live) {
+    await hooks.get("session_start")?.({}, ctx);
+    await hooks.get("before_agent_start")?.({}, ctx);
+    shutdowns.push(async () => {
+      await hooks.get("session_shutdown")?.({}, ctx);
+    });
+  }
   const execute = (name: string, args: object) =>
     tools.get(name)!.execute(crypto.randomUUID(), args, undefined, undefined, ctx);
   const anchors = async (file: string) => {
@@ -58,6 +78,7 @@ async function setup() {
     expanded = true,
     isError = false,
     isPartial = false,
+    ansi = false,
   ) {
     const resolve = (index: number): ReturnType<Resolver> =>
       index < resolvers.length
@@ -83,10 +104,28 @@ async function setup() {
       .render(180)
       .join("\n");
     expect(JSON.stringify(result)).toBe(before);
-    return stripTerminalSequences(output);
+    return ansi ? output : stripTerminalSequences(output);
   }
   return { path, destination, execute, anchors, render, tools };
 }
+
+test("live hashline edits use the Shiki split renderer without losing model-facing anchors", async () => {
+  const f = await setup(true);
+  const [first] = await f.anchors(f.path);
+  const result = await f.execute("insert", {
+    path: f.path,
+    anchor: first,
+    direction: "after",
+    text: 'const added = "blå";',
+  });
+  const details = result.details as Record<string, unknown>;
+  expect(details.diff).toMatch(/\+[A-Za-z]+│/u);
+  expect(details.diffRendering).toMatchObject({ display: "side-by-side" });
+  const output = f.render("insert", result);
+  expect(output).toContain("╱");
+  expect(output).toContain('const added = "blå";');
+  expect(output).not.toMatch(/[ +-][A-Za-z]+│/u);
+});
 
 for (const name of ["insert", "replace", "replace_match", "copy", "move", "undo_last_change"]) {
   test(`${name}: real results render without anchor metadata, including collapsed output`, async () => {
@@ -118,11 +157,58 @@ for (const name of ["insert", "replace", "replace_match", "copy", "move", "undo_
     for (const expanded of [false, true]) {
       const output = f.render(name, result, expanded);
       expect(output).toContain("const");
+      expect(output).toContain("▌");
+      expect(output).toContain("─".repeat(20));
       expect(output).not.toMatch(/[ +-][A-Za-z]+│/);
     }
+    const ansi = f.render(name, result, true, false, false, true);
+    expect(
+      (["+", "-"] as const).some((kind) => ansi.includes(color(lineBackground(kind), true))),
+    ).toBe(true);
   });
 }
 
+test("hashline ellipses use the full code background before and after source rows", async () => {
+  const f = await setup();
+  const result = {
+    content: [{ type: "text" as const, text: "Edited" }],
+    details: {
+      diff: "...\n abcde│const name = 1;\n...",
+      diffLineNumbers: [undefined, 5, undefined],
+    },
+  };
+  const output = f.render("replace", result, true, false, false, true);
+  const ellipses = output
+    .split("\n")
+    .filter((line) => stripTerminalSequences(line).trim() === "...");
+  expect(ellipses).toHaveLength(2);
+  for (const line of ellipses) {
+    expect(line).toContain(color(lineBackground(" "), true));
+    expect(stripTerminalSequences(line).length).toBeGreaterThan(3);
+  }
+});
+
+test("collapsed hashline footers follow the trailing ellipsis and precede metadata", async () => {
+  const f = await setup();
+  const result = {
+    content: [{ type: "text" as const, text: "Warnings:\nKeep warning" }],
+    details: {
+      diff:
+        Array.from({ length: 40 }, (_, index) => `+abcde│const value${index} = 1;`).join("\n") +
+        "\n...\n[Diff truncated]",
+      diffLineNumbers: Array.from({ length: 40 }, (_, index) => index + 1),
+    },
+  };
+  const collapsed = f.render("insert", result, false);
+  const ellipsis = collapsed.indexOf("...");
+  const footer = collapsed.indexOf("more lines");
+  expect(ellipsis).toBeGreaterThan(collapsed.indexOf("const value"));
+  expect(footer).toBeGreaterThan(ellipsis);
+  expect(collapsed.indexOf("[Diff truncated]")).toBeGreaterThan(footer);
+  expect(collapsed).toContain("Keep warning");
+  const expanded = f.render("insert", result, true);
+  expect(expanded.indexOf("...")).toBeGreaterThan(expanded.indexOf("const value39"));
+});
 test("cross-file move renders both captured file diffs without reading current disk content", async () => {
   const f = await setup();
   const [source] = await f.anchors(f.path);
@@ -162,7 +248,7 @@ test("collapsed reads show highlighted source rather than anchors", async () => 
   expect(output).not.toMatch(/[A-Za-z]+│/);
 });
 
-test("captured Delta details render even when the current tool has only its native renderer", async () => {
+test("captured Diff details render even when the current tool has only its native renderer", async () => {
   const f = await setup();
   const result = {
     content: [
@@ -170,7 +256,7 @@ test("captured Delta details render even when the current tool has only its nati
     ],
     details: {
       diff: "+abcde│const value = 1;",
-      delta: {
+      diffRendering: {
         display: "inline",
         noChanges: false,
         output: "CAPTURED DELTA",
@@ -206,7 +292,7 @@ test.each([1, 5, 12])(
     expect(collapsed).toContain("[Diff truncated]");
     expect(collapsed).toContain("Keep warning");
     expect(collapsed).toContain("Keep hint");
-    expect(collapsed).toContain('1 │ + const value0 = "fghij│literal";');
+    expect(collapsed).toContain('▌ 1+ │ const value0 = "fghij│literal";');
     expect(f.render("insert", result)).toContain("value39");
     const read = {
       content: [
@@ -250,8 +336,8 @@ test.each([1, 5, 12])(
       },
     };
     const output = f.render("replace", result);
-    expect(output).toContain("7 │ + const value = 1;");
-    expect(output).toContain("8 │ - removed│literal");
+    expect(output).toContain("▌ 7+ │ const value = 1;");
+    expect(output).toContain("▌ 8- │ removed│literal");
   },
 );
 
@@ -276,7 +362,7 @@ test("errors, partial results, no-ops and malformed metadata retain native behav
   expect(f.render("insert", noop)).toContain("No changes made");
   const malformed = {
     content: [{ type: "text" as const, text: "Plain output" }],
-    details: { diff: 42, delta: { output: 1 } },
+    details: { diff: 42, diffRendering: { output: 1 } },
   };
   expect(f.render("insert", malformed)).toContain("Plain output");
 });

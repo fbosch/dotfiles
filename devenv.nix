@@ -364,10 +364,16 @@ in
       bun test benchmarks/__tests__/subagent-budget*.test.ts
       node_modules/.bin/tsc --project benchmarks/tsconfig.subagent-budgets.json
     '';
-    "test:pi-delta".exec = ''
+    "test:pi-diff-rendering".exec = ''
       set -euo pipefail
       cd .pi/agent
-      bun test extensions/delta
+      bun test benchmarks/__tests__/diff-rendering.test.ts
+      node_modules/.bin/tsc --project benchmarks/tsconfig.diff-rendering.json
+    '';
+    "test:pi-diff-rendering-extension".exec = ''
+      set -euo pipefail
+      cd .pi/agent
+      bun test extensions/diff-rendering
       bun run typecheck
     '';
     "test:pi-extensions".exec = ''
@@ -555,6 +561,7 @@ in
         "test:herdr-neovim-sessions"
         "test:lua-quality"
         "test:pi-extensions"
+        "test:pi-diff-rendering"
         "test:pi-mcp"
         "test:nvim-dekit-terminal"
         "test:nvim-diffnav-terminal"

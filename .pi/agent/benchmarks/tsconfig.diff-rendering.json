@@ -1,0 +1,7 @@
+{
+  "extends": "../tsconfig.json",
+  "include": [
+    "diff-rendering*.ts",
+    "__tests__/diff-rendering.test.ts"
+  ]
+}

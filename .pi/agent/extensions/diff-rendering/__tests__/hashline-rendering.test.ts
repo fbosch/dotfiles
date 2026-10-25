@@ -6,7 +6,7 @@ import type {
   Theme,
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
-import { type DeltaDetails, loadHashlineDeltaTools, registerDeltaExtension } from "../index";
+import { type DiffDetails, loadHashlineDiffTools, registerDiffRenderingExtension } from "../index";
 
 type TextContent = { type: "text"; text: string };
 type ResultEvent = {
@@ -21,7 +21,7 @@ type ResultHook = (
   context: ExtensionContext,
 ) => Promise<ResultPatch | undefined> | ResultPatch | undefined;
 
-const delta: DeltaDetails = {
+const diffRendering: DiffDetails = {
   display: "inline",
   noChanges: false,
   output:
@@ -59,7 +59,7 @@ async function setup() {
     new URL("../../../npm/node_modules/pi-hashline-edit-pro/index.ts", import.meta.url).href
   )) as { default: (api: ExtensionAPI) => void };
   hashline.default(pi);
-  const loadedHashlineTools = await loadHashlineDeltaTools();
+  const loadedHashlineTools = await loadHashlineDiffTools();
   expect(loadedHashlineTools.map((tool) => tool.name)).toEqual([
     "replace",
     "insert",
@@ -85,7 +85,7 @@ async function setup() {
   type LifecycleHandler = (event: unknown, context: ExtensionContext) => Promise<void> | void;
   let sessionStart: LifecycleHandler | undefined;
   let beforeAgentStart: LifecycleHandler | undefined;
-  registerDeltaExtension(
+  registerDiffRenderingExtension(
     {
       ...pi,
       on: (event: string, handler: ResultHook | LifecycleHandler) => {
@@ -101,7 +101,7 @@ async function setup() {
     expect(registrationCounts.get(tool.name)).toBe(1);
   }
   if (sessionStart === undefined || beforeAgentStart === undefined) {
-    throw new Error("Delta lifecycle handlers missing");
+    throw new Error("Diff lifecycle handlers missing");
   }
   runtime = true;
   await sessionStart({ type: "session_start" }, { cwd: "/repo" } as ExtensionContext);
@@ -149,14 +149,14 @@ function editResult(warnings: boolean) {
       diff: " ...\n Ohcl│local launch_timeout_ms = 10000\n-vygo│local fast_interval_ms = 82\n+IPal│local fast_interval_ms = 83\n dfdy│local slow_interval_ms = 1000\n ...",
       diffLineNumbers: [undefined, 18, 19, 19, 20, undefined],
       metrics: { classification: "applied", added_lines: 1, removed_lines: 1 },
-      delta,
+      diffRendering,
     },
   };
 }
 
 for (const toolName of ["replace", "insert", "replace_match", "copy", "move", "undo_last_change"]) {
-  describe(`${toolName} Delta result`, () => {
-    test("preserves errors, partial updates and the non-Delta fallback", async () => {
+  describe(`${toolName} Diff result`, () => {
+    test("preserves errors, partial updates and the non-Diff fallback", async () => {
       const { tools, hashlineTools } = await setup();
       const renderResult = tools.get(toolName)?.renderResult;
       const originalRenderResult = hashlineTools.find(
@@ -181,7 +181,7 @@ for (const toolName of ["replace", "insert", "replace_match", "copy", "move", "u
           expectedText: "Editing...",
         },
         {
-          result: { ...applied, details: { ...applied.details, delta: undefined } },
+          result: { ...applied, details: { ...applied.details, diffRendering: undefined } },
           isError: false,
           isPartial: false,
           expectedText: "local fast_interval_ms = 83",
@@ -202,12 +202,12 @@ for (const toolName of ["replace", "insert", "replace_match", "copy", "move", "u
 
     for (const expanded of [false, true]) {
       test.each([false, true])(
-        `renders the auto-read diff only once when expanded=${expanded}, Delta hook first=%s`,
-        async (deltaFirst) => {
+        `renders the auto-read diff only once when expanded=${expanded}, Diff hook first=%s`,
+        async (diffRenderingFirst) => {
           const { tools, resultHooks } = await setup();
           const tool = tools.get(toolName);
           if (!tool?.renderCall || !tool.renderResult) throw new Error("hashline renderer missing");
-          const hooks = deltaFirst ? [...resultHooks].reverse() : resultHooks;
+          const hooks = diffRenderingFirst ? [...resultHooks].reverse() : resultHooks;
           for (const warnings of [false, true]) {
             let result: ResultEvent = { ...editResult(warnings), toolName, isError: false };
             for (const hook of hooks) {

@@ -191,7 +191,6 @@ export default function semanticCommandGuard(
             command,
             cwd,
             risks,
-            evidence: inspection.evidence,
             signal: controller.signal,
           });
           // Approval applies only to this exact command in this session and mode.

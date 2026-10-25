@@ -6,104 +6,44 @@ import {
   Container,
   Spacer,
   Text,
-  visibleWidth,
   wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
-import type { DeltaDetails } from "./shared";
-import {
-  COLLAPSED_LINES,
-  DELTA_ADDED_COLOR,
-  DELTA_GUTTER_COLOR,
-  DELTA_REMOVED_COLOR,
-  ERASE_TO_LINE_END,
-  ESCAPE,
-  LINE_FILL_MARKER,
-  SGR_PATTERN,
-  sanitizeTerminalOutput,
-  sourceLinesForRender,
-} from "./shared";
+import type { DiffDetails } from "./shared";
+import { COLLAPSED_LINES, ESCAPE, sanitizeTerminalOutput, sourceLinesForRender } from "./shared";
 
-function sgr(codes: readonly number[]): string {
-  return codes.length === 0 ? "" : `${ESCAPE}[${codes.join(";")}m`;
-}
-
-/** Preserve Delta's line tints while restoring Pi's tool background after style resets. */
-export function applyDiffTheme(
-  value: string,
-  theme: Pick<Theme, "getBgAnsi" | "getFgAnsi">,
-): string {
-  const withFillMarkers = value.replaceAll(ERASE_TO_LINE_END, LINE_FILL_MARKER);
-  return sanitizeTerminalOutput(withFillMarkers).replace(
-    SGR_PATTERN,
-    (_sequence, parameters: string) => {
-      const codes = parameters === "" ? [0] : parameters.split(";").map(Number);
-      const output: string[] = [];
-      let pending: number[] = [];
-      const flush = () => {
-        if (pending.length === 0) return;
-        output.push(sgr(pending));
-        pending = [];
-      };
-
-      for (let index = 0; index < codes.length; ) {
-        const code = codes[index] ?? 0;
-        if (code === 38 || code === 48) {
-          const mode = codes[index + 1];
-          const length = mode === 2 ? 5 : mode === 5 ? 3 : 1;
-          const group = codes.slice(index, index + length);
-          if (code === 38 && mode === 5 && group[2] === DELTA_ADDED_COLOR) {
-            flush();
-            output.push(theme.getFgAnsi("toolDiffAdded"));
-          } else if (code === 38 && mode === 5 && group[2] === DELTA_REMOVED_COLOR) {
-            flush();
-            output.push(theme.getFgAnsi("toolDiffRemoved"));
-          } else {
-            pending.push(...group);
-          }
-          index += length;
-          continue;
-        }
-
-        if (code === DELTA_GUTTER_COLOR) {
-          flush();
-          output.push(theme.getFgAnsi("toolDiffContext"));
-        } else {
-          pending.push(code);
-        }
-        index += 1;
-        if (code === 0) {
-          flush();
-          output.push(theme.getBgAnsi("toolSuccessBg"));
-        }
-      }
-
-      flush();
-      return output.join("");
-    },
+/** Restore the tool background after generated syntax style resets. */
+export function applyDiffTheme(value: string, theme: Pick<Theme, "getBgAnsi">): string {
+  return sanitizeTerminalOutput(value).replace(
+    new RegExp(`${ESCAPE}\\[(?:0)?m`, "gu"),
+    (sequence) => sequence + theme.getBgAnsi("toolSuccessBg"),
   );
 }
 
 export function renderDiffLines(lines: readonly string[], width: number): string[] {
-  const availableWidth = Math.max(1, width);
   return lines.flatMap((line) => {
-    const parts = line.split(LINE_FILL_MARKER);
-    let filled = parts.shift() ?? "";
-    for (const part of parts) {
-      filled += " ".repeat(Math.max(0, availableWidth - visibleWidth(filled))) + part;
-    }
-    const wrapped = wrapTextWithAnsi(filled, availableWidth);
-    return wrapped.length === 0 ? [""] : wrapped;
+    const wrapped = wrapTextWithAnsi(line, Math.max(1, width));
+    return wrapped.length ? wrapped : [""];
   });
 }
 
 class DiffOutputComponent implements Component {
+  private cachedWidth?: number;
+  private cachedLines?: string[];
+
   constructor(private readonly lines: readonly string[]) {}
 
   render(width: number): string[] {
-    return renderDiffLines(this.lines, width);
+    if (this.cachedLines === undefined || this.cachedWidth !== width) {
+      this.cachedLines = renderDiffLines(this.lines, width);
+      this.cachedWidth = width;
+    }
+    return this.cachedLines;
   }
 
-  invalidate(): void {}
+  invalidate(): void {
+    this.cachedLines = undefined;
+    this.cachedWidth = undefined;
+  }
 }
 
 function statusLine(theme: Theme, label: "Info" | "Warning", message: string): string {
@@ -118,10 +58,11 @@ function detailLines(value: string): string[] {
 }
 
 export function diffComponent(
-  details: DeltaDetails,
+  details: DiffDetails,
   expanded: boolean,
   theme: Theme,
   loading = false,
+  trailingPreview = "",
 ): Component {
   const lines = sourceLinesForRender(applyDiffTheme(details.output, theme));
   if (details.noChanges) {
@@ -133,7 +74,10 @@ export function diffComponent(
   }
 
   const visible = expanded ? lines : lines.slice(0, COLLAPSED_LINES);
-  const output = [...visible];
+  const output = [
+    ...visible,
+    ...(trailingPreview ? sourceLinesForRender(applyDiffTheme(trailingPreview, theme)) : []),
+  ];
   if (!expanded && visible.length < lines.length) {
     output.push(
       "",
@@ -161,7 +105,7 @@ export function diffComponent(
 
 export function replaceEditPreview(
   component: Component,
-  details: DeltaDetails,
+  details: DiffDetails,
   expanded: boolean,
   theme: Theme,
   loading = false,
@@ -176,9 +120,9 @@ export function replaceEditPreview(
   return component;
 }
 
-export function renderEditDeltaResult(
+export function renderEditDiffResult(
   result: { content: Array<{ type: string; text?: string }> },
-  details: DeltaDetails,
+  details: DiffDetails,
   expanded: boolean,
   theme: Theme,
 ): Component {

@@ -260,3 +260,9 @@ program. Sum the root codemode-call durations separately to see tool execution
 time; do not equate that sum with the end-to-end flow time or pure MCP latency.
 The baseline uses fewer native calls when it batches field inputs, even if
 primary-model turns make its overall flow slower.
+
+## Diff rendering engines
+
+Compare Delta with Archimedes on prepared diffs using the
+[diff rendering benchmark](diff-rendering.md). It separates first-render,
+warm-unique and warm-repeat latency and records raw samples and source hashes.

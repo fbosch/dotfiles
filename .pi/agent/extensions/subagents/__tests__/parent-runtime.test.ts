@@ -101,6 +101,65 @@ function launched(result: Awaited<ReturnType<ParentRuntime["launch"]>>) {
   return result;
 }
 
+test("reading settled partial evidence acknowledges only that assignment and refreshes presentation", async () => {
+  const f = await fixture();
+  const first = launched(await f.runtime.launch({ specialist: "fixture", prompt: "First" }));
+  const run = f.runs.get(first.workerId);
+  if (!run) throw new Error("Expected running worker");
+  run.callbacks.onTranscript({ role: "assistant", text: "Partial finding" });
+  f.runtime.inspect({ mode: "transcript", workerId: first.workerId });
+  expect(f.runtime.delivery.hasInspectedEvidence(first.assignmentId)).toBe(false);
+  run.finish({ kind: "budget-exhausted", turnsUsed: 12 });
+  await f.owner.wait(first.workerId, first.assignmentId);
+  let refreshes = 0;
+  f.runtime.delivery.subscribePresentation(() => refreshes++);
+  f.runtime.inspect({ mode: "status", workerId: first.workerId });
+  expect(() => f.runtime.inspect({ mode: "report", workerId: first.workerId })).toThrow();
+  f.runtime.inspect({ mode: "transcript", workerId: first.workerId, offset: 100 });
+  expect(f.runtime.delivery.hasInspectedEvidence(first.assignmentId)).toBe(false);
+  const page = f.runtime.inspect({ mode: "transcript", workerId: first.workerId });
+  expect(page).toMatchObject({ entries: [{ role: "assistant", text: "Partial finding" }] });
+  expect(f.runtime.delivery.hasInspectedEvidence(first.assignmentId)).toBe(true);
+  expect(refreshes).toBe(1);
+  f.runtime.inspect({ mode: "transcript", workerId: first.workerId });
+  expect(refreshes).toBe(1);
+
+  const second = await f.runtime.delivery.continue(first.workerId, "Second");
+  const nextRun = f.runs.get(first.workerId);
+  if (!nextRun) throw new Error("Expected continued worker");
+  nextRun.finish({ kind: "budget-exhausted", turnsUsed: 12 });
+  await f.owner.wait(first.workerId, second.assignmentId);
+  f.runtime.inspect({
+    mode: "transcript",
+    workerId: first.workerId,
+    assignmentId: first.assignmentId,
+  });
+  expect(f.runtime.delivery.hasInspectedEvidence(second.assignmentId)).toBe(false);
+});
+
+test.each([undefined, "Partial findings"])(
+  "waiting acknowledges exhaustion only when evidence is delivered: %s",
+  async (partialReport) => {
+    const f = await fixture();
+    const first = launched(await f.runtime.launch({ specialist: "fixture", prompt: "Task" }));
+    const run = f.runs.get(first.workerId);
+    if (!run) throw new Error("Expected running worker");
+    run.finish({
+      kind: "budget-exhausted",
+      turnsUsed: 12,
+      ...(partialReport === undefined ? {} : { partialReport }),
+    });
+    await f.runtime.inspect({
+      mode: "wait",
+      workerId: first.workerId,
+      assignmentId: first.assignmentId,
+    });
+    expect(f.runtime.delivery.hasInspectedEvidence(first.assignmentId)).toBe(
+      partialReport !== undefined,
+    );
+  },
+);
+
 test("shared launch resolves the specialist and supports background and foreground results", async () => {
   const f = await fixture(true);
   const background = launched(await f.runtime.launch({ specialist: "fixture", prompt: "Task" }));

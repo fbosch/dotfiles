@@ -1,7 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionContext, KeybindingsManager, Theme } from "@earendil-works/pi-coding-agent";
 import { type Component, stripTerminalSequences, type TUI } from "@earendil-works/pi-tui";
-import { inspectCommand } from "../../semantic-command-guard/inspection";
 import { confirmCommandPermission } from "../command-permission";
 
 const plain = (component: Component, width = 100) =>
@@ -16,7 +15,6 @@ async function review(
   copy: (text: string) => Promise<void> = async () => {},
 ) {
   const terminal = { rows: 24 };
-  const inspection = inspectCommand(command);
   const ctx = {
     mode: "tui",
     hasUI: true,
@@ -51,7 +49,6 @@ async function review(
       command,
       cwd: "/workspace",
       risks: ["destructive changes"],
-      evidence: inspection.kind === "review" ? inspection.evidence : [],
       signal: new AbortController().signal,
     },
     copy,
@@ -78,7 +75,7 @@ describe("command consent review", () => {
         terminal.rows = 18;
         expect(component.render(60).length).toBeLessThanOrEqual(terminal.rows);
         component.handleInput?.("\u001b[H");
-        expect(plain(component, 60)).toContain("Why flagged");
+        expect(plain(component, 60)).toContain("Command");
       }),
     ).toBe(false);
   });
@@ -86,19 +83,10 @@ describe("command consent review", () => {
   test("preserves real newlines without turning literal backslash-n into a newline", async () => {
     await review("printf '%s' 'first\nsecond\\nthird' > out; rm out", (component) => {
       const text = plain(component);
-      expect(text).toContain("first\n");
+      expect(text).toContain("1 │ printf '%s' 'first\n");
+      expect(text).toContain("2 │ second\\nthird");
       expect(text).toContain("second\\nthird");
       expect(text).not.toContain("Command (escaped)");
-    });
-  });
-
-  test("explains quoted operation-name matches without claiming they execute", async () => {
-    const command = "cd src && printf '%s' 'await rm(directory, { recursive: true });' > test.ts";
-    await review(command, (component) => {
-      const text = plain(component);
-      expect(text).toContain('Operation name: "rm" (line 1, column 30)');
-      expect(text).toContain("Quoted data and comments can trigger warnings.");
-      expect(text).toContain("Targets and effects are not resolved.");
     });
   });
 
@@ -135,5 +123,19 @@ describe("command consent review", () => {
         throw new Error("Clipboard unavailable");
       },
     );
+  });
+
+  test("uses tall terminals and keeps the flag cause visible while scrolling", async () => {
+    const command = `printf '%s' '${"payload ".repeat(1300)}FINAL_TARGET'; rm out`;
+    await review(command, (component, terminal) => {
+      terminal.rows = 48;
+      expect(component.render(100).length).toBeGreaterThan(30);
+      expect(component.render(100).length).toBeLessThanOrEqual(terminal.rows);
+      component.handleInput?.("\u001b[F");
+      const commandEnd = plain(component);
+      expect(commandEnd).toContain("FINAL_TARGET");
+      expect(commandEnd).toContain("Working directory: /workspace");
+      expect(commandEnd).toContain("Flagged: possible destructive changes.");
+    });
   });
 });

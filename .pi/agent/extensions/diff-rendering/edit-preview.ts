@@ -8,10 +8,10 @@ import {
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { Container } from "@earendil-works/pi-tui";
-import { renderEditDeltaResult, replaceEditPreview } from "./rendering";
+import { renderEditDiffResult, replaceEditPreview } from "./rendering";
 import {
-  type DeltaDetails,
-  type DeltaEditRequest,
+  type DiffDetails,
+  type EditDiffRequest,
   type EditDiffRunner,
   FULL_CONTEXT_LINES,
 } from "./shared";
@@ -21,27 +21,27 @@ type NativeEditRenderCall = NonNullable<NativeEditDefinition["renderCall"]>;
 type NativeEditInput = Parameters<NonNullable<NativeEditDefinition["execute"]>>[1];
 type NativeEditState = Parameters<NativeEditRenderCall>[2]["state"];
 
-type DeltaEditDetails = EditToolDetails & {
-  readonly delta?: DeltaDetails;
+type DiffEditDetails = EditToolDetails & {
+  readonly diffRendering?: DiffDetails;
 };
 
-interface DeltaEditState {
-  expandedPreview: DeltaDetails | null | undefined;
+interface DiffEditState {
+  expandedPreview: DiffDetails | null | undefined;
   expandedPreviewController: AbortController | undefined;
   expandedPreviewKey: string | undefined;
   expandedPreviewPending: boolean;
-  preview: DeltaDetails | undefined;
+  preview: DiffDetails | undefined;
   previewController: AbortController | undefined;
   previewKey: string | undefined;
   previewPending: boolean;
-  previewRequest: DeltaEditRequest | undefined;
+  previewRequest: EditDiffRequest | undefined;
 }
 
-type DeltaEditRenderState = NativeEditState & DeltaEditState;
-type DeltaEditToolDefinition = ToolDefinition<
+type DiffEditRenderState = NativeEditState & DiffEditState;
+type DiffEditToolDefinition = ToolDefinition<
   NativeEditDefinition["parameters"],
-  DeltaEditDetails | undefined,
-  DeltaEditRenderState
+  DiffEditDetails | undefined,
+  DiffEditRenderState
 >;
 
 function renderableEditInput(args: unknown): NativeEditInput | undefined {
@@ -74,7 +74,7 @@ async function simulateEdit(
   cwd: string,
   input: NativeEditInput,
   signal: AbortSignal,
-): Promise<DeltaEditRequest> {
+): Promise<EditDiffRequest> {
   let oldContent: Buffer | undefined;
   let newContent: string | undefined;
   const operations: EditOperations = {
@@ -91,7 +91,7 @@ async function simulateEdit(
   const previewTool = createEditTool(cwd, { operations });
 
   // Keep this simulation delegated to Pi so matching and line-ending behavior stay identical.
-  await previewTool.execute("delta-preview", input, signal, undefined);
+  await previewTool.execute("diff-preview", input, signal, undefined);
   if (oldContent === undefined || newContent === undefined) {
     throw new Error("Pi did not return enough data to render the edit preview");
   }
@@ -103,19 +103,19 @@ async function simulateEdit(
   };
 }
 
-function editDeltaState(state: NativeEditState): DeltaEditRenderState {
-  return state as DeltaEditRenderState;
+function editDiffState(state: NativeEditState): DiffEditRenderState {
+  return state as DiffEditRenderState;
 }
 
 function renderExpandedEditPreview(
-  details: DeltaDetails,
-  request: DeltaEditRequest,
+  details: DiffDetails,
+  request: EditDiffRequest,
   cwd: string,
-  state: DeltaEditState,
+  state: DiffEditState,
   runEdit: EditDiffRunner,
   expansionControllers: Set<AbortController>,
   invalidate: () => void,
-): DeltaDetails {
+): DiffDetails {
   if (details.noChanges) return details;
 
   const expandedRequest = { ...request, context: FULL_CONTEXT_LINES };
@@ -171,14 +171,14 @@ function renderExpandedEditPreview(
   return state.expandedPreview ?? details;
 }
 
-export function createDeltaEditTool(
+export function createDiffEditTool(
   cwd: string,
   runEdit: EditDiffRunner,
   previewControllers: Set<AbortController>,
 ): ToolDefinition<
   NativeEditDefinition["parameters"],
-  DeltaEditDetails | undefined,
-  DeltaEditRenderState
+  DiffEditDetails | undefined,
+  DiffEditRenderState
 > {
   const nativeEdit = createEditToolDefinition(cwd);
   const nativeRenderCall = nativeEdit.renderCall;
@@ -187,7 +187,7 @@ export function createDeltaEditTool(
     throw new Error("Pi's built-in edit tool does not expose renderers");
   }
 
-  const execute: DeltaEditToolDefinition["execute"] = async (
+  const execute: DiffEditToolDefinition["execute"] = async (
     toolCallId,
     input,
     signal,
@@ -213,7 +213,7 @@ export function createDeltaEditTool(
 
     if (result.details !== undefined && oldContent !== undefined && newContent !== undefined) {
       try {
-        const delta = await runEdit(
+        const diffRendering = await runEdit(
           {
             newContent,
             oldContent: oldContent.toString("utf8"),
@@ -224,10 +224,10 @@ export function createDeltaEditTool(
         );
         return {
           ...result,
-          details: { ...result.details, delta },
+          details: { ...result.details, diffRendering },
         };
       } catch {
-        // Delta is presentation-only. Preserve the successful native edit result if it fails.
+        // Diff is presentation-only. Preserve the successful native edit result if it fails.
       }
     }
 
@@ -237,11 +237,11 @@ export function createDeltaEditTool(
   const renderCall: NonNullable<
     ToolDefinition<
       NativeEditDefinition["parameters"],
-      DeltaEditDetails | undefined,
-      DeltaEditRenderState
+      DiffEditDetails | undefined,
+      DiffEditRenderState
     >["renderCall"]
   > = (args, theme, context) => {
-    const state = editDeltaState(context.state);
+    const state = editDiffState(context.state);
     const input = renderableEditInput(args);
     const key = input === undefined ? undefined : JSON.stringify(input);
     if (state.previewKey !== key) {
@@ -340,13 +340,13 @@ export function createDeltaEditTool(
   const renderResult: NonNullable<
     ToolDefinition<
       NativeEditDefinition["parameters"],
-      DeltaEditDetails | undefined,
-      DeltaEditRenderState
+      DiffEditDetails | undefined,
+      DiffEditRenderState
     >["renderResult"]
   > = (result, options, theme, context) => {
-    const delta = result.details?.delta;
-    if (!context.isError && delta !== undefined) {
-      const expandedDelta =
+    const diffRendering = result.details?.diffRendering;
+    if (!context.isError && diffRendering !== undefined) {
+      const expandedDiff =
         options.expanded &&
         context.state.preview !== undefined &&
         context.state.previewRequest !== undefined
@@ -359,14 +359,14 @@ export function createDeltaEditTool(
               previewControllers,
               context.invalidate,
             )
-          : delta;
-      if (context.state.preview?.output === delta.output) {
+          : diffRendering;
+      if (context.state.preview?.output === diffRendering.output) {
         const component =
           context.lastComponent instanceof Container ? context.lastComponent : new Container();
         component.clear();
         return component;
       }
-      return renderEditDeltaResult(result, expandedDelta, options.expanded, theme);
+      return renderEditDiffResult(result, expandedDiff, options.expanded, theme);
     }
     return nativeRenderResult(result, options, theme, context);
   };

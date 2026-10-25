@@ -7,7 +7,6 @@ interface CommandPresentation {
   command: string;
   cwd: string;
   concern: string;
-  evidence: readonly string[];
   allowSelected: boolean;
 }
 interface Token {
@@ -91,7 +90,7 @@ function tokenize(command: string): Token[] {
       executable = WRAPPERS.has(name);
     } else if (WARNING_OPTION.test(text)) color = "warning";
     else if (/^(?:[./~]|https?:\/\/)/.test(text)) color = "mdLinkUrl";
-    else if (/['"]/.test(text)) color = "syntaxString";
+    // Quoted payloads may contain whole files; keep them at normal reading contrast.
     tokens.push({ text, color });
   }
   return tokens;
@@ -132,8 +131,11 @@ export function renderCommandPermissionSections(
   theme: CommandTheme,
 ): { header: string[]; body: string[]; footer: string[] } {
   if (width <= 0) return { header: [], body: [], footer: [] };
+  const lineCount = request.command.split("\n").length;
+  const numberWidth = String(lineCount).length;
+  const numbered = lineCount > 1 && width >= numberWidth + 7;
   const padding = width >= 6 ? 1 : 0;
-  const gutter = width >= 6 ? 2 : 0;
+  const gutter = numbered ? numberWidth + 3 : width >= 6 ? 2 : 0;
   const codeWidth = width - padding * 2 - gutter;
   const asciiOnly = codeWidth < 2;
   const escaped =
@@ -147,7 +149,7 @@ export function renderCommandPermissionSections(
   const tokens = escaped ? [{ text: display, color: "text" as const }] : tokenize(display);
   let sourceLine: Token[] = [];
   const sourceLines = [sourceLine];
-  // Split after tokenizing so multiline quoted payloads retain their string color.
+  // Split after tokenizing so multiline quoted payloads are not recolored as executables.
   for (const token of tokens) {
     for (const [index, fragment] of token.text.split("\n").entries()) {
       if (index > 0) {
@@ -157,9 +159,15 @@ export function renderCommandPermissionSections(
       sourceLine.push({ text: fragment, color: token.color });
     }
   }
-  const rows = sourceLines.flatMap((lineTokens) =>
+  const rows = sourceLines.flatMap((lineTokens, sourceIndex) =>
     commandRows(lineTokens, codeWidth, theme).map((line, index) => {
-      const marker = gutter ? theme.fg("muted", index === 0 ? "  " : "↪ ") : "";
+      const label = index === 0 ? String(sourceIndex + 1) : "↪";
+      const marker = gutter
+        ? theme.fg(
+            "muted",
+            numbered ? `${label.padStart(numberWidth)} │ ` : index === 0 ? "  " : "↪ ",
+          )
+        : "";
       const content = `${" ".repeat(padding)}${marker}${line}`;
       return theme.bg(
         "userMessageBg",
@@ -172,21 +180,15 @@ export function renderCommandPermissionSections(
     header: fit([
       theme.fg("warning", " Run this bash command?"),
       theme.fg("warning", metadata(request.concern)),
+      theme.fg("muted", `Working directory: ${metadata(request.cwd)}`),
+      "",
     ]),
     body: [
       ...fit([
-        "",
-        theme.fg("accent", "Why flagged: lexical assessment"),
-        "Quoted data and comments can trigger warnings.",
-        "Targets and effects are not resolved.",
-        ...request.evidence.map((line) => metadata(line)),
-        "",
-        theme.fg("muted", escaped ? "Command (escaped)" : "Command"),
+        theme.fg("accent", escaped ? "Command (escaped)" : "Command"),
         ...(escaped ? [theme.fg("muted", "Each source line below is a JSON string.")] : []),
       ]),
       ...rows,
-      "",
-      ...fit([theme.fg("muted", `Working directory: ${metadata(request.cwd)}`)]),
     ],
     footer: renderPermissionPromptActions(
       [

@@ -10,13 +10,13 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import {
-  type DeltaDetails,
-  type DeltaExtensionDependencies,
-  type DeltaResult,
-  registerDeltaExtension,
+  type DiffDetails,
+  type DiffRenderingDependencies,
+  type DiffResult,
+  registerDiffRenderingExtension,
 } from "../index";
 
-const details: DeltaDetails = {
+const details: DiffDetails = {
   display: "inline",
   noChanges: false,
   output: "1 old    1 new",
@@ -24,9 +24,9 @@ const details: DeltaDetails = {
   width: 80,
 };
 
-const result: DeltaResult = { content: "1 old    1 new", details };
+const result: DiffResult = { content: "1 old    1 new", details };
 
-async function buildDeltaBundle(outdir: string) {
+async function buildDiffBundle(outdir: string) {
   const build = await Bun.build({
     entrypoints: [join(import.meta.dir, "..", "index.ts")],
     format: "esm",
@@ -34,6 +34,7 @@ async function buildDeltaBundle(outdir: string) {
     outdir,
     splitting: true,
     target: "bun",
+    external: ["shiki", "shiki/*", "diff"],
   });
   if (!build.success) {
     throw new Error(build.logs.map((log) => log.message).join("\n"));
@@ -42,9 +43,9 @@ async function buildDeltaBundle(outdir: string) {
 }
 
 test("keeps command, execution, and edit-preview dependencies out of the static graph", async () => {
-  const outdir = await mkdtemp(join(tmpdir(), "pi-delta-bundle-"));
+  const outdir = await mkdtemp(join(tmpdir(), "pi-diff-rendering-bundle-"));
   try {
-    const build = await buildDeltaBundle(outdir);
+    const build = await buildDiffBundle(outdir);
     const files = await readdir(outdir);
     const chunks = await Promise.all(
       files
@@ -79,7 +80,6 @@ test("keeps command, execution, and edit-preview dependencies out of the static 
       expect(Object.keys(inputs).some((input) => input.endsWith(`/${module}`))).toBe(true);
     }
 
-    expect(chunks.find(([, source]) => source.includes("child_process"))).toBeDefined();
     expect(chunks.find(([, source]) => source.includes("createEditToolDefinition"))).toBeDefined();
     expect(chunks.find(([, source]) => source.includes("BorderedLoader"))).toBeDefined();
   } finally {
@@ -129,12 +129,12 @@ describe("first-use module loaders", () => {
   test("loads the command module only when the command executes", async () => {
     const { commandHandler, pi } = createPi();
     let loads = 0;
-    registerDeltaExtension(pi, {
+    registerDiffRenderingExtension(pi, {
       config: { editPreviews: false },
       loadCommand: async () => {
         loads += 1;
         return {
-          runDeltaCommand: async (_context, _run, appendEntry) => appendEntry(details),
+          runDiffCommand: async (_context, _run, appendEntry) => appendEntry(details),
         };
       },
       run: async () => result,
@@ -142,7 +142,7 @@ describe("first-use module loaders", () => {
 
     expect(loads).toBe(0);
     const handler = commandHandler();
-    if (handler === undefined) throw new Error("/delta command was not registered");
+    if (handler === undefined) throw new Error("/diff command was not registered");
     await handler("", { cwd: "/repo", mode: "tui" } as ExtensionCommandContext);
     expect(loads).toBe(1);
   });
@@ -150,31 +150,31 @@ describe("first-use module loaders", () => {
   test("loads edit-preview implementation only for enabled sessions", async () => {
     const disabled = createPi();
     let disabledLoads = 0;
-    const disabledDependencies: DeltaExtensionDependencies = {
+    const disabledDependencies: DiffRenderingDependencies = {
       config: { editPreviews: false },
       loadEditPreview: async () => {
         disabledLoads += 1;
         throw new Error("edit preview should remain unloaded");
       },
     };
-    registerDeltaExtension(disabled.pi, disabledDependencies);
+    registerDiffRenderingExtension(disabled.pi, disabledDependencies);
     await disabled.sessionStart()?.({}, { cwd: "/repo" } as ExtensionContext);
     expect(disabledLoads).toBe(0);
 
     const enabled = createPi();
     let enabledLoads = 0;
-    const enabledDependencies: DeltaExtensionDependencies = {
+    const enabledDependencies: DiffRenderingDependencies = {
       config: { editPreviews: true },
       loadEditPreview: async () => {
         enabledLoads += 1;
-        const createDeltaEditTool = (() =>
+        const createDiffEditTool = (() =>
           ({ name: "edit" }) as ToolDefinition) as unknown as Awaited<
-          ReturnType<NonNullable<DeltaExtensionDependencies["loadEditPreview"]>>
-        >["createDeltaEditTool"];
-        return { createDeltaEditTool };
+          ReturnType<NonNullable<DiffRenderingDependencies["loadEditPreview"]>>
+        >["createDiffEditTool"];
+        return { createDiffEditTool };
       },
     };
-    registerDeltaExtension(enabled.pi, enabledDependencies);
+    registerDiffRenderingExtension(enabled.pi, enabledDependencies);
     await enabled.sessionStart()?.({}, { cwd: "/repo" } as ExtensionContext);
     expect(enabledLoads).toBe(1);
     expect(enabled.registeredTools.map((tool) => tool.name)).toEqual(["git_diff", "edit"]);
@@ -183,14 +183,13 @@ describe("first-use module loaders", () => {
   test("loads execution implementation on the first tool call", async () => {
     const { pi, registeredTools } = createPi();
     let loads = 0;
-    registerDeltaExtension(pi, {
+    registerDiffRenderingExtension(pi, {
       config: { editPreviews: false },
       loadExecution: async () => {
         loads += 1;
         return {
-          executeDeltaProcess: async () => ({ stdout: "", stderr: "", code: 0, killed: false }),
-          runDeltaEditDiff: async () => details,
-          runDeltaGitDiff: async () => result,
+          runEditDiff: async () => details,
+          runGitDiff: async () => result,
         };
       },
     });

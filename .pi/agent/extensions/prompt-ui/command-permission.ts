@@ -7,7 +7,6 @@ interface CommandPermission {
   command: string;
   cwd: string;
   risks: readonly string[];
-  evidence: readonly string[];
   signal: AbortSignal;
 }
 
@@ -16,16 +15,16 @@ export async function confirmCommandPermission(
   request: CommandPermission,
   copyCommand: (command: string) => Promise<void> = copyToClipboard,
 ): Promise<boolean> {
-  const { command, cwd, risks, evidence, signal } = request;
+  const { command, cwd, risks, signal } = request;
   if (!ctx.hasUI || signal.aborted) return false;
-  const concern = `Possible ${risks.map((risk) => risk.replace(/^a /, "")).join(" and ")}.`;
+  const concern = `Flagged: possible ${risks.map((risk) => risk.replace(/^a /, "")).join(" and ")}.`;
   const commandText = JSON.stringify(command);
   const directoryText = JSON.stringify(cwd);
   // RPC supports standard dialogs, but not custom terminal components.
   if (ctx.mode !== "tui")
     return ctx.ui.confirm(
       "Run this bash command?",
-      `${concern}\n\nWhy flagged: lexical assessment\nQuoted data and comments can trigger warnings.\nTargets and effects are not resolved.\n${evidence.map((line) => JSON.stringify(line)).join("\n")}\n\nWorking directory: ${directoryText}\n\nCommand: ${commandText}`,
+      `${concern}\n\nWorking directory: ${directoryText}\n\nCommand: ${commandText}`,
       { signal },
     );
 
@@ -69,7 +68,7 @@ export async function confirmCommandPermission(
               const allowSelected = choices.getSelectedItem()?.value === "allow";
               if (!cached || cachedWidth !== width || cachedSelection !== allowSelected) {
                 cached = renderCommandPermissionSections(
-                  { command, cwd, concern, evidence, allowSelected },
+                  { command, cwd, concern, allowSelected },
                   width,
                   theme,
                 );
@@ -83,12 +82,12 @@ export async function confirmCommandPermission(
                 ...fit(copyStatus || "Ctrl+Y copy command"),
               ];
               const rangeRows = fit(
-                `Review ${body.length}–${body.length} of ${body.length}`,
+                `Review rows ${body.length}–${body.length} of ${body.length}`,
               ).length;
               const height = Math.max(
                 1,
                 Math.min(
-                  18,
+                  body.length,
                   tui.terminal.rows - header.length - footer.length - help.length - rangeRows - 2,
                 ),
               );
@@ -99,7 +98,7 @@ export async function confirmCommandPermission(
               return [
                 ...header,
                 ...body.slice(start, end),
-                ...fit(`Review ${start + 1}–${end} of ${body.length}`),
+                ...fit(`Review rows ${start + 1}–${end} of ${body.length}`),
                 ...help,
                 ...footer,
               ];

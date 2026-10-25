@@ -193,6 +193,8 @@
       ]
     }
   },
-  "editPreviews": true,
-  "syntaxTheme": "Zenwritten Dark"
+  "diffRendering": {
+    "editPreviews": true,
+    "syntaxTheme": "zenwritten_dark"
+  }
 }

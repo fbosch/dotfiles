@@ -1,10 +1,7 @@
-import { registerHashlineRendering } from "./hashline-rendering";
 import { join, resolve } from "node:path";
 import { StringEnum } from "@earendil-works/pi-ai";
 import {
   defineTool,
-  type ExecOptions,
-  type ExecResult,
   type ExtensionAPI,
   type ExtensionContext,
   getAgentDir,
@@ -14,20 +11,21 @@ import { Container, Spacer, Text } from "@earendil-works/pi-tui";
 import { Type } from "typebox";
 import { readJsonConfig } from "../../lib/extension-config";
 import { INACTIVE_SPECIALIST_TOOL, PROGRAMMATIC_READ_ONLY } from "../../lib/tool-exposure";
+import { registerHashlineRendering } from "./hashline-rendering";
 import { diffComponent } from "./rendering";
 import {
   DEFAULT_SYNTAX_THEME,
-  type DeltaDetails,
-  type DeltaEditRequest,
-  type DeltaExecutor,
-  type DeltaResult,
+  type DiffDetails,
+  type DiffRenderEngine,
+  type DiffResult,
   diagnostic,
+  type EditDiffRequest,
   type EditDiffRunner,
   ENTRY_TYPE,
   FULL_CONTEXT_LINES,
   type GitDiffRequest,
   type GitDiffRunner,
-  isDeltaDetails,
+  isDiffDetails,
   MAX_PATHS,
   type RunOptions,
   safeInput,
@@ -35,10 +33,10 @@ import {
 
 export { applyDiffTheme, renderDiffLines } from "./rendering";
 export type {
-  DeltaDetails,
-  DeltaEditRequest,
-  DeltaExecutor,
-  DeltaResult,
+  DiffDetails,
+  DiffRenderEngine,
+  DiffResult,
+  EditDiffRequest,
   EditDiffRunner,
   GitDiffExecutor,
   GitDiffRequest,
@@ -47,7 +45,6 @@ export type {
 } from "./shared";
 export {
   boundDiffOutput,
-  buildDeltaInvocation,
   buildGitInvocation,
   normalizeHashlineDiffDetails,
   sanitizeTerminalOutput,
@@ -90,7 +87,7 @@ const GitDiffParameters = Type.Object(
 );
 
 type HashlineToolExecute = NonNullable<ToolDefinition["execute"]>;
-type HashlineDeltaDetails = Record<string, unknown> & { readonly delta?: DeltaDetails };
+type HashlineDiffDetails = Record<string, unknown> & { readonly diffRendering?: DiffDetails };
 
 interface HashlineEditFlags {
   readonly requirePath: boolean;
@@ -130,7 +127,7 @@ async function loadHashlineEditFlags(): Promise<HashlineEditFlags | undefined> {
   }
 }
 
-export async function loadHashlineDeltaTools(): Promise<ToolDefinition[]> {
+export async function loadHashlineDiffTools(): Promise<ToolDefinition[]> {
   const tools: ToolDefinition[] = [];
   const flags = await loadHashlineEditFlags();
   try {
@@ -232,7 +229,6 @@ async function readHashlineFile(path: string, cwd: string): Promise<string | und
   }
 }
 
-
 function wrapHashlineTool(tool: ToolDefinition, runEdit: EditDiffRunner): ToolDefinition {
   const originalExecute = tool.execute;
   const originalRenderResult = tool.renderResult;
@@ -240,7 +236,8 @@ function wrapHashlineTool(tool: ToolDefinition, runEdit: EditDiffRunner): ToolDe
 
   const execute: HashlineToolExecute = async (toolCallId, params, signal, onUpdate, ctx) => {
     // Transfer results carry the actual destination (and source for moves); a single-path snapshot loses that evidence.
-    if (tool.name === "copy" || tool.name === "move") return originalExecute(toolCallId, params, signal, onUpdate, ctx);
+    if (tool.name === "copy" || tool.name === "move")
+      return originalExecute(toolCallId, params, signal, onUpdate, ctx);
     const cwd = ctx.cwd;
     const path = hashlinePath(params);
     const oldContent = path === undefined ? undefined : await readHashlineFile(path, cwd);
@@ -251,13 +248,13 @@ function wrapHashlineTool(tool: ToolDefinition, runEdit: EditDiffRunner): ToolDe
     if (newContent === undefined || newContent === oldContent) return result;
 
     try {
-      const delta = await runEdit({ path, oldContent, newContent }, cwd, signal);
+      const diffRendering = await runEdit({ path, oldContent, newContent }, cwd, signal);
       return {
         ...result,
         details: {
           ...((result.details ?? {}) as Record<string, unknown>),
-          delta,
-        } as HashlineDeltaDetails,
+          diffRendering,
+        } as HashlineDiffDetails,
       };
     } catch {
       return result;
@@ -276,21 +273,21 @@ function wrapHashlineTool(tool: ToolDefinition, runEdit: EditDiffRunner): ToolDe
     theme,
     context,
   ) => {
-    const details = result.details as HashlineDeltaDetails | undefined;
-    if (!context.isError && !options.isPartial && isDeltaDetails(details?.delta)) {
+    const details = result.details as HashlineDiffDetails | undefined;
+    if (!context.isError && !options.isPartial && isDiffDetails(details?.diffRendering)) {
       // Auto-read puts the anchored diff in content for the model, not a second UI preview.
       const text = result.content
         .filter((item) => item.type === "text")
         .map((item) => item.text)
         .join("\n");
       const warning = [
-        details.delta.warning,
+        details.diffRendering.warning,
         text.match(/(?:^|\n)Warnings:\n([\s\S]*)$/u)?.[1]?.trim(),
       ]
         .filter((value) => value !== undefined && value !== "")
         .join("\n");
       return diffComponent(
-        warning === "" ? details.delta : { ...details.delta, warning },
+        warning === "" ? details.diffRendering : { ...details.diffRendering, warning },
         options.expanded === true || context.expanded === true,
         theme,
       );
@@ -303,20 +300,20 @@ function wrapHashlineTool(tool: ToolDefinition, runEdit: EditDiffRunner): ToolDe
 
 interface GitDiffRenderState {
   expandedController: AbortController | undefined;
-  expandedDetails: DeltaDetails | null | undefined;
+  expandedDetails: DiffDetails | null | undefined;
   expandedKey: string | undefined;
   expandedPending: boolean;
 }
 
 function renderExpandedGitDiff(
-  details: DeltaDetails,
+  details: DiffDetails,
   request: GitDiffRequest,
   cwd: string,
   state: GitDiffRenderState,
   run: GitDiffRunner,
   expansionControllers: Set<AbortController>,
   invalidate: () => void,
-): DeltaDetails {
+): DiffDetails {
   if (details.noChanges) return details;
 
   const expandedRequest = { ...request, context: FULL_CONTEXT_LINES };
@@ -372,7 +369,7 @@ function renderExpandedGitDiff(
   return state.expandedDetails ?? details;
 }
 
-export interface DeltaConfig {
+export interface DiffRenderingConfig {
   readonly editPreviews?: boolean;
   readonly syntaxTheme?: string;
 }
@@ -381,11 +378,11 @@ type ExecutionModule = typeof import("./execution");
 type CommandModule = typeof import("./command");
 type EditPreviewModule = typeof import("./edit-preview");
 
-export interface DeltaExtensionDependencies {
+export interface DiffRenderingDependencies {
   readonly columns?: () => number | undefined;
-  readonly config?: DeltaConfig;
+  readonly config?: DiffRenderingConfig;
   readonly editPreviews?: (context: ExtensionContext) => boolean;
-  readonly executeDelta?: DeltaExecutor;
+  readonly engine?: DiffRenderEngine;
   readonly loadCommand?: () => Promise<CommandModule>;
   readonly loadEditPreview?: () => Promise<EditPreviewModule>;
   readonly loadExecution?: () => Promise<ExecutionModule>;
@@ -395,73 +392,84 @@ export interface DeltaExtensionDependencies {
   readonly loadHashlineTools?: () => Promise<readonly ToolDefinition[]>;
 }
 
-export function loadDeltaConfig(agentDirectory = getAgentDir()): DeltaConfig {
+export function loadDiffRenderingConfig(agentDirectory = getAgentDir()): DiffRenderingConfig {
   const value = readJsonConfig(join(agentDirectory, "settings.json"));
   if (value === undefined) return {};
   if (typeof value !== "object" || value === null || Array.isArray(value)) {
     throw new Error("Pi settings: expected an object");
   }
 
-  const settings = value as Record<string, unknown>;
+  const settings = (value as Record<string, unknown>).diffRendering;
+  if (settings === undefined) return {};
+  if (typeof settings !== "object" || settings === null || Array.isArray(settings)) {
+    throw new Error("settings.diffRendering: expected an object");
+  }
+  const fields = settings as Record<string, unknown>;
   const config: Record<string, unknown> = {};
   for (const field of ["editPreviews", "syntaxTheme"]) {
-    if (settings[field] !== undefined) config[field] = settings[field];
+    if (fields[field] !== undefined) config[field] = fields[field];
   }
 
   if (config.editPreviews !== undefined && typeof config.editPreviews !== "boolean") {
-    throw new Error("settings.editPreviews: expected a boolean");
+    throw new Error("settings.diffRendering.editPreviews: expected a boolean");
   }
   if (config.syntaxTheme !== undefined) {
     if (typeof config.syntaxTheme !== "string" || config.syntaxTheme.trim() === "") {
-      throw new Error("settings.syntaxTheme: expected a non-empty string");
+      throw new Error("settings.diffRendering.syntaxTheme: expected a non-empty string");
     }
     if (config.syntaxTheme.includes("\0") || /\p{C}/u.test(config.syntaxTheme)) {
-      throw new Error("settings.syntaxTheme must not contain control characters");
+      throw new Error("settings.diffRendering.syntaxTheme must not contain control characters");
     }
   }
 
-  return config as DeltaConfig;
+  return config as DiffRenderingConfig;
 }
 
-export function registerDeltaExtension(
+export function registerDiffRenderingExtension(
   pi: ExtensionAPI,
-  dependencies: DeltaExtensionDependencies = {},
+  dependencies: DiffRenderingDependencies = {},
 ): void {
-  const config = dependencies.config ?? loadDeltaConfig();
+  const config = dependencies.config ?? loadDiffRenderingConfig();
   const syntaxTheme = config.syntaxTheme ?? DEFAULT_SYNTAX_THEME;
   const loadExecution = dependencies.loadExecution ?? (() => import("./execution"));
   let executionModule: Promise<ExecutionModule> | undefined;
   const getExecution = () => (executionModule ??= loadExecution());
-  const executeDelta =
-    dependencies.executeDelta ??
-    ((args: readonly string[], input: string | undefined, options: ExecOptions) =>
-      getExecution().then(({ executeDeltaProcess }) => executeDeltaProcess(args, input, options)));
+  let enginePromise: Promise<DiffRenderEngine> | undefined;
+  const getEngine = () =>
+    (enginePromise ??= dependencies.engine
+      ? Promise.resolve(dependencies.engine)
+      : import("./engine").then(({ createDiffRenderer }) => createDiffRenderer(syntaxTheme)));
   const run: GitDiffRunner =
     dependencies.run ??
-    ((request, cwd, signal) =>
-      getExecution().then(({ runDeltaGitDiff }) =>
-        runDeltaGitDiff((command, args, options) => pi.exec(command, args, options), request, cwd, {
-          columns: dependencies.columns?.() ?? process.stdout.columns,
-          executeDelta,
-          ...(signal === undefined ? {} : { signal }),
-          syntaxTheme,
-        }),
-      ));
+    (async (request, cwd, signal) => {
+      signal?.throwIfAborted();
+      const engine = await getEngine();
+      signal?.throwIfAborted();
+      const { runGitDiff } = await getExecution();
+      return runGitDiff((command, args, options) => pi.exec(command, args, options), request, cwd, {
+        columns: dependencies.columns?.() ?? process.stdout.columns,
+        engine,
+        ...(signal ? { signal } : {}),
+      });
+    });
   const runEdit: EditDiffRunner =
     dependencies.runEdit ??
-    ((request, cwd, signal) =>
-      getExecution().then(({ runDeltaEditDiff }) =>
-        runDeltaEditDiff(executeDelta, request, cwd, {
-          columns: dependencies.columns?.() ?? process.stdout.columns,
-          ...(signal === undefined ? {} : { signal }),
-          syntaxTheme,
-        }),
-      ));
+    (async (request, cwd, signal) => {
+      signal?.throwIfAborted();
+      const engine = await getEngine();
+      signal?.throwIfAborted();
+      const { runEditDiff } = await getExecution();
+      return runEditDiff(request, cwd, {
+        columns: dependencies.columns?.() ?? process.stdout.columns,
+        engine,
+        ...(signal ? { signal } : {}),
+      });
+    });
 
   const previewControllers = new Set<AbortController>();
   const expansionControllers = new Set<AbortController>();
   const shouldUseEditPreviews = dependencies.editPreviews ?? (() => config.editPreviews === true);
-  const loadHashlineTools = dependencies.loadHashlineTools ?? loadHashlineDeltaTools;
+  const loadHashlineTools = dependencies.loadHashlineTools ?? loadHashlineDiffTools;
   const loadEditPreview = dependencies.loadEditPreview ?? (() => import("./edit-preview"));
   const loadCommand = dependencies.loadCommand ?? (() => import("./command"));
   interface SessionState {
@@ -470,7 +478,7 @@ export function registerDeltaExtension(
     hashlineRegistration?: Promise<void>;
   }
   let activeSession: SessionState | undefined;
-  const registerHashlineDeltaTools = (session: SessionState): Promise<void> => {
+  const registerHashlineDiffTools = (session: SessionState): Promise<void> => {
     if (session.hashlineRegistration === undefined) {
       session.hashlineRegistration = (async () => {
         const tools = dependencies.hashlineTools ?? (await loadHashlineTools());
@@ -483,46 +491,53 @@ export function registerDeltaExtension(
     return session.hashlineRegistration;
   };
 
-  pi.on("session_shutdown", () => {
+  pi.on("session_shutdown", async () => {
     activeSession = undefined;
     for (const controller of previewControllers) controller.abort();
     for (const controller of expansionControllers) controller.abort();
     previewControllers.clear();
     expansionControllers.clear();
+    const pending = enginePromise;
+    enginePromise = undefined;
+    if (pending) await (await pending).dispose();
   });
 
   pi.on("session_start", async (_event, ctx) => {
     const editPreviews = shouldUseEditPreviews(ctx);
     const session: SessionState = { cwd: ctx.cwd, editPreviews };
     activeSession = session;
-    if (!editPreviews) return;
-    const { createDeltaEditTool } = await loadEditPreview();
+    // Await initialization so the first visible diff uses warmed grammars and the configured theme.
+    if (dependencies.engine || !dependencies.run || !dependencies.runEdit) {
+      await (await getEngine()).prewarm();
+    }
+    if (activeSession !== session || !editPreviews) return;
+    const { createDiffEditTool } = await loadEditPreview();
     if (activeSession !== session) return;
-    pi.registerTool(createDeltaEditTool(ctx.cwd, runEdit, previewControllers));
+    pi.registerTool(createDiffEditTool(ctx.cwd, runEdit, previewControllers));
   });
 
   pi.on("before_agent_start", async (_event, ctx) => {
     const session = activeSession;
     if (session === undefined || !session.editPreviews || session.cwd !== ctx.cwd) return;
-    await registerHashlineDeltaTools(session);
+    await registerHashlineDiffTools(session);
   });
 
-  pi.registerEntryRenderer<DeltaDetails>(ENTRY_TYPE, (entry, { expanded }, theme) => {
+  pi.registerEntryRenderer<DiffDetails>(ENTRY_TYPE, (entry, { expanded }, theme) => {
     const details = entry.data;
     return details === undefined
-      ? new Text(theme.fg("warning", "Delta diff data is unavailable."), 0, 0)
+      ? new Text(theme.fg("warning", "Diff data is unavailable."), 0, 0)
       : diffComponent(details, expanded, theme);
   });
 
   pi.registerTool(
-    defineTool<typeof GitDiffParameters, DeltaDetails, GitDiffRenderState>({
+    defineTool<typeof GitDiffParameters, DiffDetails, GitDiffRenderState>({
       ...INACTIVE_SPECIALIST_TOOL,
       ...PROGRAMMATIC_READ_ONLY,
       name: "git_diff",
-      label: "Delta Git diff",
+      label: "Git diff",
       description:
-        "Render a read-only syntax-highlighted Git diff with Delta. Supports unstaged or staged changes, one revision/range, and optional pathspecs. Untracked files are excluded. Output is truncated to 2000 lines or 50KB; full truncated output is saved to a temporary file.",
-      promptSnippet: "Render syntax-highlighted Git diffs with Delta",
+        "Render a read-only syntax-highlighted Git diff with Shiki. Supports unstaged or staged changes, one revision/range, and optional pathspecs. Untracked files are excluded. Output is truncated to 2000 lines or 50KB; full truncated output is saved to a temporary file.",
+      promptSnippet: "Render syntax-highlighted Git diffs with Diff",
       promptGuidelines: [
         "Use git_diff instead of bash when visually inspecting textual Git changes; use git status for summaries and git diff --check for validation.",
       ],
@@ -571,7 +586,7 @@ export function registerDeltaExtension(
     }),
   );
 
-  pi.registerCommand("delta", {
+  pi.registerCommand("diff", {
     description: "Show the unstaged syntax-highlighted Git diff",
     handler: async (args, ctx) => {
       const input = args.trim();
@@ -585,14 +600,14 @@ export function registerDeltaExtension(
       }
 
       if (ctx.mode !== "tui") {
-        ctx.ui.notify("/delta requires interactive mode.", "error");
+        ctx.ui.notify("/diff requires interactive mode.", "error");
         return;
       }
 
       try {
-        const { runDeltaCommand } = await loadCommand();
-        await runDeltaCommand(ctx, run, (details) => {
-          pi.appendEntry<DeltaDetails>(ENTRY_TYPE, details);
+        const { runDiffCommand } = await loadCommand();
+        await runDiffCommand(ctx, run, (details) => {
+          pi.appendEntry<DiffDetails>(ENTRY_TYPE, details);
         });
       } catch (error) {
         ctx.ui.notify(diagnostic(error instanceof Error ? error.message : String(error)), "error");
@@ -603,44 +618,36 @@ export function registerDeltaExtension(
 
 function commandHelp(): string {
   return [
-    "Usage: /delta",
+    "Usage: /diff",
     "",
-    "Show unstaged working-tree changes using Delta.",
+    "Show unstaged working-tree changes with syntax highlighting.",
     "Ask the agent to use `git_diff` for staged changes, revisions, or path filters.",
-    "Set `editPreviews` to true in ~/.pi/agent/settings.json to use Delta for edit previews.",
+    "Set `diffRendering.editPreviews` to true in ~/.pi/agent/settings.json to enable syntax-highlighted edit previews.",
   ].join("\n");
 }
 
-export async function executeDeltaProcess(
-  args: readonly string[],
-  input: string | undefined,
-  options: ExecOptions,
-): Promise<ExecResult> {
-  const { executeDeltaProcess: execute } = await import("./execution");
-  return execute(args, input, options);
-}
-
-export async function runDeltaGitDiff(
+export async function runGitDiff(
   executeGit: import("./shared").GitDiffExecutor,
   request: GitDiffRequest,
   cwd: string,
-  options: RunOptions = {},
-): Promise<DeltaResult> {
-  const { runDeltaGitDiff: run } = await import("./execution");
+  options: RunOptions,
+): Promise<DiffResult> {
+  const { runGitDiff: run } = await import("./execution");
   return run(executeGit, request, cwd, options);
 }
 
-export async function runDeltaEditDiff(
-  executeDelta: DeltaExecutor,
-  request: DeltaEditRequest,
+export async function runEditDiff(
+  request: EditDiffRequest,
   cwd: string,
-  options: RunOptions = {},
-): Promise<DeltaDetails> {
-  const { runDeltaEditDiff: run } = await import("./execution");
-  return run(executeDelta, request, cwd, options);
+  options: RunOptions,
+): Promise<DiffDetails> {
+  const { runEditDiff: run } = await import("./execution");
+  return run(request, cwd, options);
 }
 
-export default function deltaExtension(pi: ExtensionAPI & Parameters<typeof registerHashlineRendering>[0]): void {
+export default function diffRenderingExtension(
+  pi: ExtensionAPI & Parameters<typeof registerHashlineRendering>[0],
+): void {
   registerHashlineRendering(pi);
-  registerDeltaExtension(pi);
+  registerDiffRenderingExtension(pi);
 }

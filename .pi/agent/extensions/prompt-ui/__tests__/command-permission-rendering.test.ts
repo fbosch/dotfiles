@@ -1,6 +1,9 @@
 import { describe, expect, test } from "bun:test";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
-import { renderCommandPermissionLines } from "../command-permission-rendering";
+import {
+  renderCommandPermissionLines,
+  renderCommandPermissionSections,
+} from "../command-permission-rendering";
 
 const colors: Record<string, string> = {
   accent: "36",
@@ -22,8 +25,7 @@ const theme = {
 const input = {
   command: "rm -rf ./src/generated",
   cwd: "/workspace",
-  concern: "Possible destructive changes.",
-  evidence: [],
+  concern: "Flagged: possible destructive changes.",
   allowSelected: true,
 };
 const render = (command: string, width = 100) =>
@@ -227,7 +229,40 @@ describe("command permission presentation", () => {
   test("keeps multiline quoted payloads and comments distinct from executable names", () => {
     const command = "printf '%s' 'first\nrm -rf ./payload' # rm -rf ./comment\nrm -rf ./real";
     const text = render(command).join("\n");
-    expect(text).toContain("\u001b[32mrm -rf ./payload'\u001b[39m");
+    expect(text).toContain("\u001b[37mrm -rf ./payload'\u001b[39m");
     expect(text.split("\u001b[33mrm\u001b[39m")).toHaveLength(2);
+  });
+
+  test("numbers physical lines, preserves blank lines, and marks wrapped continuations", () => {
+    const command = `printf '%s' 'first\n${"payload ".repeat(12)}\n\nlast' > out`;
+    for (const width of [1, 3, 6, 8, 12, 24, 80]) {
+      const lines = render(command, width);
+      expect(lines.every((line) => visibleWidth(line) <= width)).toBe(true);
+    }
+    const rows = render(command, 24)
+      .filter((line) => line.includes(BG))
+      .map(stripTerminalSequences);
+    expect(rows[0]).toStartWith(" 1 │ printf");
+    expect(rows.some((row) => row.startsWith(" 2 │ payload"))).toBe(true);
+    expect(rows.some((row) => row.startsWith(" ↪ │ "))).toBe(true);
+    expect(rows.some((row) => row.trimEnd() === " 3 │")).toBe(true);
+    expect(rows.some((row) => row.startsWith(" 4 │ last'"))).toBe(true);
+    expect(rows.map((row) => row.slice(5).trimEnd()).join("")).toContain("last' > out");
+  });
+
+  test("aligns multi-digit source numbers", () => {
+    const rows = render(Array.from({ length: 12 }, (_, i) => `echo ${i + 1}`).join("\n"))
+      .filter((line) => line.includes(BG))
+      .map(stripTerminalSequences);
+    expect(rows[0]).toStartWith("  1 │ echo 1");
+    expect(rows[11]).toStartWith(" 12 │ echo 12");
+  });
+
+  test("keeps the flag cause and directory separate from the scrollable command", () => {
+    const sections = renderCommandPermissionSections(input, 100, theme);
+    expect(plain(sections.header)).toBe(
+      " Run this bash command?\nFlagged: possible destructive changes.\nWorking directory: /workspace\n",
+    );
+    expect(plain(sections.body)).toContain(input.command);
   });
 });

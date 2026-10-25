@@ -505,7 +505,7 @@ describe("confirm mode", () => {
     expect(rendered).toContain("Command");
     expect(rendered).toContain("rm -rf src");
     expect(rendered).toContain("Working directory: /private-workspace");
-    expect(rendered).toContain("Possible destructive changes.");
+    expect(rendered).toContain("Flagged: possible destructive changes.");
   });
 
   test("a slow primary verdict reaches approval instead of the forbidden fallback", async () => {

@@ -42,6 +42,7 @@ export function createWorkerUI(
             terminalRows: tui.terminal.rows,
             maxRows,
             hiddenWorkers: runtime.delivery.foregroundWorkerIds(),
+            hasInspectedEvidence: (id) => runtime.delivery.hasInspectedEvidence(id),
             theme,
             agentName: (name) => agentName(name, theme, appearance),
           }),

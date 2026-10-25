@@ -79,10 +79,10 @@ export class ParentRuntime {
         workerId ? workerStatus(owner.inspect(workerId)) : owner.list().map(workerStatus),
       )
       .with({ mode: "report" }, ({ workerId, assignmentId }) =>
-        owner.report(workerId, assignmentId),
+        this.delivery.report(workerId, assignmentId),
       )
       .with({ mode: "transcript" }, ({ workerId, assignmentId, offset, limit }) =>
-        owner.transcript(workerId, {
+        this.delivery.transcript(workerId, {
           ...(assignmentId === undefined ? {} : { assignmentId }),
           ...(offset === undefined ? {} : { offset }),
           ...(limit === undefined ? {} : { limit }),

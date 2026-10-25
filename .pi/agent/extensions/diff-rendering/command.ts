@@ -1,25 +1,25 @@
 import type { ExtensionCommandContext } from "@earendil-works/pi-coding-agent";
 import { BorderedLoader } from "@earendil-works/pi-coding-agent";
-import type { DeltaDetails, DeltaResult, GitDiffRunner } from "./shared";
+import type { DiffDetails, DiffResult, GitDiffRunner } from "./shared";
 import { diagnostic } from "./shared";
 
-export async function runDeltaCommand(
+export async function runDiffCommand(
   context: ExtensionCommandContext,
   run: GitDiffRunner,
-  appendEntry: (details: DeltaDetails) => void,
+  appendEntry: (details: DiffDetails) => void,
 ): Promise<void> {
   const outcome = await context.ui.custom<
     | { readonly status: "cancelled" }
     | { readonly message: string; readonly status: "error" }
-    | { readonly result: DeltaResult; readonly status: "success" }
+    | { readonly result: DiffResult; readonly status: "success" }
   >((tui, theme, _keybindings, done) => {
-    const loader = new BorderedLoader(tui, theme, "Rendering Git diff with Delta...");
+    const loader = new BorderedLoader(tui, theme, "Rendering Git diff with Diff...");
     let settled = false;
     const finish = (
       result:
         | { readonly status: "cancelled" }
         | { readonly message: string; readonly status: "error" }
-        | { readonly result: DeltaResult; readonly status: "success" },
+        | { readonly result: DiffResult; readonly status: "success" },
     ) => {
       if (settled) return;
       settled = true;
@@ -41,7 +41,7 @@ export async function runDeltaCommand(
   });
 
   if (outcome.status === "cancelled") {
-    context.ui.notify("Delta diff cancelled.", "info");
+    context.ui.notify("Diff diff cancelled.", "info");
     return;
   }
   if (outcome.status === "error") {

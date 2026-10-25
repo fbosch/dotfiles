@@ -1,20 +1,28 @@
 import type { ExecOptions, ExecResult } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_MAX_BYTES, DEFAULT_MAX_LINES } from "@earendil-works/pi-coding-agent";
+import type { StructuredPatch } from "diff";
 
 export const COMMAND_TIMEOUT_MS = 60_000;
-export const EDIT_COMMAND_TIMEOUT_MS = 10_000;
+export const EDIT_DIFF_TIMEOUT_MS = 100;
 // Keep expansion within the renderer's existing bounded-output contract.
 export const FULL_CONTEXT_LINES = DEFAULT_MAX_LINES;
 export const DEFAULT_CONTEXT_LINES = 3;
-export const DEFAULT_SYNTAX_THEME = "Zenwritten Dark";
+export const DEFAULT_SYNTAX_THEME = "zenwritten_dark";
 export const DEFAULT_WIDTH = 120;
 export const MIN_WIDTH = 40;
 export const MAX_WIDTH = 240;
-export const SIDE_BY_SIDE_MIN_WIDTH = 96;
+export const SIDE_BY_SIDE_MIN_WIDTH = 150;
 export const COLLAPSED_LINES = 24;
 export const MAX_PATHS = 100;
-export const ENTRY_TYPE = "delta-git-diff";
-export const HASHLINE_DIFF_TOOLS = new Set(["replace", "insert", "replace_match", "copy", "move", "undo_last_change"]);
+export const ENTRY_TYPE = "diff-rendering-git-diff";
+export const HASHLINE_DIFF_TOOLS = new Set([
+  "replace",
+  "insert",
+  "replace_match",
+  "copy",
+  "move",
+  "undo_last_change",
+]);
 // Parse metadata up to its delimiter so anchor-width changes cannot consume source text.
 const HASHLINE_ANCHOR_FIELD = "[A-Za-z0-9]+";
 const HASHLINE_DIFF_PREFIX = `([ +-])(?:${HASHLINE_ANCHOR_FIELD}| +)│`;
@@ -29,13 +37,8 @@ export const ESCAPE = "\u001b";
 export const SGR_SUFFIX_PATTERN = /^\[[0-9;]*m/;
 export const SGR_PATTERN = new RegExp(`${ESCAPE}\\[([0-9;]*)m`, "g");
 export const ESCAPE_SUFFIX_PATTERN = /^\[[0-?]*[ -/]*[@-~]/;
-export const DELTA_ADDED_COLOR = 28;
-export const DELTA_REMOVED_COLOR = 88;
-export const DELTA_GUTTER_COLOR = 34;
 export const ZENWRITTEN_ADDED_BACKGROUND = "#232D1A";
 export const ZENWRITTEN_REMOVED_BACKGROUND = "#3E2225";
-export const ERASE_TO_LINE_END = `${ESCAPE}[0K`;
-export const LINE_FILL_MARKER = "␛pi-delta-fill␛";
 
 export interface GitDiffRequest {
   readonly context?: number;
@@ -52,7 +55,7 @@ export interface DiffTruncation {
   readonly totalLines: number;
 }
 
-export interface DeltaDetails {
+export interface DiffDetails {
   readonly display: "side-by-side" | "inline";
   readonly fullOutputPath?: string;
   readonly noChanges: boolean;
@@ -63,7 +66,7 @@ export interface DeltaDetails {
   readonly width: number;
 }
 
-export function isDeltaDetails(value: unknown): value is DeltaDetails {
+export function isDiffDetails(value: unknown): value is DiffDetails {
   if (value === null || typeof value !== "object" || Array.isArray(value)) return false;
   const record = value as Record<string, unknown>;
   return (
@@ -75,9 +78,9 @@ export function isDeltaDetails(value: unknown): value is DeltaDetails {
   );
 }
 
-export interface DeltaResult {
+export interface DiffResult {
   readonly content: string;
-  readonly details: DeltaDetails;
+  readonly details: DiffDetails;
 }
 
 export type GitDiffExecutor = (
@@ -86,19 +89,32 @@ export type GitDiffExecutor = (
   options: ExecOptions,
 ) => Promise<ExecResult>;
 
-export type DeltaExecutor = (
-  args: readonly string[],
-  input: string | undefined,
-  options: ExecOptions,
-) => Promise<ExecResult>;
+export interface DiffRenderOptions {
+  readonly width: number;
+  readonly display: "inline" | "side-by-side";
+  readonly auto?: boolean;
+  readonly signal?: AbortSignal;
+}
+
+export interface RenderedDiff {
+  readonly output: string;
+  readonly display: "inline" | "side-by-side";
+  readonly warning?: string;
+}
+
+export interface DiffRenderEngine {
+  prewarm(): Promise<void>;
+  render(patches: readonly StructuredPatch[], options: DiffRenderOptions): Promise<RenderedDiff>;
+  dispose(): Promise<void>;
+}
 
 export type GitDiffRunner = (
   request: GitDiffRequest,
   cwd: string,
   signal?: AbortSignal,
-) => Promise<DeltaResult>;
+) => Promise<DiffResult>;
 
-export interface DeltaEditRequest {
+export interface EditDiffRequest {
   readonly context?: number;
   readonly newContent: string;
   readonly oldContent: string;
@@ -106,16 +122,15 @@ export interface DeltaEditRequest {
 }
 
 export type EditDiffRunner = (
-  request: DeltaEditRequest,
+  request: EditDiffRequest,
   cwd: string,
   signal?: AbortSignal,
-) => Promise<DeltaDetails>;
+) => Promise<DiffDetails>;
 
 export interface RunOptions {
   readonly columns?: number;
-  readonly executeDelta?: DeltaExecutor;
+  readonly engine: DiffRenderEngine;
   readonly signal?: AbortSignal;
-  readonly syntaxTheme?: string;
   readonly writeFullOutput?: (output: string) => Promise<string>;
 }
 
@@ -132,17 +147,11 @@ export interface GitInvocation {
   readonly width: number;
 }
 
-export interface DeltaInvocationOptions {
-  readonly context?: number;
-  readonly edit?: boolean;
-  readonly syntaxTheme?: string;
-}
-
 function printableCharacter(value: string): boolean {
   return /^\P{C}$/u.test(value);
 }
 
-/** Preserve Delta SGR colors while rejecting source-derived terminal control sequences. */
+/** Preserve generated SGR colors while rejecting source-derived terminal control sequences. */
 export function sanitizeTerminalOutput(value: string): string {
   const normalized = value.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
   let output = "";
@@ -309,40 +318,6 @@ export function buildGitInvocation(
   if (paths.length > 0) args.push("--", ...paths);
 
   return { args, display, scope: describeScope(request), width };
-}
-
-export function buildDeltaInvocation(
-  display: "side-by-side" | "inline",
-  width: number,
-  options: DeltaInvocationOptions = {},
-): string[] {
-  const syntaxTheme = safeInput(options.syntaxTheme ?? DEFAULT_SYNTAX_THEME, "Delta syntax theme");
-  const args = [
-    "--no-gitconfig",
-    "--paging=never",
-    "--dark",
-    `--width=${width}`,
-    "--line-numbers",
-    "--line-fill-method=spaces",
-    `--line-numbers-minus-style=${DELTA_REMOVED_COLOR}`,
-    `--line-numbers-plus-style=${DELTA_ADDED_COLOR}`,
-    `--minus-style=syntax "${ZENWRITTEN_REMOVED_BACKGROUND}"`,
-    `--minus-emph-style=syntax "${ZENWRITTEN_REMOVED_BACKGROUND}"`,
-    `--plus-style=syntax "${ZENWRITTEN_ADDED_BACKGROUND}"`,
-    `--plus-emph-style=syntax "${ZENWRITTEN_ADDED_BACKGROUND}"`,
-    "--commit-decoration-style=omit",
-    "--file-decoration-style=omit",
-    "--hunk-header-style=omit",
-    "--hunk-header-decoration-style=omit",
-    `--syntax-theme=${syntaxTheme}`,
-  ];
-  if (options.edit === true) {
-    args.push("--file-style=omit", `--diff-args=-U${options.context ?? DEFAULT_CONTEXT_LINES}`);
-  } else {
-    args.push("--file-style=bold");
-  }
-  if (display === "side-by-side") args.push("--side-by-side");
-  return args;
 }
 
 export function stripSgrCodes(value: string): string {
