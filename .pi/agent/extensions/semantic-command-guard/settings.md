@@ -75,18 +75,29 @@ override for those commands.
 The guard handles only bash calls, including calls nested inside codemode.
 The codemode script itself is not classified. Local lexical filters select
 deletion, overwriting, destructive Git operations, network transfers, and
-inline code. Simple reads and ordinary Git inspection skip classification. A
-standalone `rm` skips classification only when its literal targets resolve
-strictly inside the Git worktree. Shell expansion, globs, compound commands,
-worktree-root or outside targets, and paths resolving outside through symlinks
-remain under review.
+inline code. Simple reads and ordinary Git inspection skip classification.
 
-Standalone literal file mutations also skip classification when every operand
-resolves strictly inside `/tmp`: `rm`, `rmdir`, `unlink`, `mv`, `truncate`,
-`chmod`, `chown`, `touch`, `tee`, and `shred`, with supported options. Relative
-paths use the working directory. Mixed targets, `/tmp` itself, symlink escapes,
-unknown options, shell expansion, compound commands, and inline code remain
-under review. This exemption does not bypass catastrophic-command checks.
+File operations skip semantic review only when every resolved access matches
+the runtime filesystem grants in `NONO_CAP_FILE`. Reads require `read` or
+`readwrite`; mutations require `write` or `readwrite`. File grants match exactly,
+and directory grants include descendants. No worktree or `/tmp` exemptions
+are hardcoded. Narrow the nono profile to narrow the agent's permitted scope.
+
+The exemption recognizes standalone literal `rm`, `rmdir`, `unlink`, `mv`,
+`cp`, `truncate`, `chmod`, `chown`, `touch`, `tee`, and `shred` calls with
+supported options. Relative paths use the working directory. Symlinks resolve
+before parent traversal. Copy sources require read access, and copy destinations
+require write access. Mixed or ungranted targets, denied paths and their parents,
+unknown options, shell expansion, compound commands, inline code, network
+transfers, and destructive Git operations remain eligible for semantic review.
+Nono bypass exceptions overlapping denied paths also remain under review.
+
+Missing, unreadable, or malformed runtime metadata silently disables path
+exemptions; semantic review continues normally. Launching Pi without nono is
+supported and does not trigger a warning. Runtime metadata is a launcher signal,
+not proof of kernel enforcement.
+The extension does not parse the source Nix profile or reproduce nono's policy
+inheritance. Catastrophic-command checks remain unchanged.
 
 Commands longer than 16,000 characters are not truncated. Shadow mode skips
 them with a warning; confirm mode blocks them.

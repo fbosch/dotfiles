@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import {
@@ -9,6 +10,7 @@ import {
   type TurnEndEvent,
   type TurnEndEventResult,
 } from "@earendil-works/pi-coding-agent";
+import { buildIndex, withIndex } from "./artifact-index";
 import {
   estimateTokens,
   type MaskCandidate,
@@ -62,6 +64,25 @@ export function registerContextMasking(
     artifactRoot: () => join(getAgentDir(), "cache", "context-masking"),
   },
 ): void {
+  // Keyed by the latest compaction: the hidden set only changes when a compaction lands.
+  let cached: { compactionId: string; text: string | undefined } | undefined;
+  pi.on("context", (event, ctx) => {
+    const branch = ctx.sessionManager.getBranch();
+    const compaction = branch.findLast((entry) => entry.type === "compaction");
+    if (compaction === undefined) return undefined;
+    if (cached?.compactionId !== compaction.id) {
+      const visible = new Set(
+        ctx.sessionManager
+          .buildSessionProjection()
+          .entries.filter((entry) => entry.messages.length > 0)
+          .map((entry) => entry.sourceEntry.id),
+      );
+      cached = { compactionId: compaction.id, text: buildIndex(branch, visible, existsSync) };
+    }
+    if (cached.text === undefined) return undefined;
+    const messages = withIndex(event.messages, cached.text);
+    return messages === undefined ? undefined : { messages };
+  });
   pi.on(
     "turn_end",
     async (event: TurnEndEvent, ctx: ExtensionContext): Promise<TurnEndEventResult | undefined> => {
@@ -108,6 +129,11 @@ export function registerContextMasking(
           freedTokens,
           tokensBefore: usage.tokens,
           contextWindow: usage.contextWindow,
+          items: written.map(({ candidate, path }) => ({
+            entryId: candidate.entryId,
+            toolName: candidate.toolName,
+            path,
+          })),
         },
       });
       if (ctx.hasUI) {

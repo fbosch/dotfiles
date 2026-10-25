@@ -11,8 +11,7 @@ import { catastrophicCommandReason } from "../catastrophic-command-guard";
 import { confirmCommandPermission } from "../prompt-ui/command-permission";
 import { isRecord } from "../shared/is-record";
 import { flaggedRisks, inspectCommand } from "./inspection";
-import { isRepoLocalRm } from "./repo-local-rm";
-import { isTmpFileMutation } from "./tmp-file-mutation";
+import { commandFitsSandbox, readNonoCapabilities } from "./sandbox";
 
 interface CommandGuardSettings {
   readonly enabled: boolean;
@@ -43,6 +42,7 @@ export function resolveCommandGuardSettings(settings: unknown): CommandGuardSett
 interface Dependencies {
   loadSettings: () => unknown;
   request: typeof requestClassifier;
+  loadSandbox: typeof readNonoCapabilities;
 }
 
 type BlockedCall = { block: true; reason: string };
@@ -54,6 +54,7 @@ export default function semanticCommandGuard(
     // Read on every Bash call; reparse only when settings.json changes.
     loadSettings: cachedJsonConfigReader(() => join(getAgentDir(), "settings.json")),
     request: requestClassifier,
+    loadSandbox: readNonoCapabilities,
   },
 ): void {
   let shadowPending: AbortController | undefined;
@@ -126,11 +127,7 @@ export default function semanticCommandGuard(
       const hardReason = catastrophicCommandReason(command);
       if (hardReason) return confirming ? block(hardReason) : undefined;
     }
-    if (
-      inspection.kind === "skip" ||
-      isTmpFileMutation(command, cwd) ||
-      isRepoLocalRm(command, cwd)
-    )
+    if (inspection.kind === "skip" || commandFitsSandbox(command, cwd, dependencies.loadSandbox()))
       return;
     // shortcut: shadow mode samples one in-flight command to bound background cost.
     // Confirm mode must assess every selected call; it never uses this skip.

