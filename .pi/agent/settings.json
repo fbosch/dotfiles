@@ -36,7 +36,8 @@
     ]
   },
   "contextMasking": {
-    "enabled": true
+    "enabled": true,
+    "prefetchRecall": true
   },
   "quickReplies": {
     "enabled": true

@@ -2,8 +2,14 @@ import { afterEach, expect, test } from "bun:test";
 import { link, mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { SessionEntry } from "@earendil-works/pi-coding-agent";
-import { RECALL_LIMITS, recallSaved, registerRecall } from "../recall";
+import type {
+  BeforeAgentStartEvent,
+  BeforeAgentStartEventResult,
+  ExtensionAPI,
+  ExtensionContext,
+  SessionEntry,
+} from "@earendil-works/pi-coding-agent";
+import { RECALL_LIMITS, recallSaved, registerRecall, registerRecallPrefetch } from "../recall";
 import { sessionWith } from "./fixtures";
 
 const roots: string[] = [];
@@ -132,4 +138,68 @@ test("returns the matching region of an oversized line", async () => {
   ]);
   const report = await recallSaved(f.manager.getBranch(), f.root, "audit receipt");
   expect(report.text).toContain("audit-long-line");
+});
+
+test("prefetch adds relevant passages once, skips unrelated and custom requests, and honors disablement", async () => {
+  const f = await fixture(["Archived audit receipt: audit-prefetched"]);
+  type Handler = (
+    event: BeforeAgentStartEvent,
+    ctx: ExtensionContext,
+  ) => Promise<BeforeAgentStartEventResult | undefined>;
+  let handler: Handler | undefined;
+  const pi = {
+    on: (_name: string, callback: Handler) => {
+      handler = callback;
+    },
+  } as unknown as Pick<ExtensionAPI, "on">;
+  let enabled = true;
+  registerRecallPrefetch(
+    pi,
+    () => f.root,
+    () => enabled,
+  );
+  const ctx = { sessionManager: f.manager } as unknown as ExtensionContext;
+  const invoke = async (event: unknown) => {
+    if (!handler) throw new Error("Missing prefetch hook");
+    return handler(event as BeforeAgentStartEvent, ctx);
+  };
+  const message = { prompt: "What was the archived audit receipt?" };
+  expect(await invoke({ customMessage: {} })).toBeUndefined();
+  expect(await invoke({ prompt: "What is 17 * 23?" })).toBeUndefined();
+  enabled = false;
+  expect(await invoke(message)).toBeUndefined();
+  enabled = true;
+  const result = await invoke(message);
+  expect(result?.message?.content).toContain("audit-prefetched");
+  expect(f.manager.getEntries().filter((e) => e.type === "custom_message")).toHaveLength(0);
+  if (!result?.message) throw new Error("Missing recalled passage");
+  f.manager.appendCustomMessageEntry(result.message.customType, result.message.content, false);
+  expect(await invoke(message)).toBeUndefined();
+});
+
+test("enforces total scan bytes and artifact count limits", async () => {
+  const big = await fixture(
+    Array.from({ length: 17 }, () => "audit receipt\n".padEnd(RECALL_LIMITS.fileBytes, "x")),
+  );
+  let report = await recallSaved(big.manager.getBranch(), big.root, "audit receipt");
+  expect(report.bytes).toBe(RECALL_LIMITS.totalBytes);
+  expect(report.scanned).toBe(16);
+  expect(report.limited).toBe(true);
+  const many = await fixture(Array.from({ length: 81 }, () => "audit receipt"));
+  report = await recallSaved(many.manager.getBranch(), many.root, "audit receipt");
+  expect(report.scanned).toBe(RECALL_LIMITS.artifacts);
+  expect(report.limited).toBe(true);
+});
+
+test("clips aggregate passages to the output cap", async () => {
+  const f = await fixture(
+    Array.from({ length: 3 }, () =>
+      Array.from({ length: 6 }, (_, i) =>
+        (i === 3 ? "audit receipt " : "other ").padEnd(790, "x"),
+      ).join("\n"),
+    ),
+  );
+  const report = await recallSaved(f.manager.getBranch(), f.root, "audit receipt");
+  expect(report.text.length).toBeLessThanOrEqual(RECALL_LIMITS.outputChars);
+  expect(report.limited).toBe(true);
 });

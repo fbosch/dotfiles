@@ -9,7 +9,8 @@ Add this to the global `~/.pi/agent/settings.json` and run `/reload`:
 ```json
 {
   "contextMasking": {
-    "enabled": true
+    "enabled": true,
+    "prefetchRecall": true
   }
 }
 ```
@@ -19,6 +20,7 @@ Only the global setting is read. Malformed settings leave context unchanged.
 | Setting | Default | Meaning |
 |---|---|---|
 | `enabled` | `false` | Turns masking on. |
+| `prefetchRecall` | `false` | Add matching saved passages when a new text request arrives. Requires `enabled`. |
 | `triggerRatio` | `0.7` | Mask once Pi's context estimate reaches this share of the context window. |
 | `protectRecentTurns` | `10` | Tool results from the latest N assistant turns stay verbatim. |
 | `minResultChars` | `800` | Shorter results stay verbatim. |
@@ -37,7 +39,24 @@ At the end of a turn, if context usage is at or above the trigger, the extension
 
 The raw session file keeps every original result, and `/tree` navigation to a point before the edit shows the originals again.
 
-To see a hidden result again, the model calls `read` on the path in the placeholder, using `offset` and `limit` for long files. No extra tool is registered, so masking never changes the tool list.
+A hidden result remains available through `read` at its saved path. The extension also registers a deferred `recall` tool that returns matching passages. Tool discovery can activate it; to declare it at startup, add `"+recall"` to `defaultTools`. Automatic lookup does not activate the tool or change the active tool list.
+
+## Automatic saved-output lookup
+
+With both `enabled` and `prefetchRecall` on, the extension searches saved output once per new text request. It uses the first 500 characters of the request as a lexical query. At least two distinct query terms must occur within three neighboring lines for the extension to add a result. It appends up to two passages as historical data at the conversation tail; it does not rewrite earlier messages. An identical lookup result already in visible context is not appended again.
+
+Lookup is local and does not call a classifier. It only reads artifacts recorded on the current session branch, under the masking cache, with the expected entry filename. It rejects symlinked files and session directories. Each lookup scans at most the newest 80 artifacts, 128 KiB per file and 2 MiB total. Returned text is capped at 12,000 characters; long lines are excerpted. The output reports skipped files and scan limits. Full saved files remain available through `read`.
+
+The two-term gate is a lexical heuristic, not a relevance guarantee. It can miss paraphrases or add irrelevant context when terms overlap. Automatic lookup stops when either setting is off; the deferred `recall` tool remains available for existing saved output.
+
+The synthetic discovery probe separates model-directed recall from automatic lookup:
+
+```bash
+PROBE_RECALL=1 PROBE_PREFETCH=1 PI_BIN=/path/to/unwrapped/pi \
+  bun .pi/agent/benchmarks/context-artifact-discovery-probe.ts
+```
+
+Omit `PROBE_PREFETCH=1` to test the tool alone. The probe records correctness, retrieval behavior, tokens and latency. Its gateway pacing is excluded from measured response time. These small synthetic cases do not establish real-task quality.
 
 ## Interaction with compaction and caching
 

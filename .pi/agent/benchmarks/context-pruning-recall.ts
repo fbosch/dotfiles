@@ -265,7 +265,7 @@ async function main() {
     initialPromptTokens: number;
     cumulativeInputTokens: number;
   })[] = [];
-  const selections = [];
+  const selections: Awaited<ReturnType<typeof classify>>[] = [];
   for (let repeat = 0; repeat < repeats; repeat++) {
     const h = history();
     const selection = await classify(h, runtime);

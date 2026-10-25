@@ -63,12 +63,18 @@ describe("parseSettings", () => {
     expect(parseSettings(undefined)).toEqual(DEFAULT_SETTINGS);
     expect(parseSettings({})).toEqual(DEFAULT_SETTINGS);
     expect(DEFAULT_SETTINGS.enabled).toBe(false);
+    expect(DEFAULT_SETTINGS.prefetchRecall).toBe(false);
   });
 
   test("overrides individual fields", () => {
-    expect(parseSettings({ contextMasking: { enabled: true, protectRecentTurns: 5 } })).toEqual({
+    expect(
+      parseSettings({
+        contextMasking: { enabled: true, prefetchRecall: true, protectRecentTurns: 5 },
+      }),
+    ).toEqual({
       ...DEFAULT_SETTINGS,
       enabled: true,
+      prefetchRecall: true,
       protectRecentTurns: 5,
     });
   });
@@ -76,6 +82,7 @@ describe("parseSettings", () => {
   test("rejects invalid values and unknown keys", () => {
     for (const contextMasking of [
       { enabled: "yes" },
+      { prefetchRecall: "yes" },
       { triggerRatio: 0 },
       { triggerRatio: 1.5 },
       { protectRecentTurns: 0 },

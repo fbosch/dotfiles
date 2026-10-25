@@ -29,6 +29,7 @@ export default function (pi: ExtensionAPI) {
     await appendFile(join(ctx.cwd, "wire.jsonl"), JSON.stringify({
       pointers: payload.includes("/saved/"),
       index: payload.includes("Saved tool results:"),
+      toolNames: Array.isArray(event.payload.tools) ? event.payload.tools.map((tool) => tool.name ?? tool.function?.name) : [],
     }) + "\\n");
   });
 }
@@ -71,9 +72,10 @@ export default function (pi: ExtensionAPI) {
     `
 import { dirname, join } from "node:path";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { registerRecall } from ${JSON.stringify(join(import.meta.dir, "../extensions/context-masking/recall.ts"))};
+import { registerRecall, registerRecallPrefetch } from ${JSON.stringify(join(import.meta.dir, "../extensions/context-masking/recall.ts"))};
 export default function (pi: ExtensionAPI) {
   registerRecall(pi, (ctx) => join(dirname(ctx.cwd), "saved"));
+  if (process.env.PROBE_PREFETCH === "1") registerRecallPrefetch(pi, (ctx) => join(dirname(ctx.cwd), "saved"));
 }
 `,
   );
@@ -146,6 +148,16 @@ export default function (pi: ExtensionAPI) {
         arm: job.arm,
         indexed,
         recallEnabled: indexed && recallEnabled,
+        prefetched: appended.some(
+          (e) => e.type === "custom_message" && e.customType === "context-masking-recall",
+        ),
+        prefetchContainedAnswer: appended.some(
+          (e) =>
+            e.type === "custom_message" &&
+            e.customType === "context-masking-recall" &&
+            typeof e.content === "string" &&
+            e.content.includes(probe.answer),
+        ),
         recallCalls: appended
           .flatMap((e) =>
             e.type === "message" && e.message.role === "assistant" ? e.message.content : [],

@@ -251,3 +251,38 @@ export function registerRecall(
     }),
   );
 }
+
+export function registerRecallPrefetch(
+  pi: Pick<ExtensionAPI, "on">,
+  artifactRoot: (ctx: ExtensionContext) => string = () =>
+    join(getAgentDir(), "cache", "context-masking"),
+  enabled: (ctx: ExtensionContext) => boolean = () => true,
+) {
+  pi.on("before_agent_start", async (event, ctx) => {
+    if (!("prompt" in event) || !enabled(ctx)) return undefined;
+    const query = event.prompt.trim().slice(0, 500);
+    if (!query || words(query).every((word) => STOP.has(word))) return undefined;
+    const report = await recallSaved(ctx.sessionManager.getBranch(), artifactRoot(ctx), query, 2);
+    // shortcut: two nearby lexical matches gate prefetch, not a relevance classifier.
+    // Revisit this gate after a real-task evaluation measures irrelevant context injection.
+    if ((report.passages[0]?.score ?? 0) < 2) return undefined;
+    if (
+      ctx.sessionManager
+        .buildSessionProjection()
+        .messages.some(
+          (message) =>
+            message.role === "custom" &&
+            message.customType === "context-masking-recall" &&
+            message.content === report.text,
+        )
+    )
+      return undefined;
+    return {
+      message: {
+        customType: "context-masking-recall",
+        content: report.text,
+        display: false,
+      },
+    };
+  });
+}

@@ -19,7 +19,7 @@ import {
   placeholder,
   selectMasks,
 } from "./policy";
-import { registerRecall } from "./recall";
+import { registerRecall, registerRecallPrefetch } from "./recall";
 
 export const CUSTOM_TYPE = "context-masking";
 
@@ -155,4 +155,12 @@ export function registerContextMasking(
 export default function contextMasking(pi: ExtensionAPI): void {
   registerContextMasking(pi);
   registerRecall(pi);
+  registerRecallPrefetch(pi, undefined, (ctx) => {
+    try {
+      const settings = loadSettings(ctx);
+      return settings.enabled && settings.prefetchRecall;
+    } catch {
+      return false;
+    }
+  });
 }
