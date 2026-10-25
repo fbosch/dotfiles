@@ -22,7 +22,6 @@ import {
 } from "@earendil-works/pi-tui";
 import { Value } from "typebox/value";
 import { installFloatingDialogs } from "../../prompt-ui/floating-dialogs";
-import { installSubagentWidgetFrame } from "../../prompt-ui/subagent-widget-frame";
 import tasksExtension, {
   confidentlyExplainsUnfinishedWork,
   formatProgress,
@@ -193,48 +192,36 @@ const regressionTask: TaskItem = {
 const plan: TaskItem[] = [inspectTask, regressionTask];
 
 describe("standalone tasks checklist", () => {
-  test.each([false, true])(
-    "renders the original panel with shared wrapper enabled=%s",
-    async (wrapped) => {
-      const tasks = harness(createSession());
-      const uninstall = wrapped
-        ? installSubagentWidgetFrame(tasks.context.ui as unknown as ExtensionContext["ui"])
-        : undefined;
-      const theme = {
-        fg: (_color: string, text: string) => text,
-        getBgAnsi: () => "\x1b[48;2;34;34;34m",
-        strikethrough: (text: string) => text,
-      } as unknown as Theme;
-      try {
-        await tasks.event("session_start");
-        await tasks.call({ action: "set", items: plan });
-        const factory = tasks.widgets.at(-1);
-        if (typeof factory !== "function") throw new Error("Expected a task widget factory");
-        const widget = factory({} as TUI, theme);
-        const lines = widget.render(80);
-        const plain = lines.map(stripTerminalSequences);
-        expect(plain).toEqual([
-          " ".repeat(80),
-          "  • 2 tasks (0 done, 1 in progress, 1 open)".padEnd(80),
-          "    □ Inspect current behavior".padEnd(80),
-          "    ■ Add regression tests".padEnd(80),
-          "▀".repeat(80),
-        ]);
-        expect(lines.slice(0, -1).every((line) => line.startsWith("\x1b[48;2;34;34;34m"))).toBe(
-          true,
-        );
-        expect(lines.at(-1)).toBe(`\x1b[38;2;34;34;34m${"▀".repeat(80)}\x1b[39m`);
-        expect(plain.join("\n")).not.toContain("#inspect");
-        for (const width of [1, 4, 5, 12, 80]) {
-          expect(widget.render(width).every((line) => visibleWidth(line) === width)).toBe(true);
-        }
-        await tasks.command("clear");
-        expect(tasks.widgets.at(-1)).toBeUndefined();
-      } finally {
-        uninstall?.();
-      }
-    },
-  );
+  test("renders the original panel", async () => {
+    const tasks = harness(createSession());
+    const theme = {
+      fg: (_color: string, text: string) => text,
+      getBgAnsi: () => "\x1b[48;2;34;34;34m",
+      strikethrough: (text: string) => text,
+    } as unknown as Theme;
+    await tasks.event("session_start");
+    await tasks.call({ action: "set", items: plan });
+    const factory = tasks.widgets.at(-1);
+    if (typeof factory !== "function") throw new Error("Expected a task widget factory");
+    const widget = factory({} as TUI, theme);
+    const lines = widget.render(80);
+    const plain = lines.map(stripTerminalSequences);
+    expect(plain).toEqual([
+      " ".repeat(80),
+      "  • 2 tasks (0 done, 1 in progress, 1 open)".padEnd(80),
+      "    □ Inspect current behavior".padEnd(80),
+      "    ■ Add regression tests".padEnd(80),
+      "▀".repeat(80),
+    ]);
+    expect(lines.slice(0, -1).every((line) => line.startsWith("\x1b[48;2;34;34;34m"))).toBe(true);
+    expect(lines.at(-1)).toBe(`\x1b[38;2;34;34;34m${"▀".repeat(80)}\x1b[39m`);
+    expect(plain.join("\n")).not.toContain("#inspect");
+    for (const width of [1, 4, 5, 12, 80]) {
+      expect(widget.render(width).every((line) => visibleWidth(line) === width)).toBe(true);
+    }
+    await tasks.command("clear");
+    expect(tasks.widgets.at(-1)).toBeUndefined();
+  });
 
   test("configures state icons with defaults for omitted states", () => {
     expect(resolveTaskIcons({})).toEqual({ pending: "□", in_progress: "■", completed: "✓" });

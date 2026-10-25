@@ -29,7 +29,6 @@ export const TASKS_INPUT_ENTRY = "fbb.tasks-checklist.input";
 const RECONCILIATION_MESSAGE_TYPE = "fbb.tasks-checklist.reminder";
 const RECONCILIATION_CONFIDENCE = 0.85;
 const MAX_RESPONSE_CHARS = 4_000;
-// This widget owns its frame; the legacy "tasks" key can be framed again by prompt-ui.
 const TASK_WIDGET_KEY = "tasks-checklist";
 
 const STATUSES = ["pending", "in_progress", "completed"] as const;

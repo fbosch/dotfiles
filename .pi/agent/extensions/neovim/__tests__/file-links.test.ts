@@ -2,10 +2,6 @@ import { expect, test } from "bun:test";
 import { pathToFileURL } from "node:url";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
 import { hyperlink, type Terminal, Text, type TUI, TuiAltScreen } from "@earendil-works/pi-tui";
-import {
-  installSubagentSessionUrlHandler,
-  subagentSessionUrl,
-} from "../../prompt-ui/subagent-session-links";
 import { installNeovimFileLinks } from "../file-links";
 
 const imagePath = "/tmp/pi-clipboard-63bb0b66-b11e-4c53-ae13-a5d09220fbc2.png";
@@ -119,32 +115,20 @@ test("shutdown cancels queued clicks and silences an in-flight open failure", as
   expect(f.notifications).toEqual([]);
 });
 
-for (const neovimFirst of [true, false]) {
-  test(`composes with subagent links and reloads without stale callbacks (${neovimFirst})`, async () => {
-    const f = fixture();
-    const tui = f.tui as unknown as TUI;
-    const target = { agentId: "agent-1", displayName: "Explore", description: "Inspect" };
-    const sessions: unknown[] = [];
-    const installFile = () => installNeovimFileLinks(tui, f.context, f.openFile);
-    const installSession = () =>
-      installSubagentSessionUrlHandler(tui, (value) => sessions.push(value));
-    for (let reload = 0; reload < 3; reload++) {
-      const [disposeFirst, disposeSecond] = neovimFirst
-        ? [installFile(), installSession()]
-        : [installSession(), installFile()];
-      f.tui.openUrl(imageUrl);
-      f.tui.openUrl(subagentSessionUrl(target));
-      f.tui.openUrl("https://example.com");
-      await settle();
-      expect(f.opened).toEqual(Array(reload + 1).fill(imagePath));
-      expect(sessions).toEqual(Array(reload + 1).fill(target));
-      expect(f.external).toEqual(Array(reload + 1).fill("https://example.com"));
-      disposeFirst();
-      disposeSecond();
-      expect(f.tui.openUrl).toBe(f.original);
-    }
-  });
-}
+test("reloads without stale callbacks and passes other URLs through", async () => {
+  const f = fixture();
+  const tui = f.tui as unknown as TUI;
+  for (let reload = 0; reload < 3; reload++) {
+    const dispose = installNeovimFileLinks(tui, f.context, f.openFile);
+    f.tui.openUrl(imageUrl);
+    f.tui.openUrl("https://example.com");
+    await settle();
+    expect(f.opened).toEqual(Array(reload + 1).fill(imagePath));
+    expect(f.external).toEqual(Array(reload + 1).fill("https://example.com"));
+    dispose();
+    expect(f.tui.openUrl).toBe(f.original);
+  }
+});
 
 class TestTerminal implements Terminal {
   readonly columns = 100;
