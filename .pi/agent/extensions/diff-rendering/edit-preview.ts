@@ -32,6 +32,7 @@ interface DiffEditState {
   expandedPreviewPending: boolean;
   preview: DiffDetails | undefined;
   previewController: AbortController | undefined;
+  previewFailed: boolean;
   previewKey: string | undefined;
   previewPending: boolean;
   previewRequest: EditDiffRequest | undefined;
@@ -250,6 +251,7 @@ export function createDiffEditTool(
       if (previousController !== undefined) previewControllers.delete(previousController);
       state.previewController = undefined;
       state.preview = undefined;
+      state.previewFailed = false;
       state.previewRequest = undefined;
       state.previewKey = key;
       state.previewPending = false;
@@ -267,7 +269,8 @@ export function createDiffEditTool(
       context.argsComplete &&
       input !== undefined &&
       !state.previewPending &&
-      state.preview === undefined
+      state.preview === undefined &&
+      !state.previewFailed
     ) {
       const controller = new AbortController();
       const requestKey = key;
@@ -306,6 +309,8 @@ export function createDiffEditTool(
             ) {
               return;
             }
+            // Redraws must not retry a failed request until its arguments change.
+            state.previewFailed = true;
             state.previewPending = false;
             state.previewController = undefined;
             context.invalidate();

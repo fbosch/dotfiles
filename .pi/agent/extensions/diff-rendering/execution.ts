@@ -138,11 +138,24 @@ export async function runGitDiff(
           auto: request.display === undefined || request.display === "auto",
           ...(options.signal ? { signal: options.signal } : {}),
         });
-  // jsdiff discards binary/mode/rename-only headers; keep them alongside textual patches.
+  // jsdiff drops extended headers, including those attached to text hunks.
   if (textual.length) {
     const metadata = gitResult.stdout
       .split(/(?=^diff --git )/mu)
-      .filter((section) => section.startsWith("diff --git ") && !/^@@ /mu.test(section))
+      .flatMap((section) => {
+        if (!section.startsWith("diff --git ")) return [];
+        const hunkStart = section.search(/^@@ /mu);
+        if (hunkStart === -1) return [section];
+        const headers = section
+          .slice(0, hunkStart)
+          .split("\n")
+          .filter((line) =>
+            /^(?:old mode |new mode |new file mode |deleted file mode |similarity index |dissimilarity index |rename from |rename to |copy from |copy to )/u.test(
+              line,
+            ),
+          );
+        return headers.length === 0 ? [] : [`${section.split("\n", 1)[0]}\n${headers.join("\n")}`];
+      })
       .join("\n");
     if (metadata)
       rendered = { ...rendered, output: `${rendered.output}\n${boundDiffOutputForSave(metadata)}` };

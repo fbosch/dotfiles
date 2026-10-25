@@ -55,11 +55,12 @@ function linesForPatch(patch: StructuredPatch): Line[] {
     previousEnd = hunk.oldStart + hunk.oldLines;
     for (const raw of hunk.lines) {
       const kind = raw[0];
-      const content = clean(raw.slice(1));
+      // Hunk rows already delimit lines; CR must not introduce extra highlighted rows.
+      const content = clean(raw.slice(1).replaceAll("\r", ""));
       if (kind === " ") lines.push({ content, kind, old: old++, next: next++ });
       else if (kind === "-") lines.push({ content, kind, old: old++ });
       else if (kind === "+") lines.push({ content, kind, next: next++ });
-      else if (kind === "\\") lines.push({ content: clean(raw), kind });
+      else if (kind === "\\") lines.push({ content: `\\${content}`, kind });
     }
   }
   return lines;

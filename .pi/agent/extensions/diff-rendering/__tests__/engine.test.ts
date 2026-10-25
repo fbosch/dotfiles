@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { stripVTControlCharacters } from "node:util";
 import { visibleWidth } from "@earendil-works/pi-tui";
-import { structuredPatch } from "diff";
+import { formatPatch, structuredPatch } from "diff";
 import { createDiffRenderer } from "../engine";
 import { runEditDiff, runGitDiff } from "../execution";
 import { type DiffRenderEngine, ESCAPE } from "../shared";
@@ -11,6 +11,13 @@ beforeAll(() => engine.prewarm());
 afterAll(() => engine.dispose());
 const patch = (old: string, next: string, path = "sample.ts") =>
   structuredPatch(path, path, old, next, undefined, undefined, { context: 3 });
+
+const sourceRowCases = [
+  { name: "CRLF", old: "old\r\ntail\r\nend\r\n", next: "new\r\ntail\r\nend\r\n" },
+  { name: "mixed endings", old: "old\r\ntail\nend\r\n", next: "new\r\ntail\nend\r\n" },
+  { name: "embedded CR", old: "ol\rd\ntai\rl\nend\n", next: "ne\rw\ntai\rl\nend\n" },
+  { name: "no final newline", old: "old\r\ntail\r\nend", next: "new\r\ntail\r\nend" },
+];
 
 describe("Shiki diff rendering", () => {
   test("frames split output and hatches only missing source lines", async () => {
@@ -216,6 +223,24 @@ describe("Shiki diff rendering", () => {
       );
     }
   });
+  for (const source of sourceRowCases) {
+    test(`preserves source-row mapping with ${source.name}`, async () => {
+      for (const path of ["sample.ts", "sample.unknown"]) {
+        for (const display of ["inline", "side-by-side"] as const) {
+          const options = { width: 160, display, auto: false };
+          const result = await engine.render([patch(source.old, source.next, path)], options);
+          const expected = await engine.render(
+            [patch(source.old.replaceAll("\r", ""), source.next.replaceAll("\r", ""), path)],
+            options,
+          );
+          expect(result).toEqual(expected);
+          const plain = stripVTControlCharacters(result.output);
+          expect(plain).toContain("tail");
+          expect(plain).toContain("end");
+        }
+      }
+    });
+  }
   test("honors pre-aborted rendering", async () => {
     await expect(
       engine.render([patch("a", "b")], {
@@ -228,6 +253,36 @@ describe("Shiki diff rendering", () => {
 });
 
 describe("in-process diff execution", () => {
+  for (const source of sourceRowCases) {
+    test(`preserves public Git and edit output with ${source.name}`, async () => {
+      const normalized = {
+        old: source.old.replaceAll("\r", ""),
+        next: source.next.replaceAll("\r", ""),
+      };
+      for (const columns of [100, 200]) {
+        const git = (old: string, next: string) =>
+          runGitDiff(
+            async () => ({
+              code: 0,
+              killed: false,
+              stderr: "",
+              stdout: formatPatch(patch(old, next)),
+            }),
+            {},
+            "/repo",
+            { engine, columns },
+          );
+        const edit = (oldContent: string, newContent: string) =>
+          runEditDiff({ path: "sample.ts", oldContent, newContent }, "/repo", { engine, columns });
+        const gitResult = await git(source.old, source.next);
+        expect(gitResult).toEqual(await git(normalized.old, normalized.next));
+        expect(gitResult.content).toContain("end");
+        const editResult = await edit(source.old, source.next);
+        expect(editResult).toEqual(await edit(normalized.old, normalized.next));
+        expect(stripVTControlCharacters(editResult.output)).toContain("end");
+      }
+    });
+  }
   test("renders edits without file snapshots", async () => {
     const result = await runEditDiff(
       { path: "src/example.ts", oldContent: "const n = 1;\n", newContent: "const n = 2;\n" },
@@ -275,6 +330,83 @@ describe("in-process diff execution", () => {
     expect(result.content).toContain("Binary files");
     expect(result.details.noChanges).toBe(false);
   });
+  const extendedHeaderCases = [
+    {
+      name: "untrusted header controls",
+      header:
+        `rename from old${ESCAPE}]52;c;ZXZpbA==\u0007.ts\n` +
+        `rename to new${ESCAPE}[31m${ESCAPE}[2J.ts${ESCAPE}[0m\n`,
+      oldPath: "a/old.ts",
+      newPath: "b/new.ts",
+      hunk: "@@ -1 +1 @@\n-old\n+new\n",
+      expected: ["rename from old.ts", "rename to new.ts"],
+    },
+    {
+      name: "mode change",
+      header: "old mode 100644\nnew mode 100755\n",
+      oldPath: "a/sample.ts",
+      newPath: "b/sample.ts",
+      hunk: "@@ -1 +1 @@\n-old\n+new\n",
+      expected: ["old mode 100644", "new mode 100755"],
+    },
+    {
+      name: "rename",
+      header: "similarity index 80%\nrename from old.ts\nrename to new.ts\n",
+      oldPath: "a/old.ts",
+      newPath: "b/new.ts",
+      hunk: "@@ -1 +1 @@\n-old\n+new\n",
+      expected: ["similarity index 80%", "rename from old.ts", "rename to new.ts"],
+    },
+    {
+      name: "copy",
+      header: "similarity index 80%\ncopy from old.ts\ncopy to new.ts\n",
+      oldPath: "a/old.ts",
+      newPath: "b/new.ts",
+      hunk: "@@ -1 +1 @@\n-old\n+new\n",
+      expected: ["similarity index 80%", "copy from old.ts", "copy to new.ts"],
+    },
+    {
+      name: "new file",
+      header: "new file mode 100755\n",
+      oldPath: "/dev/null",
+      newPath: "b/sample.ts",
+      hunk: "@@ -0,0 +1 @@\n+new\n",
+      expected: ["new file mode 100755"],
+    },
+    {
+      name: "deleted file",
+      header: "deleted file mode 100755\n",
+      oldPath: "a/sample.ts",
+      newPath: "/dev/null",
+      hunk: "@@ -1 +0,0 @@\n-old\n",
+      expected: ["deleted file mode 100755"],
+    },
+  ];
+  for (const source of extendedHeaderCases) {
+    test(`preserves extended headers on text hunks: ${source.name}`, async () => {
+      const raw =
+        `diff --git ${source.oldPath === "/dev/null" ? "a/sample.ts" : source.oldPath} ${source.newPath === "/dev/null" ? "b/sample.ts" : source.newPath}\n` +
+        source.header +
+        `--- ${source.oldPath}\n+++ ${source.newPath}\n${source.hunk}`;
+      const result = await runGitDiff(
+        async () => ({ code: 0, killed: false, stderr: "", stdout: raw }),
+        {},
+        "/repo",
+        { engine },
+      );
+      const plain = stripVTControlCharacters(result.details.output);
+      for (const header of source.expected) {
+        expect(result.content).toContain(header);
+        expect(plain).toContain(header);
+      }
+      expect(plain).toContain(source.name === "deleted file" ? "old" : "new");
+      for (const control of [`${ESCAPE}]52;`, `${ESCAPE}[31m`, `${ESCAPE}[2J`]) {
+        expect(result.content).not.toContain(control);
+        expect(result.details.output).not.toContain(control);
+      }
+    });
+  }
+
   test("preserves metadata beside text changes", async () => {
     const raw =
       "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-old\n+new\ndiff --git a/a.png b/a.png\nBinary files a/a.png and b/a.png differ\ndiff --git a/run.sh b/run.sh\nold mode 100644\nnew mode 100755\n";
