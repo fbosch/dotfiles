@@ -14,11 +14,8 @@ import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-cl
 import { withToolExecution } from "../../__tests__/fixtures/tool-context";
 import toolDiscoveryExtension, {
   isDeferredToolName,
-  rankDeferredToolsWithClassifier,
-  resolveClassifierToolDiscoveryConfig,
   resolveDeferredToolPrefixes,
   searchDeferredTools,
-  searchDeferredToolsWithClassifierFallback,
 } from "../index";
 import type { NativeToolSearchHooks, NativeToolSearchRanker } from "../native-ranking";
 
@@ -49,21 +46,6 @@ afterAll(() => {
   else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
   rmSync(testAgentDirectory, { recursive: true, force: true });
 });
-
-async function nativeClassifierRegistry(onInput?: (input: ClassifierContext) => void) {
-  const registry = await createNativeClassifierRegistry();
-  return {
-    findOfType: registry.findOfType.bind(registry),
-    classify: (
-      model: Parameters<typeof registry.classify>[0],
-      input: ClassifierContext,
-      options?: Parameters<typeof registry.classify>[2],
-    ) => {
-      onInput?.(input);
-      return registry.classify(model, input, options);
-    },
-  };
-}
 
 interface SearchResult {
   usage?: Usage;
@@ -432,49 +414,6 @@ describe("tool discovery", () => {
     expect(isDeferredToolName("worktrunk", ["worktrunk"])).toBe(true);
     expect(isDeferredToolName("read")).toBe(false);
   });
-  test("resolves Classifier settings with safe defaults, bounds, and trusted project overrides", () => {
-    expect(resolveClassifierToolDiscoveryConfig({}, undefined)).toEqual({
-      enabled: true,
-      timeoutMs: 2400,
-    });
-    expect(
-      resolveClassifierToolDiscoveryConfig({
-        classifier: { toolDiscovery: { enabled: false, timeoutMs: 1500 } },
-      }),
-    ).toEqual({ enabled: false, timeoutMs: 1500 });
-    expect(
-      resolveClassifierToolDiscoveryConfig({ classifier: { toolDiscovery: { timeoutMs: 0 } } }),
-    ).toEqual({
-      enabled: false,
-      timeoutMs: 2400,
-    });
-    expect(resolveClassifierToolDiscoveryConfig({ classifier: null })).toEqual({
-      enabled: false,
-      timeoutMs: 2400,
-    });
-    expect(
-      resolveClassifierToolDiscoveryConfig({ classifier: { toolDiscovery: { enabled: null } } }),
-    ).toEqual({
-      enabled: false,
-      timeoutMs: 2400,
-    });
-    expect(
-      resolveClassifierToolDiscoveryConfig(
-        { classifier: { toolDiscovery: { enabled: true } } },
-        { classifier: { toolDiscovery: { enabled: false } } },
-      ),
-    ).toEqual({ enabled: false, timeoutMs: 2400 });
-    expect(
-      resolveClassifierToolDiscoveryConfig(
-        {
-          classifier: { toolDiscovery: { enabled: false } },
-          toolDiscovery: { deferredToolPrefixes: ["global_"] },
-        },
-        { toolDiscovery: { deferredToolPrefixes: ["project_"] } },
-      ),
-    ).toEqual({ enabled: false, timeoutMs: 2400 });
-  });
-
   test("reads deferred prefixes from tool discovery settings", () => {
     expect(
       resolveDeferredToolPrefixes({
@@ -741,164 +680,6 @@ describe("tool discovery", () => {
     ]);
   });
 
-  test("uses bounded live Classifier probabilities to rank beyond lexical matches", async () => {
-    const tools = [
-      dummyTool("chart_pie", "Render circular data visualizations"),
-      dummyTool("chart_network", "Render relationships between connected nodes"),
-      dummyTool("chart_table", "Render tabular data"),
-    ].map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.parameters,
-      exposure: "direct" as const,
-      sourceInfo: {
-        path: `/extensions/${tool.name}.ts`,
-        source: "local" as const,
-        scope: "user" as const,
-        origin: "top-level" as const,
-      },
-    }));
-    let classifierInput: ClassifierContext | undefined;
-    const ranked = await rankDeferredToolsWithClassifier(
-      tools,
-      "show connected dependencies",
-      2,
-      ["chart_"],
-      {
-        modelRegistry: await nativeClassifierRegistry((input) => {
-          classifierInput = input;
-        }),
-        fetch: async () => {
-          const criteria = classifierInput?.questions.best_tool;
-          if (criteria?.type !== "choice") throw new Error("choice criteria missing");
-          const selected = Object.entries(criteria.criteria).find(([, value]) =>
-            value.startsWith("chart_network:"),
-          )?.[0];
-          if (selected === undefined) throw new Error("network candidate missing");
-          const probabilities = Object.fromEntries(
-            Object.keys(criteria.criteria).map((id) => [id, id === selected ? 1 : 0]),
-          );
-          return new Response(
-            JSON.stringify({
-              answers: {
-                best_tool: {
-                  type: "choice",
-                  choice: selected,
-                  confidence: 1,
-                  probabilities,
-                },
-              },
-            }),
-            { status: 200, headers: { "content-type": "application/json" } },
-          );
-        },
-      },
-    );
-
-    expect(ranked?.matches.map((tool) => tool.name)).toEqual(["chart_network"]);
-    expect(ranked?.rankingSource).toBe("classifier");
-    expect(classifierInput?.questions.best_tool?.type).toBe("choice");
-    expect(JSON.stringify(classifierInput?.state)).not.toContain("parameters");
-    expect(JSON.stringify(classifierInput?.state)).not.toContain("sourceInfo");
-  });
-
-  test("accepts a valid Classifier no-match response without activating a candidate", async () => {
-    const tools = [dummyTool("chart_pie", "Render circular data visualizations")].map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.parameters,
-      exposure: "direct" as const,
-      sourceInfo: {
-        path: `/extensions/${tool.name}.ts`,
-        source: "local" as const,
-        scope: "user" as const,
-        origin: "top-level" as const,
-      },
-    }));
-
-    const ranked = await rankDeferredToolsWithClassifier(
-      tools,
-      "database migrations",
-      1,
-      ["chart_"],
-      {
-        modelRegistry: await nativeClassifierRegistry(),
-        fetch: async () =>
-          new Response(
-            JSON.stringify({
-              answers: {
-                best_tool: {
-                  type: "choice",
-                  choice: "no_match",
-                  confidence: 0.9,
-                  probabilities: { candidate_0: 0.1, no_match: 0.9 },
-                },
-              },
-            }),
-            { status: 200 },
-          ),
-      },
-    );
-
-    expect(ranked).toEqual({ matches: [], rankingSource: "classifier" });
-  });
-
-  test("falls back to lexical results for unavailable or malformed Classifier responses", async () => {
-    const tools = [
-      dummyTool("websearch", "Search the public web"),
-      dummyTool("webfetch", "Fetch a web page"),
-    ].map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.parameters,
-      exposure: "direct" as const,
-      sourceInfo: {
-        path: `/extensions/${tool.name}.ts`,
-        source: "local" as const,
-        scope: "user" as const,
-        origin: "top-level" as const,
-      },
-    }));
-    const fetchTool = tools.find((tool) => tool.name === "webfetch");
-    if (fetchTool === undefined) throw new Error("webfetch fixture missing");
-    const options = {
-      modelRegistry: await nativeClassifierRegistry(),
-      fetch: async () => new Response("not-json", { status: 200 }),
-    };
-
-    const lexicalMatches = searchDeferredTools(tools, "fetch web page", 2, ["web"]);
-    await expect(
-      searchDeferredToolsWithClassifierFallback(tools, "fetch web page", 2, ["web"], options),
-    ).resolves.toEqual({ matches: lexicalMatches, rankingSource: "lexical" });
-    await expect(
-      searchDeferredToolsWithClassifierFallback(tools, "fetch web page", 2, ["web"], {
-        modelRegistry: await nativeClassifierRegistry(),
-        fetch: async () =>
-          new Response(
-            JSON.stringify({
-              answers: {
-                best_tool: {
-                  type: "choice",
-                  choice: "unexpected",
-                  confidence: 1,
-                  probabilities: { unexpected: 1 },
-                },
-              },
-            }),
-            { status: 200 },
-          ),
-      }),
-    ).resolves.toEqual({ matches: lexicalMatches, rankingSource: "lexical" });
-    await expect(
-      searchDeferredToolsWithClassifierFallback(tools, "fetch web page", 2, ["web"], {
-        modelRegistry: await nativeClassifierRegistry(),
-        fetch: async () => {
-          throw new Error("network unavailable");
-        },
-      }),
-    ).resolves.toEqual({ matches: lexicalMatches, rankingSource: "lexical" });
-  });
-
   test("does not activate tools after cancellation", async () => {
     const harness = createHarness({
       tools: [dummyTool("read", "Read files"), dummyTool("chart_pie", "Render a chart")],
@@ -910,51 +691,5 @@ describe("tool discovery", () => {
 
     await expect(harness.search("chart", 1, controller.signal)).rejects.toThrow();
     expect(harness.activeTools).toEqual(["read", "tool_load"]);
-  });
-
-  test("rejects caller cancellation but falls back on classifier deadlines", async () => {
-    const tools = [dummyTool("chart_pie", "Render a chart")].map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.parameters,
-      exposure: "direct" as const,
-      sourceInfo: {
-        path: `/extensions/${tool.name}.ts`,
-        source: "local" as const,
-        scope: "user" as const,
-        origin: "top-level" as const,
-      },
-    }));
-    const chartTool = tools[0];
-    if (chartTool === undefined) throw new Error("chart fixture missing");
-    const controller = new AbortController();
-    controller.abort();
-    await expect(
-      searchDeferredToolsWithClassifierFallback(
-        tools,
-        "chart",
-        1,
-        ["chart_"],
-        {
-          modelRegistry: await nativeClassifierRegistry(),
-          timeoutMs: 5,
-          fetch: async () => new Response("never"),
-        },
-        controller.signal,
-      ),
-    ).rejects.toThrow();
-
-    await expect(
-      searchDeferredToolsWithClassifierFallback(tools, "chart", 1, ["chart_"], {
-        modelRegistry: await nativeClassifierRegistry(),
-        timeoutMs: 5,
-        fetch: async (_url, init) =>
-          new Promise<Response>((_resolve, reject) => {
-            const abort = () => reject(new Error("request timed out"));
-            if (init?.signal?.aborted) abort();
-            else init?.signal?.addEventListener("abort", abort, { once: true });
-          }),
-      }),
-    ).resolves.toEqual({ matches: [chartTool], rankingSource: "lexical" });
   });
 });

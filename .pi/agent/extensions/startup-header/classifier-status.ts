@@ -1,6 +1,6 @@
 import { resolveClassifierEnabled, resolveClassifierPreferences } from "../../lib/classifier";
+import { resolveClassifierToolDiscoveryConfig } from "../../lib/discovery-ranking";
 import { resolveSkillSelectionConfig } from "../skill-discovery/selection-config";
-import { resolveClassifierToolDiscoveryConfig } from "../tool-discovery";
 import type { StartupOwnerState } from "./contracts";
 
 export { VERCEL_GATEWAY_PROVIDER_ID } from "../../lib/classifier";

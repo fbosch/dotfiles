@@ -1,4 +1,3 @@
-import type { Usage } from "@earendil-works/pi-ai";
 import * as PiSDK from "@earendil-works/pi-coding-agent";
 import {
   defineTool,
@@ -8,13 +7,11 @@ import {
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { DEFAULT_CLASSIFIER_TIMEOUT_MS } from "../../lib/classifier";
 import {
-  type DiscoveryRankingOptions,
-  type DiscoveryRankingResult,
+  DiscoverySearchError,
   MAX_DISCOVERY_CLASSIFIER_CANDIDATES,
-  rankDiscovery,
-  rankDiscoveryWithClassifier,
+  resolveClassifierToolDiscoveryConfig,
+  searchCatalog,
 } from "../../lib/discovery-ranking";
 import { activeAgentName } from "../shared/active-agent";
 import { isRecord } from "../shared/is-record";
@@ -29,11 +26,6 @@ const MAX_MATCHES = 10;
 const MAX_SUMMARY_CHARS = 180;
 const MAX_DEFERRED_PREFIXES = 32;
 const MAX_DEFERRED_PREFIX_LENGTH = 120;
-const MAX_CLASSIFIER_TIMEOUT_MS = DEFAULT_CLASSIFIER_TIMEOUT_MS;
-const DEFAULT_CLASSIFIER_TOOL_DISCOVERY_CONFIG = {
-  enabled: true,
-  timeoutMs: DEFAULT_CLASSIFIER_TIMEOUT_MS,
-} as const;
 
 const DEFAULT_DEFERRED_TOOL_PREFIXES = [] as const;
 
@@ -56,59 +48,6 @@ interface ToolSearchDetails {
 }
 
 type ToolInfo = ReturnType<ExtensionAPI["getAllTools"]>[number];
-
-export interface ClassifierToolDiscoveryConfig {
-  readonly enabled: boolean;
-  readonly timeoutMs: number;
-}
-
-function readClassifierToolDiscoverySection(
-  settings: unknown,
-): Record<string, unknown> | null | undefined {
-  if (!isRecord(settings) || settings.classifier === undefined) return undefined;
-  if (!isRecord(settings.classifier)) return null;
-  const section = settings.classifier.toolDiscovery;
-  return section === undefined || isRecord(section) ? section : null;
-}
-
-function readClassifierToolDiscoveryConfig(
-  section: Record<string, unknown> | null | undefined,
-  current: ClassifierToolDiscoveryConfig,
-): ClassifierToolDiscoveryConfig {
-  if (section === undefined) return current;
-  if (
-    section === null ||
-    Object.keys(section).some((key) => !["enabled", "timeoutMs"].includes(key))
-  ) {
-    return { enabled: false, timeoutMs: current.timeoutMs };
-  }
-  const enabled = Object.hasOwn(section, "enabled") ? section.enabled : current.enabled;
-  const timeoutMs = Object.hasOwn(section, "timeoutMs") ? section.timeoutMs : current.timeoutMs;
-  if (
-    typeof enabled !== "boolean" ||
-    typeof timeoutMs !== "number" ||
-    !Number.isInteger(timeoutMs) ||
-    timeoutMs < 1 ||
-    timeoutMs > MAX_CLASSIFIER_TIMEOUT_MS
-  ) {
-    return { enabled: false, timeoutMs: current.timeoutMs };
-  }
-  return { enabled, timeoutMs };
-}
-
-export function resolveClassifierToolDiscoveryConfig(
-  globalSettings: unknown,
-  projectSettings?: unknown,
-): ClassifierToolDiscoveryConfig {
-  const global = readClassifierToolDiscoveryConfig(
-    readClassifierToolDiscoverySection(globalSettings),
-    DEFAULT_CLASSIFIER_TOOL_DISCOVERY_CONFIG,
-  );
-  return readClassifierToolDiscoveryConfig(
-    readClassifierToolDiscoverySection(projectSettings),
-    global,
-  );
-}
 
 function getConfiguredPrefixes(settings: unknown): string[] | undefined {
   if (!isRecord(settings) || !isRecord(settings.toolDiscovery)) return undefined;
@@ -212,14 +151,6 @@ export function searchDeferredTools(
     .map(({ tool }) => tool);
 }
 
-export type ClassifierRankingOptions = Omit<DiscoveryRankingOptions, "enabled">;
-
-export interface RankedToolResult {
-  matches: ToolInfo[];
-  rankingSource: "classifier" | "lexical";
-  usage?: Usage;
-}
-
 function lexicalDiscoveryMatches(
   tools: readonly ToolInfo[],
   query: string,
@@ -229,60 +160,6 @@ function lexicalDiscoveryMatches(
   return searchDeferredTools(tools, query, MAX_DISCOVERY_CLASSIFIER_CANDIDATES, prefixes).map(
     (tool) => ({ name: tool.name, score: scoreTool(tool, terms) }),
   );
-}
-
-function asToolRanking(
-  ranking: DiscoveryRankingResult,
-  tools: readonly ToolInfo[],
-): RankedToolResult {
-  const byName = new Map(tools.map((tool) => [tool.name, tool]));
-  return {
-    matches: ranking.matches.map((item) => {
-      const tool = byName.get(item.name);
-      if (tool === undefined) throw new Error("Ranking selected an unknown discovery tool");
-      return tool;
-    }),
-    rankingSource: ranking.rankingSource,
-    ...(ranking.usage === undefined ? {} : { usage: ranking.usage }),
-  };
-}
-
-export async function rankDeferredToolsWithClassifier(
-  tools: readonly ToolInfo[],
-  query: string,
-  limit: number,
-  prefixes: readonly string[],
-  options: ClassifierRankingOptions,
-  signal?: AbortSignal,
-): Promise<RankedToolResult | undefined> {
-  const candidates = tools.filter((tool) => isDiscoverableTool(tool, prefixes));
-  const attempt = await rankDiscoveryWithClassifier(
-    candidates,
-    lexicalDiscoveryMatches(candidates, query, prefixes),
-    query,
-    limit,
-    { ...options, ...(signal === undefined ? {} : { signal }) },
-  );
-  return attempt.ok ? asToolRanking(attempt.result, candidates) : undefined;
-}
-
-export async function searchDeferredToolsWithClassifierFallback(
-  tools: readonly ToolInfo[],
-  query: string,
-  limit: number,
-  prefixes: readonly string[],
-  options: ClassifierRankingOptions,
-  signal?: AbortSignal,
-): Promise<RankedToolResult> {
-  const candidates = tools.filter((tool) => isDiscoverableTool(tool, prefixes));
-  const ranking = await rankDiscovery(
-    candidates,
-    lexicalDiscoveryMatches(candidates, query, prefixes),
-    query,
-    limit,
-    { ...options, ...(signal === undefined ? {} : { signal }) },
-  );
-  return asToolRanking(ranking, candidates);
 }
 
 function getConfiguredSettings(ctx: ExtensionContext) {
@@ -349,38 +226,21 @@ export default function toolDiscoveryExtension(
       executionMode: "sequential",
 
       async execute(_toolCallId, params, signal, _onUpdate, ctx) {
-        let inferenceUsage: Usage | undefined;
         try {
-          const tools = searchableTools(ctx);
-          const { deferredToolPrefixes: prefixes, classifierToolDiscovery: classifierConfig } =
+          const { deferredToolPrefixes: prefixes, classifierToolDiscovery: config } =
             getConfiguredSettings(ctx);
-          const ranked: RankedToolResult = classifierConfig.enabled
-            ? await searchDeferredToolsWithClassifierFallback(
-                tools,
-                params.query,
-                params.limit ?? DEFAULT_MATCHES,
-                prefixes,
-                {
-                  modelRegistry: ctx.modelRegistry,
-                  onUsage: (usage) => {
-                    inferenceUsage = usage;
-                  },
-                  timeoutMs: classifierConfig.timeoutMs,
-                  settingsContext: ctx,
-                },
-                signal,
-              )
-            : {
-                matches: searchDeferredTools(
-                  tools,
-                  params.query,
-                  params.limit ?? DEFAULT_MATCHES,
-                  prefixes,
-                ),
-                rankingSource: "lexical" as const,
-              };
-          signal?.throwIfAborted();
-          const { matches: rankedMatches, rankingSource } = ranked;
+          const tools = searchableTools(ctx).filter((tool) => isDiscoverableTool(tool, prefixes));
+          const ranked = await searchCatalog(tools, {
+            key: (tool) => tool.name,
+            describe: (tool) => tool.description,
+            lexical: lexicalDiscoveryMatches(tools, params.query, prefixes),
+            query: params.query,
+            limit: params.limit ?? DEFAULT_MATCHES,
+            context: ctx,
+            config,
+            ...(signal === undefined ? {} : { signal }),
+          });
+          const { items: rankedMatches, rankingSource } = ranked;
           const usage = ranked.usage === undefined ? {} : { usage: ranked.usage };
           const currentTools = searchableTools(ctx);
           const byName = new Map(currentTools.map((tool) => [tool.name, tool]));
@@ -429,14 +289,11 @@ export default function toolDiscoveryExtension(
             },
           };
         } catch (error) {
-          if (inferenceUsage === undefined) throw error;
-          // Agent-core discards usage on thrown failures; return an error result without accepting matches.
+          if (!(error instanceof DiscoverySearchError)) throw error;
           return {
             isError: true,
-            usage: inferenceUsage,
-            content: [
-              { type: "text", text: error instanceof Error ? error.message : String(error) },
-            ],
+            usage: error.usage,
+            content: [{ type: "text", text: error.message }],
             details: { matches: [], added: [], rankingSource: "classifier" },
           };
         }

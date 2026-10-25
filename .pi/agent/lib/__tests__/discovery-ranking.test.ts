@@ -1,11 +1,17 @@
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import type { ClassifierContext, Usage } from "@earendil-works/pi-ai";
 import type { ClassifierRequestResult } from "../classifier";
 import {
   compactDiscoveryDescription,
   type DiscoveryRankingOptions,
+  DiscoverySearchError,
   MAX_DISCOVERY_CLASSIFIER_CANDIDATES,
   rankDiscovery,
+  resolveClassifierToolDiscoveryConfig,
+  searchCatalog,
 } from "../discovery-ranking";
 import { createNativeClassifierRegistry } from "./native-classifier-registry";
 
@@ -380,5 +386,179 @@ describe("shared discovery ranking", () => {
         ),
       ).rejects.toThrow("positive integer");
     }
+  });
+});
+
+test("resolves Classifier settings with safe defaults, bounds, and trusted project overrides", () => {
+  expect(resolveClassifierToolDiscoveryConfig({}, undefined)).toEqual({
+    enabled: true,
+    timeoutMs: 2400,
+  });
+  expect(
+    resolveClassifierToolDiscoveryConfig({
+      classifier: { toolDiscovery: { enabled: false, timeoutMs: 1500 } },
+    }),
+  ).toEqual({ enabled: false, timeoutMs: 1500 });
+  expect(
+    resolveClassifierToolDiscoveryConfig({ classifier: { toolDiscovery: { timeoutMs: 0 } } }),
+  ).toEqual({ enabled: false, timeoutMs: 2400 });
+  expect(resolveClassifierToolDiscoveryConfig({ classifier: null })).toEqual({
+    enabled: false,
+    timeoutMs: 2400,
+  });
+  expect(
+    resolveClassifierToolDiscoveryConfig({ classifier: { toolDiscovery: { enabled: null } } }),
+  ).toEqual({ enabled: false, timeoutMs: 2400 });
+  expect(
+    resolveClassifierToolDiscoveryConfig(
+      { classifier: { toolDiscovery: { enabled: true } } },
+      { classifier: { toolDiscovery: { enabled: false } } },
+    ),
+  ).toEqual({ enabled: false, timeoutMs: 2400 });
+  expect(
+    resolveClassifierToolDiscoveryConfig(
+      {
+        classifier: { toolDiscovery: { enabled: false } },
+        toolDiscovery: { deferredToolPrefixes: ["global_"] },
+      },
+      { toolDiscovery: { deferredToolPrefixes: ["project_"] } },
+    ),
+  ).toEqual({ enabled: false, timeoutMs: 2400 });
+});
+
+describe("catalog search", () => {
+  const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
+  const agentDirectory = mkdtempSync(join(tmpdir(), "discovery-catalog-search-"));
+  const projectDirectory = mkdtempSync(join(tmpdir(), "discovery-catalog-project-"));
+  const context = { cwd: projectDirectory, isProjectTrusted: () => false, modelRegistry: registry };
+  type Item = { id: string; summary: string; groups: string[] };
+  const alpha: Item = { id: "alpha", summary: "Find æøå information", groups: ["lookup"] };
+  const beta: Item = { id: "beta", summary: "Search matching symbols", groups: [] };
+  const catalog = [alpha, beta];
+  const describeCatalog = {
+    key: (item: Item) => item.id,
+    describe: (item: Item) => item.summary,
+    tags: (item: Item) => item.groups,
+  };
+  function settings(value: unknown): void {
+    writeFileSync(join(agentDirectory, "settings.json"), JSON.stringify(value));
+  }
+
+  beforeAll(() => {
+    process.env.PI_CODING_AGENT_DIR = agentDirectory;
+  });
+  afterAll(() => {
+    if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
+    else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
+    rmSync(agentDirectory, { recursive: true, force: true });
+    rmSync(projectDirectory, { recursive: true, force: true });
+  });
+
+  test("returns the selected catalog items with ranking source and usage", async () => {
+    settings({});
+    let input: ClassifierContext | undefined;
+    const result = await searchCatalog(catalog, {
+      ...describeCatalog,
+      lexical,
+      query: "find",
+      limit: 1,
+      context,
+      request: async (_registry, request) => {
+        input = request;
+        return choice("candidate_1");
+      },
+    });
+    expect(result).toEqual({ items: [alpha], rankingSource: "classifier", usage });
+    expect(JSON.stringify(input?.state)).toContain("lookup");
+  });
+
+  test("reads the classifier switch from settings and skips inference when disabled", async () => {
+    settings({ classifier: { toolDiscovery: { enabled: false } } });
+    let requests = 0;
+    const result = await searchCatalog(catalog, {
+      ...describeCatalog,
+      lexical,
+      query: "find",
+      limit: 1,
+      context,
+      request: async () => {
+        requests += 1;
+        return choice();
+      },
+    });
+    expect(result).toEqual({
+      items: [beta],
+      rankingSource: "lexical",
+      fallbackReason: "disabled",
+    });
+    expect(requests).toBe(0);
+  });
+
+  test("a supplied config replaces the settings read", async () => {
+    settings({ classifier: { toolDiscovery: { enabled: true } } });
+    const result = await searchCatalog(catalog, {
+      ...describeCatalog,
+      lexical,
+      query: "find",
+      limit: 2,
+      context,
+      config: { enabled: false, timeoutMs: 2400 },
+      request: async () => {
+        throw new Error("classifier must not run");
+      },
+    });
+    expect(result.items).toEqual([beta, alpha]);
+    expect(result.fallbackReason).toBe("disabled");
+  });
+
+  test("duplicate catalog keys fail before inference", async () => {
+    settings({});
+    await expect(
+      searchCatalog([alpha, alpha], {
+        ...describeCatalog,
+        lexical: [],
+        query: "find",
+        limit: 1,
+        context,
+        request: async () => choice(),
+      }),
+    ).rejects.toThrow("Duplicate discovery candidate names");
+  });
+
+  test("a failure after billed inference carries its usage", async () => {
+    settings({});
+    const controller = new AbortController();
+    const error = await searchCatalog(catalog, {
+      ...describeCatalog,
+      lexical,
+      query: "find",
+      limit: 1,
+      context,
+      signal: controller.signal,
+      request: async () => {
+        controller.abort(new Error("caller stopped"));
+        return choice();
+      },
+    }).catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(DiscoverySearchError);
+    expect(error).toMatchObject({ message: "caller stopped", usage });
+  });
+
+  test("a failure before inference is rethrown unchanged", async () => {
+    settings({});
+    const controller = new AbortController();
+    const reason = new Error("already stopped");
+    controller.abort(reason);
+    await expect(
+      searchCatalog(catalog, {
+        ...describeCatalog,
+        lexical,
+        query: "find",
+        limit: 1,
+        context,
+        signal: controller.signal,
+        request: async () => choice(),
+      }),
+    ).rejects.toBe(reason);
   });
 });

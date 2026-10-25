@@ -4,20 +4,18 @@ import {
   defineTool,
   type ExtensionAPI,
   type ExtensionContext,
-  getAgentDir,
-  SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { isMatching, match, P } from "ts-pattern";
 import { Type } from "typebox";
 import {
   DISCOVERY_FALLBACK_REASONS,
   type DiscoveryFallbackReason,
+  DiscoverySearchError,
   MAX_DISCOVERY_CLASSIFIER_CANDIDATES,
-  rankDiscovery,
+  searchCatalog,
 } from "../../lib/discovery-ranking";
 import { INACTIVE_SPECIALIST_TOOL } from "../../lib/tool-exposure";
 import { truncateCommandOutput } from "../just";
-import { resolveClassifierToolDiscoveryConfig } from "../tool-discovery";
 import {
   discoverScripts,
   inspectScript,
@@ -324,37 +322,19 @@ export default function dekitExtension(pi: ExtensionAPI): void {
                 rankingSource: "lexical",
               };
             }
-            const candidates = catalog.map((script) => ({
-              name: script.id,
-              description: scriptSearchDescription(script),
-              tags: script.recipe?.groups ?? [],
-            }));
             const lexical = rankScriptsLocally(catalog, query ?? "");
-            const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
-              projectTrusted: ctx.isProjectTrusted(),
-            });
-            const config = resolveClassifierToolDiscoveryConfig(
-              settings.getGlobalSettings(),
-              settings.getProjectSettings(),
-            );
-            let inferenceUsage: Usage | undefined;
             try {
-              const ranked = await rankDiscovery(candidates, lexical, query ?? "", limit ?? 20, {
-                modelRegistry: ctx.modelRegistry,
-                enabled: config.enabled,
-                timeoutMs: config.timeoutMs,
-                settingsContext: ctx,
+              const ranked = await searchCatalog(catalog, {
+                key: (script) => script.id,
+                describe: scriptSearchDescription,
+                tags: (script) => script.recipe?.groups ?? [],
+                lexical,
+                query: query ?? "",
+                limit: limit ?? 20,
+                context: ctx,
                 ...(signal === undefined ? {} : { signal }),
-                onUsage: (usage) => {
-                  inferenceUsage = usage;
-                },
               });
-              signal?.throwIfAborted();
-              const scripts = ranked.matches.map(({ name }) => {
-                const script = byId.get(name);
-                if (script === undefined) throw new Error("Ranked script is outside the catalog");
-                return scriptSummary(script);
-              });
+              const scripts = ranked.items.map(scriptSummary);
               discoveryUsage = ranked.usage;
               return {
                 action: "discover",
@@ -375,10 +355,9 @@ export default function dekitExtension(pi: ExtensionAPI): void {
                   : { fallbackReason: ranked.fallbackReason }),
               };
             } catch (error) {
-              if (inferenceUsage === undefined) throw error;
-              // Throwing a billed failure would make agent-core discard its inference usage.
-              discoveryUsage = inferenceUsage;
-              discoveryError = error instanceof Error ? error.message : String(error);
+              if (!(error instanceof DiscoverySearchError)) throw error;
+              discoveryUsage = error.usage;
+              discoveryError = error.message;
               return {
                 action: "discover",
                 project,

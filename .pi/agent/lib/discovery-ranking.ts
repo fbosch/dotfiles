@@ -1,10 +1,13 @@
 import type { ClassifierContext, Usage } from "@earendil-works/pi-ai";
+import { getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { match } from "ts-pattern";
 import {
   type ClassifierFailure,
   type ClassifierOptions,
   type ClassifierRegistry,
   type ClassifierRequestResult,
+  type ClassifierSettingsContext,
+  DEFAULT_CLASSIFIER_TIMEOUT_MS,
   requestClassifier,
 } from "./classifier";
 
@@ -54,7 +57,7 @@ export interface DiscoveryRankingOptions extends ClassifierOptions {
     options: ClassifierOptions,
   ) => Promise<ClassifierRequestResult>;
 }
-export type ClassifierDiscoveryAttempt =
+type ClassifierDiscoveryAttempt =
   | { ok: true; result: DiscoveryRankingResult }
   | { ok: false; fallbackReason: DiscoveryFallbackReason; usage?: Usage };
 
@@ -128,7 +131,7 @@ function classifierInput(
   };
 }
 
-export async function rankDiscoveryWithClassifier(
+async function rankDiscoveryWithClassifier(
   candidates: readonly DiscoveryCandidate[],
   lexicalMatches: readonly DiscoveryMatch[],
   query: string,
@@ -231,4 +234,166 @@ export async function rankDiscovery(
         fallbackReason: result.fallbackReason,
         ...(result.usage === undefined ? {} : { usage: result.usage }),
       };
+}
+
+export interface ClassifierToolDiscoveryConfig {
+  readonly enabled: boolean;
+  readonly timeoutMs: number;
+}
+
+const DEFAULT_CLASSIFIER_TOOL_DISCOVERY_CONFIG: ClassifierToolDiscoveryConfig = {
+  enabled: true,
+  timeoutMs: DEFAULT_CLASSIFIER_TIMEOUT_MS,
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function readClassifierToolDiscoverySection(
+  settings: unknown,
+): Record<string, unknown> | null | undefined {
+  if (!isRecord(settings) || settings.classifier === undefined) return undefined;
+  if (!isRecord(settings.classifier)) return null;
+  const section = settings.classifier.toolDiscovery;
+  return section === undefined || isRecord(section) ? section : null;
+}
+
+function readClassifierToolDiscoveryConfig(
+  section: Record<string, unknown> | null | undefined,
+  current: ClassifierToolDiscoveryConfig,
+): ClassifierToolDiscoveryConfig {
+  if (section === undefined) return current;
+  if (
+    section === null ||
+    Object.keys(section).some((key) => !["enabled", "timeoutMs"].includes(key))
+  ) {
+    return { enabled: false, timeoutMs: current.timeoutMs };
+  }
+  const enabled = Object.hasOwn(section, "enabled") ? section.enabled : current.enabled;
+  const timeoutMs = Object.hasOwn(section, "timeoutMs") ? section.timeoutMs : current.timeoutMs;
+  if (
+    typeof enabled !== "boolean" ||
+    typeof timeoutMs !== "number" ||
+    !Number.isInteger(timeoutMs) ||
+    timeoutMs < 1 ||
+    timeoutMs > DEFAULT_CLASSIFIER_TIMEOUT_MS
+  ) {
+    return { enabled: false, timeoutMs: current.timeoutMs };
+  }
+  return { enabled, timeoutMs };
+}
+
+/** Reads `classifier.toolDiscovery`; any invalid section disables the classifier rather than guessing. */
+export function resolveClassifierToolDiscoveryConfig(
+  globalSettings: unknown,
+  projectSettings?: unknown,
+): ClassifierToolDiscoveryConfig {
+  const global = readClassifierToolDiscoveryConfig(
+    readClassifierToolDiscoverySection(globalSettings),
+    DEFAULT_CLASSIFIER_TOOL_DISCOVERY_CONFIG,
+  );
+  return readClassifierToolDiscoveryConfig(
+    readClassifierToolDiscoverySection(projectSettings),
+    global,
+  );
+}
+
+function configuredClassifierToolDiscovery(
+  context: ClassifierSettingsContext,
+): ClassifierToolDiscoveryConfig {
+  const settings = SettingsManager.create(context.cwd, getAgentDir(), {
+    projectTrusted: context.isProjectTrusted(),
+  });
+  return resolveClassifierToolDiscoveryConfig(
+    settings.getGlobalSettings(),
+    settings.getProjectSettings(),
+  );
+}
+
+export interface DiscoverySearchContext extends ClassifierSettingsContext {
+  readonly modelRegistry: ClassifierRegistry;
+}
+
+export interface CatalogSearch<T> {
+  readonly key: (item: T) => string;
+  readonly describe: (item: T) => string;
+  readonly tags?: (item: T) => readonly string[];
+  /** Lexical matches from the catalog's own scorer, best first. */
+  readonly lexical: readonly DiscoveryMatch[];
+  readonly query: string;
+  readonly limit: number;
+  readonly context: DiscoverySearchContext;
+  /** Supply when the caller already read settings, so one search uses one settings snapshot. */
+  readonly config?: ClassifierToolDiscoveryConfig;
+  readonly signal?: AbortSignal;
+  readonly request?: DiscoveryRankingOptions["request"];
+}
+
+export interface CatalogSearchResult<T> {
+  readonly items: T[];
+  readonly rankingSource: DiscoveryRankingResult["rankingSource"];
+  readonly fallbackReason?: DiscoveryFallbackReason;
+  readonly usage?: Usage;
+}
+
+/**
+ * A search that failed after classifier inference was billed. Callers return it as an error result,
+ * because agent-core discards the usage of a thrown tool failure.
+ */
+export class DiscoverySearchError extends Error {
+  readonly usage: Usage;
+
+  constructor(cause: unknown, usage: Usage) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+    this.name = "DiscoverySearchError";
+    this.usage = usage;
+  }
+}
+
+export async function searchCatalog<T>(
+  catalog: readonly T[],
+  search: CatalogSearch<T>,
+): Promise<CatalogSearchResult<T>> {
+  const config = search.config ?? configuredClassifierToolDiscovery(search.context);
+  const byKey = new Map(catalog.map((item) => [search.key(item), item]));
+  let attemptedUsage: Usage | undefined;
+  try {
+    const ranking = await rankDiscovery(
+      catalog.map((item) => ({
+        name: search.key(item),
+        description: search.describe(item),
+        ...(search.tags === undefined ? {} : { tags: search.tags(item) }),
+      })),
+      search.lexical,
+      search.query,
+      search.limit,
+      {
+        modelRegistry: search.context.modelRegistry,
+        enabled: config.enabled,
+        timeoutMs: config.timeoutMs,
+        settingsContext: search.context,
+        ...(search.signal === undefined ? {} : { signal: search.signal }),
+        ...(search.request === undefined ? {} : { request: search.request }),
+        onUsage: (usage) => {
+          attemptedUsage = usage;
+        },
+      },
+    );
+    search.signal?.throwIfAborted();
+    const items = ranking.matches.map(({ name }) => {
+      const item = byKey.get(name);
+      if (item === undefined) throw new Error("Ranking selected an item outside the catalog");
+      return item;
+    });
+    return {
+      items,
+      rankingSource: ranking.rankingSource,
+      ...(ranking.fallbackReason === undefined ? {} : { fallbackReason: ranking.fallbackReason }),
+      ...(ranking.usage === undefined ? {} : { usage: ranking.usage }),
+    };
+  } catch (error) {
+    if (attemptedUsage === undefined) throw error;
+    throw new DiscoverySearchError(error, attemptedUsage);
+  }
 }

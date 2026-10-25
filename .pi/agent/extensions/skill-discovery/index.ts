@@ -1,19 +1,13 @@
-import type { Usage } from "@earendil-works/pi-ai";
-import {
-  defineTool,
-  type ExtensionAPI,
-  getAgentDir,
-  SettingsManager,
-} from "@earendil-works/pi-coding-agent";
+import { defineTool, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import {
   compactDiscoveryDescription,
   type DiscoveryMatch,
-  rankDiscovery,
+  DiscoverySearchError,
+  searchCatalog,
 } from "../../lib/discovery-ranking";
 import { fullSkillCatalog } from "../shared/skill-prompt";
 import { configuredSkillVisibility } from "../shared/skill-visibility";
-import { resolveClassifierToolDiscoveryConfig } from "../tool-discovery";
 import { createSkillSelectionExtension } from "./selection";
 
 const MAX_MATCHES = 10;
@@ -106,33 +100,17 @@ export default function skillDiscovery(
       ),
       executionMode: "sequential",
       async execute(_id, params, signal, _onUpdate, ctx) {
-        let inferenceUsage: Usage | undefined;
         try {
-          const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
-            projectTrusted: ctx.isProjectTrusted(),
-          });
-          const config = resolveClassifierToolDiscoveryConfig(
-            settings.getGlobalSettings(),
-            settings.getProjectSettings(),
-          );
-          const limit = params.limit ?? DEFAULT_MATCHES;
-          const lexical = searchSkillsBm25(catalog, params.query, catalog.length);
-          const ranking = await rankDiscovery(catalog, lexical, params.query, limit, {
-            modelRegistry: ctx.modelRegistry,
-            enabled: config.enabled,
-            timeoutMs: config.timeoutMs,
-            settingsContext: ctx,
+          const ranking = await searchCatalog(catalog, {
+            key: (skill) => skill.name,
+            describe: (skill) => skill.description,
+            lexical: searchSkillsBm25(catalog, params.query, catalog.length),
+            query: params.query,
+            limit: params.limit ?? DEFAULT_MATCHES,
+            context: ctx,
             ...(signal === undefined ? {} : { signal }),
-            onUsage: (usage) => {
-              inferenceUsage = usage;
-            },
           });
-          signal?.throwIfAborted();
-          const byName = new Map(catalog.map((skill) => [skill.name, skill]));
-          const matches = ranking.matches.flatMap((match) => {
-            const skill = byName.get(match.name);
-            return skill === undefined ? [] : [skill];
-          });
+          const matches = ranking.items;
           return {
             ...(ranking.usage === undefined ? {} : { usage: ranking.usage }),
             content: [
@@ -150,13 +128,11 @@ export default function skillDiscovery(
             },
           };
         } catch (error) {
-          if (inferenceUsage === undefined) throw error;
+          if (!(error instanceof DiscoverySearchError)) throw error;
           return {
             isError: true,
-            usage: inferenceUsage,
-            content: [
-              { type: "text", text: error instanceof Error ? error.message : String(error) },
-            ],
+            usage: error.usage,
+            content: [{ type: "text", text: error.message }],
             details: { matches: [], rankingSource: "classifier" as const },
           };
         }
