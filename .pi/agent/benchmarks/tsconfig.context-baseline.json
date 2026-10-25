@@ -1,0 +1,7 @@
+{
+  "extends": "../tsconfig.json",
+  "include": [
+    "context-baseline.ts",
+    "__tests__/context-baseline.test.ts"
+  ]
+}

@@ -370,6 +370,12 @@ in
       bun test benchmarks/__tests__/diff-rendering.test.ts
       node_modules/.bin/tsc --project benchmarks/tsconfig.diff-rendering.json
     '';
+    "test:pi-context-baseline".exec = ''
+      set -euo pipefail
+      cd .pi/agent
+      bun test benchmarks/__tests__/context-baseline.test.ts
+      node_modules/.bin/tsc --project benchmarks/tsconfig.context-baseline.json
+    '';
     "test:pi-diff-rendering-extension".exec = ''
       set -euo pipefail
       cd .pi/agent
@@ -562,6 +568,7 @@ in
         "test:lua-quality"
         "test:pi-extensions"
         "test:pi-diff-rendering"
+        "test:pi-context-baseline"
         "test:pi-mcp"
         "test:nvim-dekit-terminal"
         "test:nvim-diffnav-terminal"
