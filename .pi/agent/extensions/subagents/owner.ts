@@ -9,33 +9,28 @@ import {
   type BudgetToolOutcome,
   budgetTaskKind,
 } from "./budget";
+import {
+  type AssignmentOutcome,
+  historicalWorker,
+  isSettled,
+  type LifecycleEffect,
+  type LifecycleEvent,
+  type LifecycleState,
+  type LiveSessionAvailability,
+  launchedWorker,
+  type Operation,
+  permission,
+  type SegmentPurpose,
+  transition,
+  type WorkerStatus,
+} from "./lifecycle";
 import type { ResolvedSpecialist } from "./specialist";
+
+export type { AssignmentOutcome, LiveSessionAvailability, WorkerStatus } from "./lifecycle";
 
 export type WorkerId = string;
 export type AssignmentId = string;
 export type QuestionId = string;
-export type AssignmentOutcome =
-  | "queued"
-  | "running"
-  | "waiting-question"
-  | "stopping"
-  | "completed"
-  | "failed"
-  | "budget-exhausted"
-  | "cancelled"
-  | "cleanup-unknown";
-export type WorkerStatus =
-  | "queued"
-  | "running"
-  | "waiting-question"
-  | "stopping"
-  | "idle"
-  | "cancelled"
-  | "cleanup-unknown"
-  | "releasing"
-  | "released"
-  | "historical";
-export type LiveSessionAvailability = "available" | "released" | "historical" | "none";
 export type PersistenceStatus = "not-attempted" | "pending" | "saved" | "failed";
 
 export interface TranscriptEntry {
@@ -304,13 +299,15 @@ interface MutableWorker {
   assignments: Map<AssignmentId, MutableAssignment>;
   createdAt: number;
   sessionStarted: boolean;
+  reserved: boolean;
+  closeAttempt?: number;
   active?: ActiveSegment;
 }
 
 interface QueueJob {
   readonly workerId: WorkerId;
   readonly assignmentId: AssignmentId;
-  readonly purpose: "start" | "question-reply" | "continuation";
+  readonly purpose: SegmentPurpose;
   readonly prompt?: string;
   readonly questionId?: QuestionId;
 }
@@ -394,7 +391,6 @@ export class WorkerOwner {
   private readonly queue: QueueJob[] = [];
   private readonly listeners = new Set<(event: OwnerEvent) => void>();
   private readonly pendingPersistence = new Set<Promise<void>>();
-  private reservations = 0;
   private shuttingDown = false;
   private shutdownPromise?: Promise<void>;
 
@@ -436,12 +432,10 @@ export class WorkerOwner {
       id,
       specialist: config.name,
       config,
-      status: "queued",
-      liveSession: "available",
+      ...launchedWorker,
       currentAssignmentId: assignmentId,
       assignments: new Map([[assignmentId, assignment]]),
       createdAt: Date.now(),
-      sessionStarted: false,
     };
     this.workers.set(id, worker);
     this.queue.push({ workerId: id, assignmentId, purpose: "start" });
@@ -572,8 +566,7 @@ export class WorkerOwner {
 
   async steer(workerId: WorkerId, text: string): Promise<void> {
     const worker = this.requireWorker(workerId);
-    if (worker.status !== "running")
-      throw new Error(`Cannot steer worker in ${worker.status} state`);
+    this.assertPermitted(worker, "steer");
     if (!text.trim()) throw new Error("steering text must be non-empty");
     await this.driver.steer(workerId, text);
   }
@@ -582,7 +575,8 @@ export class WorkerOwner {
     this.assertAdmissionOpen();
     const worker = this.requireWorker(workerId);
     const question = worker.pendingQuestion;
-    if (!question || worker.status !== "waiting-question" || question.id !== questionId) {
+    this.assertPermitted(worker, "reply");
+    if (!question || question.id !== questionId) {
       throw new Error("Question is not current for this worker");
     }
     if (!text.trim()) throw new Error("question reply must be non-empty");
@@ -590,9 +584,6 @@ export class WorkerOwner {
     if (assignment.budget.maxTurns - assignment.turnsUsed < 1) {
       throw new Error("No turns remain; explicitly extend the assignment budget before replying");
     }
-    delete worker.pendingQuestion;
-    worker.status = "queued";
-    assignment.outcome = "queued";
     this.queue.push({
       workerId,
       assignmentId: assignment.id,
@@ -600,8 +591,7 @@ export class WorkerOwner {
       prompt: text,
       questionId,
     });
-    this.emitState(worker);
-    this.pump();
+    this.dispatch(worker, { type: "replied" });
     return this.snapshot(worker);
   }
 
@@ -616,25 +606,7 @@ export class WorkerOwner {
     if (assignmentId !== worker.currentAssignmentId)
       throw new Error("Cannot extend a non-current assignment budget");
     const assignment = this.requireAssignment(worker, assignmentId);
-    const canExtend =
-      worker.liveSession === "available" &&
-      match(worker.status)
-        .with("waiting-question", "queued", () => true)
-        .with(
-          "running",
-          "stopping",
-          "idle",
-          "cancelled",
-          "cleanup-unknown",
-          "releasing",
-          "released",
-          "historical",
-          () => false,
-        )
-        .exhaustive();
-    if (!canExtend) {
-      throw new Error(`Cannot extend assignment budget in ${worker.status} state`);
-    }
+    this.assertPermitted(worker, "extendBudget");
     assignment.budget.extend(additionalTurns);
     this.emitState(worker);
     return this.snapshot(worker);
@@ -649,24 +621,8 @@ export class WorkerOwner {
     this.assertAdmissionOpen();
     if (!prompt.trim()) throw new Error("continuation prompt must be non-empty");
     const worker = this.requireWorker(workerId);
-    if (worker.status !== "idle" || worker.liveSession !== "available") {
-      throw new Error(`Cannot continue worker in ${worker.status} state`);
-    }
+    this.assertPermitted(worker, "continue");
     const previous = this.requireAssignment(worker, worker.currentAssignmentId);
-    match(previous.outcome)
-      .with("completed", "failed", "budget-exhausted", () => undefined)
-      .with(
-        "queued",
-        "running",
-        "waiting-question",
-        "stopping",
-        "cancelled",
-        "cleanup-unknown",
-        () => {
-          throw new Error(`Cannot continue assignment with ${previous.outcome} outcome`);
-        },
-      )
-      .exhaustive();
     const initialTurns = maxTurns ?? worker.config.maxTurns;
     const ceiling = assignmentCeiling(initialTurns, worker.config.hardMaxTurns, hardMaxTurns);
     const assignmentId = randomUUID();
@@ -680,106 +636,30 @@ export class WorkerOwner {
     previous.budget.invalidate();
     worker.assignments.set(assignmentId, assignment);
     worker.currentAssignmentId = assignmentId;
-    worker.status = "queued";
     this.queue.push({ workerId, assignmentId, purpose: "continuation" });
-    this.emitState(worker);
-    this.pump();
+    this.dispatch(worker, { type: "continued" });
     return { workerId, assignmentId, worker: this.snapshot(worker) };
   }
 
   async cancel(workerId: WorkerId): Promise<WorkerSnapshot> {
     const worker = this.requireWorker(workerId);
-    return match(worker.status)
-      .with("queued", () => this.cancelQueued(worker))
-      .with("waiting-question", () => this.cancelQuestion(worker))
-      .with("running", () => this.cancelRunning(worker))
-      .with("stopping", "cleanup-unknown", "cancelled", () => this.snapshot(worker))
-      .with("idle", "releasing", "released", "historical", () => {
-        throw new Error(`Cannot cancel worker in ${worker.status} state`);
-      })
-      .exhaustive();
-  }
-
-  private cancelQueued(worker: MutableWorker): WorkerSnapshot {
-    this.removeQueued(worker.id);
-    const assignment = this.requireAssignment(worker, worker.currentAssignmentId);
-    assignment.budget.invalidate();
-    delete worker.pendingQuestion;
-    if (worker.sessionStarted) {
-      worker.status = "stopping";
-      assignment.outcome = "stopping";
-      this.emitState(worker);
-      void this.closeCancelledIdle(worker, assignment);
-    } else {
-      assignment.outcome = "cancelled";
-      worker.status = "cancelled";
-      worker.liveSession = "none";
-      this.emitState(worker);
-      this.persist(worker, assignment);
-    }
-    this.pump();
-    return this.snapshot(worker);
-  }
-
-  private cancelQuestion(worker: MutableWorker): WorkerSnapshot {
-    worker.status = "stopping";
-    delete worker.pendingQuestion;
-    const assignment = this.requireAssignment(worker, worker.currentAssignmentId);
-    assignment.budget.invalidate();
-    assignment.outcome = "stopping";
-    this.emitState(worker);
-    void this.closeCancelledIdle(worker, assignment);
-    return this.snapshot(worker);
-  }
-
-  private cancelRunning(worker: MutableWorker): WorkerSnapshot {
-    const active = worker.active;
-    if (!active) throw new Error(`Cannot cancel worker in ${worker.status} state`);
-    worker.status = "stopping";
-    const assignment = this.requireAssignment(worker, active.assignmentId);
-    assignment.budget.invalidate();
-    assignment.outcome = "stopping";
-    this.emitState(worker);
-    try {
-      void this.driver.abort(worker.id).catch((error: unknown) => {
-        this.markCleanupUnknown(worker, assignment, `Abort request failed: ${errorText(error)}`);
-      });
-    } catch (error) {
-      this.markCleanupUnknown(worker, assignment, `Abort request failed: ${errorText(error)}`);
-    }
+    if (worker.status === "running" && !worker.active)
+      throw new Error(`Cannot cancel worker in ${worker.status} state`);
+    void this.dispatch(worker, { type: "cancelRequested" });
     return this.snapshot(worker);
   }
 
   async release(workerId: WorkerId): Promise<WorkerSnapshot> {
     const worker = this.requireWorker(workerId);
-    if (worker.liveSession === "released" || worker.liveSession === "none")
-      return this.snapshot(worker);
-    if (worker.status !== "idle" && worker.status !== "cancelled")
-      throw new Error(`Cannot release worker in ${worker.status} state`);
-    for (const assignment of worker.assignments.values()) assignment.budget.invalidate();
-    worker.status = "releasing";
-    this.emitState(worker);
-    let result: { readonly confirmed: boolean; readonly diagnostic?: string };
-    try {
-      result = await this.driver.close(workerId);
-    } catch (error) {
-      result = { confirmed: false, diagnostic: errorText(error) };
-    }
-    if (!result.confirmed) {
-      this.markCleanupUnknown(
-        worker,
-        this.requireAssignment(worker, worker.currentAssignmentId),
-        result.diagnostic ?? "Child session shutdown was not confirmed",
-      );
-    } else {
-      worker.status = "released";
-      worker.liveSession = "released";
-      this.emitState(worker);
-    }
+    const verdict = permission(this.lifecycleState(worker), "release");
+    if (verdict.kind === "noop") return this.snapshot(worker);
+    if (verdict.kind === "refused") throw new Error(verdict.reason);
+    await this.dispatch(worker, { type: "releaseRequested" });
     return this.snapshot(worker);
   }
 
   /**
+   * Stop admission, settle active work, close retained sessions, and drain evidence writes.  /**
    * Stop admission, settle active work, close retained sessions, and drain evidence writes.
    * Cleanup-unknown workers keep their execution reservations and remain referenced.
    */
@@ -798,67 +678,28 @@ export class WorkerOwner {
     await Promise.all(
       workerIds.map((workerId) => {
         const worker = this.workers.get(workerId);
-        if (!worker) return Promise.resolve();
-        return match(worker.status)
-          .with("queued", "running", "waiting-question", () => this.cancel(workerId))
-          .with(
-            "stopping",
-            "idle",
-            "cancelled",
-            "cleanup-unknown",
-            "releasing",
-            "released",
-            "historical",
-            () => Promise.resolve(),
-          )
-          .exhaustive();
+        if (!worker || !this.permits(worker, "cancel")) return Promise.resolve();
+        return this.cancel(workerId);
       }),
     );
     await Promise.all(workerIds.map((workerId) => this.awaitShutdownSettlement(workerId)));
     await Promise.all(
       workerIds.map((workerId) => {
         const worker = this.workers.get(workerId);
-        if (!worker || worker.liveSession !== "available") return Promise.resolve();
-        return match(worker.status)
-          .with("idle", "cancelled", () => this.release(workerId))
-          .with(
-            "queued",
-            "running",
-            "waiting-question",
-            "stopping",
-            "cleanup-unknown",
-            "releasing",
-            "released",
-            "historical",
-            () => Promise.resolve(),
-          )
-          .exhaustive();
+        if (!worker || !this.permits(worker, "release")) return Promise.resolve();
+        return this.release(workerId);
       }),
     );
     await Promise.allSettled([...this.pendingPersistence]);
   }
 
   private awaitShutdownSettlement(workerId: WorkerId): Promise<void> {
-    const isSettled = () => {
-      const status = this.workers.get(workerId)?.status;
-      return match(status)
-        .with(
-          undefined,
-          "idle",
-          "cancelled",
-          "cleanup-unknown",
-          "released",
-          "historical",
-          () => true,
-        )
-        .with("queued", "running", "waiting-question", "stopping", "releasing", () => false)
-        .exhaustive();
-    };
-    if (isSettled()) return Promise.resolve();
+    const settled = () => isSettled(this.workers.get(workerId)?.status);
+    if (settled()) return Promise.resolve();
     return new Promise((resolve) => {
       let unsubscribe = () => {};
       const check = () => {
-        if (!isSettled()) return;
+        if (!settled()) return;
         unsubscribe();
         resolve();
       };
@@ -898,15 +739,13 @@ export class WorkerOwner {
       id: snapshot.id,
       specialist: snapshot.specialist,
       config: freezeConfig(snapshot.config),
-      status: "historical",
-      liveSession: "historical",
+      ...historicalWorker,
       currentAssignmentId: snapshot.currentAssignmentId,
       ...(snapshot.pendingQuestion === undefined
         ? {}
         : { pendingQuestion: Object.freeze({ ...snapshot.pendingQuestion }) }),
       assignments,
       createdAt: snapshot.createdAt,
-      sessionStarted: false,
     };
     this.workers.set(worker.id, worker);
     this.emitState(worker);
@@ -998,7 +837,7 @@ export class WorkerOwner {
 
   private pump(): void {
     if (this.shuttingDown || this.cleanupHealth.isBlocked()) return;
-    while (this.reservations < this.capacity && this.queue.length > 0) {
+    while (this.reservedCount() < this.capacity && this.queue.length > 0) {
       const job = this.queue.shift();
       if (!job) return;
       const worker = this.workers.get(job.workerId);
@@ -1049,9 +888,6 @@ export class WorkerOwner {
   }
 
   private startSegment(worker: MutableWorker, assignment: MutableAssignment, job: QueueJob): void {
-    this.reservations++;
-    worker.status = "running";
-    assignment.outcome = "running";
     const remaining = assignment.budget.maxTurns - assignment.turnsUsed;
     const token = randomUUID();
     const active: ActiveSegment = {
@@ -1061,7 +897,7 @@ export class WorkerOwner {
       observedTurns: assignment.turnsUsed,
     };
     worker.active = active;
-    this.emitState(worker);
+    this.dispatch(worker, { type: "segmentStarted", purpose: job.purpose });
 
     const isCurrent = () => worker.active?.token === token;
     const isBudgetEligible = () =>
@@ -1161,10 +997,7 @@ export class WorkerOwner {
     let execution: Promise<ChildExecutionOutcome>;
     try {
       execution = match(job.purpose)
-        .with("start", () => {
-          worker.sessionStarted = true;
-          return this.driver.start(common, callbacks);
-        })
+        .with("start", () => this.driver.start(common, callbacks))
         .with("question-reply", "continuation", (purpose) =>
           this.driver.prompt(
             {
@@ -1194,32 +1027,13 @@ export class WorkerOwner {
     if (worker.active?.token !== token) return;
     assignment.budget.invalidate();
     assignment.turnsUsed = Math.max(assignment.turnsUsed, worker.active.observedTurns);
-    if (error instanceof UnconfirmedChildStartupError) {
-      this.markCleanupUnknown(worker, assignment, error.message);
-      return;
-    }
-    if (error instanceof ChildStartupFailedError && worker.active.purpose === "start") {
-      worker.sessionStarted = false;
-      worker.liveSession = "none";
-    }
-    if (worker.status === "cleanup-unknown") {
-      assignment.partialReport ??= errorText(error);
-      this.emitState(worker);
-      return;
-    }
-    if (worker.status === "stopping") {
-      assignment.partialReport ??= errorText(error);
-      void this.finishCancellation(worker, assignment, token);
-      return;
-    }
-    assignment.outcome = "failed";
-    assignment.error = errorText(error);
-    delete worker.active;
-    worker.status = "idle";
-    this.reservations--;
-    this.emitState(worker);
-    this.persist(worker, assignment);
-    this.pump();
+    const startup =
+      error instanceof UnconfirmedChildStartupError
+        ? "unconfirmed"
+        : error instanceof ChildStartupFailedError && worker.active.purpose === "start"
+          ? "failed"
+          : "none";
+    void this.dispatch(worker, { type: "segmentFailed", error: errorText(error), startup });
   }
 
   private settleSegment(
@@ -1245,65 +1059,158 @@ export class WorkerOwner {
       return;
     }
     assignment.turnsUsed = Math.max(result.turnsUsed, active.observedTurns);
-    if (worker.status === "cleanup-unknown") {
-      this.retainPartialOutcome(assignment, result);
-      this.emitState(worker);
-      return;
+    void this.dispatch(worker, {
+      type: "segmentSettled",
+      result,
+      questionAsked: Boolean(active.questionText),
+    });
+  }
+
+  private lifecycleState(worker: MutableWorker): LifecycleState {
+    return {
+      status: worker.status,
+      outcome: this.requireAssignment(worker, worker.currentAssignmentId).outcome,
+      liveSession: worker.liveSession,
+      reserved: worker.reserved,
+      sessionStarted: worker.sessionStarted,
+      ...(worker.closeAttempt === undefined ? {} : { closeAttempt: worker.closeAttempt }),
+    };
+  }
+
+  private permits(worker: MutableWorker, operation: Operation): boolean {
+    return permission(this.lifecycleState(worker), operation).kind === "allowed";
+  }
+
+  private assertPermitted(worker: MutableWorker, operation: Operation): void {
+    const verdict = permission(this.lifecycleState(worker), operation);
+    if (verdict.kind === "refused") throw new Error(verdict.reason);
+  }
+
+  private reservedCount(): number {
+    let count = 0;
+    for (const worker of this.workers.values()) if (worker.reserved) count++;
+    return count;
+  }
+
+  /** Applies one lifecycle transition; resolves once any child close it started has settled. */
+  private dispatch(worker: MutableWorker, event: LifecycleEvent): Promise<void> {
+    const assignment = this.requireAssignment(worker, worker.currentAssignmentId);
+    const { state, effects } = transition(this.lifecycleState(worker), event);
+    worker.status = state.status;
+    assignment.outcome = state.outcome;
+    worker.liveSession = state.liveSession;
+    worker.reserved = state.reserved;
+    worker.sessionStarted = state.sessionStarted;
+    if (state.closeAttempt === undefined) delete worker.closeAttempt;
+    else worker.closeAttempt = state.closeAttempt;
+    const closing: Promise<void>[] = [];
+    for (const effect of effects) {
+      if (effect.kind === "close") closing.push(this.closeChild(worker, effect.attempt));
+      else this.runEffect(worker, assignment, effect);
     }
-    if (worker.status === "stopping") {
-      this.retainPartialOutcome(assignment, result);
-      void this.finishCancellation(worker, assignment, token);
-      return;
-    }
-    if (result.kind === "waiting-question") {
-      const text = active.questionText;
-      if (!text) {
-        this.settleSegmentFailure(
-          worker,
-          assignment,
-          token,
-          new Error("Child driver yielded without exactly one correlated question"),
-        );
-        return;
-      }
-      const question: PendingQuestion = Object.freeze({
-        id: randomUUID(),
-        workerId: worker.id,
-        assignmentId: assignment.id,
-        text,
-      });
-      worker.pendingQuestion = question;
-      assignment.outcome = "waiting-question";
-      delete worker.active;
-      worker.status = "waiting-question";
-      this.reservations--;
-      this.emitState(worker);
-      this.emit({ type: "question", question });
-      this.persist(worker, assignment);
-      this.pump();
-      return;
-    }
-    delete worker.active;
-    worker.status = "idle";
-    this.reservations--;
-    match(result)
-      .with({ kind: "completed" }, ({ report }) => {
-        assignment.outcome = "completed";
-        assignment.report = report;
+    return Promise.all(closing).then(() => undefined);
+  }
+
+  private runEffect(
+    worker: MutableWorker,
+    assignment: MutableAssignment,
+    effect: Exclude<LifecycleEffect, { kind: "close" }>,
+  ): void {
+    match(effect)
+      .with({ kind: "dequeue" }, () => this.removeQueued(worker.id))
+      .with({ kind: "invalidateBudget" }, () => assignment.budget.invalidate())
+      .with({ kind: "invalidateAllBudgets" }, () => {
+        for (const item of worker.assignments.values()) item.budget.invalidate();
       })
-      .with({ kind: "failed" }, ({ error, partialReport }) => {
-        assignment.outcome = "failed";
-        assignment.error = error;
-        this.setPartialReport(assignment, partialReport);
+      .with({ kind: "clearQuestion" }, () => {
+        delete worker.pendingQuestion;
       })
-      .with({ kind: "budget-exhausted" }, ({ partialReport }) => {
-        assignment.outcome = "budget-exhausted";
-        this.setPartialReport(assignment, partialReport);
+      .with({ kind: "raiseQuestion" }, () => {
+        const text = worker.active?.questionText;
+        if (!text) throw new Error("Cannot raise a question without its text");
+        worker.pendingQuestion = Object.freeze({
+          id: randomUUID(),
+          workerId: worker.id,
+          assignmentId: assignment.id,
+          text,
+        });
       })
+      .with({ kind: "clearActive" }, () => {
+        delete worker.active;
+      })
+      .with({ kind: "recordFinal" }, ({ result }) =>
+        match(result)
+          .with({ kind: "completed" }, ({ report }) => {
+            assignment.report = report;
+          })
+          .with({ kind: "failed" }, ({ error, partialReport }) => {
+            assignment.error = error;
+            this.setPartialReport(assignment, partialReport);
+          })
+          .with({ kind: "budget-exhausted" }, ({ partialReport }) =>
+            this.setPartialReport(assignment, partialReport),
+          )
+          .exhaustive(),
+      )
+      .with({ kind: "recordPartial" }, ({ result }) =>
+        this.retainPartialOutcome(assignment, result),
+      )
+      .with({ kind: "recordPartialText" }, ({ text }) => {
+        assignment.partialReport ??= text;
+      })
+      .with({ kind: "recordError" }, ({ text }) => {
+        assignment.error = text;
+      })
+      .with({ kind: "markUncertain" }, ({ diagnostic }) =>
+        this.cleanupHealth.markUncertain({
+          parentSessionId: this.parentSessionId,
+          workerId: worker.id,
+          assignmentId: assignment.id,
+          diagnostic,
+        }),
+      )
+      .with({ kind: "emitState" }, () => this.emitState(worker))
+      .with({ kind: "emitQuestion" }, () => {
+        const question = worker.pendingQuestion;
+        if (question) this.emit({ type: "question", question });
+      })
+      .with({ kind: "persist" }, () => this.persist(worker, assignment))
+      .with({ kind: "pump" }, () => this.pump())
+      .with({ kind: "abort" }, () => this.abortChild(worker))
       .exhaustive();
-    this.emitState(worker);
-    this.persist(worker, assignment);
-    this.pump();
+  }
+
+  private abortChild(worker: MutableWorker): void {
+    const uncertain = (error: unknown) => {
+      void this.dispatch(worker, {
+        type: "cleanupUncertain",
+        diagnostic: `Abort request failed: ${errorText(error)}`,
+      });
+    };
+    try {
+      void this.driver.abort(worker.id).catch(uncertain);
+    } catch (error) {
+      uncertain(error);
+    }
+  }
+
+  private async closeChild(worker: MutableWorker, attempt: number): Promise<void> {
+    let result: { readonly confirmed: boolean; readonly diagnostic?: string };
+    try {
+      result = await this.driver.close(worker.id);
+    } catch (error) {
+      result = { confirmed: false, diagnostic: errorText(error) };
+    }
+    await this.dispatch(
+      worker,
+      result.confirmed
+        ? { type: "closeConfirmed", attempt }
+        : {
+            type: "closeUnconfirmed",
+            attempt,
+            diagnostic: result.diagnostic ?? "Child session shutdown was not confirmed",
+          },
+    );
   }
 
   private retainPartialOutcome(assignment: MutableAssignment, result: ChildExecutionOutcome): void {
@@ -1321,84 +1228,6 @@ export class WorkerOwner {
   private setPartialReport(assignment: MutableAssignment, report: string | undefined): void {
     if (report === undefined) delete assignment.partialReport;
     else assignment.partialReport = report;
-  }
-
-  private async finishCancellation(
-    worker: MutableWorker,
-    assignment: MutableAssignment,
-    token: string,
-  ): Promise<void> {
-    let result: { readonly confirmed: boolean; readonly diagnostic?: string };
-    try {
-      result = await this.driver.close(worker.id);
-    } catch (error) {
-      result = { confirmed: false, diagnostic: errorText(error) };
-    }
-    if (worker.active?.token !== token) return;
-    if (!result.confirmed) {
-      this.markCleanupUnknown(
-        worker,
-        assignment,
-        result.diagnostic ?? "Child session shutdown was not confirmed",
-      );
-      return;
-    }
-    delete worker.active;
-    worker.status = "cancelled";
-    worker.liveSession = "released";
-    assignment.outcome = "cancelled";
-    delete worker.pendingQuestion;
-    this.reservations--;
-    this.emitState(worker);
-    this.persist(worker, assignment);
-    this.pump();
-  }
-
-  private async closeCancelledIdle(
-    worker: MutableWorker,
-    assignment: MutableAssignment,
-  ): Promise<void> {
-    let result: { readonly confirmed: boolean; readonly diagnostic?: string };
-    try {
-      result = await this.driver.close(worker.id);
-    } catch (error) {
-      result = { confirmed: false, diagnostic: errorText(error) };
-    }
-    if (worker.status !== "stopping") return;
-    if (!result.confirmed) {
-      this.markCleanupUnknown(
-        worker,
-        assignment,
-        result.diagnostic ?? "Child session shutdown was not confirmed",
-      );
-      return;
-    }
-    worker.status = "cancelled";
-    worker.liveSession = "released";
-    assignment.outcome = "cancelled";
-    delete worker.pendingQuestion;
-    this.emitState(worker);
-    this.persist(worker, assignment);
-  }
-
-  private markCleanupUnknown(
-    worker: MutableWorker,
-    assignment: MutableAssignment,
-    diagnostic: string,
-  ): void {
-    assignment.budget.invalidate();
-    worker.status = "cleanup-unknown";
-    assignment.outcome = "cleanup-unknown";
-    assignment.error = diagnostic;
-    delete worker.pendingQuestion;
-    this.cleanupHealth.markUncertain({
-      parentSessionId: this.parentSessionId,
-      workerId: worker.id,
-      assignmentId: assignment.id,
-      diagnostic,
-    });
-    this.emitState(worker);
-    this.persist(worker, assignment);
   }
 
   private persist(worker: MutableWorker, assignment: MutableAssignment): void {

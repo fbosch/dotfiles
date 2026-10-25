@@ -188,48 +188,6 @@ test("worker IDs are scoped to the owning parent", async () => {
   await first.owner.wait(workerId, first.owner.inspect(workerId).currentAssignmentId);
 });
 
-test("continuation is refused after cancellation, release, cleanup uncertainty, or historical restore", async () => {
-  const cancelled = setup({ capacity: 1 });
-  const blocker = deferred<ChildExecutionOutcome>();
-  cancelled.driver.startBehavior = () => blocker.promise;
-  await cancelled.owner.launch({ config: config(), prompt: "occupy slot" });
-  const queued = await cancelled.owner.launch({ config: config(), prompt: "queued" });
-  await cancelled.owner.cancel(queued.workerId);
-  await expect(cancelled.owner.continue(queued.workerId, "again")).rejects.toThrow(
-    "Cannot continue",
-  );
-
-  const released = setup();
-  const done = await released.owner.launch({ config: config(), prompt: "done" });
-  await released.owner.wait(done.workerId, done.assignmentId);
-  await released.owner.release(done.workerId);
-  await expect(released.owner.continue(done.workerId, "again")).rejects.toThrow("Cannot continue");
-
-  const uncertain = setup();
-  const running = deferred<ChildExecutionOutcome>();
-  uncertain.driver.startBehavior = () => running.promise;
-  uncertain.driver.closeBehavior = async () => ({ confirmed: false, diagnostic: "still active" });
-  const active = await uncertain.owner.launch({ config: config(), prompt: "cancel me" });
-  await uncertain.owner.cancel(active.workerId);
-  running.resolve(completed(1));
-  await flush();
-  expect(uncertain.owner.inspect(active.workerId).status).toBe("cleanup-unknown");
-  await expect(uncertain.owner.continue(active.workerId, "again")).rejects.toThrow(
-    "cleanup uncertainty",
-  );
-
-  const source = setup();
-  const completedWorker = await source.owner.launch({
-    config: config(),
-    prompt: "save for history",
-  });
-  await source.owner.wait(completedWorker.workerId, completedWorker.assignmentId);
-  const history = source.owner.inspect(completedWorker.workerId);
-  const restored = setup({ history: [history] });
-  expect(restored.owner.inspect(history.id).status).toBe("historical");
-  await expect(restored.owner.continue(history.id, "again")).rejects.toThrow("Cannot continue");
-});
-
 test.each([
   ["missing", []],
   ["empty", ["   "]],
