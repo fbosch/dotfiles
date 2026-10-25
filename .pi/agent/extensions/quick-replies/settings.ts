@@ -23,8 +23,6 @@ export const DEFAULT_QUICK_REPLY_SHORTCUTS = [
   "alt+1",
   "alt+2",
   "alt+3",
-  "alt+4",
-  "alt+5",
 ] as const satisfies readonly KeyId[];
 
 const MODIFIERS = new Set(["alt", "ctrl", "shift", "super"]);
@@ -82,7 +80,7 @@ export function resolveQuickRepliesSettings(settings: unknown): QuickRepliesSett
   const shortcuts = parseQuickReplyShortcuts(settings.quickReplies.shortcuts);
   if (shortcuts === null) {
     return invalidSettings(
-      "global quickReplies.shortcuts: expected five unique supported modified keys or function keys",
+      `global quickReplies.shortcuts: expected ${DEFAULT_QUICK_REPLY_SHORTCUTS.length} unique supported modified keys or function keys`,
     );
   }
 

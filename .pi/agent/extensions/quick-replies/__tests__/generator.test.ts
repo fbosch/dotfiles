@@ -16,6 +16,7 @@ import {
   parseQuickReplyResponse,
   prepareQuickReplyInput,
   type QuickReply,
+  SecretScanUnavailableError,
 } from "../generator";
 
 function reply(index: number): QuickReply {
@@ -997,6 +998,40 @@ describe("quick reply model generation", () => {
     expect(completions).toBe(0);
   });
 
+  test("fails loudly without completing the model when ripsecrets is unavailable", async () => {
+    let completions = 0;
+    const ctx = {
+      cwd: "/project",
+      isProjectTrusted: () => false,
+      modelRegistry: {
+        find: () => ({
+          provider: "openai-codex",
+          id: "gpt-6-luna-fast",
+          api: "openai-codex-responses",
+        }),
+        complete: async () => {
+          completions += 1;
+          throw new Error("unexpected model completion");
+        },
+      },
+    } as unknown as Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry">;
+    const originalPath = process.env.PATH;
+    process.env.PATH = mkdtempSync(join(tmpdir(), "quick-replies-empty-path-"));
+
+    try {
+      const generation = generateQuickReplies(
+        ctx,
+        { userText: "Proceed", assistantText: "The change is ready." },
+        new AbortController().signal,
+      );
+      await expect(generation).rejects.toBeInstanceOf(SecretScanUnavailableError);
+      await expect(generation).rejects.toThrow("ripsecrets is not on PATH");
+    } finally {
+      rmSync(process.env.PATH, { force: true, recursive: true });
+      process.env.PATH = originalPath;
+    }
+    expect(completions).toBe(0);
+  });
   test("allows risky source wording to reach the generator agent", async () => {
     let calls = 0;
     const ctx = {

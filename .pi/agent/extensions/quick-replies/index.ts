@@ -9,6 +9,7 @@ import {
   type QuickReply,
   type QuickReplyContextTurn,
   type QuickReplyGenerator,
+  SecretScanUnavailableError,
 } from "./generator";
 import {
   DEFAULT_QUICK_REPLY_SHORTCUTS,
@@ -77,7 +78,9 @@ export function renderQuickReplyPanel(
       : "";
   const styles: readonly ShortcutStyle[] = ["full", "short", "numeric"];
   let content: string[] | undefined;
+  let headerAboveReplies: string[] | undefined;
 
+  // A header beside the replies wins over any style that needs the header on its own row.
   for (const shortcutStyle of styles) {
     const repliesLine = renderLayout({ replies, shortcuts, shortcutStyle, startIndex: 0 }, theme);
     const combined = header.length > 0 ? `${header}${REPLY_GAP}${repliesLine}` : repliesLine;
@@ -85,17 +88,15 @@ export function renderQuickReplyPanel(
       content = [combined];
       break;
     }
-  }
-
-  if (content === undefined) {
-    for (const shortcutStyle of styles) {
-      const repliesLine = renderLayout({ replies, shortcuts, shortcutStyle, startIndex: 0 }, theme);
-      if (header.length > 0 && visibleWidth(repliesLine) <= contentWidth) {
-        content = [header, repliesLine];
-        break;
-      }
+    if (
+      header.length > 0 &&
+      headerAboveReplies === undefined &&
+      visibleWidth(repliesLine) <= contentWidth
+    ) {
+      headerAboveReplies = [header, repliesLine];
     }
   }
+  content ??= headerAboveReplies;
 
   if (content === undefined) {
     for (const shortcutStyle of styles) {
@@ -173,6 +174,7 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
     let widgetMounted = false;
     let uiPromptActive = false;
     let enabled = settings.enabled;
+    let secretScanWarningShown = false;
 
     function abortGeneration(): void {
       activeGeneration?.controller.abort();
@@ -240,11 +242,8 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
         ctx.ui.notify(message, level);
         return;
       }
-      if (level === "error") {
-        console.error(message);
-      } else {
-        console.log(message);
-      }
+      // Print, JSON, and RPC modes reserve stdout for their output.
+      console.error(message);
     }
 
     function setEnabled(value: boolean, ctx: ExtensionContext): void {
@@ -304,18 +303,22 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
         .then((replies) => {
           if (activeGeneration !== generation) return;
           activeGeneration = undefined;
-          if (
-            replies.length < MIN_GENERATED_REPLIES ||
-            replies.length > shortcuts.length ||
-            canShowReplies(ctx, runId) === false
-          ) {
+          if (replies.length < MIN_GENERATED_REPLIES || canShowReplies(ctx, runId) === false) {
             clearWidget(ctx);
             return;
           }
           showReplies(ctx, runId, replies);
         })
-        .catch(() => {
+        .catch((error: unknown) => {
           if (activeGeneration === generation) activeGeneration = undefined;
+          if (error instanceof SecretScanUnavailableError && secretScanWarningShown === false) {
+            secretScanWarningShown = true;
+            report(
+              ctx,
+              `Quick replies are off until the secret scan works: ${error.message}`,
+              "warning",
+            );
+          }
         });
     }
 

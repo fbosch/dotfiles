@@ -4,7 +4,12 @@
   "entry": [
     "extensions/*.ts",
     "extensions/*/index.ts",
-    "lib/ai-commit/cli.ts"
+    "extensions/auth-profiles/usage-status.ts",
+    "extensions/subagents/git-read.ts",
+    "lib/ai-commit/cli.ts",
+    "lib/azure/ado_case_fetch.ts",
+    "lib/azure/ado_pbi_fetch.ts",
+    "lib/ci_failure_context.ts"
   ],
   "ignorePatterns": [
     "benchmarks/**",

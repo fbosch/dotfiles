@@ -8,7 +8,12 @@ import {
 import type { Component } from "@earendil-works/pi-tui";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import { customStartEvent, userStartEvent } from "../../shared/__tests__/agent-start-events";
-import type { QuickReply, QuickReplyGenerator, QuickReplyInput } from "../generator";
+import {
+  type QuickReply,
+  type QuickReplyGenerator,
+  type QuickReplyInput,
+  SecretScanUnavailableError,
+} from "../generator";
 import {
   createQuickRepliesExtension,
   QUICK_REPLY_SHORTCUTS,
@@ -529,25 +534,28 @@ describe("quick replies lifecycle", () => {
     expect(harness.widgetActive).toBe(false);
   });
 
-  test("silently ignores generation errors and excessive reply counts", async () => {
+  test("silently ignores generation errors", async () => {
     const failed = createHarness({ generate: async () => Promise.reject(new Error("failed")) });
     await failed.startRun();
     await failed.finishAssistant("Done.");
     await failed.settle();
 
-    const sixReplies = createHarness({
-      generate: async () =>
-        Array.from({ length: 6 }, (_, index) => ({
-          label: `Choice ${index + 1}`,
-          message: `Choose ${index + 1}`,
-        })),
-    });
-    await sixReplies.startRun();
-    await sixReplies.finishAssistant("Done.");
-    await sixReplies.settle();
-
     expect(failed.widgetActive).toBe(false);
-    expect(sixReplies.widgetActive).toBe(false);
+    expect(failed.notifications).toEqual([]);
+  });
+
+  test("warns once when the secret scan is unavailable", async () => {
+    const harness = createHarness({
+      generate: async () =>
+        Promise.reject(new SecretScanUnavailableError("ripsecrets is not on PATH")),
+    });
+    await showGeneratedReplies(harness);
+    await showGeneratedReplies(harness);
+
+    expect(harness.widgetActive).toBe(false);
+    expect(harness.notifications).toEqual([
+      "Quick replies are off until the secret scan works: ripsecrets is not on PATH",
+    ]);
   });
 
   test.each([
@@ -648,11 +656,6 @@ describe("quick replies lifecycle", () => {
     const rendered = stripTerminalSequences(narrow.renderWidget(30).join("\n"));
     await narrow.press(2);
 
-    const capped = createHarness({ generate: async () => fiveReplies });
-    await showGeneratedReplies(capped);
-    capped.renderWidget(120);
-    await capped.press(3);
-
     const hidden = createHarness({ generate: async () => fiveReplies });
     await showGeneratedReplies(hidden);
     hidden.renderWidget(6);
@@ -662,18 +665,17 @@ describe("quick replies lifecycle", () => {
     expect(rendered).not.toContain("Four");
     expect(rendered).not.toContain("Five");
     expect(narrow.sentMessages).toEqual(["Third response"]);
-    expect(capped.sentMessages).toEqual([]);
     expect(hidden.sentMessages).toEqual([]);
   });
 });
 
 describe("quick reply widget", () => {
-  test("registers five alternative-digit shortcuts", () => {
-    expect(QUICK_REPLY_SHORTCUTS).toEqual(["alt+1", "alt+2", "alt+3", "alt+4", "alt+5"]);
+  test("registers one alternative-digit shortcut per displayable reply", () => {
+    expect(QUICK_REPLY_SHORTCUTS).toEqual(["alt+1", "alt+2", "alt+3"]);
   });
 
   test("registers, renders, and handles configured shortcuts", async () => {
-    const shortcuts = ["ctrl+1", "ctrl+2", "ctrl+3", "ctrl+4", "ctrl+5"] as const;
+    const shortcuts = ["ctrl+1", "ctrl+2", "ctrl+3"] as const;
     const harness = createHarness({ shortcuts });
 
     expect(harness.registeredShortcuts).toEqual([...shortcuts]);

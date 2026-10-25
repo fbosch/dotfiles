@@ -3,7 +3,7 @@
 Tracked patches preserve local changes to pinned Pi extensions:
 - `@ff-labs+pi-fff+0.11.0.patch` disables FFF's native watcher on macOS, forwards Git-status metadata for `@` suggestions, and marks the bounded find and grep tools for read-only programmatic dispatch.
 - `pi-hashline-edit-pro+6.0.1.patch` is rebased onto 7.0.0. It keeps one registry identity when Pi exposes a session file after early tool calls, preserving served anchors and reclamation state; it also keeps source type-safe under the local ES2022 and exact-optional checks and exposes processed image payloads and notes to codemode's `image()`.
-- `pi-lens+4.3.0.patch` is rebased onto 4.4.4. It refreshes hashline anchors after immediate formatting, avoids duplicate deferred formatting, and runs Fallow alongside the primary language server as an advisory-only auxiliary. Upstream now resolves bundled grammars.
+- `pi-lens+4.3.0.patch` is rebased onto 4.4.4. It refreshes hashline anchors after immediate formatting, avoids duplicate deferred formatting, and runs Fallow alongside the primary language server as an advisory-only auxiliary that reports new workspace findings after edits. Upstream now resolves bundled grammars.
 
 The standalone task checklist lives in `../extensions/tasks/`. It stores versioned snapshots in Pi session history under its own entry type and ignores old pi-tasks state.
 
@@ -31,10 +31,19 @@ Keep these patches here rather than editing Pi's installed packages without a re
 
 ### Fallow diagnostics
 
-The Fallow auxiliary starts for JavaScript and TypeScript files only when an
-ancestor contains `.fallowrc.json`, `.fallowrc.jsonc`, `fallow.toml`, or
-`.fallow.toml`. It prefers that project's `node_modules/.bin/fallow-lsp`,
-then tries PATH. It never installs Fallow automatically.
+The Fallow auxiliary matches the Neovim `fallow` client in
+`.config/nvim/lua/plugins/core/lsp.lua`. It starts for JavaScript and TypeScript
+files at the nearest ancestor containing `pnpm-workspace.yaml`, `.fallowrc.json`,
+`.fallowrc.jsonc`, `fallow.toml`, `.fallow.toml`, or `.git`. It runs `fallow-lsp`
+from PATH first, then the project's `node_modules/.bin/fallow-lsp`. It never
+installs Fallow automatically.
+
+Fallow publishes findings for the whole workspace, including files that were not
+opened. The patch keeps every publication. After each edit, the tool result lists
+findings that appeared since the previous report, from any file: errors and
+warnings by path and line, up to 20, and hints as counts per rule. A finding that
+clears and returns counts as new again. Findings from a scan that finishes after an
+edit's result appear with the next edit.
 
 Fallow findings stay advisory, including diagnostics at error severity.
 The primary language server, such as `tsc`, continues to provide type errors.

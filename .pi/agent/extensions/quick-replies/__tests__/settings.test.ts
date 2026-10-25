@@ -55,8 +55,8 @@ describe("quick reply global settings", () => {
     });
   });
 
-  test("loads five configurable quick-reply shortcuts", () => {
-    const shortcuts = ["ctrl+1", "ctrl+2", "ctrl+3", "ctrl+4", "ctrl+5"] as const;
+  test("loads three configurable quick-reply shortcuts", () => {
+    const shortcuts = ["ctrl+1", "ctrl+2", "ctrl+3"] as const;
 
     expect(resolveQuickRepliesSettings({ quickReplies: { shortcuts } })).toEqual({
       enabled: true,
@@ -67,15 +67,16 @@ describe("quick reply global settings", () => {
 
   test.each([
     { shortcuts: ["ctrl+1", "ctrl+2"] },
-    { shortcuts: ["ctrl+1", "ctrl+1", "ctrl+3", "ctrl+4", "ctrl+5"] },
-    { shortcuts: ["1", "2", "3", "4", "5"] },
-    { shortcuts: ["ctrl+1", "ctrl+2", "ctrl+3", "ctrl+4", "invalid+key"] },
+    { shortcuts: ["ctrl+1", "ctrl+2", "ctrl+3", "ctrl+4"] },
+    { shortcuts: ["ctrl+1", "ctrl+1", "ctrl+3"] },
+    { shortcuts: ["1", "2", "3"] },
+    { shortcuts: ["ctrl+1", "ctrl+2", "invalid+key"] },
   ])("disables quick replies for invalid shortcut configuration: $shortcuts", ({ shortcuts }) => {
     expect(resolveQuickRepliesSettings({ quickReplies: { shortcuts } })).toEqual({
       enabled: false,
       shortcuts: [],
       warnings: [
-        "global quickReplies.shortcuts: expected five unique supported modified keys or function keys",
+        "global quickReplies.shortcuts: expected 3 unique supported modified keys or function keys",
       ],
     });
   });

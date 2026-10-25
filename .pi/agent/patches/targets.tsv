@@ -7,4 +7,4 @@ package	pi-hashline-edit-pro	pi-hashline-edit-pro+6.0.1.patch	src/hashline/hash.
 package	pi-hashline-edit-pro	pi-hashline-edit-pro+6.0.1.patch	src/hashline/resolve.ts	75cac13551077ef8821885b511c1c5b228102d88d6f4b00f443a7c34f297ec22	e9af6d8f948fc912391966ae0de028b81395cc6f574b00f1506919c3f1cdfa33
 package	pi-hashline-edit-pro	pi-hashline-edit-pro+6.0.1.patch	src/read.ts	5197457263d4b60449fd10424522460efcfe5f7855ebd5324518498727bcb2e6	ca5b579e02dba1c7bb5cf9aeb53394578a2f6e8d0a4b370fb3b145a3e24bc256
 package	pi-hashline-edit-pro	pi-hashline-edit-pro+6.0.1.patch	src/structured.ts	4232f049424a93a97b16d1bddd9ebac4a88058ebe2e83ca884cb38f3cbf2601a	c8370024354d04dcd7d59be102b3eafad864c89eac5b625f4ee3a434d856c1bd
-package	pi-lens	pi-lens+4.3.0.patch	dist/index.js	fd53c6a044e8f2c92631ce5f19108456353d33fd53aca6bae836a049580c7035	38a3e1267725ac2df55a098055919ee3fceb53769f99fbe88a1c527e75b7524d
+package	pi-lens	pi-lens+4.3.0.patch	dist/index.js	fd53c6a044e8f2c92631ce5f19108456353d33fd53aca6bae836a049580c7035	7187b1010bd5cb74dbcb3ed49055cfcdc2cbbe5827d79fb0435e56d4dec48a17

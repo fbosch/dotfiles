@@ -77,12 +77,19 @@ test("Fallow is auxiliary while TypeScript remains a primary candidate", async (
   if (!fallow) throw new Error("Fallow server missing");
   expect(fallow.role).toBe("auxiliary");
   expect(servers.filter((server) => server.role === "language")[0]?.id).toBe("TypeScriptServer");
-  expect(fallow.root).toEqual([".fallowrc.json", ".fallowrc.jsonc", "fallow.toml", ".fallow.toml"]);
+  expect(fallow.root).toEqual([
+    "pnpm-workspace.yaml",
+    ".fallowrc.json",
+    ".fallowrc.jsonc",
+    "fallow.toml",
+    ".fallow.toml",
+    ".git",
+  ]);
   await fallow.spawn("/fixture/project");
   expect(calls).toEqual([
     {
       spec: {
-        candidates: ["/fixture/project/node_modules/.bin/fallow-lsp", "fallow-lsp"],
+        candidates: ["fallow-lsp", "/fixture/project/node_modules/.bin/fallow-lsp"],
         args: [],
         cwd: "/fixture/project",
       },
@@ -207,3 +214,79 @@ test("the installed Fallow LSP publishes dead-code diagnostics", async () => {
     proc.kill();
   }
 }, 15000);
+
+interface FallowFixtureDiagnostic {
+  severity: number;
+  code: string;
+  message: string;
+  range: { start: { line: number; character: number } };
+}
+
+function workspaceFindings() {
+  const code = `${section("var fallowWorkspaceDiagnostics = ", "\nfunction setupIncomingHandlers(")}\n({ recordFallowPublication, takeNewFallowFindings })`;
+  return runInNewContext(code, { normalizeMapKey: (value: string) => value, path109: path }) as {
+    recordFallowPublication(
+      root: string,
+      filePath: string,
+      diagnostics: FallowFixtureDiagnostic[],
+    ): void;
+    takeNewFallowFindings(): string | undefined;
+  };
+}
+
+function finding(
+  severity: number,
+  code: string,
+  message: string,
+  line = 0,
+): FallowFixtureDiagnostic {
+  return { severity, code, message, range: { start: { line, character: 0 } } };
+}
+
+test("workspace Fallow findings are reported once for files that were never edited", () => {
+  const { recordFallowPublication, takeNewFallowFindings } = workspaceFindings();
+  const unusedFile = finding(2, "unused-file", "File is not reachable from any entry point");
+  recordFallowPublication("/repo", "/repo/src/dead.ts", [unusedFile]);
+  recordFallowPublication("/repo", "/repo/src/util.ts", [
+    finding(4, "unused-export", "Export 'unused' is unused", 1),
+    finding(3, "code-duplication", "Duplicated code block (8 lines, 2 instances)", 4),
+  ]);
+
+  expect(takeNewFallowFindings()).toBe(
+    [
+      "--- Fallow: new findings in /repo ---",
+      "- warning unused-file: src/dead.ts:1 File is not reachable from any entry point",
+      "- hints: unused-export \u00d71, code-duplication \u00d71",
+    ].join("\n"),
+  );
+  expect(takeNewFallowFindings()).toBeUndefined();
+
+  recordFallowPublication("/repo", "/repo/src/other.ts", [unusedFile]);
+  expect(takeNewFallowFindings()).toBe(
+    [
+      "--- Fallow: new findings in /repo ---",
+      "- warning unused-file: src/other.ts:1 File is not reachable from any entry point",
+    ].join("\n"),
+  );
+
+  recordFallowPublication("/repo", "/repo/src/dead.ts", []);
+  expect(takeNewFallowFindings()).toBeUndefined();
+  recordFallowPublication("/repo", "/repo/src/dead.ts", [unusedFile]);
+  expect(takeNewFallowFindings()).toContain("src/dead.ts:1");
+});
+
+test("workspace Fallow findings list errors first and cap the listed warnings", () => {
+  const { recordFallowPublication, takeNewFallowFindings } = workspaceFindings();
+  for (let index = 0; index < 22; index++) {
+    recordFallowPublication("/repo", `/repo/src/file-${String(index).padStart(2, "0")}.ts`, [
+      finding(2, "unused-file", "File is not reachable from any entry point"),
+    ]);
+  }
+  recordFallowPublication("/repo", "/repo/src/zz.ts", [
+    finding(1, "unresolved-import", "Cannot resolve './gone'", 2),
+  ]);
+  const lines = takeNewFallowFindings()?.split("\n") ?? [];
+  expect(lines[1]).toBe("- error unresolved-import: src/zz.ts:3 Cannot resolve './gone'");
+  expect(lines).toHaveLength(22);
+  expect(lines.at(-1)).toBe("- ... 3 more");
+});

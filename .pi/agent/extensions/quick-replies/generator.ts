@@ -8,8 +8,11 @@ import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-a
 import { Type } from "typebox";
 import { type ClassifierFetch, requestClassifier } from "../../lib/classifier";
 import { resolveFastModelRequest } from "../openai-capabilities";
-import { resolveQuickReplyModel } from "./settings";
+import { DEFAULT_QUICK_REPLY_SHORTCUTS, resolveQuickReplyModel } from "./settings";
 
+export class SecretScanUnavailableError extends Error {
+  override readonly name = "SecretScanUnavailableError";
+}
 export interface QuickReply {
   label: string;
   message: string;
@@ -63,7 +66,8 @@ const RIPSECRETS_ALLOWLIST_DIRECTIVE = "pragma: allowlist secret";
 const MIN_REPLIES = 1;
 const MAX_REPLIES = 5;
 const DEFAULT_DISPLAY_REPLIES = 2;
-export const MAX_DISPLAY_REPLIES = 3;
+// Each displayed reply needs its own shortcut.
+export const MAX_DISPLAY_REPLIES = DEFAULT_QUICK_REPLY_SHORTCUTS.length;
 const MIN_USEFUL_SCORE = 1;
 const MIN_THIRD_REPLY_SCORE = 1.75;
 const QUICK_REPLY_SCORE_LEVELS = [
@@ -146,10 +150,7 @@ const QUICK_REPLY_TOOL_SYSTEM_PROMPT = `${QUICK_REPLY_SYSTEM_PROMPT}
 Call ${QUICK_REPLY_TOOL_NAME} exactly once with the final suggestions. Do not emit text.`;
 
 export function extractVisibleAssistantProse(message: Pick<AssistantMessage, "content">): string {
-  return message.content
-    .filter((block): block is TextContent => block.type === "text")
-    .map((block) => block.text)
-    .join("\n");
+  return joinTextBlocks(message.content);
 }
 
 export function getDeterministicQuickReplies(input: QuickReplyInput): QuickReply[] {
@@ -250,7 +251,6 @@ export function parseQuickReplyResponse(raw: string): QuickReply[] {
 // Semantic suitability belongs to the generator agent; this parser enforces transport and data safety only.
 function parseQuickReplyPayload(parsed: unknown): QuickReply[] {
   if (!hasExactKeys(parsed, ["suggestions"]) || !Array.isArray(parsed.suggestions)) return [];
-  if (parsed.suggestions.length === 0) return [];
   if (parsed.suggestions.length < MIN_REPLIES || parsed.suggestions.length > MAX_REPLIES) return [];
 
   const replies: QuickReply[] = [];
@@ -346,7 +346,7 @@ async function rankQuickRepliesWithClassifier(
     if (third !== undefined && third.score >= MIN_THIRD_REPLY_SCORE) {
       selected.push(third);
     }
-    return selected.slice(0, MAX_DISPLAY_REPLIES).map(({ reply }) => reply);
+    return selected.map(({ reply }) => reply);
   } catch {
     return signal.aborted ? [] : fallback;
   }
@@ -447,6 +447,11 @@ async function filterSecretFreeReplies(
   replies: readonly QuickReply[],
   signal: AbortSignal,
 ): Promise<QuickReply[]> {
+  if (replies.length === 0) return [];
+  // One combined scan covers the common clean case; per-reply scans keep safe neighbors of a match.
+  if (await passesSecretScan(JSON.stringify(replies), signal)) return [...replies];
+  if (replies.length === 1 || signal.aborted) return [];
+
   const scanResults = await Promise.all(
     replies.map((reply) => passesSecretScan(JSON.stringify(reply), signal)),
   );
@@ -471,8 +476,12 @@ async function passesSecretScan(text: string, signal: AbortSignal): Promise<bool
     // ripsecrets requires a path; unlinking removes its name before the scanner starts.
     await unlink(inputPath);
     return await runRipsecrets(inputFile.fd, directory, signal);
-  } catch {
-    return false;
+  } catch (error) {
+    if (signal.aborted) return false;
+    if (error instanceof SecretScanUnavailableError) throw error;
+    throw new SecretScanUnavailableError(
+      `cannot prepare secret scan: ${error instanceof Error ? error.message : String(error)}`,
+    );
   } finally {
     await inputFile?.close().catch(() => undefined);
     if (directory !== undefined) {
@@ -482,28 +491,52 @@ async function passesSecretScan(text: string, signal: AbortSignal): Promise<bool
 }
 
 function runRipsecrets(inputFd: number, cwd: string, signal: AbortSignal): Promise<boolean> {
-  return new Promise((resolve) => {
+  return new Promise((resolve, reject) => {
     const child = spawn("ripsecrets", ["/dev/fd/3"], {
       cwd,
       env: { PATH: process.env.PATH ?? "" },
       stdio: ["ignore", "ignore", "ignore", inputFd],
     });
     let settled = false;
-    const finish = (safe: boolean): void => {
+    const finish = (settle: () => void): void => {
       if (settled) return;
       settled = true;
       clearTimeout(timeout);
       signal.removeEventListener("abort", abort);
-      resolve(safe);
+      settle();
     };
     const abort = (): void => {
       child.kill("SIGKILL");
-      finish(false);
+      finish(() => resolve(false));
     };
-    const timeout = setTimeout(abort, SECRET_SCAN_TIMEOUT_MS);
+    const timeout = setTimeout(() => {
+      child.kill("SIGKILL");
+      finish(() =>
+        reject(
+          new SecretScanUnavailableError(`ripsecrets timed out after ${SECRET_SCAN_TIMEOUT_MS} ms`),
+        ),
+      );
+    }, SECRET_SCAN_TIMEOUT_MS);
 
-    child.once("error", () => finish(false));
-    child.once("close", (code) => finish(code === 0));
+    child.once("error", (error: NodeJS.ErrnoException) => {
+      const reason =
+        error.code === "ENOENT"
+          ? "ripsecrets is not on PATH"
+          : `ripsecrets failed: ${error.message}`;
+      finish(() => reject(new SecretScanUnavailableError(reason)));
+    });
+    child.once("close", (code) =>
+      finish(() => {
+        // ripsecrets exits 1 when it finds a secret; any other failure means the scan did not run.
+        if (code === 0 || code === 1) resolve(code === 0);
+        else
+          reject(
+            new SecretScanUnavailableError(
+              `ripsecrets exited with ${code === null ? "a signal" : `code ${code}`}`,
+            ),
+          );
+      }),
+    );
     if (signal.aborted) abort();
     else signal.addEventListener("abort", abort, { once: true });
   });
@@ -519,14 +552,16 @@ function projectContextTurn(entry: SessionEntry): QuickReplyContextTurn | undefi
   const { message } = entry;
   if (message.role !== "user" && message.role !== "assistant") return undefined;
   const text = normalizeExcerpt(
-    typeof message.content === "string"
-      ? message.content
-      : message.content
-          .filter((part): part is TextContent => part.type === "text")
-          .map((part) => part.text)
-          .join("\n"),
+    typeof message.content === "string" ? message.content : joinTextBlocks(message.content),
   );
   return text.length === 0 ? undefined : { role: message.role, text };
+}
+
+function joinTextBlocks(blocks: readonly { type: string }[]): string {
+  return blocks
+    .filter((block): block is TextContent => block.type === "text")
+    .map((block) => block.text)
+    .join("\n");
 }
 
 function prepareRecentContext(
