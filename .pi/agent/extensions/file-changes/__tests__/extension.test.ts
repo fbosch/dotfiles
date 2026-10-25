@@ -2,7 +2,6 @@ import { describe, expect, test } from "bun:test";
 import { join } from "node:path";
 import type {
   ExtensionAPI,
-  ExtensionCommandContext,
   ExtensionContext,
   ExtensionWidgetOptions,
 } from "@earendil-works/pi-coding-agent";
@@ -10,7 +9,6 @@ import type { Component, TUI } from "@earendil-works/pi-tui";
 import { createFileChangesExtension } from "../index";
 
 type EventHandler = (event: never, context: ExtensionContext) => unknown;
-type CommandHandler = (args: string, context: ExtensionCommandContext) => Promise<void> | void;
 type WidgetFactory = (tui: TUI, theme: never) => Component;
 type WidgetContent = string[] | WidgetFactory | undefined;
 
@@ -30,8 +28,6 @@ function createHarness(initialFiles: Record<string, string | null>, showFileChan
   const statuses: Array<string | undefined> = [];
   const widgets: WidgetContent[] = [];
   const notifications: string[] = [];
-  let configuredShowFileChanges = showFileChanges;
-  let command: CommandHandler | undefined;
 
   const pi = {
     appendEntry(customType: string, data: unknown) {
@@ -39,9 +35,6 @@ function createHarness(initialFiles: Record<string, string | null>, showFileChan
     },
     on(event: string, handler: EventHandler) {
       handlers.set(event, handler);
-    },
-    registerCommand(name: string, options: { handler: CommandHandler }) {
-      if (name === "changes") command = options.handler;
     },
   } as unknown as ExtensionAPI;
   const context = {
@@ -56,7 +49,7 @@ function createHarness(initialFiles: Record<string, string | null>, showFileChan
       setWidget: (_key: string, content: WidgetContent, _options?: ExtensionWidgetOptions) =>
         widgets.push(content),
     },
-  } as unknown as ExtensionCommandContext;
+  } as unknown as ExtensionContext;
 
   createFileChangesExtension({
     readSettings: () => ({ showFileChanges: configuredShowFileChanges, warnings: [] }),

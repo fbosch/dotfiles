@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import { getAgentDir } from "@earendil-works/pi-coding-agent";
-import { readLockedJsonFile, updateLockedJsonFile } from "../../lib/locked-json-file";
+import { readLockedJsonFile } from "../../lib/locked-json-file";
 
 export interface FileChangesSettings {
   readonly showFileChanges: boolean;
@@ -45,25 +45,3 @@ export function loadFileChangesSettings(
   }
 }
 
-export function writeFileChangesSetting(
-  showFileChanges: boolean,
-  settingsPath = join(getAgentDir(), "settings.json"),
-): void {
-  try {
-    updateLockedJsonFile(settingsPath, (current) => {
-      const settings = current ?? {};
-      if (isRecord(settings) === false) {
-        throw new Error(`Cannot update Pi settings from ${settingsPath}: expected a JSON object`);
-      }
-
-      settings.showFileChanges = showFileChanges;
-      delete settings.hideFileChanges;
-      return settings;
-    });
-  } catch (error) {
-    if (error instanceof Error && error.message.startsWith("Cannot update Pi settings")) {
-      throw error;
-    }
-    throw new Error(settingsError(settingsPath, error));
-  }
-}

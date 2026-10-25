@@ -11,11 +11,7 @@ import {
   summarizeFileChange,
   type TrackedFile,
 } from "./model";
-import {
-  type FileChangesSettings,
-  loadFileChangesSettings,
-  writeFileChangesSetting,
-} from "./settings";
+import { type FileChangesSettings, loadFileChangesSettings } from "./settings";
 import { FileChangesWidget } from "./widget";
 
 const BASELINE_ENTRY = "file-changes:baseline";
@@ -40,7 +36,6 @@ interface PendingSnapshot extends FileBaseline {}
 interface FileChangesDependencies {
   readonly readSettings?: () => FileChangesSettings;
   readonly readTextFile?: ReadTextFile;
-  readonly writeSettings?: (showFileChanges: boolean) => void;
 }
 
 async function readTextFile(absolutePath: string): Promise<FileContent> {
@@ -74,21 +69,6 @@ function pathFromEntry(cwd: string, data: unknown): string | undefined {
   return typeof path === "string" ? normalizeToolPath(cwd, path).path : undefined;
 }
 
-function report(ctx: ExtensionContext, message: string): void {
-  if (ctx.hasUI) {
-    ctx.ui.notify(message, "info");
-    return;
-  }
-  console.log(message);
-}
-
-function reportError(ctx: ExtensionContext, message: string): void {
-  if (ctx.hasUI) {
-    ctx.ui.notify(message, "error");
-    return;
-  }
-  console.error(message);
-}
 
 export function createFileChangesExtension(
   dependencies: FileChangesDependencies = {},
@@ -169,64 +149,6 @@ export function createFileChangesExtension(
       updateUi(ctx);
     }
 
-    function clearChanges(ctx: ExtensionContext): void {
-      baselines.clear();
-      pendingSnapshots.clear();
-      trackedFiles.clear();
-      pi.appendEntry(CLEAR_ENTRY, { timestamp: Date.now() });
-      updateUi(ctx);
-    }
-
-    function setShowFileChanges(value: boolean, ctx: ExtensionContext): boolean {
-      try {
-        (dependencies.writeSettings ?? writeFileChangesSetting)(value);
-      } catch (error) {
-        reportError(
-          ctx,
-          `Cannot update global showFileChanges setting: ${
-            error instanceof Error ? error.message : String(error)
-          }`,
-        );
-        return false;
-      }
-
-      showFileChanges = value;
-      updateUi(ctx);
-      report(ctx, value ? "Changes shown" : "Changes hidden");
-      return true;
-    }
-
-    pi.registerCommand("changes", {
-      description: "Toggle, show, hide, or clear file changes globally",
-      getArgumentCompletions: (prefix) => {
-        const input = prefix.trimStart();
-        if (input.includes(" ")) return null;
-        const actions = ["show", "hide", "clear"];
-        const matches = actions.filter((action) => action.startsWith(input));
-        return matches.length === 0 ? null : matches.map((value) => ({ value, label: value }));
-      },
-      handler: async (args, ctx) => {
-        // Slash commands receive raw @-references; they must not invalidate the action.
-        const [action = "", ...references] = args.trim().split(/\s+/);
-        if (references.some((reference) => !reference.startsWith("@"))) {
-          report(ctx, "Usage: /changes [show|hide|clear]");
-          return;
-        }
-
-        if (action === "clear") {
-          const count = trackedFiles.size;
-          clearChanges(ctx);
-          report(ctx, `Cleared file changes for ${count} ${count === 1 ? "file" : "files"}`);
-          return;
-        }
-        if (action === "" || action === "show" || action === "hide") {
-          setShowFileChanges(action === "show" || (action === "" && !showFileChanges), ctx);
-          return;
-        }
-
-        report(ctx, "Usage: /changes [show|hide|clear]");
-      },
-    });
 
     pi.on("session_start", async (_event, ctx) => {
       const settings = (dependencies.readSettings ?? loadFileChangesSettings)();

@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { generateQuickReplies, type QuickReply, type QuickReplyInput } from "../generator";
+import { createQuickReplyGenerator, type QuickReply, type QuickReplyInput } from "../generator";
+import {
+  classifierFetch,
+  classifierMethods,
+  createClassifierTestRegistry,
+} from "./classifier-fixture";
 
 interface QuickReplyQualityFixture {
   readonly name: string;
@@ -108,6 +113,9 @@ const qualityFixtures: readonly QuickReplyQualityFixture[] = [
   },
 ];
 
+const classifierRegistry = await createClassifierTestRegistry();
+// Quality fixtures judge generator output, so the Classifier approves every candidate.
+const generateQuickReplies = createQuickReplyGenerator({ fetch: classifierFetch() });
 function contextFor(
   modelSuggestions: readonly QuickReply[],
   capturePrompt: (prompt: string) => void,
@@ -116,6 +124,7 @@ function contextFor(
     cwd: "/project",
     isProjectTrusted: () => false,
     modelRegistry: {
+      ...classifierMethods(classifierRegistry),
       find: () => ({
         provider: "openai-codex",
         id: "gpt-6-luna-fast",

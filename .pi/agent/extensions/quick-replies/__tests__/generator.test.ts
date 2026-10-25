@@ -1,10 +1,9 @@
-import { afterAll, describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { describe, expect, test } from "bun:test";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { AssistantMessage, ClassifierContext } from "@earendil-works/pi-ai";
 import { type ExtensionContext, SessionManager } from "@earendil-works/pi-coding-agent";
-import { createNativeClassifierRegistry } from "../../../lib/__tests__/native-classifier-registry";
 import {
   buildQuickReplyPrompt,
   createQuickReplyGenerator,
@@ -18,9 +17,19 @@ import {
   type QuickReply,
   SecretScanUnavailableError,
 } from "../generator";
+import {
+  classifierFetch,
+  classifierMethods,
+  createClassifierTestRegistry,
+} from "./classifier-fixture";
 
+// Self-describing replies survive the fallback used when no Classifier verdict is available.
 function reply(index: number): QuickReply {
-  return { label: `Choice ${index}`, message: `Choose option ${index}` };
+  return { label: `Choice ${index}`, message: `Choice ${index}` };
+}
+
+function shortenedReply(index: number): QuickReply {
+  return { label: `Choice ${index}`, message: `Choose option ${index} for this change` };
 }
 
 function response(replies: readonly QuickReply[]): string {
@@ -41,48 +50,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function classifierScoreResponse(scores: readonly number[]): unknown {
-  const answers = Object.fromEntries(
-    scores.map((score, index) => {
-      const probabilities =
-        score <= 1
-          ? { "0": 1 - score, "1": score, "2": 0 }
-          : { "0": 0, "1": 2 - score, "2": score - 1 };
-      return [
-        `candidate_${index}`,
-        {
-          type: "score",
-          score,
-          confidence: 0.5,
-          legend: {
-            "0": "Poor fit",
-            "1": "Plausible but weak",
-            "2": "Strong fit",
-          },
-          probabilities,
-        },
-      ];
-    }),
-  );
-  return { model: "jev-1.13.0", answers };
-}
-
-const previousAgentDirectory = process.env.PI_CODING_AGENT_DIR;
-const testAgentDirectory = mkdtempSync(join(tmpdir(), "quick-replies-classifier-test-"));
-writeFileSync(
-  join(testAgentDirectory, "settings.json"),
-  JSON.stringify({
-    classifier: { providers: [{ provider: "openrouter", model: "typesafe/jev-1.13" }] },
-  }),
-);
-process.env.PI_CODING_AGENT_DIR = testAgentDirectory;
-const classifierRegistry = await createNativeClassifierRegistry();
-
-afterAll(() => {
-  if (previousAgentDirectory === undefined) delete process.env.PI_CODING_AGENT_DIR;
-  else process.env.PI_CODING_AGENT_DIR = previousAgentDirectory;
-  rmSync(testAgentDirectory, { recursive: true, force: true });
-});
+const classifierRegistry = await createClassifierTestRegistry();
 
 function generatorContext(
   candidates: readonly QuickReply[],
@@ -97,15 +65,7 @@ function generatorContext(
         id: "gpt-6-luna-fast",
         api: "openai-codex-responses",
       }),
-      findOfType: classifierRegistry.findOfType.bind(classifierRegistry),
-      classify: (
-        model: Parameters<typeof classifierRegistry.classify>[0],
-        input: ClassifierContext,
-        options?: Parameters<typeof classifierRegistry.classify>[2],
-      ) => {
-        onClassifierInput?.(input);
-        return classifierRegistry.classify(model, input, options);
-      },
+      ...classifierMethods(classifierRegistry, onClassifierInput),
       complete: async () => ({
         role: "assistant",
         content: [
@@ -659,9 +619,9 @@ describe("quick reply model generation", () => {
     const safeReply = { label: "Show config path", message: "Show the relevant config path" };
     let gatewayBody = "";
     const generator = createQuickReplyGenerator({
-      fetch: async (_input, init) => {
+      fetch: async (input, init) => {
         gatewayBody = String(init?.body ?? "");
-        return new Response(JSON.stringify(classifierScoreResponse([2])));
+        return classifierFetch()(input, init);
       },
     });
 
@@ -677,7 +637,7 @@ describe("quick reply model generation", () => {
   });
 
   test("filters secret-bearing suggestions without discarding safe neighbors", async () => {
-    const safeReply = { label: "Show config path", message: "Show the relevant config path" };
+    const safeReply = { label: "Show config path", message: "Show config path" };
     const ctx = {
       cwd: "/project",
       isProjectTrusted: () => false,
@@ -727,8 +687,7 @@ describe("quick reply model generation", () => {
     const classifierInputs: ClassifierContext[] = [];
     const generator = createQuickReplyGenerator({
       timeoutMs: 900,
-      fetch: async () =>
-        new Response(JSON.stringify(classifierScoreResponse([1.9, 0.2, 2, 1.9, 0.7]))),
+      fetch: classifierFetch({ scores: [1.9, 0.2, 2, 1.9, 0.7] }),
     });
 
     const replies = await generator(
@@ -750,8 +709,12 @@ describe("quick reply model generation", () => {
     const classifierInput = classifierInputs[0];
     expect(classifierInput).toBeDefined();
     if (classifierInput === undefined) throw new Error("classifier input missing");
-    expect(Object.keys(classifierInput.questions)).toHaveLength(5);
+    expect(Object.keys(classifierInput.questions)).toHaveLength(10);
     expect(classifierInput.questions.candidate_0).toMatchObject({ type: "score" });
+    expect(classifierInput.questions.candidate_0_label_match).toMatchObject({
+      type: "bool",
+      instructions: expect.stringContaining("candidates[0].label"),
+    });
     expect(classifierInput.state).toMatchObject({
       conversation: {
         userText: "Check the result",
@@ -775,7 +738,7 @@ describe("quick reply model generation", () => {
 
     for (const { scores, expected } of cases) {
       const generator = createQuickReplyGenerator({
-        fetch: async () => new Response(JSON.stringify(classifierScoreResponse(scores))),
+        fetch: classifierFetch({ scores }),
       });
       expect(
         await generator(
@@ -787,10 +750,24 @@ describe("quick reply model generation", () => {
     }
   });
 
+  test("drops candidates whose label does not preview their message", async () => {
+    const candidates = [1, 2, 3].map((index) => shortenedReply(index));
+    const generator = createQuickReplyGenerator({
+      fetch: classifierFetch({ scores: [2, 2, 2], labelMatches: [0.95, 0.4, 0.85] }),
+    });
+
+    expect(
+      await generator(
+        generatorContext(candidates),
+        { userText: "What next?", assistantText: "The change is ready." },
+        new AbortController().signal,
+      ),
+    ).toEqual([candidateAt(candidates, 0), candidateAt(candidates, 2)]);
+  });
   test.each(["gateway error", "invalid score response"])(
-    "falls back to the first two safe candidates in generator order on %s",
+    "falls back to the first two self-describing candidates in generator order on %s",
     async (failure) => {
-      const candidates = [1, 2, 3, 4].map((index) => reply(index));
+      const candidates = [shortenedReply(1), reply(2), shortenedReply(3), reply(4), reply(5)];
       let fetchCalls = 0;
       const generator = createQuickReplyGenerator({
         fetch: async () => {
@@ -807,13 +784,13 @@ describe("quick reply model generation", () => {
           { userText: "What next?", assistantText: "The change is ready." },
           new AbortController().signal,
         ),
-      ).toEqual(candidates.slice(0, 2));
+      ).toEqual([candidateAt(candidates, 1), candidateAt(candidates, 3)]);
       expect(fetchCalls).toBeGreaterThan(0);
     },
   );
 
   test("falls back when the bounded Classifier deadline expires", async () => {
-    const candidates = [1, 2, 3].map((index) => reply(index));
+    const candidates = [shortenedReply(1), reply(2), shortenedReply(3)];
     let fetchCalls = 0;
     let abortedAttempts = 0;
     const generator = createQuickReplyGenerator({
@@ -846,7 +823,7 @@ describe("quick reply model generation", () => {
         { userText: "What next?", assistantText: "The change is ready." },
         new AbortController().signal,
       ),
-    ).toEqual(candidates.slice(0, 2));
+    ).toEqual([candidateAt(candidates, 1)]);
     expect(fetchCalls).toBeGreaterThan(0);
     expect(fetchCalls).toBeLessThanOrEqual(2);
     expect(abortedAttempts).toBeGreaterThan(0);
@@ -1054,8 +1031,8 @@ describe("quick reply model generation", () => {
                 name: "return_quick_replies",
                 arguments: {
                   suggestions: [
-                    { label: "Show local diff", message: "Show the local diff" },
-                    { label: "Run local checks", message: "Run the local checks" },
+                    { label: "Show local diff", message: "Show local diff" },
+                    { label: "Run local checks", message: "Run local checks" },
                   ],
                 },
               },
@@ -1073,8 +1050,8 @@ describe("quick reply model generation", () => {
         new AbortController().signal,
       ),
     ).toEqual([
-      { label: "Show local diff", message: "Show the local diff" },
-      { label: "Run local checks", message: "Run the local checks" },
+      { label: "Show local diff", message: "Show local diff" },
+      { label: "Run local checks", message: "Run local checks" },
     ]);
     expect(calls).toBe(1);
   });

@@ -59,7 +59,7 @@ const MAX_MESSAGE_CHARS = 160;
 const MAX_RESPONSE_TOKENS = 384;
 const MAX_RESPONSE_CHARS = 4_096;
 const REQUEST_TIMEOUT_MS = 3_000;
-// Ranking is optional; cap its added latency so generator-order fallback stays prompt.
+// Ranking is optional; cap its added latency so the fallback stays prompt.
 const CLASSIFIER_RANKING_TIMEOUT_MS = 1_200;
 const SECRET_SCAN_TIMEOUT_MS = 500;
 const RIPSECRETS_ALLOWLIST_DIRECTIVE = "pragma: allowlist secret";
@@ -75,6 +75,13 @@ const QUICK_REPLY_SCORE_LEVELS = [
   "Plausible but weak: safe and relevant, but generic, partly redundant, or only modestly advances an unresolved next step.",
   "Strong fit: safe and grounded, advances an unresolved next step, and is materially distinct from the other candidates.",
 ] as const;
+// Selecting a label sends its message immediately, so any surprise in the message costs a cancelled run.
+const MIN_LABEL_MATCH_PROBABILITY = 0.8;
+const QUICK_REPLY_LABEL_MATCH_CRITERIA = {
+  true: "The label previews the whole message: the message adds no action, target, scope, condition, constraint, or direction that the label does not convey, and the label implies nothing the message does not ask.",
+  false:
+    "The message adds an action, target, scope, condition, constraint, or direction the label does not convey, or the label implies something the message does not ask.",
+} as const;
 const TRUNCATION_MARKER = "\n[...truncated...]\n";
 const QUICK_REPLY_TOOL_NAME = "return_quick_replies";
 const FORMAT_CHARACTER = /\p{Cf}/u;
@@ -275,6 +282,13 @@ function parseQuickReplyPayload(parsed: unknown): QuickReply[] {
   return replies;
 }
 
+function suitabilityQuestionId(index: number): string {
+  return `candidate_${index}`;
+}
+
+function labelMatchQuestionId(index: number): string {
+  return `candidate_${index}_label_match`;
+}
 function createQuickReplyRankingRequest(
   input: PreparedQuickReplyInput,
   replies: readonly QuickReply[],
@@ -285,13 +299,23 @@ function createQuickReplyRankingRequest(
     message: reply.message,
   }));
   const questions: ClassifierContext["questions"] = Object.fromEntries(
-    candidates.map((candidate, index) => [
-      candidate.id,
-      {
-        type: "score",
-        instructions: `How suitable is \`candidates[${index}].message\` as a quick reply for the conversation? Judge its safety, grounding in the latest response, progress on an unresolved next step, and whether it is materially distinct from the other candidates.`,
-        criteria: [...QUICK_REPLY_SCORE_LEVELS],
-      },
+    candidates.flatMap((_candidate, index) => [
+      [
+        suitabilityQuestionId(index),
+        {
+          type: "score",
+          instructions: `How suitable is \`candidates[${index}].message\` as a quick reply for the conversation? Judge its safety, grounding in the latest response, progress on an unresolved next step, and whether it is materially distinct from the other candidates.`,
+          criteria: [...QUICK_REPLY_SCORE_LEVELS],
+        },
+      ],
+      [
+        labelMatchQuestionId(index),
+        {
+          type: "bool",
+          instructions: `The user sees only \`candidates[${index}].label\` and selecting it sends \`candidates[${index}].message\` verbatim. Would a user who read only the label expect exactly that message?`,
+          criteria: { ...QUICK_REPLY_LABEL_MATCH_CRITERIA },
+        },
+      ],
     ]),
   );
   return {
@@ -315,7 +339,10 @@ async function rankQuickRepliesWithClassifier(
   options: QuickReplyGeneratorOptions,
 ): Promise<QuickReply[]> {
   if (signal.aborted) return [];
-  const fallback = replies.slice(0, DEFAULT_DISPLAY_REPLIES);
+  // Without a verdict, only a label that is the whole message is known to preview it faithfully.
+  const fallback = replies
+    .filter((reply) => comparisonKey(reply.label) === comparisonKey(reply.message))
+    .slice(0, DEFAULT_DISPLAY_REPLIES);
   if (replies.length === 0) return fallback;
 
   try {
@@ -333,9 +360,10 @@ async function rankQuickRepliesWithClassifier(
 
     const scores: number[] = [];
     for (let index = 0; index < replies.length; index += 1) {
-      const answer = result.value.answers[`candidate_${index}`];
-      if (answer?.type !== "score") return fallback;
-      scores.push(answer.score);
+      const answer = result.value.answers[suitabilityQuestionId(index)];
+      const labelMatch = result.value.answers[labelMatchQuestionId(index)];
+      if (answer?.type !== "score" || labelMatch?.type !== "bool") return fallback;
+      scores.push(labelMatch.probability >= MIN_LABEL_MATCH_PROBABILITY ? answer.score : 0);
     }
     const qualified = replies
       .map((reply, index) => ({ reply, index, score: scores[index] ?? 0 }))
