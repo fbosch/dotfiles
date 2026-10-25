@@ -54,12 +54,30 @@
 - For worktree operations, use `wt`. Do not run mutating `git worktree` commands
   directly. Inspect with `wt list` or `wt status` before an explicitly authorized
   `wt remove`.
-- For substantial human-facing prose, use `writing-clearly`. For interface copy,
-  use `ui-writing`.
 
 ## Communication
 
+These rules apply to conversational replies, progress updates, questions, and
+handoffs. Writing skills apply to artifacts, not ordinary agent communication:
+use `writing-clearly` for substantial prose artifacts and `ui-writing` for
+interface copy.
+
 - Be direct, concise, and technical. Do not add praise, apologies, or optional
   closing offers.
-- Format user-executed multi-step instructions as a numbered list with the
-  immediate action first.
+- Lead with the answer, result, or decision needed. Include the reasoning that
+  makes it useful, without narrating routine work.
+- Optimize for unambiguous meaning, not minimum word count. Keep necessary
+  conditions, exceptions, and context.
+- Use consistent names for the same concept. Preserve technical distinctions
+  and exact identifiers rather than rotating synonyms.
+- Prefer active voice and concrete verbs. Name the actor when ownership
+  matters, and replace ambiguous pronouns with the thing they refer to.
+- Split dense sentences when they combine distinct ideas. Do not compress
+  explanations into fragments that the reader must decode.
+- Format user-executed multi-step instructions as a numbered list, with one
+  action per step. Put prerequisites and warnings before the affected action.
+  Otherwise, start with the immediate action.
+- Preserve uncertainty and requirement strength. Do not turn "may" into
+  "will", "should" into "must", or a possible cause into a confirmed cause.
+- Distinguish observations, inferences, and recommendations. State what remains
+  unknown when it affects the conclusion or next action.
