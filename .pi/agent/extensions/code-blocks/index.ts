@@ -1,6 +1,5 @@
 import { copyToClipboard, type ExtensionAPI, type Theme } from "@earendil-works/pi-coding-agent";
 import {
-  getOsc8LinkAtColumn,
   hyperlink,
   Markdown,
   type MarkdownTheme,
@@ -26,7 +25,6 @@ interface MarkdownToken {
 interface MarkdownInternals {
   theme: MarkdownTheme;
   renderToken: RenderToken;
-  invalidate: () => void;
 }
 
 type CodeBlockComponent = Pick<MarkdownInternals, "theme">;
@@ -64,11 +62,9 @@ interface TuiAltScreenInternals {
   handleSelectionMouseEvent: TuiMouseHandler;
   openUrl: ((url: string) => void) | undefined;
   pressedUrl: string | undefined;
-  previousScreen: string[];
   terminal: { write: (data: string) => void };
   mouseEnabled: boolean;
   flash: (message: string) => void;
-  requestRender: () => void;
 }
 
 type TuiMouseHandler = (this: TuiAltScreenInternals, event: TuiMouseEvent) => void;
@@ -127,8 +123,6 @@ const ENABLE_ALL_MOTION_MOUSE = "\u001b[?1003h";
 let nextCopyPayloadId = 0;
 const copyPayloads = new Map<string, string>();
 const copyPayloadIds = new Map<string, string>();
-const codeBlockMarkdowns = new Set<MarkdownInternals>();
-let hoveredCopyUrl: string | undefined;
 let resolveActiveTheme: () => CodeBlockTheme | undefined = () => undefined;
 
 function globalClipboardPatchState(): ClipboardPatchState | undefined {
@@ -511,9 +505,6 @@ export function renderCodeBlock(
   activeTheme = resolveActiveTheme(),
 ): string[] {
   const code = token.text ?? "";
-  // Markdown caches rendered lines, so hover changes must invalidate messages containing code blocks.
-  const markdown = component as MarkdownInternals;
-  if (typeof markdown.invalidate === "function") codeBlockMarkdowns.add(markdown);
   const isDiff = normaliseLanguage(token.lang?.trim().split(/\s+/, 1)[0]) === "diff";
   const sections = isDiff ? splitDiffSections(code) : [code];
   const lines: string[] = [];
@@ -598,21 +589,12 @@ function renderCodePanel(
   return lines;
 }
 
-function updateHoveredCopyButton(tui: TuiAltScreenInternals, event: TuiMouseEvent): void {
-  const url = getOsc8LinkAtColumn(tui.previousScreen[event.y] ?? "", event.x);
-  const nextHoveredCopyUrl = isCopyPayloadUrl(url) ? url : undefined;
-  if (nextHoveredCopyUrl === hoveredCopyUrl) return;
-
-  hoveredCopyUrl = nextHoveredCopyUrl;
-  for (const markdown of codeBlockMarkdowns) markdown.invalidate();
-  tui.requestRender();
-}
-
 export function installCodeBlockClipboard(
   writeClipboard: ClipboardWriter = copyToClipboard,
 ): CodeBlockClipboardPatch {
   globalClipboardPatchState()?.restore();
 
+  // SAFETY: Private TUI members; the typeof checks below disable the patch if they are absent.
   const prototype = TuiAltScreen.prototype as unknown as TuiAltScreenInternals;
   const originalBeforeTerminalStart = prototype.beforeTerminalStart;
   const originalHandleSelectionMouseEvent = prototype.handleSelectionMouseEvent;
@@ -637,7 +619,6 @@ export function installCodeBlockClipboard(
   // Pi exposes link activation only as URL opening, so route this private action URI through
   // the existing fullscreen hit-test without changing how ordinary links are handled.
   const patchedHandleSelectionMouseEvent: TuiMouseHandler = function (event): void {
-    updateHoveredCopyButton(this, event);
     const pressedUrl = event.release ? this.pressedUrl : undefined;
     if (!isCopyPayloadUrl(pressedUrl)) {
       originalHandleSelectionMouseEvent.call(this, event);
@@ -675,7 +656,6 @@ export function installCodeBlockClipboard(
   prototype.handleSelectionMouseEvent = patchedHandleSelectionMouseEvent;
   let state: ClipboardPatchState;
   const restore = (): void => {
-    hoveredCopyUrl = undefined;
     if (prototype.beforeTerminalStart === patchedBeforeTerminalStart) {
       prototype.beforeTerminalStart = originalBeforeTerminalStart;
     }
@@ -700,6 +680,7 @@ export function installCodeBlockClipboard(
 export function installCodeBlockRenderer(): CodeBlockPatch {
   globalPatchState()?.restore();
 
+  // SAFETY: Private Markdown member; the typeof check below disables the patch if it is absent.
   const prototype = Markdown.prototype as unknown as MarkdownInternals;
   const originalRenderToken = prototype.renderToken;
   if (typeof originalRenderToken !== "function") {
@@ -723,7 +704,6 @@ export function installCodeBlockRenderer(): CodeBlockPatch {
   prototype.renderToken = patchedRenderToken;
   let state: PatchState;
   const restore = (): void => {
-    codeBlockMarkdowns.clear();
     if (prototype.renderToken === patchedRenderToken) prototype.renderToken = originalRenderToken;
     if (globalPatchState() === state) setGlobalPatchState(undefined);
   };

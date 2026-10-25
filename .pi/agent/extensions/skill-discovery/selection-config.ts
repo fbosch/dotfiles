@@ -1,7 +1,7 @@
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { getAgentDir, SettingsManager } from "@earendil-works/pi-coding-agent";
 import { DEFAULT_CLASSIFIER_TIMEOUT_MS } from "../../lib/classifier";
 import { isRecord } from "../shared/is-record";
+import { loadSkillSettings } from "../shared/skill-visibility";
 
 const DEFAULT_THRESHOLD = 0.72;
 const DEFAULT_MAX_RECOMMENDATIONS = 3;
@@ -88,8 +88,6 @@ export function resolveSkillSelectionConfig(
 export function configuredSkillSelection(
   context: Pick<ExtensionContext, "cwd" | "isProjectTrusted">,
 ): SkillSelectionConfig {
-  const settings = SettingsManager.create(context.cwd, getAgentDir(), {
-    projectTrusted: context.isProjectTrusted(),
-  });
-  return resolveSkillSelectionConfig(settings.getGlobalSettings(), settings.getProjectSettings());
+  const settings = loadSkillSettings(context);
+  return resolveSkillSelectionConfig(settings.global, settings.project);
 }

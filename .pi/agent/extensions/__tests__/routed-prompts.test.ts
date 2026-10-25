@@ -57,7 +57,11 @@ function createHarness(options: {
   } as unknown as ExtensionContext;
 
   createRoutedPromptsExtension({
-    launch: options.launch ?? (async () => { throw new Error("Minimal subagents launch handler is unavailable"); }),
+    launch:
+      options.launch ??
+      (async () => {
+        throw new Error("Minimal subagents launch handler is unavailable");
+      }),
     readPrompt: () => options.content,
   })(pi);
 
@@ -124,6 +128,42 @@ describe("routed prompts", () => {
 
     expect(routedPrompt.prompt).toBe("value: two words");
   });
+
+  test.each([
+    [
+      "timeout",
+      "sleep 5 & wait",
+      { timeoutMs: 100, maxOutputBytes: 1024 },
+      "timed out after 100 ms",
+    ],
+    ["output", "yes", { timeoutMs: 5_000, maxOutputBytes: 1024 }, "output exceeded 1024 bytes"],
+    [
+      "stderr output",
+      "yes >&2",
+      { timeoutMs: 5_000, maxOutputBytes: 1024 },
+      "output exceeded 1024 bytes",
+    ],
+  ] as const)(
+    "stops routed shell substitutions that exceed the %s limit",
+    async (_name, command, limits, message) => {
+      const started = performance.now();
+      await expect(
+        expandRoutedPromptShell(
+          {
+            agent: "quick",
+            command: "example",
+            description: "Example",
+            prompt: `value: !\`${command}\``,
+            options: { foreground: false },
+          },
+          [],
+          process.cwd(),
+          limits,
+        ),
+      ).rejects.toThrow(message);
+      expect(performance.now() - started).toBeLessThan(2_000);
+    },
+  );
 
   test("does not execute shell syntax injected through prompt arguments", async () => {
     const injected = "!`printf injected`";

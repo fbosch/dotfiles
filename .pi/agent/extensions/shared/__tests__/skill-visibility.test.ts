@@ -3,7 +3,11 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Skill } from "@earendil-works/pi-coding-agent";
-import { configuredSkillVisibility, resolveSkillVisibility } from "../skill-visibility";
+import {
+  configuredSkillVisibility,
+  loadSkillSettings,
+  resolveSkillVisibility,
+} from "../skill-visibility";
 
 function skill(name: string, explicitOnly = false): Skill {
   return {
@@ -168,4 +172,22 @@ test.each([true, false])("project visibility settings follow project trust: %s",
   const visibility = configuredSkillVisibility({ cwd, isProjectTrusted: () => trusted }, catalog);
   expect(names(visibility.eligibleSkills)).toEqual(["bun", "local"]);
   expect(names(visibility.promptSkills(discoverable))).toEqual(trusted ? ["local"] : ["bun"]);
+});
+
+test("one prompt-start context loads skill settings once", () => {
+  const root = mkdtempSync(join(tmpdir(), "pi-skill-settings-"));
+  directories.push(root);
+  const agentDir = join(root, "agent");
+  mkdirSync(agentDir);
+  process.env.PI_CODING_AGENT_DIR = agentDir;
+  const settingsPath = join(agentDir, "settings.json");
+  writeFileSync(settingsPath, JSON.stringify({ skillTweaks: { warmSkills: ["bun"] } }));
+  const context = { cwd: root, isProjectTrusted: () => false };
+
+  const first = loadSkillSettings(context);
+  writeFileSync(settingsPath, JSON.stringify({ skillTweaks: { warmSkills: ["local"] } }));
+  expect(loadSkillSettings(context)).toBe(first);
+  expect(loadSkillSettings({ ...context }).global).toMatchObject({
+    skillTweaks: { warmSkills: ["local"] },
+  });
 });

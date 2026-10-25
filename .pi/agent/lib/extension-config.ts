@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 import {
   CONFIG_DIR_NAME,
@@ -28,6 +28,29 @@ export function readJsonConfig(path: string): unknown {
       `Cannot load extension config from ${path}: ${error instanceof Error ? error.message : String(error)}`,
     );
   }
+}
+
+/**
+ * Returns a reader that reparses `path` only after the file changes. Stat follows symlinks, so
+ * edits through a Stow-managed target are seen; a directory watcher on the link would miss them.
+ */
+export function cachedJsonConfigReader(path: () => string): () => unknown {
+  let cached: { path: string; signature: string; value: unknown } | undefined;
+  return () => {
+    const current = path();
+    let signature: string;
+    try {
+      const stat = statSync(current, { bigint: true });
+      signature = `${stat.dev}:${stat.ino}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "ENOENT") return readJsonConfig(current);
+      signature = "missing";
+    }
+    if (cached?.path === current && cached.signature === signature) return cached.value;
+    const value = readJsonConfig(current);
+    cached = { path: current, signature, value };
+    return value;
+  };
 }
 
 export function loadExtensionConfigLayers(

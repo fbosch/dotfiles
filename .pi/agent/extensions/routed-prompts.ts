@@ -8,8 +8,8 @@ import {
   type SlashCommandInfo,
 } from "@earendil-works/pi-coding-agent";
 import { Text } from "@earendil-works/pi-tui";
-import { requestSubagentLaunch } from "./subagents/production";
 import type { ParentLaunch } from "./subagents/parent-runtime";
+import { requestSubagentLaunch } from "./subagents/production";
 
 const ROUTED_PROMPT_MESSAGE = "routed-prompt";
 interface SpawnOptions {
@@ -149,35 +149,75 @@ export function substitutePromptArgs(content: string, args: readonly string[]): 
 
 const SHELL_SUBSTITUTION = /!`([\s\S]*?)`/g;
 
+export interface PromptShellLimits {
+  readonly timeoutMs: number;
+  readonly maxOutputBytes: number;
+}
+
+// Input handling waits for substitutions, so a hung or chatty command must not stall the prompt.
+const DEFAULT_SHELL_LIMITS: PromptShellLimits = { timeoutMs: 30_000, maxOutputBytes: 1024 * 1024 };
+
 function runPromptShellCommand(
   command: string,
   cwd: string,
   args: readonly string[],
+  limits: PromptShellLimits,
 ): Promise<string> {
   return new Promise((resolve, reject) => {
+    // A separate process group lets a timeout also stop commands the shell started.
     const child = spawn("sh", ["-c", command, "pi-prompt", ...args], {
       cwd,
+      detached: true,
       stdio: ["ignore", "pipe", "pipe"],
     });
 
-    let stdout = "";
-    let stderr = "";
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => {
-      stdout += chunk;
-    });
-    child.stderr.on("data", (chunk: string) => {
-      stderr += chunk;
-    });
-    child.on("error", reject);
-    child.on("close", (exitCode) => {
-      if (exitCode !== 0) {
-        const output = stderr.trim() || stdout.trim() || `exit ${exitCode ?? "unknown"}`;
-        reject(new Error(`Prompt shell command failed: ${output}`));
+    const stdout: Buffer[] = [];
+    const stderr: Buffer[] = [];
+    let outputBytes = 0;
+    let settled = false;
+    const settle = (error: Error | undefined, value = "") => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      if (error === undefined) resolve(value);
+      else reject(error);
+    };
+    const stop = (message: string) => {
+      if (child.pid !== undefined) {
+        try {
+          process.kill(-child.pid, "SIGKILL");
+        } catch {
+          // The group already exited.
+        }
+      }
+      settle(new Error(message));
+    };
+    const timer = setTimeout(
+      () => stop(`Prompt shell command timed out after ${limits.timeoutMs} ms`),
+      limits.timeoutMs,
+    );
+    const collect = (chunks: Buffer[]) => (chunk: Buffer) => {
+      outputBytes += chunk.length;
+      if (outputBytes > limits.maxOutputBytes) {
+        stop(`Prompt shell command output exceeded ${limits.maxOutputBytes} bytes`);
         return;
       }
-      resolve(stdout.trimEnd());
+      chunks.push(chunk);
+    };
+    child.stdout.on("data", collect(stdout));
+    child.stderr.on("data", collect(stderr));
+    child.on("error", (error) => settle(error));
+    child.on("close", (exitCode) => {
+      const out = Buffer.concat(stdout).toString("utf8");
+      if (exitCode !== 0) {
+        const output =
+          Buffer.concat(stderr).toString("utf8").trim() ||
+          out.trim() ||
+          `exit ${exitCode ?? "unknown"}`;
+        settle(new Error(`Prompt shell command failed: ${output}`));
+        return;
+      }
+      settle(undefined, out.trimEnd());
     });
   });
 }
@@ -186,6 +226,7 @@ export async function expandRoutedPromptShell(
   routedPrompt: RoutedPrompt,
   args: readonly string[],
   cwd: string,
+  limits: PromptShellLimits = DEFAULT_SHELL_LIMITS,
 ): Promise<RoutedPrompt> {
   const matches = [...routedPrompt.prompt.matchAll(SHELL_SUBSTITUTION)];
   if (matches.length === 0) {
@@ -199,7 +240,7 @@ export async function expandRoutedPromptShell(
     const command = match[1];
     if (command === undefined || match.index === undefined) continue;
     content += substitutePromptArgs(routedPrompt.prompt.slice(lastIndex, match.index), args);
-    content += await runPromptShellCommand(command, cwd, args);
+    content += await runPromptShellCommand(command, cwd, args, limits);
     lastIndex = match.index + match[0].length;
   }
   content += substitutePromptArgs(routedPrompt.prompt.slice(lastIndex), args);
@@ -207,9 +248,7 @@ export async function expandRoutedPromptShell(
   return { ...routedPrompt, prompt: content };
 }
 
-function routeOptions(
-  frontmatter: RoutedPromptFrontmatter,
-): SpawnOptions {
+function routeOptions(frontmatter: RoutedPromptFrontmatter): SpawnOptions {
   const options: SpawnOptions = { foreground: false };
   const model = optionalString(frontmatter, "model");
   const thinkingLevel = optionalString(frontmatter, "thinking");
@@ -218,7 +257,9 @@ function routeOptions(
 
   if (model !== undefined) options.model = model;
   if (thinkingLevel !== undefined) {
-    const level = (["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const).find((value) => value === thinkingLevel);
+    const level = (["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const).find(
+      (value) => value === thinkingLevel,
+    );
     if (level === undefined) throw new Error("Unknown thinking level");
     options.thinking = level;
   }
@@ -262,7 +303,6 @@ export function resolveRoutedPrompt(
   };
 }
 
-
 function renderMessageContent(content: unknown): string {
   if (typeof content === "string") return content;
   if (Array.isArray(content) === false) return "";
@@ -281,7 +321,8 @@ export function createRoutedPromptsExtension(
   const readPrompt = dependencies.readPrompt ?? ((path: string) => readFileSync(path, "utf8"));
 
   return (pi) => {
-    const launch = dependencies.launch ?? ((request: ParentLaunch) => requestSubagentLaunch(pi.events, request));
+    const launch =
+      dependencies.launch ?? ((request: ParentLaunch) => requestSubagentLaunch(pi.events, request));
     pi.registerMessageRenderer(
       ROUTED_PROMPT_MESSAGE,
       (message) => new Text(renderMessageContent(message.content), 0, 0),
@@ -325,9 +366,12 @@ export function createRoutedPromptsExtension(
         return { action: "handled" };
       }
 
-
       try {
-        await launch({ specialist: routedPrompt.agent, prompt: routedPrompt.prompt, ...routedPrompt.options });
+        await launch({
+          specialist: routedPrompt.agent,
+          prompt: routedPrompt.prompt,
+          ...routedPrompt.options,
+        });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         ctx.ui.notify(`Cannot run /${routedPrompt.command}: ${message}`, "error");

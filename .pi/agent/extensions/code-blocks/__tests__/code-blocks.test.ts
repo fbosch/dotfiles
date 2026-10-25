@@ -81,15 +81,8 @@ describe("code block rendering", () => {
   test("copies raw code from the header action without gutters", async () => {
     const code =
       '/run local bar=MainActionBar or MainMenuBar; local cap=bar and bar.EndCaps and bar.EndCaps.LeftEndCap; local xml=MainMenuBar and MainMenuBar.EndCaps and MainMenuBar.EndCaps.LeftEndCap; print("EndCap check", cap, cap and cap:GetName(), cap and cap.system, xml, cap==xml)';
-    let invalidations = 0;
-    const cachedComponent = {
-      ...component,
-      invalidate: () => {
-        invalidations += 1;
-      },
-    };
     const lines = renderCodeBlock(
-      cachedComponent,
+      component,
       { type: "code", lang: "ts", text: code },
       40,
       undefined,
@@ -136,11 +129,9 @@ describe("code block rendering", () => {
       }) => void;
       previousScreen: string[];
       flash: () => void;
-      requestRender: () => void;
     };
     internals.previousScreen = [header];
     internals.flash = () => {};
-    internals.requestRender = () => {};
 
     try {
       internals.beforeTerminalStart();
@@ -152,9 +143,8 @@ describe("code block rendering", () => {
         y: 0,
         release: false,
       });
-      expect(invalidations).toBe(1);
       const hoveredLines = renderCodeBlock(
-        cachedComponent,
+        component,
         { type: "code", lang: "ts", text: code },
         40,
         undefined,

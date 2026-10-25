@@ -6,7 +6,7 @@ import {
   isToolCallEventType,
 } from "@earendil-works/pi-coding-agent";
 import { INTERACTIVE_CLASSIFIER_TIMEOUT_MS, requestClassifier } from "../../lib/classifier";
-import { readJsonConfig } from "../../lib/extension-config";
+import { cachedJsonConfigReader } from "../../lib/extension-config";
 import { catastrophicCommandReason } from "../catastrophic-command-guard";
 import { confirmCommandPermission } from "../prompt-ui/command-permission";
 import { isRecord } from "../shared/is-record";
@@ -50,7 +50,8 @@ const block = (reason: string): BlockedCall => ({ block: true, reason });
 export default function semanticCommandGuard(
   pi: ExtensionAPI,
   dependencies: Dependencies = {
-    loadSettings: () => readJsonConfig(join(getAgentDir(), "settings.json")),
+    // Read on every Bash call; reparse only when settings.json changes.
+    loadSettings: cachedJsonConfigReader(() => join(getAgentDir(), "settings.json")),
     request: requestClassifier,
   },
 ): void {

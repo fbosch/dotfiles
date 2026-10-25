@@ -159,18 +159,35 @@ export function resolveSkillVisibility(
   };
 }
 
+export interface SkillSettings {
+  readonly global: ReturnType<SettingsManager["getGlobalSettings"]>;
+  readonly project: ReturnType<SettingsManager["getProjectSettings"]>;
+}
+
+// Pi passes one context object to every handler of a single prompt-start emit, so skill
+// visibility and skill selection share one settings load per prompt instead of one each.
+const settingsByContext = new WeakMap<
+  object,
+  { cwd: string; trusted: boolean; settings: SkillSettings }
+>();
+
+export function loadSkillSettings(
+  context: Pick<ExtensionContext, "cwd" | "isProjectTrusted">,
+): SkillSettings {
+  const trusted = context.isProjectTrusted();
+  const cached = settingsByContext.get(context);
+  if (cached?.cwd === context.cwd && cached.trusted === trusted) return cached.settings;
+  const manager = SettingsManager.create(context.cwd, getAgentDir(), { projectTrusted: trusted });
+  const settings = { global: manager.getGlobalSettings(), project: manager.getProjectSettings() };
+  settingsByContext.set(context, { cwd: context.cwd, trusted, settings });
+  return settings;
+}
+
 export function configuredSkillVisibility(
   context: Pick<ExtensionContext, "cwd" | "isProjectTrusted">,
   skills: readonly Skill[],
   systemPrompt?: string,
 ) {
-  const settings = SettingsManager.create(context.cwd, getAgentDir(), {
-    projectTrusted: context.isProjectTrusted(),
-  });
-  return resolveSkillVisibility(
-    skills,
-    settings.getGlobalSettings(),
-    settings.getProjectSettings(),
-    systemPrompt,
-  );
+  const settings = loadSkillSettings(context);
+  return resolveSkillVisibility(skills, settings.global, settings.project, systemPrompt);
 }
