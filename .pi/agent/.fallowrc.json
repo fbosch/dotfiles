@@ -1,9 +1,14 @@
 {
   "$schema": "./node_modules/fallow/schema.json",
+  "production": true,
   "entry": [
     "extensions/*.ts",
     "extensions/*/index.ts",
     "lib/ai-commit/cli.ts"
+  ],
+  "ignorePatterns": [
+    "benchmarks/**",
+    "evals/**"
   ],
   "ignoreDependencies": [
     "@earendil-works/pi-ai",

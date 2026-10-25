@@ -17,7 +17,6 @@
 
 ## Preferences
 
-- When interacting with Cloudflare, use the `cf` CLI unless the project has a Wrangler configuration file.
 - When a concept, relationship, timeline, hierarchy, or quantitative comparison would be easier to grasp visually, use `chart_*` tools for data, results, and quantitative visualizations; use Mermaid diagrams mainly for flows and process relationships. Include a concise textual explanation too.
 - Preserve Danish letters exactly (`æ`, `ø`, `å`).
 - Treat follow-up requests as cumulative unless the user resets scope.
@@ -40,6 +39,7 @@
   conventions.
 - Capture the smallest useful screenshot region unless a full-screen image is
   requested.
+
 ## Conditional guidance
 
 - Before selecting or adding a dependency, library, or development tool, read
