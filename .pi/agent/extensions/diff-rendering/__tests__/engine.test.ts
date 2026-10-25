@@ -112,6 +112,38 @@ describe("Shiki diff rendering", () => {
     });
     expect(result.display).toBe("inline");
   });
+  test.each([
+    [5, 1, "inline"],
+    [6, 1, "side-by-side"],
+    [100, 4, "inline"],
+    [100, 3, "side-by-side"],
+  ] as const)(
+    "automatic split respects wrapping thresholds for %s lines and %s long lines",
+    async (total, long, display) => {
+      const source = Array.from(
+        { length: total },
+        (_, i) => `const item${i} = "${i < long ? "a".repeat(80) : "short"}";`,
+      ).join("\n");
+      const input = [patch(source, source.replaceAll("const", "let"))];
+      expect((await engine.render(input, { width: 160, display: "side-by-side" })).display).toBe(
+        display,
+      );
+    },
+  );
+
+  test("explicit inline and forced split preserve their layout for heavily wrapped source", async () => {
+    const source = Array.from(
+      { length: 10 },
+      (_, i) => `const item${i} = "${"a".repeat(100)}";`,
+    ).join("\n");
+    const input = [patch(source, source.replaceAll("const", "let"))];
+    for (const width of [100, 160]) {
+      expect((await engine.render(input, { width, display: "inline" })).display).toBe("inline");
+      const split = await engine.render(input, { width, display: "side-by-side", auto: false });
+      expect(split.display).toBe("side-by-side");
+      expect(Math.max(...split.output.split("\n").map(visibleWidth))).toBeLessThanOrEqual(width);
+    }
+  });
   test("preserves insertions, deletions, blank lines, EOF markers and hunk numbers", async () => {
     const result = await engine.render([patch("before\n\nlast", "after\n\nlast\n")], {
       width: 100,

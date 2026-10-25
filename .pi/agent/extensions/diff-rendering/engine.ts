@@ -175,19 +175,22 @@ export function createDiffRenderer(themeName = DEFAULT_SYNTAX_THEME): DiffRender
       const gutterWidth = numberWidth + 5;
       const halfWidth = Math.floor((options.width - 1) / 2);
       const sideCodeWidth = halfWidth - gutterWidth;
-      const sourceLines = prepared
-        .flatMap(({ lines }) => lines)
-        .filter((line) => line.kind !== "\\");
-      const wraps = sourceLines.filter((line) => visibleWidth(line.content) > sideCodeWidth).length;
-      const fallback =
-        options.auto !== false && (wraps >= 8 || (wraps >= sourceLines.length * 0.2 && wraps > 0));
-      const display =
+      const canSplit =
         options.display === "side-by-side" &&
         sideCodeWidth >= 20 &&
-        !fallback &&
-        (options.auto === false || (options.width >= SIDE_BY_SIDE_MIN_WIDTH && sideCodeWidth >= 60))
-          ? "side-by-side"
-          : "inline";
+        (options.auto === false ||
+          (options.width >= SIDE_BY_SIDE_MIN_WIDTH && sideCodeWidth >= 60));
+      let fallback = false;
+      if (canSplit && options.auto !== false) {
+        const sourceLines = prepared
+          .flatMap(({ lines }) => lines)
+          .filter((line) => line.kind !== "\\");
+        const wraps = sourceLines.filter(
+          (line) => visibleWidth(line.content) > sideCodeWidth,
+        ).length;
+        fallback = wraps >= 8 || (wraps >= sourceLines.length * 0.2 && wraps > 0);
+      }
+      const display = canSplit && !fallback ? "side-by-side" : "inline";
       const output: string[] = [];
       const warnings = new Set<string>();
       for (const { patch, lines } of prepared) {
