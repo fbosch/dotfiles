@@ -169,6 +169,53 @@ describe("Shiki diff rendering", () => {
     expect(result.output).not.toContain(`${ESCAPE}[31m`);
     expect(stripVTControlCharacters(result.output)).toContain("æøånew");
   });
+
+  const cleanCases = [
+    { name: "empty text", source: "", expected: "" },
+    {
+      name: "every printable ASCII character",
+      source: Array.from({ length: 95 }, (_, i) => String.fromCharCode(i + 32)).join(""),
+      expected: Array.from({ length: 95 }, (_, i) => String.fromCharCode(i + 32)).join(""),
+    },
+    { name: "tab expansion", source: "\tindent", expected: "    indent" },
+    { name: "Unicode text", source: "æøå 中文 😀 e\u0301", expected: "æøå 中文 😀 e\u0301" },
+    {
+      name: "ASCII and Unicode controls",
+      source: "a\u0000\u0007\u007f\u0085\u202e\u2066\u2069\ud800b",
+      expected: "ab",
+    },
+    { name: "source SGR", source: "a\x1b[31mred\x1b[0mb", expected: "aredb" },
+    { name: "screen clearing", source: "a\x1b[2Jb", expected: "ab" },
+    { name: "BEL-terminated OSC", source: "a\x1b]52;c;ZXZpbA==\u0007b", expected: "ab" },
+    { name: "ST-terminated OSC", source: "a\x1b]52;c;ZXZpbA==\x1b\\b", expected: "ab" },
+    { name: "unterminated OSC", source: "a\x1b]52;c;ZXZpbA==", expected: "a" },
+    { name: "trailing escape", source: "a\x1b", expected: "a" },
+  ];
+  for (const { name, source, expected } of cleanCases) {
+    test(`cleans source and file names consistently: ${name}`, async () => {
+      const options = { width: 180, display: "inline" } as const;
+      const rendered = await engine.render(
+        [patch("before\n", `${source}\n`, "sample.unknown")],
+        options,
+      );
+      expect(rendered).toEqual(
+        await engine.render([patch("before\n", `${expected}\n`, "sample.unknown")], options),
+      );
+      expect(stripVTControlCharacters(rendered.output)).toContain(expected || "▌ 1+ │");
+      const file = await engine.render([patch("before\n", "after\n", source)], options);
+      expect(file).toEqual(await engine.render([patch("before\n", "after\n", expected)], options));
+      expect(stripVTControlCharacters(file.output).split("\n")[0]).toBe(expected);
+    });
+  }
+  test("normalizes carriage returns in file names", async () => {
+    for (const source of ["file.unknown\r", "file\r\nname.unknown"]) {
+      const expected = source.replaceAll("\r\n", "\n").replaceAll("\r", "\n");
+      const options = { width: 180, display: "inline" } as const;
+      expect(await engine.render([patch("before\n", "after\n", source)], options)).toEqual(
+        await engine.render([patch("before\n", "after\n", expected)], options),
+      );
+    }
+  });
   test("honors pre-aborted rendering", async () => {
     await expect(
       engine.render([patch("a", "b")], {
