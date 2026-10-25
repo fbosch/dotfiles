@@ -27,13 +27,15 @@ export function renderDiffLines(lines: readonly string[], width: number): string
 }
 
 class DiffOutputComponent implements Component {
-  private cachedWidth?: number;
-  private cachedLines?: string[];
+  private cachedWidth: number | undefined;
+  private cachedLines: string[] | undefined;
 
   constructor(private readonly lines: readonly string[]) {}
 
   render(width: number): string[] {
-    if (this.cachedLines === undefined || this.cachedWidth !== width) {
+    // Release the previous wrap buffer before allocating rows for a new terminal width.
+    if (this.cachedWidth !== width) this.invalidate();
+    if (this.cachedLines === undefined) {
       this.cachedLines = renderDiffLines(this.lines, width);
       this.cachedWidth = width;
     }
