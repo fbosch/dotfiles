@@ -44,4 +44,3 @@ export function loadFileChangesSettings(
     return { ...defaultSettings(), warnings: [settingsError(settingsPath, error)] };
   }
 }
-

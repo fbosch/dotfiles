@@ -1,12 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import {
-  loadFileChangesSettings,
-  resolveFileChangesSettings,
-  writeFileChangesSetting,
-} from "../settings";
+import { loadFileChangesSettings, resolveFileChangesSettings } from "../settings";
 
 const temporaryDirectories: string[] = [];
 
@@ -50,34 +46,6 @@ describe("file changes settings", () => {
     expect(loadFileChangesSettings(path)).toEqual({
       showFileChanges: false,
       warnings: [],
-    });
-  });
-
-  test("updates the global setting without dropping other settings", () => {
-    const directory = mkdtempSync(join(tmpdir(), "file-changes-settings-"));
-    temporaryDirectories.push(directory);
-    const path = join(directory, "settings.json");
-    writeFileSync(path, '{"theme":"dark","hideFileChanges":true}\n');
-
-    writeFileChangesSetting(false, path);
-
-    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
-      theme: "dark",
-      showFileChanges: false,
-    });
-  });
-
-  test("does not overwrite settings while Pi's file lock is held", () => {
-    const directory = mkdtempSync(join(tmpdir(), "file-changes-settings-"));
-    temporaryDirectories.push(directory);
-    const path = join(directory, "settings.json");
-    writeFileSync(path, '{"theme":"dark","showFileChanges":true}\n');
-    mkdirSync(`${path}.lock`);
-
-    expect(() => writeFileChangesSetting(false, path)).toThrow("locked by another process");
-    expect(JSON.parse(readFileSync(path, "utf8"))).toEqual({
-      theme: "dark",
-      showFileChanges: true,
     });
   });
 });

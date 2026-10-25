@@ -69,7 +69,6 @@ function pathFromEntry(cwd: string, data: unknown): string | undefined {
   return typeof path === "string" ? normalizeToolPath(cwd, path).path : undefined;
 }
 
-
 export function createFileChangesExtension(
   dependencies: FileChangesDependencies = {},
 ): ExtensionFactory {
@@ -148,7 +147,6 @@ export function createFileChangesExtension(
       for (const path of baselines.keys()) await recompute(path);
       updateUi(ctx);
     }
-
 
     pi.on("session_start", async (_event, ctx) => {
       const settings = (dependencies.readSettings ?? loadFileChangesSettings)();

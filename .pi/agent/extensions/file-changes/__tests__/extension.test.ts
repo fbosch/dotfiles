@@ -52,11 +52,8 @@ function createHarness(initialFiles: Record<string, string | null>, showFileChan
   } as unknown as ExtensionContext;
 
   createFileChangesExtension({
-    readSettings: () => ({ showFileChanges: configuredShowFileChanges, warnings: [] }),
+    readSettings: () => ({ showFileChanges, warnings: [] }),
     readTextFile: async (absolutePath) => files.get(absolutePath),
-    writeSettings: (value) => {
-      configuredShowFileChanges = value;
-    },
   })(pi);
 
   async function emit(event: string, value: object): Promise<void> {
@@ -71,11 +68,6 @@ function createHarness(initialFiles: Record<string, string | null>, showFileChan
     statuses,
     widgets,
     emit,
-    getShowFileChanges: () => configuredShowFileChanges,
-    async runCommand(args: string): Promise<void> {
-      if (command === undefined) throw new Error("changes command was not registered");
-      await command(args, context);
-    },
   };
 }
 
@@ -150,36 +142,7 @@ describe("file changes extension", () => {
     });
   });
 
-  test("supports explicit visibility and clearing commands", async () => {
-    const harness = createHarness({ "example.ts": null });
-    await harness.emit("tool_call", writeCall("new", "example.ts"));
-    harness.files.set("/repo/example.ts", "after\n");
-    await harness.emit("tool_result", writeResult("new", "example.ts"));
-
-    await harness.runCommand("hide");
-    expect(harness.statuses.at(-1)).toBe("1 file +1");
-    expect(harness.widgets.at(-1)).toBeUndefined();
-    expect(harness.getShowFileChanges()).toBe(false);
-    expect(harness.notifications.at(-1)).toBe("Changes hidden");
-
-    await harness.runCommand("");
-    expect(harness.widgets.at(-1)).toBeTypeOf("function");
-    expect(harness.getShowFileChanges()).toBe(true);
-
-    await harness.runCommand("hide");
-    expect(harness.getShowFileChanges()).toBe(false);
-
-    await harness.runCommand("show");
-    expect(harness.widgets.at(-1)).toBeTypeOf("function");
-    expect(harness.getShowFileChanges()).toBe(true);
-
-    await harness.runCommand("clear");
-    expect(harness.statuses.at(-1)).toBeUndefined();
-    expect(harness.entries.at(-1)).toMatchObject({ customType: "file-changes:clear" });
-    expect(harness.notifications.at(-1)).toBe("Cleared file changes for 1 file");
-  });
-
-  test("honors the global setting and toggles it with /changes", async () => {
+  test("keeps the footer indicator when the widget is hidden", async () => {
     const harness = createHarness({ "example.ts": "before\n" }, false);
     await harness.emit("session_start", { reason: "startup" });
 
@@ -199,23 +162,9 @@ describe("file changes extension", () => {
       },
     });
 
-    await harness.runCommand("");
-    expect(harness.getShowFileChanges()).toBe(true);
+    await harness.emit("session_start", { reason: "reload" });
     expect(harness.statuses.at(-1)).toBe("1 file +1 -1");
-    expect(harness.widgets.at(-1)).toBeTypeOf("function");
-    expect(harness.notifications.at(-1)).toBe("Changes shown");
-  });
-  test("accepts a file reference after the show action", async () => {
-    const harness = createHarness({ "example.ts": "before\n" });
-    await harness.emit("session_start", { reason: "startup" });
-    await harness.emit("tool_call", writeCall("write-1", "example.ts"));
-    harness.files.set("/repo/example.ts", "after\n");
-    await harness.emit("tool_result", writeResult("write-1", "example.ts"));
-    await harness.runCommand("hide");
-    await harness.runCommand("show @.pi/agent/extensions/file-changes/");
-    expect(harness.getShowFileChanges()).toBe(true);
-    expect(harness.widgets.at(-1)).toBeTypeOf("function");
-    expect(harness.notifications.at(-1)).toBe("Changes shown");
+    expect(harness.widgets.at(-1)).toBeUndefined();
   });
   test("tracks hashline replace edits when the built-in edit tool is disabled", async () => {
     const harness = createHarness({ "example.ts": "before\n" });
