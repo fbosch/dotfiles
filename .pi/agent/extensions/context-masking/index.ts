@@ -12,6 +12,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { buildIndex, withIndex } from "./artifact-index";
 import { isClassifierCheckpoint, registerClassifierCompaction } from "./classifier-hook";
+import { isHybridCheckpoint } from "./hybrid-summary";
 import {
   estimateTokens,
   type MaskCandidate,
@@ -75,7 +76,7 @@ export function registerContextMasking(
     for (const entry of branch) {
       if (entry.type !== "compaction") continue;
       compactionId = entry.id;
-      embeddedIndex = isClassifierCheckpoint(entry.details);
+      embeddedIndex = isClassifierCheckpoint(entry.details) || isHybridCheckpoint(entry.details);
     }
     // Classifier checkpoints already contain selected references; reindexing every artifact
     // would put intentionally omitted addresses back into active context.

@@ -42,6 +42,7 @@
   },
   "contextClassifierCompaction": {
     "enabled": true,
+    "mode": "extractive",
     "provider": "openrouter",
     "model": "typesafe/jev-1.14",
     "includeContent": true,

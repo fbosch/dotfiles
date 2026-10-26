@@ -11,6 +11,7 @@ import type {
 } from "@earendil-works/pi-coding-agent";
 import { RECALL_LIMITS, recallSaved, registerRecall, registerRecallPrefetch } from "../recall";
 import { sessionWith } from "./fixtures";
+import { customStartEvent, userStartEvent } from "../../shared/__tests__/agent-start-events";
 
 const roots: string[] = [];
 afterEach(async () => {
@@ -163,9 +164,9 @@ test("prefetch adds relevant passages once, skips unrelated and custom requests,
     if (!handler) throw new Error("Missing prefetch hook");
     return handler(event as BeforeAgentStartEvent, ctx);
   };
-  const message = { prompt: "What was the archived audit receipt?" };
-  expect(await invoke({ customMessage: {} })).toBeUndefined();
-  expect(await invoke({ prompt: "What is 17 * 23?" })).toBeUndefined();
+  const message = userStartEvent("What was the archived audit receipt?");
+  expect(await invoke(customStartEvent())).toBeUndefined();
+  expect(await invoke(userStartEvent("What is 17 * 23?"))).toBeUndefined();
   enabled = false;
   expect(await invoke(message)).toBeUndefined();
   enabled = true;

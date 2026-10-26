@@ -49,6 +49,104 @@ describe("native versus enabled-classifier comparison preflight", () => {
     expect(report.lifecycle).toContain("prepared-masked-history");
   });
 
+  test("hybrid uses the same paired evidence and request caps without provider calls", async () => {
+    const root = await mkdtemp(join(scratch, "hybrid-"));
+    roots.push(root);
+    const report = await buildPreflight({ root, hybrid: true });
+    expect(report.networkCalls).toBe(0);
+    expect(report.arms).toHaveLength(6);
+    expect(report.config.classifier.mode).toBe("hybrid");
+    expect(report.config.classifier.maxSummaryInputBytes).toBe(48000);
+    expect(report.config.limits.modelPerProbe).toBe(12);
+    expect(report.config.limits.toolOverheadPerProbe).toBe(12);
+    for (const seed of report.config.seeds) {
+      const native = report.arms.find(r => r.seed === seed && r.arm === "native-pi-summary");
+      const hybrid = report.arms.find(r => r.seed === seed && r.arm === "hybrid-summary");
+      if (!native || !hybrid) throw Error("Missing hybrid pair");
+      expect(native.workspaceHash).toBe(hybrid.workspaceHash);
+      for (const arm of [native, hybrid]) {
+        expect(arm.compactions).toHaveLength(3);
+        expect(arm.compactions.every(c => c.retainedTailTokens === 20001)).toBe(true);
+        expect(arm.compactions.every(c => c.classifierRequests.every(r => r.bytes <= 24000))).toBe(true);
+      }
+      expect(hybrid.compactions.every(c => c.classifierRequests.length > 0)).toBe(true);
+    }
+  });
+
+  test("native recall ablation shares masking and bounds with hybrid on fresh synthetic seeds", async () => {
+    const root = await mkdtemp(join(scratch, "recall-ablation-"));
+    roots.push(root);
+    const report = await buildPreflight({ root, recallAblation: true });
+    expect(report.networkCalls).toBe(0);
+    expect(report.config.seeds).toEqual(["recall-holdout-1", "recall-holdout-2", "recall-holdout-3"]);
+    expect(report.arms).toHaveLength(6);
+    expect(report.config.limits).toEqual({
+      modelPerCompaction: 2, classifierPerCompaction: 40, modelPerProbe: 12,
+      toolOverheadPerProbe: 12, operationMs: 180_000, campaignMs: 900_000,
+    });
+    const nativeConfig = report.config.armSettings["native-recall"];
+    const hybridConfig = report.config.armSettings["hybrid-summary"];
+    if (!nativeConfig || !hybridConfig) throw Error("Missing ablation settings");
+    expect(nativeConfig.contextMasking).toEqual(hybridConfig.contextMasking);
+    expect(nativeConfig.contextMasking.enabled).toBe(true);
+    expect(nativeConfig.contextMasking.prefetchRecall).toBe(true);
+    expect(nativeConfig.contextClassifierCompaction.enabled).toBe(false);
+    expect(hybridConfig.contextClassifierCompaction.enabled).toBe(true);
+    expect(nativeConfig.compaction).toEqual(hybridConfig.compaction);
+    expect(nativeConfig.compactionModel).toEqual(hybridConfig.compactionModel);
+    for (const seed of report.config.seeds) {
+      const native = report.arms.find(r => r.seed === seed && r.arm === "native-recall");
+      const hybrid = report.arms.find(r => r.seed === seed && r.arm === "hybrid-summary");
+      if (!native || !hybrid) throw Error("Missing recall pair");
+      expect(native.workspaceHash).toBe(hybrid.workspaceHash);
+      expect(native.artifactCount).toBeGreaterThan(0);
+      expect(native.artifactCount).toBe(hybrid.artifactCount);
+      expect(native.compactions.every(c => c.classifierRequests.length === 0)).toBe(true);
+      expect(hybrid.compactions.every(c => c.classifierRequests.length > 0)).toBe(true);
+      for (const arm of [native, hybrid]) {
+        expect(arm.compactions).toHaveLength(3);
+        expect(arm.compactions.every(c => c.retainedTailTokens === 20001)).toBe(true);
+        expect(arm.compactions.every(c => c.classifierRequests.every(r => r.bytes <= 24000))).toBe(true);
+      }
+    }
+  });
+
+  test("four-way preflight isolates all configurations on identical fresh evidence and rotates order", async () => {
+    const root = await mkdtemp(join(scratch, "four-way-"));
+    roots.push(root);
+    const report = await buildPreflight({ root, fourWay: true });
+    const arms = ["native-pi-summary", "native-recall", "enabled-classifier", "hybrid-summary"] as const;
+    expect(report.networkCalls).toBe(0);
+    expect(report.config.seeds).toEqual(["fourway-holdout-1", "fourway-holdout-2", "fourway-holdout-3"]);
+    expect(report.arms).toHaveLength(12);
+    expect(report.config.maximumRequests).toEqual({ model: 216, classifier: 720 });
+    expect(report.config.limits).toEqual({
+      modelPerCompaction: 2, classifierPerCompaction: 40, modelPerProbe: 12,
+      toolOverheadPerProbe: 12, operationMs: 180_000, campaignMs: 900_000,
+    });
+    for (const [index, seed] of report.config.seeds.entries()) {
+      const paired = report.arms.filter(row => row.seed === seed);
+      expect(new Set(paired.map(row => row.workspaceHash)).size).toBe(1);
+      expect(report.config.order[index]?.arms).toEqual([...arms.slice(index), ...arms.slice(0, index)]);
+      for (const arm of arms) {
+        const row = paired.find(row => row.arm === arm);
+        const config = report.config.armSettings[arm];
+        if (!row || !config) throw Error("Missing four-way arm");
+        const masked = arm !== "native-pi-summary";
+        const classified = arm === "enabled-classifier" || arm === "hybrid-summary";
+        expect(config.contextMasking.enabled).toBe(masked);
+        expect(config.contextMasking.prefetchRecall).toBe(masked);
+        expect(config.contextClassifierCompaction.enabled).toBe(classified);
+        expect(config.contextClassifierCompaction.mode).toBe(arm === "hybrid-summary" ? "hybrid" : "extractive");
+        expect(row.artifactCount > 0).toBe(masked);
+        expect(row.compactions).toHaveLength(3);
+        expect(row.compactions.every(c => c.retainedTailTokens === 20001)).toBe(true);
+        expect(row.compactions.every(c => (c.classifierRequests.length > 0) === classified)).toBe(true);
+        expect(row.compactions.every(c => c.classifierRequests.every(r => r.bytes <= 24000))).toBe(true);
+      }
+    }
+  });
+
   test("rejects symlinked and unlisted workspace reads", async () => {
     const root = await mkdtemp(join(scratch, "manifest-"));
     roots.push(root);

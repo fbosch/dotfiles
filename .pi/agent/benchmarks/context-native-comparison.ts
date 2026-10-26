@@ -10,6 +10,7 @@ import {
   CLASSIFIER_DEFAULTS, classifyCompaction, type ClassifierResponse,
 } from "../extensions/context-masking/classifier-compaction";
 import { CLASSIFIER_CHECKPOINT, isClassifierCheckpoint } from "../extensions/context-masking/classifier-hook";
+import { isHybridCheckpoint } from "../extensions/context-masking/hybrid-summary";
 import contextMasking from "../extensions/context-masking/index";
 import { DEFAULT_SETTINGS, placeholder, selectMasks } from "../extensions/context-masking/policy";
 import { autonomousStages, scoreStagedRecall } from "./context-classifier-autonomous-history";
@@ -18,10 +19,27 @@ import { assistant } from "./context-masking-recall-probe";
 export const PREFLIGHT_ROOT = "/tmp/context-native-comparison-preflight";
 export const SEEDS = ["paired-1", "paired-2", "paired-3"] as const;
 export const ARMS = ["native-pi-summary", "enabled-classifier"] as const;
+export const HYBRID_ARMS = ["native-pi-summary", "hybrid-summary"] as const;
+export const RECALL_ABLATION_ARMS = ["native-recall", "hybrid-summary"] as const;
+export const RECALL_ABLATION_SEEDS = ["recall-holdout-1", "recall-holdout-2", "recall-holdout-3"] as const;
+export const FOUR_WAY_ARMS = ["native-pi-summary", "native-recall", "enabled-classifier", "hybrid-summary"] as const;
+export const FOUR_WAY_SEEDS = ["fourway-holdout-1", "fourway-holdout-2", "fourway-holdout-3"] as const;
 const MODEL = ["openai-codex", "gpt-6.1-sol"] as const;
 const CLASSIFIER = { ...CLASSIFIER_DEFAULTS, enabled: true, includeContent: true, maxOutputBytes: 4_000 };
 const LIMITS = { modelPerCompaction: 2, classifierPerCompaction: 40, modelPerProbe: 12, toolOverheadPerProbe: 12, operationMs: 180_000, campaignMs: 900_000 };
-type Arm = typeof ARMS[number];
+type Arm = typeof ARMS[number] | typeof HYBRID_ARMS[number] | typeof RECALL_ABLATION_ARMS[number];
+interface ComparisonOptions { hybrid?: boolean; recallAblation?: boolean; fourWay?: boolean }
+function comparison(options: ComparisonOptions) {
+  if ([options.hybrid, options.recallAblation, options.fourWay].filter(Boolean).length > 1) throw Error("Choose one comparison variant");
+  return {
+    arms: options.fourWay ? FOUR_WAY_ARMS : options.recallAblation ? RECALL_ABLATION_ARMS : options.hybrid ? HYBRID_ARMS : ARMS,
+    seeds: options.fourWay ? FOUR_WAY_SEEDS : options.recallAblation ? RECALL_ABLATION_SEEDS : SEEDS,
+  };
+}
+function orderedArms(arms: readonly Arm[], seedIndex: number) {
+  const offset = seedIndex % arms.length;
+  return [...arms.slice(offset), ...arms.slice(0, offset)];
+}
 type Preparation = SessionBeforeCompactEvent["preparation"];
 type Usage = NonNullable<ClassifierResponse["usage"]>;
 type Model = NonNullable<ReturnType<ModelRuntime["getModel"]>>;
@@ -37,18 +55,24 @@ interface Call {
 interface State {
   seed: string; arm: Arm; phase: number; probing: boolean; dry: boolean;
   modelCalls: number; classifierCalls: number; toolCalls: number;
-  fatal?: string; preparation?: Preparation; before?: ReturnType<typeof snapshot>;
+  fatal?: string; probeFailure?: string; preparation?: Preparation; before?: ReturnType<typeof snapshot>;
 }
 const digest = (bytes: string | Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
+function classifierSettings(arm: Arm) {
+  return { ...CLASSIFIER, enabled: arm === "enabled-classifier" || arm === "hybrid-summary", mode: arm === "hybrid-summary" ? "hybrid" as const : "extractive" as const };
+}
+function route(details: unknown, arm: Arm) {
+  return isHybridCheckpoint(details) ? "hybrid" : isClassifierCheckpoint(details) ? "classifier" : classifierSettings(arm).enabled ? "fallback" : "native";
+}
 function settings(arm: Arm) {
   return {
     packages: [], extensions: [], defaultTools: ["read", "tool_search"],
     // Manual checkpoints isolate compaction behavior; native retention and prompts stay unchanged.
     compaction: { ...DEFAULT_COMPACTION_SETTINGS, enabled: false },
     retry: { enabled: false },
-    contextMasking: { ...DEFAULT_SETTINGS, enabled: arm === "enabled-classifier", prefetchRecall: arm === "enabled-classifier" },
-    contextClassifierCompaction: { ...CLASSIFIER, enabled: arm === "enabled-classifier" },
+    contextMasking: { ...DEFAULT_SETTINGS, enabled: arm !== "native-pi-summary", prefetchRecall: arm !== "native-pi-summary" },
+    contextClassifierCompaction: classifierSettings(arm),
     compactionModel: { enabled: false, model: MODEL.join("/"), thinkingLevel: "off" },
   };
 }
@@ -119,7 +143,7 @@ async function appendStage(f: Fixture, phase: number, arm: Arm) {
     const entry = f.manager.appendMessage({ role: "toolResult", toolCallId: "phase-" + phase + "-trace-" + i, toolName: "trace_batch", content: [{ type: "text", text }], isError: false, timestamp: phase });
     if (i === 9) f.traceIds.push(entry);
   }
-  if (arm === "enabled-classifier") {
+  if (arm !== "native-pi-summary") {
     // shortcut: prepare historical masks. Measure automatic lifecycle separately before tuning triggerRatio from these results.
     const masks = selectMasks(f.manager.buildSessionProjection().entries, DEFAULT_SETTINGS);
     const root = join(f.agentDir, "cache", "context-masking", f.manager.getSessionId());
@@ -168,11 +192,11 @@ async function session(runtime: ModelRuntime, model: Model, f: Fixture, state: S
           const path = event.input.path;
           if (typeof path !== "string") throw Error("Invalid read path");
           const artifactRoot = join(f.agentDir, "cache", "context-masking");
-          const knownArtifact = state.arm === "enabled-classifier" && f.artifacts.has(resolve(f.cwd, path));
+          const knownArtifact = state.arm !== "native-pi-summary" && f.artifacts.has(resolve(f.cwd, path));
           await assertManifestRead(knownArtifact ? artifactRoot : f.cwd,
             new Set(knownArtifact ? [...f.artifacts.keys()].map(p => relative(artifactRoot, p)) : f.manifest.keys()), path);
           event.input.limit = 80;
-        } else if (event.toolName !== "tool_search" && !(state.arm === "enabled-classifier" && event.toolName === "recall"))
+        } else if (event.toolName !== "tool_search" && !(state.arm !== "native-pi-summary" && event.toolName === "recall"))
           throw Error("Out-of-scope tool: " + event.toolName);
       } catch (error) {
         state.fatal = String(error); ctx.abort();
@@ -185,7 +209,7 @@ async function session(runtime: ModelRuntime, model: Model, f: Fixture, state: S
   const loader = new DefaultResourceLoader({
     cwd: f.cwd, agentDir: f.agentDir, settingsManager: memory,
     noExtensions: true, noContextFiles: true, noSkills: true, noThemes: true, noPromptTemplates: true,
-    extensionFactories: [observer, createToolSearchExtension(), ...(!state.dry && state.arm === "enabled-classifier" ? [contextMasking] : [])],
+    extensionFactories: [observer, createToolSearchExtension(), ...(!state.dry && state.arm !== "native-pi-summary" ? [contextMasking] : [])],
   });
   await loader.reload();
   if (loader.getExtensions().errors.length) throw Error("Extension loading failed");
@@ -206,14 +230,15 @@ function clearPreparation(state: State) {
 function newState(seed: string, arm: Arm, dry = false): State {
   return { seed, arm, phase: 0, probing: false, dry, modelCalls: 0, classifierCalls: 0, toolCalls: 0 };
 }
-export async function buildPreflight(options: { root: string; answerContextWindow?: number; classifierContextWindow?: number }) {
+export async function buildPreflight(options: ComparisonOptions & { root: string; answerContextWindow?: number; classifierContextWindow?: number }) {
   await mkdir(options.root, { recursive: true, mode: 0o700 });
   const { runtime, answer, classifier } = await models(options.root, true);
   let attempts = 0;
   runtime.streamSimple = () => { attempts++; throw Error("Provider call during offline preflight"); };
   runtime.classify = async () => { attempts++; throw Error("Classifier call during offline preflight"); };
   const arms = [];
-  for (const seed of SEEDS) for (const arm of ARMS) {
+  const { arms: comparisonArms, seeds } = comparison(options);
+  for (const seed of seeds) for (const arm of comparisonArms) {
     const f = await fixture(join(options.root, seed, arm), seed), state = newState(seed, arm, true), compactions = [];
     for (let phase = 0; phase < 3; phase++) {
       state.phase = phase; await appendStage(f, phase, arm);
@@ -224,10 +249,10 @@ export async function buildPreflight(options: { root: string; answerContextWindo
       const p = state.preparation;
       if (!p) throw Error("Native preparation not observed");
       const row = snapshot(f, p, phase), requests: Array<{ bytes: number; questions: number }> = [];
-      if (arm === "enabled-classifier") await classifyCompaction({
+      if (classifierSettings(arm).enabled) await classifyCompaction({
         branch: f.manager.getBranch(), messages: [...p.messagesToSummarize, ...p.turnPrefixMessages],
         ...(p.previousSummary ? { previousSummary: p.previousSummary } : {}),
-      }, CLASSIFIER, {
+      }, classifierSettings(arm), {
         artifactRoot: join(f.agentDir, "cache", "context-masking"),
         classify: async request => {
           requests.push({ bytes: Buffer.byteLength(JSON.stringify(request)), questions: Object.keys(request.questions).length });
@@ -243,18 +268,23 @@ export async function buildPreflight(options: { root: string; answerContextWindo
     const window = options.answerContextWindow ?? answer.contextWindow;
     if (compactions.some(r => r.inputTokens + DEFAULT_COMPACTION_SETTINGS.reserveTokens >= window)) throw Error("Preflight exceeds answer context window");
     if (!(await artifactsPreserved(f))) throw Error("Preflight changed saved artifacts");
-    arms.push({ seed, arm, workspaceHash: await workspaceHash(f), contextWindow: window, compactions });
+    arms.push({ seed, arm, workspaceHash: await workspaceHash(f), artifactCount: f.artifacts.size, contextWindow: window, compactions });
   }
   if (attempts) throw Error("Offline preflight attempted provider calls");
   return {
     networkCalls: attempts, lifecycle: "manual checkpoints; prepared-masked-history; automatic thresholds not measured",
-    config: { seeds: SEEDS, stages: 3, compaction: DEFAULT_COMPACTION_SETTINGS, answerModel: MODEL,
-      classifierContextWindow: options.classifierContextWindow ?? classifier.contextWindow, classifier: CLASSIFIER, limits: LIMITS,
-      maximumRequests: { model: 108, classifier: 360 }, retries: false, thinkingLevel: "off" },
+    config: { seeds, armSettings: Object.fromEntries(comparisonArms.map(arm => [arm, settings(arm)])), stages: 3, compaction: DEFAULT_COMPACTION_SETTINGS, answerModel: MODEL,
+      order: seeds.map((seed, index) => ({ seed, arms: orderedArms(comparisonArms, index) })),
+      classifierContextWindow: options.classifierContextWindow ?? classifier.contextWindow, classifier: classifierSettings(options.fourWay ? "hybrid-summary" : comparisonArms[1]), limits: LIMITS,
+      maximumRequests: {
+        model: seeds.length * comparisonArms.length * (3 * LIMITS.modelPerCompaction + LIMITS.modelPerProbe),
+        classifier: seeds.length * comparisonArms.filter(arm => classifierSettings(arm).enabled).length * 3 * LIMITS.classifierPerCompaction,
+      }, retries: false, thinkingLevel: "off" },
     arms,
   };
 }
-export async function runComparison(root: string) {
+export async function runComparison(root: string, options: ComparisonOptions = {}) {
+  const { arms: comparisonArms, seeds } = comparison(options);
   const live = join(getAgentDir(), "settings.json"), before = digest(await readFile(live));
   const { runtime, answer } = await models(root, false);
   const calls: Call[] = [], pending: Promise<void>[] = [], rows: Array<Record<string, unknown>> = [];
@@ -263,7 +293,14 @@ export async function runComparison(root: string) {
   function check(kind: "model" | "classifier") {
     const s = active;
     if (!s || s.fatal || performance.now() - started > LIMITS.campaignMs) throw Error(s?.fatal ?? "Campaign request guard");
-    if (kind === "model" && ++s.modelCalls > (s.probing ? LIMITS.modelPerProbe : LIMITS.modelPerCompaction)) throw Error("Model-request budget exceeded");
+    if (kind === "classifier" && !classifierSettings(s.arm).enabled) {
+      s.fatal = "Classifier request from disabled arm: " + s.arm;
+      throw Error(s.fatal);
+    }
+    if (kind === "model" && ++s.modelCalls > (s.probing ? LIMITS.modelPerProbe : LIMITS.modelPerCompaction)) {
+      if (s.probing) s.probeFailure = "model-request-limit";
+      throw Error("Model-request budget exceeded");
+    }
     if (kind === "classifier" && ++s.classifierCalls > LIMITS.classifierPerCompaction) throw Error("Classifier-request budget exceeded");
     return s;
   }
@@ -291,7 +328,7 @@ export async function runComparison(root: string) {
   const previous = process.env.PI_CODING_AGENT_DIR;
   let failure: string | undefined;
   try {
-    for (const [index, seed] of SEEDS.entries()) for (const arm of index % 2 ? [...ARMS].reverse() : ARMS) {
+    for (const [index, seed] of seeds.entries()) for (const arm of orderedArms(comparisonArms, index)) {
       const f = await fixture(join(root, "measured", seed, arm), seed), state = newState(seed, arm);
       process.env.PI_CODING_AGENT_DIR = f.agentDir;
       await writeFile(join(f.agentDir, "settings.json"), JSON.stringify(settings(arm), null, 2));
@@ -313,10 +350,10 @@ export async function runComparison(root: string) {
           const checkpoint = f.manager.getBranch().filter(e => e.type === "compaction").at(-1);
           if (checkpoint?.type !== "compaction") throw Error("Missing committed checkpoint");
           compactions.push({ ...state.before, ms: performance.now() - start, maskPreparationMs,
-            bytes: Buffer.byteLength(result.summary), outcome: isClassifierCheckpoint(checkpoint.details) ? "classifier" : arm === "enabled-classifier" ? "fallback" : "native",
+            bytes: Buffer.byteLength(result.summary), outcome: route(checkpoint.details, arm),
             details: checkpoint.details, audit: f.manager.getBranch().slice(branchBefore).filter(e => e.type === "custom" && e.customType === CLASSIFIER_CHECKPOINT).map(e => e.type === "custom" ? e.data : undefined), calls: calls.slice(firstCall) });
           await writeFile(join(f.agentDir, "checkpoint-" + (phase + 1) + ".json"), JSON.stringify(checkpoint, null, 2));
-          console.error(JSON.stringify({ seed, arm, phase: phase + 1, outcome: isClassifierCheckpoint(checkpoint.details) ? "classifier" : "native", ms: compactions.at(-1)?.ms }));
+          console.error(JSON.stringify({ seed, arm, phase: phase + 1, outcome: route(checkpoint.details, arm), ms: compactions.at(-1)?.ms }));
         } finally { clearTimeout(timer); s.dispose(); }
         if (!(await artifactsPreserved(f))) throw Error("Saved artifact changed");
         if (await workspaceHash(f) !== armRow.workspaceHash) throw Error("Workspace evidence changed");
@@ -331,10 +368,14 @@ export async function runComparison(root: string) {
         await Promise.all(pending);
         if (state.fatal) throw Error(state.fatal);
         const answerText = s.getLastAssistantText() ?? "";
+        const last = [...s.agent.state.messages].reverse().find(m => m.role === "assistant");
         armRow.probe = { ms: performance.now() - start, answer: answerText, score: scoreStagedRecall(f.stages, 2, answerText),
+          failure: state.probeFailure, finalStopReason: last?.role === "assistant" ? last.stopReason : undefined,
+          finalError: last?.role === "assistant" ? last.errorMessage : undefined,
           toolCalls: state.toolCalls, toolCallLimit: f.manifest.size + LIMITS.toolOverheadPerProbe, manifestFiles: f.manifest.size, calls: calls.slice(firstCall),
           prefetch: s.agent.state.messages.some(m => "customType" in m && m.customType === "context-masking-recall") };
         armRow.artifactsPreserved = await artifactsPreserved(f);
+        armRow.artifactCount = f.artifacts.size;
         armRow.workspaceHashAfter = await workspaceHash(f);
         if (!armRow.artifactsPreserved || armRow.workspaceHashAfter !== armRow.workspaceHash) throw Error("Final integrity check failed");
       } finally { clearTimeout(timer); s.dispose(); }
@@ -347,10 +388,11 @@ export async function runComparison(root: string) {
   }
   const after = digest(await readFile(live));
   if (after !== before) failure ??= "Live settings changed";
-  const report = { status: failure ? "failed" : "complete", failure, root, model: MODEL, seeds: SEEDS,
-    lifecycle: "Manual compactions; native default retention/prompts; prepared historical masks in candidate; automatic trigger thresholds not measured",
-    controls: { limits: LIMITS, compaction: DEFAULT_COMPACTION_SETTINGS, candidate: CLASSIFIER, imposedWaitMs: 0, automaticCompaction: false, retries: false, thinkingLevel: "off",
-      order: "native first on seeds1/3, candidate first on seed2; fresh sessions, no warmup; provider cache uncontrolled and usage recorded" },
+  const report = { status: failure ? "failed" : "complete", failure, root, model: MODEL, seeds,
+    lifecycle: "Manual compactions; native default retention/prompts; prepared historical masks where enabled; automatic trigger thresholds not measured",
+    controls: { limits: LIMITS, compaction: DEFAULT_COMPACTION_SETTINGS, candidate: classifierSettings(options.fourWay ? "hybrid-summary" : comparisonArms[1]), arms: Object.fromEntries(comparisonArms.map(arm => [arm, settings(arm)])), imposedWaitMs: 0, automaticCompaction: false, retries: false, thinkingLevel: "off",
+      order: seeds.map((seed, index) => ({ seed, arms: orderedArms(comparisonArms, index) })),
+      cachePolicy: "Fresh sessions, no warmup; provider cache uncontrolled and usage recorded" },
     pricing: "usage.cost is SDK-reported/catalog pricing only. Actual Codex subscription dollar cost is unknown; do not chart as zero or claim dollar savings.",
     liveSettingsUnchanged: before === after, settingsDigestBefore: before, settingsDigestAfter: after, rows, calls };
   await writeFile(join(root, "report.json"), JSON.stringify(report, null, 2));
@@ -361,9 +403,10 @@ async function main() {
   await mkdir(PREFLIGHT_ROOT, { recursive: true, mode: 0o700 });
   const root = await mkdtemp(join(PREFLIGHT_ROOT, "cohort-"));
   console.error(JSON.stringify({ root }));
-  const preflight = await buildPreflight({ root: join(root, "preflight") });
+  const options = { hybrid: process.argv.includes("--hybrid"), recallAblation: process.argv.includes("--recall-ablation"), fourWay: process.argv.includes("--four-way") };
+  const preflight = await buildPreflight({ root: join(root, "preflight"), ...options });
   await writeFile(join(root, "preflight.json"), JSON.stringify(preflight, null, 2));
   console.log(JSON.stringify({ root, preflight }));
-  if (process.argv.includes("--run")) console.log(JSON.stringify(await runComparison(root)));
+  if (process.argv.includes("--run")) console.log(JSON.stringify(await runComparison(root, options)));
 }
 if (import.meta.main) main().catch(error => { console.error(error); process.exitCode = 1; });

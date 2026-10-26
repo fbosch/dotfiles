@@ -2,7 +2,7 @@
 
 This extension hides old, large tool results from the model's context before Pi needs to compact. Each hidden result is saved to a local file, and a short placeholder in the conversation points to it. User messages, assistant messages, tool calls, and recent tool results stay verbatim. Deterministic masking and local recall do not call a model. The optional classifier compaction candidate below is disabled by default.
 
-## Enable it
+## Enable masking with native compaction
 
 Add this to the global `~/.pi/agent/settings.json` and run `/reload`:
 
@@ -11,11 +11,19 @@ Add this to the global `~/.pi/agent/settings.json` and run `/reload`:
   "contextMasking": {
     "enabled": true,
     "prefetchRecall": true
+  },
+  "contextClassifierCompaction": {
+    "enabled": false
+  },
+  "compactionModel": {
+    "enabled": false
   }
 }
 ```
 
-Only the global setting is read. Malformed settings leave context unchanged.
+This configuration uses Pi's built-in summarizer with the active conversation model. Masking and recall remain enabled; neither custom compaction handler runs.
+
+Masking reads global settings only. Malformed masking settings leave context unchanged.
 
 | Setting | Default | Meaning |
 |---|---|---|
@@ -41,9 +49,11 @@ The raw session file keeps every original result, and `/tree` navigation to a po
 
 A hidden result remains available through `read` at its saved path. The extension also registers a deferred `recall` tool that returns matching passages. Tool discovery can activate it; to declare it at startup, add `"+recall"` to `defaultTools`. Automatic lookup does not activate the tool or change the active tool list.
 
+The `recall` tool accepts either `query` for one question or `queries` for one to eight distinct questions. For example, `{"queries":["Which schema was approved?","What retention period was approved?"],"limit":2}` retrieves both in one scan. `limit` applies per question. All questions share the same scan and output budgets, and each gets an output allowance so the first cannot consume the whole response.
+
 ## Automatic saved-output lookup
 
-With both `enabled` and `prefetchRecall` on, the extension searches saved output once per new text request. It uses the first 500 characters of the request as a lexical query. At least two distinct query terms must occur within three neighboring lines for the extension to add a result. It appends up to two passages as historical data at the conversation tail; it does not rewrite earlier messages. An identical lookup result already in visible context is not appended again.
+With both `enabled` and `prefetchRecall` on, the extension searches saved output once per new text request. It parses up to 8,000 prompt characters into at most eight questions of 500 characters each. It recognizes ordinary English and Danish questions and bullet lists. A single request still uses at most 500 characters as its query. Each prefetched question needs a match for at least two distinct terms within three neighboring lines. A strong question does not admit weak matches for another question. The extension appends the passages as historical data at the conversation tail. It does not rewrite earlier messages or append an identical lookup result already in visible context.
 
 Lookup is local and does not call a classifier. It only reads artifacts recorded on the current session branch, under the masking cache, with the expected entry filename. It rejects symlinked files and session directories. Each lookup scans at most the newest 80 artifacts, 128 KiB per file and 2 MiB total. Returned text is capped at 12,000 characters; long lines are excerpted. The output reports skipped files and scan limits. Full saved files remain available through `read`.
 
@@ -70,9 +80,11 @@ A compaction summary can drop placeholders and their file paths, which would lea
 
 The index is built from session entries, not from the summary, so it works whichever extension writes the summary. It is added per request rather than stored in the session. It changes only when a new compaction lands, so it does not break the prompt cache between compactions. It is added even when `enabled` is `false`, because earlier batches may still hide results.
 
+Extractive checkpoints embed their selected references. Hybrid checkpoints keep the catalogue in session entries and expose it through recall. Neither receives the general index again.
+
 ## Classifier compaction candidate
 
-The extension includes a classifier-driven alternative to generative compaction. It is disabled by default in the extension and enabled in this repository's global settings.
+The extension includes an experimental classifier-driven alternative to generative compaction. It is disabled by default. This repository opts into an extractive live trial after approval to send eligible content to Jev. Masking, batched recall and native fallback remain enabled; hybrid mode stays off.
 
 Enabling it sends conversation text, tool arguments, masks, artifact addresses and eligible saved output to the configured classifier provider. The synthetic evaluations send generated data only. Do not enable it for recorded sessions without accepting that data transfer.
 
@@ -80,6 +92,7 @@ Enabling it sends conversation text, tool arguments, masks, artifact addresses a
 {
   "contextClassifierCompaction": {
     "enabled": true,
+    "mode": "extractive",
     "provider": "openrouter",
     "model": "typesafe/jev-1.14",
     "includeContent": true,
@@ -97,21 +110,23 @@ This is a separate global setting, not a field inside `contextMasking`. With `en
 
 The host resolves artifacts recorded on the current branch and reads them through the same path and symlink checks as local recall. Jev receives the actual output alongside the original call, mask and saved address. It cannot open local files itself. With `includeContent: false`, requests omit the hydrated output but still contain the visible conversation and metadata.
 
-Two probability questions per result decide whether the full output needs to remain inline and whether the call and reference are useful. The host renders coherent pairs as full output, saved references, or omissions. It never deletes an artifact. The decisions cannot supply replacement addresses.
+In the default `extractive` mode, two probability questions per result decide whether the full output needs to remain inline and whether the call and reference are useful. The host renders coherent pairs as full output, saved references, or omissions. It never deletes an artifact. The decisions cannot supply replacement addresses.
 
 The candidate preserves user and assistant text in order, unrecorded tool results and the previous summary. Pi stores this extractive history as a labeled summary string, not as the original structured messages. Ambiguous tool-call identities, images and other unsupported content cause normal compaction to take over.
 
 | Setting | Default | Meaning |
 |---|---|---|
-| `maxRequestBytes` | `24000` | Serialized classifier state and questions per request. Batches repeat shared conversation state. |
+| `mode` | `"extractive"` | Use extractive checkpoints or opt in to `"hybrid"` native summaries. |
+| `maxSummaryInputBytes` | `48000` | Hybrid input budget for selected messages and the previous summary. |
+| `maxRequestBytes` | `24000` | Serialized classifier state and questions per request. |
 | `maxArtifactBytes` | `12000` | Maximum bytes read from one artifact. Partial output keeps a reference without classification. |
 | `maxTotalArtifactBytes` | `256000` | Maximum artifact bytes per attempt. |
 | `maxArtifacts` | `40` | Maximum saved results considered per attempt. |
-| `maxOutputBytes` | `24000` | Maximum UTF-8 bytes in the rendered checkpoint, excluding Pi wrappers and the retained tail. |
-| `threshold` | `0.5` | Minimum probability for an inline or reference decision. Inline takes precedence. |
-| `minFreedRatio` | `0.25` | Required additional reduction in rendered history bytes. |
+| `maxOutputBytes` | `24000` | Extractive checkpoint byte limit, excluding Pi wrappers and the retained tail. Does not cap a hybrid native summary. |
+| `threshold` | `0.5` | Extractive probability threshold. Inline takes precedence over a reference. |
+| `minFreedRatio` | `0.25` | Required additional reduction in extractive history bytes. |
 
-This repository sets `maxOutputBytes` to `4000` to match the synthetic trials. Conversation text or checkpoints that cannot fit the configured limits fall back to normal compaction.
+This repository sets `maxOutputBytes` to `4000` for extractive mode. Conversation text or checkpoints that cannot fit the applicable limits fall back to normal compaction.
 
 These are byte limits, not exact token counts. The host does not abridge conversation text to fit a classifier request. It retains a reference when an individual result cannot fit. If the conversation itself is too large, an artifact cannot be read safely, or a limit prevents a valid checkpoint, the hook runs Pi's native summarizer with the global `compactionModel.model` and `compactionModel.thinkingLevel`. Malformed classifier answers and API failures also fall back. Cancellation cancels the attempt instead of starting another model request. Missing or invalid fallback settings, an unavailable model, or a failed summary cancel the attempt rather than retrying with the active conversation model.
 
@@ -119,7 +134,7 @@ Selected references are embedded in accepted checkpoints. The general post-compa
 
 Successful checkpoints carry classifier usage. Paid fallback attempts have separate `context-masking-classifier-compaction` audit entries. Those entries preserve reported usage but do not add it to the default summary's headline usage. Telemetry stores decisions and sizes, not classifier packets or saved output.
 
-Pi runs all `session_before_compact` handlers, and the last non-cancel result wins. Multiple custom compactors can spend money even when only one result is committed. This repository keeps `pi-compaction-model` installed but sets `compactionModel.enabled` to `false`. The classifier hook owns both extractive checkpoints and generative fallback. The fallback reads the global `compactionModel` model and thinking level even while the standalone compactor is disabled; `enabled` and `reasons` do not gate classifier fallback.
+Pi runs all `session_before_compact` handlers, and the last non-cancel result wins. Multiple custom compactors can spend money even when only one result is committed. This repository keeps `pi-compaction-model` installed but disables its standalone handler. The classifier hook owns extractive checkpoints and native fallback in the live trial. Both hybrid summaries and fallback read the global `compactionModel` model and thinking level while the standalone compactor is disabled. Its `enabled` and `reasons` fields do not gate those requests.
 
 Trusted project settings must not re-enable `compactionModel` while the global classifier is enabled.
 
@@ -137,6 +152,69 @@ CLASSIFIER_DISTRACTORS=12 bun .pi/agent/benchmarks/context-classifier-candidate.
 ```
 
 The second command adds closed background outputs to exercise pruning of surplus pointers. Both runs use synthetic coding continuations and identical continuation-time retrieval. The benchmark checks a 1,600-token ceiling with provider-reported counts, uses a tighter 4,000-byte checkpoint cap, and includes failed candidate work and summary fallbacks in cost. It does not measure longitudinal cache savings.
+
+## Experimental hybrid summaries
+
+Hybrid mode is opt-in.
+
+```json
+{
+  "contextClassifierCompaction": {
+    "enabled": true,
+    "mode": "hybrid",
+    "includeContent": true,
+    "maxSummaryInputBytes": 48000
+  }
+}
+```
+
+The classifier gets one evidence-selection question per complete saved result. It excludes a result only when its relevance probability is at most 0.1. Uncertain results stay in the selected evidence. Partial results keep their trusted saved path and a partial-excerpt notice without classification. Hybrid classifier packets repeat non-candidate conversation state rather than every candidate's placeholder.
+
+The host restores selected source text into coherent call/result pairs. It preserves user and assistant text, combines the chronological prefix into one native summary request, and leaves Pi's retained-history boundary unchanged. The configured native summarizer updates the working summary from that evidence and the previous summary. The model can still omit or misstate facts; selecting evidence does not guarantee summary quality.
+
+The 48,000-byte limit covers the selected message representation and previous summary. It is separate from the extractive 4,000-byte checkpoint cap. Hybrid output follows native summarization rather than rejecting a useful summary solely for exceeding that extractive cap. The checkpoint carries a short recall hint. The complete saved-result catalogue stays in session entries instead of taking space in the working summary.
+
+Valid classifier responses can be reused from a bounded, in-memory cache of 64 packets per active session. Reuse requires identical task state, artifact identities and content, model, settings and request. Any change to that evidence scope invalidates reuse. Cancelled classifier passes and invalid answers do not populate the cache. Hits avoid provider requests and do not add old usage again. The cache does not survive an extension reload.
+
+Accepted hybrid checkpoints include fresh classifier and native-summary usage. Audit entries report classifier requests, cache hits, sizes and decisions without saved contents. Native fallback also restores validated file lists from preceding extension-created checkpoints.
+
+The initial three-seed paired run accepted three hybrid checkpoints and used native fallback for six. All six fallbacks hit `summary-input-limit`: the selector retained too much evidence at the second and third checkpoints. That result does not justify enabling hybrid mode by default.
+
+Offline preflight makes no provider requests:
+
+```bash
+bun .pi/agent/benchmarks/context-native-comparison.ts --hybrid
+```
+
+The hosted comparison uses generated evidence only:
+
+```bash
+bun .pi/agent/benchmarks/context-native-comparison.ts --hybrid --run
+```
+
+It pairs the hybrid with a fresh native baseline on three seeds of one synthetic template. Both arms use manual checkpoints, native retention defaults, the same source files, at most 12 model requests per final probe and 52 tool attempts. Failed probes remain in the results. Each arm starts fresh sessions, so this comparison does not establish longitudinal cache savings. Actual Codex subscription billing is not available from SDK token counts.
+
+To compare native summaries with masking and batched recall against the hybrid, use the recall ablation:
+
+```bash
+bun .pi/agent/benchmarks/context-native-comparison.ts --recall-ablation
+bun .pi/agent/benchmarks/context-native-comparison.ts --recall-ablation --run
+```
+
+The first command runs offline preflight. The second makes hosted requests with generated evidence only. Both arms enable masking and batched prefetch, and only the hybrid enables classifier compaction. The comparison uses three fresh seeds of the same synthetic template and keeps the request limits and native retention defaults unchanged.
+
+Both arms recovered 18/18 facts in the three-seed recall ablation. Recorded compaction and probe time totaled 172.3 seconds for native summaries plus recall versus 203.6 seconds for hybrid. The arms made zero and 57 classifier requests respectively. This comparison did not include extractive classifier compaction and does not establish real-task quality or automatic compaction performance.
+
+For a fresh comparison of plain native, native with masking and batched recall, extractive classifier compaction, and hybrid summaries:
+
+```bash
+bun .pi/agent/benchmarks/context-native-comparison.ts --four-way
+bun .pi/agent/benchmarks/context-native-comparison.ts --four-way --run
+```
+
+The first command runs offline preflight; the second makes hosted requests with synthetic evidence only. All four arms use identical fresh seeds and unchanged per-arm limits. Arm order rotates across three seeds, which does not fully balance four positions. Extractive classifier compaction still allows native fallback, and the results count that work. Live settings remain unchanged.
+
+The four-way comparison recovered 18/18 facts in every arm. Extractive classifier compaction was fastest and used the fewest main-model tokens, with native fallback at three of nine checkpoints. That result supports a trial, not a general reliability claim. The live trial retains `openai-codex/gpt-6-luna` with `xhigh` thinking for fallback, as explicitly selected. The benchmark used `openai-codex/gpt-6.1-sol` with thinking off, so its timing and cost estimates do not directly predict this live fallback configuration.
 
 ## Limits
 

@@ -15,6 +15,9 @@ import {
   classifyCompaction,
 } from "./classifier-compaction";
 
+import { ClassifierDecisionCache } from "./classifier-cache";
+import { HYBRID_CHECKPOINT, prepareHybridSummary, restoreCheckpointFiles } from "./hybrid-summary";
+import { sumUsage } from "./classifier-compaction";
 export const CLASSIFIER_CHECKPOINT = "context-masking-classifier-compaction";
 
 export function isClassifierCheckpoint(details: unknown): boolean {
@@ -33,6 +36,8 @@ export function parseClassifierSettings(global: unknown): ClassifierSettings {
     !isMatching(
       {
         enabled: P.optional(P.boolean),
+        mode: P.optional(P.union("extractive", "hybrid")),
+        maxSummaryInputBytes: P.optional(P.number.int().gte(1_000).lte(100_000)),
         provider: P.optional(P.string.minLength(1)),
         model: P.optional(P.string.minLength(1)),
         includeContent: P.optional(P.boolean),
@@ -78,9 +83,12 @@ export function registerClassifierCompaction(
     artifactRoot: () => join(getAgentDir(), "cache", "context-masking"),
   },
 ) {
+  let cache = new ClassifierDecisionCache();
+  let cacheSessionId: string | undefined;
   const fallback = async (
     event: SessionBeforeCompactEvent,
     ctx: ExtensionContext,
+    preparation = event.preparation,
   ): Promise<SessionBeforeCompactResult> => {
     if (event.signal.aborted) return { cancel: true };
     try {
@@ -110,7 +118,7 @@ export function registerClassifierCompaction(
       if (!model) throw new Error(`Compaction model unavailable: ${modelId}`);
       // enabled controls the standalone compactor; fallback still uses its model and thinking level.
       const compaction = await (dependencies.compact ?? compact)(
-        event.preparation,
+        restoreCheckpointFiles(preparation, event.branchEntries),
         model,
         undefined,
         undefined,
@@ -150,6 +158,10 @@ export function registerClassifierCompaction(
         ctx.ui.notify("Classifier model unavailable; using normal compaction.", "warning");
       return fallback(event, ctx);
     }
+    if (settings.mode === "hybrid") {
+      const sessionId = ctx.sessionManager.getSessionId();
+      if (sessionId !== cacheSessionId) { cache = new ClassifierDecisionCache(); cacheSessionId = sessionId; }
+    }
     const result = await classifyCompaction(
       {
         messages: [
@@ -165,15 +177,21 @@ export function registerClassifierCompaction(
       settings,
       {
         artifactRoot: dependencies.artifactRoot(),
+        ...(settings.mode === "hybrid" ? { cache } : {}),
         classify: (request, signal) =>
           ctx.modelRegistry.classify(model, request, signal ? { signal } : {}),
       },
       event.signal,
     );
+    const selectedPreparation = settings.mode === "hybrid" && result.kind === "retained"
+      ? prepareHybridSummary(event.preparation, result.evidence, settings.maxSummaryInputBytes) : undefined;
+    if (settings.mode === "hybrid" && result.kind === "retained" && !selectedPreparation) {
+      result.kind = "fallback"; result.reason = "summary-input-limit";
+    }
     const audit = {
       type: CLASSIFIER_CHECKPOINT,
       version: 1,
-      mode: settings.includeContent ? "content-aware" : "metadata-only",
+      mode: settings.mode === "hybrid" ? "hybrid" : settings.includeContent ? "content-aware" : "metadata-only",
       model: `${settings.provider}/${settings.model}`,
       outcome: result.kind,
       reason: result.reason,
@@ -182,6 +200,7 @@ export function registerClassifierCompaction(
       artifactBytes: result.artifactBytes,
       artifactsRead: result.artifactsRead,
       classifierMs: result.classifierMs,
+      cacheHits: result.cacheHits,
       usageComplete: result.usageComplete,
       decisions: result.decisions.map(({ entryId, action, forced }) => ({
         entryId,
@@ -192,11 +211,26 @@ export function registerClassifierCompaction(
     };
     // Failed attempts cannot attach usage to Pi's default summary. Preserve their accounting
     // separately without storing classifier packets or tool-output contents in telemetry.
-    if (result.requestBytes.length) pi.appendEntry(CLASSIFIER_CHECKPOINT, audit);
+    if (result.requestBytes.length || result.cacheHits) pi.appendEntry(CLASSIFIER_CHECKPOINT, audit);
     if (result.reason === "aborted") return { cancel: true };
     if (result.kind === "fallback") {
       if (ctx.hasUI) ctx.ui.notify(`Classifier compaction fell back: ${result.reason}.`, "warning");
       return fallback(event, ctx);
+    }
+    if (settings.mode === "hybrid" && selectedPreparation) {
+      const native = await fallback(event, ctx, selectedPreparation);
+      if (!native?.compaction) return native;
+      const nativeDetails = native.compaction.details;
+      if (!isMatching({ readFiles: P.array(P.string), modifiedFiles: P.array(P.string) }, nativeDetails))
+        return { cancel: true };
+      const usage = result.usage ? sumUsage(native.compaction.usage, result.usage) : native.compaction.usage;
+      return { compaction: {
+        ...native.compaction,
+        summary: native.compaction.summary + "\n\nSaved tool evidence is available through recall; discover it with tool_search.",
+        ...(usage ? { usage } : {}),
+        details: { ...nativeDetails, ...audit, type: HYBRID_CHECKPOINT,
+          artifactIndex: "external", usageComplete: audit.usageComplete && !!native.compaction.usage },
+      } };
     }
     const readFiles = new Set(event.preparation.fileOps.read);
     const modifiedFiles = new Set([
