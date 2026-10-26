@@ -33,11 +33,19 @@
       "manual",
       "threshold",
       "overflow"
-    ]
+    ],
+    "enabled": false
   },
   "contextMasking": {
     "enabled": true,
     "prefetchRecall": true
+  },
+  "contextClassifierCompaction": {
+    "enabled": true,
+    "provider": "openrouter",
+    "model": "typesafe/jev-1.14",
+    "includeContent": true,
+    "maxOutputBytes": 4000
   },
   "quickReplies": {
     "enabled": true

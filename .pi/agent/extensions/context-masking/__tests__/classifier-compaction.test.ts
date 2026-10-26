@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, readFile, rm, symlink, writeFile } from "node:fs/promis
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type {
+  compact,
   ExtensionAPI,
   ExtensionContext,
   SessionBeforeCompactEvent,
@@ -313,6 +314,29 @@ test("compaction hook uses real session projection and preserves cut boundary, u
   let handler: Handler | undefined;
   const records: unknown[] = [];
   let enabled = false;
+  let maxTotalArtifactBytes = settings.maxTotalArtifactBytes;
+  let fallbackSettings: unknown = {
+    compactionModel: {
+      enabled: false,
+      model: "summary-provider/configured-summary-model",
+      thinkingLevel: "xhigh",
+    },
+  };
+  let classifierAvailable = true;
+  let summaryFails = false;
+  const fallbackCalls: Parameters<typeof compact>[] = [];
+  const fallbackModel: Parameters<typeof compact>[1] = {
+    id: "configured-summary-model",
+    provider: "summary-provider",
+    name: "Summary",
+    api: "openai-responses",
+    baseUrl: "https://example.invalid",
+    reasoning: true,
+    input: ["text"],
+    contextWindow: 100_000,
+    maxTokens: 8_000,
+    cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  };
   let calls = 0;
   const api = {
     on: (_name: string, fn: Handler) => {
@@ -323,13 +347,25 @@ test("compaction hook uses real session projection and preserves cut boundary, u
     },
   } as unknown as Pick<ExtensionAPI, "on" | "appendEntry">;
   registerClassifierCompaction(api, {
-    settings: () => ({ ...settings, enabled }),
+    settings: () => ({ ...settings, enabled, maxTotalArtifactBytes }),
+    globalSettings: () => fallbackSettings,
+    compact: async (...args) => {
+      fallbackCalls.push(args);
+      if (summaryFails) throw new Error("Summary request failed");
+      return { summary: "Configured fallback", firstKeptEntryId: kept.id, tokensBefore: 8_000 };
+    },
     artifactRoot: () => f.root,
   });
   const ctx = {
     hasUI: false,
+    model: { ...fallbackModel, id: "unsupported-active-session-model" },
     modelRegistry: {
-      getModelOfType: () => ({ id: "test" }),
+      getModelOfType: () => (classifierAvailable ? { id: "test" } : undefined),
+      find: (provider: string, id: string) => {
+        expect(provider).toBe("summary-provider");
+        expect(id).toBe("configured-summary-model");
+        return fallbackModel;
+      },
       classify: async (_model: unknown, request: ClassifierRequest) => {
         calls++;
         return answer(request, () => 0);
@@ -358,6 +394,41 @@ test("compaction hook uses real session projection and preserves cut boundary, u
     modifiedFiles: ["edited.ts"],
   });
   expect(records.length).toBe(1);
+  expect(fallbackCalls).toHaveLength(0);
+  // Exhaust the read budget after the first artifact, matching the reported fallback.
+  maxTotalArtifactBytes = 1;
+  const fallback = await handler(event, ctx);
+  expect(fallback?.compaction?.summary).toBe("Configured fallback");
+  expect(fallbackCalls).toHaveLength(1);
+  expect(fallbackCalls[0]?.[0]).toBe(preparation);
+  expect(fallbackCalls[0]?.[1]).toBe(fallbackModel);
+  expect(fallbackCalls[0]?.[5]).toBe(event.signal);
+  expect(fallbackCalls[0]?.[6]).toBe("xhigh");
+  expect(fallbackCalls[0]?.[7]).toBeTypeOf("function");
+  expect(await handler({ ...event, signal: AbortSignal.abort() }, ctx)).toEqual({ cancel: true });
+  expect(fallbackCalls).toHaveLength(1);
+  classifierAvailable = false;
+  expect((await handler(event, ctx))?.compaction?.summary).toBe("Configured fallback");
+  expect(fallbackCalls).toHaveLength(2);
+  summaryFails = true;
+  expect(await handler(event, ctx)).toEqual({ cancel: true });
+  expect(fallbackCalls).toHaveLength(3);
+  summaryFails = false;
+  for (const invalid of [
+    undefined,
+    {},
+    { compactionModel: { model: "missing-provider" } },
+    {
+      compactionModel: {
+        model: "summary-provider/configured-summary-model",
+        thinkingLevel: "invalid",
+      },
+    },
+  ]) {
+    fallbackSettings = invalid;
+    expect(await handler(event, ctx)).toEqual({ cancel: true });
+  }
+  expect(fallbackCalls).toHaveLength(3);
 });
 
 test("preserves assistant block order around retained tool calls", async () => {

@@ -1,8 +1,11 @@
 import { join } from "node:path";
 import {
+  compact,
   type ExtensionAPI,
   type ExtensionContext,
   getAgentDir,
+  type SessionBeforeCompactEvent,
+  type SessionBeforeCompactResult,
   SettingsManager,
 } from "@earendil-works/pi-coding-agent";
 import { isMatching, P } from "ts-pattern";
@@ -52,26 +55,81 @@ export function parseClassifierSettings(global: unknown): ClassifierSettings {
   return settings;
 }
 
+type GlobalSettings = ReturnType<SettingsManager["getGlobalSettings"]>;
 interface Dependencies {
   settings: (ctx: ExtensionContext) => ClassifierSettings;
   artifactRoot: () => string;
+  globalSettings?: (ctx: ExtensionContext) => unknown;
+  compact?: typeof compact;
 }
 
-function load(ctx: ExtensionContext): ClassifierSettings {
+function loadGlobalSettings(ctx: ExtensionContext): GlobalSettings {
   const settings = SettingsManager.create(ctx.cwd, getAgentDir(), {
     projectTrusted: ctx.isProjectTrusted(),
   });
   if (settings.drainErrors().length) throw new Error("Invalid settings");
-  return parseClassifierSettings(settings.getGlobalSettings());
+  return settings.getGlobalSettings();
 }
 
 export function registerClassifierCompaction(
   pi: Pick<ExtensionAPI, "on" | "appendEntry">,
   dependencies: Dependencies = {
-    settings: load,
+    settings: (ctx) => parseClassifierSettings(loadGlobalSettings(ctx)),
     artifactRoot: () => join(getAgentDir(), "cache", "context-masking"),
   },
 ) {
+  const fallback = async (
+    event: SessionBeforeCompactEvent,
+    ctx: ExtensionContext,
+  ): Promise<SessionBeforeCompactResult> => {
+    if (event.signal.aborted) return { cancel: true };
+    try {
+      const global = (dependencies.globalSettings ?? loadGlobalSettings)(ctx);
+      if (
+        !isMatching(
+          {
+            compactionModel: {
+              model: P.string.minLength(1),
+              thinkingLevel: P.optional(
+                P.union("off", "minimal", "low", "medium", "high", "xhigh", "max"),
+              ),
+            },
+          },
+          global,
+        )
+      )
+        throw new Error("Invalid compactionModel settings");
+      const { model: modelId, thinkingLevel } = global.compactionModel;
+      const separator = modelId.indexOf("/");
+      if (separator <= 0 || separator === modelId.length - 1)
+        throw new Error("compactionModel.model must be provider/model");
+      const model = ctx.modelRegistry.find(
+        modelId.slice(0, separator),
+        modelId.slice(separator + 1),
+      );
+      if (!model) throw new Error(`Compaction model unavailable: ${modelId}`);
+      // enabled controls the standalone compactor; fallback still uses its model and thinking level.
+      const compaction = await (dependencies.compact ?? compact)(
+        event.preparation,
+        model,
+        undefined,
+        undefined,
+        event.customInstructions,
+        event.signal,
+        thinkingLevel,
+        (selected, context, options) => ctx.modelRegistry.streamSimple(selected, context, options),
+      );
+      return event.signal.aborted ? { cancel: true } : { compaction };
+    } catch (error) {
+      if (!event.signal.aborted && ctx.hasUI)
+        ctx.ui.notify(
+          `Classifier compaction fallback failed: ${error instanceof Error ? error.message : String(error)}`,
+          "error",
+        );
+      // Do not retry an invalid fallback with the active conversation model.
+      return { cancel: true };
+    }
+  };
   pi.on("session_before_compact", async (event, ctx) => {
     let settings: ClassifierSettings;
     try {
@@ -82,7 +140,7 @@ export function registerClassifierCompaction(
           "Invalid classifier compaction settings; using normal compaction.",
           "warning",
         );
-      return undefined;
+      return fallback(event, ctx);
     }
     if (!settings.enabled) return undefined;
     if (event.signal.aborted) return { cancel: true };
@@ -90,7 +148,7 @@ export function registerClassifierCompaction(
     if (!model) {
       if (ctx.hasUI)
         ctx.ui.notify("Classifier model unavailable; using normal compaction.", "warning");
-      return undefined;
+      return fallback(event, ctx);
     }
     const result = await classifyCompaction(
       {
@@ -138,7 +196,7 @@ export function registerClassifierCompaction(
     if (result.reason === "aborted") return { cancel: true };
     if (result.kind === "fallback") {
       if (ctx.hasUI) ctx.ui.notify(`Classifier compaction fell back: ${result.reason}.`, "warning");
-      return undefined;
+      return fallback(event, ctx);
     }
     const readFiles = new Set(event.preparation.fileOps.read);
     const modifiedFiles = new Set([

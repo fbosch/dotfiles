@@ -62,7 +62,7 @@ Omit `PROBE_PREFETCH=1` to test the tool alone. The probe records correctness, r
 
 Masking runs as a batch, then history stays append-only until the next batch. Each batch changes context from the first masked result onward, so the next request rewrites the provider's prompt cache from that point. `minFreedRatio` stops small batches that would cost a cache rebuild for little gain.
 
-Pi re-estimates context from the edited projection as soon as a masking batch is committed, before its own compaction check. If masking frees enough, compaction does not run on that turn. When masking cannot keep context under Pi's compaction threshold and the classifier candidate is disabled, normal compaction, including `pi-compaction-model`, still runs; its summary then sees placeholders instead of the hidden results.
+Pi re-estimates context from the edited projection as soon as a masking batch is committed, before its own compaction check. If masking frees enough, compaction does not run on that turn. Otherwise, the configured compaction path runs. A generative fallback sees placeholders instead of the hidden results.
 
 ## After compaction
 
@@ -72,17 +72,23 @@ The index is built from session entries, not from the summary, so it works which
 
 ## Classifier compaction candidate
 
-The extension includes a classifier-driven alternative to generative compaction. It is disabled by default and is not enabled in this repository's settings.
+The extension includes a classifier-driven alternative to generative compaction. It is disabled by default in the extension and enabled in this repository's global settings.
 
 Enabling it sends conversation text, tool arguments, masks, artifact addresses and eligible saved output to the configured classifier provider. The synthetic evaluations send generated data only. Do not enable it for recorded sessions without accepting that data transfer.
 
 ```json
 {
   "contextClassifierCompaction": {
-    "enabled": false,
+    "enabled": true,
     "provider": "openrouter",
     "model": "typesafe/jev-1.14",
-    "includeContent": true
+    "includeContent": true,
+    "maxOutputBytes": 4000
+  },
+  "compactionModel": {
+    "enabled": false,
+    "model": "openai-codex/gpt-6-luna",
+    "thinkingLevel": "xhigh"
   }
 }
 ```
@@ -105,13 +111,23 @@ The candidate preserves user and assistant text in order, unrecorded tool result
 | `threshold` | `0.5` | Minimum probability for an inline or reference decision. Inline takes precedence. |
 | `minFreedRatio` | `0.25` | Required additional reduction in rendered history bytes. |
 
-These are byte limits, not exact token counts. The host does not abridge conversation text to fit a classifier request. It retains a reference when an individual result cannot fit. If the conversation itself is too large, an artifact cannot be read safely, or a limit prevents a valid checkpoint, the hook returns no override and Pi's remaining compaction path runs. Malformed classifier answers and API failures also fall back. Cancellation cancels the attempt instead of starting another model request.
+This repository sets `maxOutputBytes` to `4000` to match the synthetic trials. Conversation text or checkpoints that cannot fit the configured limits fall back to normal compaction.
+
+These are byte limits, not exact token counts. The host does not abridge conversation text to fit a classifier request. It retains a reference when an individual result cannot fit. If the conversation itself is too large, an artifact cannot be read safely, or a limit prevents a valid checkpoint, the hook runs Pi's native summarizer with the global `compactionModel.model` and `compactionModel.thinkingLevel`. Malformed classifier answers and API failures also fall back. Cancellation cancels the attempt instead of starting another model request. Missing or invalid fallback settings, an unavailable model, or a failed summary cancel the attempt rather than retrying with the active conversation model.
 
 Selected references are embedded in accepted checkpoints. The general post-compaction index does not reinsert addresses that this candidate omitted. Session records, exact artifacts and local recall remain available.
 
 Successful checkpoints carry classifier usage. Paid fallback attempts have separate `context-masking-classifier-compaction` audit entries. Those entries preserve reported usage but do not add it to the default summary's headline usage. Telemetry stores decisions and sizes, not classifier packets or saved output.
 
-Before a live trial, verify which extension owns `session_before_compact`. Pi runs all such handlers and the last non-cancel result wins, so multiple custom compactors can spend money even when only one result is committed. This repository also configures `pi-compaction-model`. The candidate does not change or coordinate that extension.
+Pi runs all `session_before_compact` handlers, and the last non-cancel result wins. Multiple custom compactors can spend money even when only one result is committed. This repository keeps `pi-compaction-model` installed but sets `compactionModel.enabled` to `false`. The classifier hook owns both extractive checkpoints and generative fallback. The fallback reads the global `compactionModel` model and thinking level even while the standalone compactor is disabled; `enabled` and `reasons` do not gate classifier fallback.
+
+Trusted project settings must not re-enable `compactionModel` while the global classifier is enabled.
+
+To restore the dedicated generative compaction model:
+
+1. Set `contextClassifierCompaction.enabled` to `false`.
+2. Set `compactionModel.enabled` to `true`.
+3. Run `/reload`.
 
 The benchmark uses the extension's `classifyCompaction` function:
 
