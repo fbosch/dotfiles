@@ -129,7 +129,8 @@ test("content-aware packet contains actual output, original call, mask, and exac
   expect(result.kind).toBe("retained");
   expect(result.text).toContain("never change current constraints");
   expect(result.text).not.toContain("source-0.txt");
-  expect(result.decisions.map((d) => d.action)).toEqual(["omit", "omit", "omit", "inline", "inline"]);
+  expect(result.decisions.filter(d => d.id.startsWith("r")).map(d => d.action)).toEqual(["omit", "omit", "omit"]);
+  expect(result.decisions.filter(d => d.id.startsWith("t")).map(d => d.action)).toEqual(["inline", "inline"]);
   for (const path of f.paths) expect(await readFile(path, "utf8")).toBeTruthy();
 });
 
@@ -208,7 +209,7 @@ test("pins pointers for partial reads and enforces total read and request limits
       },
     },
   );
-  expect(result.decisions[0]).toMatchObject({ action: "reference", forced: true });
+  expect(result.decisions.find(decision => decision.id === "r0")).toMatchObject({ action: "reference", forced: true });
   expect(result.artifactBytes).toBeLessThanOrEqual(48);
   result = await classifyCompaction(
     f.input,
@@ -572,22 +573,19 @@ test("each read window renews its byte budget without leaving later results uncl
   expect({ kind: result.kind, reason: result.reason }).toEqual({ kind: "retained", reason: "accepted" });
   expect(result.artifactsRead).toBe(5); expect(result.artifactBytes).toBeGreaterThan(512);
   expect(result.evidence.every(item => item.action === "omit" && !item.partial)).toBe(true);
-  for (const request of requests) expect(Object.keys(request.questions).filter(name => name.startsWith("inline_r")).length).toBeLessThanOrEqual(2);
+  expect(requests).toHaveLength(1);
+  expect(Object.keys(requests[0]?.questions ?? {}).filter(name => name.startsWith("inline_r"))).toHaveLength(5);
   expect(new Set(requests.flatMap(request => Object.keys(request.questions).filter(name => name.startsWith("inline_r")))).size).toBe(5);
 });
 
-test("small artifact windows bound each classifier packet without capping the whole prefix", async () => {
+test("small artifact windows renew independently of byte-packed classifier requests", async () => {
   const f = await fixture(Array.from({ length: 5 }, (_, i) => `Closed result ${i}`));
   const requests: ClassifierRequest[] = [], bounded = { ...settings, maxArtifacts: 2 };
   const result = await classifyCompaction(f.input, bounded, { artifactRoot: f.root, classify: async request => { requests.push(request); return answer(request, () => 0); } });
   expect(result.kind).toBe("retained"); expect(result.artifactsRead).toBe(5);
-  expect(requests).toHaveLength(3);
+  expect(requests).toHaveLength(1);
   expect(result.usage?.input).toBe(requests.length * USAGE.input);
-  for (const request of requests) {
-    const indices = Object.keys(request.questions).filter(name => name.startsWith("inline_r")).map(name => Number(name.slice(8)));
-    expect(indices.length).toBeLessThanOrEqual(2);
-    expect(new Set(indices.map(index => Math.floor(index / 2))).size).toBeLessThanOrEqual(1);
-  }
+  expect(Object.keys(requests[0]?.questions ?? {}).filter(name => name.startsWith("inline_r"))).toHaveLength(5);
 });
 
 test("cancellation after the first window does not submit later classifier packets", async () => {
@@ -676,4 +674,68 @@ test("the compaction hook commits a packed reference checkpoint without native f
   expect(await readFile(manifest.path, "utf8")).toContain(f.paths[114] ?? "");
   f.manager.appendCompaction(compaction.summary, keptId, compaction.tokensBefore, compaction.details);
   expect(JSON.stringify(f.manager.buildSessionProjection().messages)).toContain("Recent tail stays outside compaction.");
+});
+
+test("selects an exact approval span without retaining repetitive logs", async () => {
+  const log = "trace: background check successful\n";
+  const approval = "FINAL APPROVED: restart=cursor_æøå; never reset it.\n";
+  const original = log.repeat(16) + approval + log.repeat(15);
+  const f = await fixture([original]);
+  const requests: ClassifierRequest[] = [];
+  const result = await classifyCompaction(f.input, { ...settings, maxOutputBytes: 1800 }, {
+    artifactRoot: f.root, deferReduction: true, classify: async request => {
+      requests.push(request);
+      return answer(request, name => name === "inline_r0s1" ? 1 : 0);
+    },
+  });
+  expect(result.kind).toBe("retained");
+  expect(result.text).toContain(approval.trimEnd());
+  expect(result.text).toContain("[source lines 17-17]");
+  expect(result.text).toContain("source-0.txt");
+  expect(result.decisions.find(decision => decision.id === "r0s1")).toMatchObject({ action: "inline", startLine: 17, endLine: 17 });
+  expect(requests).toHaveLength(1);
+  expect(result.reconciliationRequests ?? 0).toBe(0);
+  expect(await readFile(f.paths[0] ?? "", "utf8")).toBe(original);
+});
+
+test("deduplicates shared content without merging source decisions", async () => {
+  const text = "One shared exact output: æøå";
+  const f = await fixture([text, text]);
+  let state = "";
+  const result = await classifyCompaction(f.input, settings, { artifactRoot: f.root, classify: async request => {
+    state = JSON.stringify(request.state);
+    return answer(request, name => name === "inline_r0" ? 1 : 0);
+  } });
+  expect(result.kind).toBe("retained");
+  expect(state.split(text)).toHaveLength(2);
+  expect(result.decisions.filter(decision => decision.id.startsWith("r")).map(decision => decision.action)).toEqual(["inline", "omit"]);
+});
+
+test("reconciles joint working selections once only when they came from multiple batches", async () => {
+  const f = await fixture(["approval one " + "a".repeat(1100), "approval two " + "b".repeat(1100), "approval three " + "c".repeat(1100)]);
+  const requests: ClassifierRequest[] = [];
+  const result = await classifyCompaction(f.input, { ...settings, maxRequestBytes: 6800 }, { artifactRoot: f.root, classify: async request => {
+    requests.push(request);
+    const reconciliation = JSON.stringify(request.state).includes('"phase":"reconciliation"');
+    return answer(request, name => name.startsWith("inline_r") && (!reconciliation || name === "inline_r2") ? 1 : 0);
+  } });
+  expect({ kind: result.kind, reason: result.reason }).toEqual({ kind: "fallback", reason: "reconciliation-byte-limit" });
+  expect(result.reconciliationRequests ?? 0).toBe(0);
+  expect(requests.every(request => Buffer.byteLength(JSON.stringify(request)) <= 6800)).toBe(true);
+});
+
+test("joint reconciliation can supersede an older selection within one extra bounded request", async () => {
+  const f = await fixture(["unrelated " + "a".repeat(5000), "Earlier approved target=old", "unrelated " + "b".repeat(5000), "Revised approved target=new"]);
+  const requests: ClassifierRequest[] = [];
+  const result = await classifyCompaction(f.input, { ...settings, maxRequestBytes: 9000 }, { artifactRoot: f.root, classify: async request => {
+    requests.push(request);
+    const reconciliation = JSON.stringify(request.state).includes('"phase":"reconciliation"');
+    return answer(request, name => name === "inline_r3" || (!reconciliation && name === "inline_r1") ? 1 : 0);
+  } });
+  expect({ kind: result.kind, reason: result.reason }).toEqual({ kind: "retained", reason: "accepted" });
+  expect(result.reconciliationRequests).toBe(1);
+  expect(result.decisions.filter(decision => decision.id.startsWith("r")).map(decision => decision.action)).toEqual(["omit", "omit", "omit", "inline"]);
+  expect(requests.filter(request => JSON.stringify(request.state).includes('"phase":"reconciliation"'))).toHaveLength(1);
+  expect(result.usage?.input).toBe(requests.length * USAGE.input);
+  expect(result.requestBytes.every(bytes => bytes <= 9000)).toBe(true);
 });

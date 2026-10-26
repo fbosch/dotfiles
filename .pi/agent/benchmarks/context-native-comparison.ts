@@ -15,6 +15,8 @@ import contextMasking from "../extensions/context-masking/index";
 import { DEFAULT_SETTINGS, placeholder, selectMasks } from "../extensions/context-masking/policy";
 import { autonomousStages, scoreStagedRecall } from "./context-classifier-autonomous-history";
 import { assistant } from "./context-masking-recall-probe";
+import { savedItems } from "../extensions/context-masking/artifact-index";
+import { readSavedArtifact } from "../extensions/context-masking/saved-artifact";
 
 export const PREFLIGHT_ROOT = "/tmp/context-native-comparison-preflight";
 export const SEEDS = ["paired-1", "paired-2", "paired-3"] as const;
@@ -28,13 +30,19 @@ const MODEL = ["openai-codex", "gpt-6.1-sol"] as const;
 const CLASSIFIER = { ...CLASSIFIER_DEFAULTS, enabled: true, includeContent: true, maxOutputBytes: 4_000 };
 const LIMITS = { modelPerCompaction: 2, classifierPerCompaction: 40, modelPerProbe: 12, toolOverheadPerProbe: 12, operationMs: 180_000, campaignMs: 900_000 };
 type Arm = typeof ARMS[number] | typeof HYBRID_ARMS[number] | typeof RECALL_ABLATION_ARMS[number];
-interface ComparisonOptions { hybrid?: boolean; recallAblation?: boolean; fourWay?: boolean }
+interface ComparisonOptions { hybrid?: boolean; recallAblation?: boolean; fourWay?: boolean; classifierOnly?: boolean }
 function comparison(options: ComparisonOptions) {
-  if ([options.hybrid, options.recallAblation, options.fourWay].filter(Boolean).length > 1) throw Error("Choose one comparison variant");
+  if ([options.hybrid, options.recallAblation, options.fourWay, options.classifierOnly].filter(Boolean).length > 1) throw Error("Choose one comparison variant");
   return {
-    arms: options.fourWay ? FOUR_WAY_ARMS : options.recallAblation ? RECALL_ABLATION_ARMS : options.hybrid ? HYBRID_ARMS : ARMS,
-    seeds: options.fourWay ? FOUR_WAY_SEEDS : options.recallAblation ? RECALL_ABLATION_SEEDS : SEEDS,
+    arms: options.classifierOnly ? ["enabled-classifier"] as const : options.fourWay ? FOUR_WAY_ARMS : options.recallAblation ? RECALL_ABLATION_ARMS : options.hybrid ? HYBRID_ARMS : ARMS,
+    seeds: options.fourWay || options.classifierOnly ? FOUR_WAY_SEEDS : options.recallAblation ? RECALL_ABLATION_SEEDS : SEEDS,
   };
+}
+function candidateArm(arms: readonly Arm[]) {
+  if (arms.includes("hybrid-summary")) return "hybrid-summary";
+  const candidate = arms.find(arm => arm === "enabled-classifier" || arm === "hybrid-summary");
+  if (!candidate) throw Error("Comparison requires a candidate arm");
+  return candidate;
 }
 function orderedArms(arms: readonly Arm[], seedIndex: number) {
   const offset = seedIndex % arms.length;
@@ -90,6 +98,17 @@ export async function assertManifestRead(root: string, manifest: ReadonlySet<str
   }
   const file = await realpath(join(base, rel));
   if (file !== join(await realpath(base), rel) || !(await lstat(file)).isFile()) throw Error("Escaped workspace read");
+}
+// Compaction can create source snapshots and manifests beyond the initial prepared masks.
+export async function registerSavedArtifacts(root: string, manager: SessionManager, artifacts: Map<string, string>) {
+  for (const item of savedItems(manager.getBranch()).values()) {
+    if (artifacts.has(item.path)) continue;
+    if (typeof item.text !== "string" || Buffer.byteLength(item.text) > 4 * 1024 * 1024 || digest(item.text) !== item.entryId)
+      throw Error("Unverifiable generated comparison artifact");
+    const saved = await readSavedArtifact(root, item.path, item.entryId, Buffer.byteLength(item.text));
+    if (saved.partial || saved.text !== item.text) throw Error("Generated comparison artifact changed");
+    artifacts.set(item.path, digest(item.text));
+  }
 }
 async function fixture(root: string, seed: string): Promise<Fixture> {
   const cwd = join(root, "workspace"), agentDir = join(root, "agent");
@@ -276,7 +295,7 @@ export async function buildPreflight(options: ComparisonOptions & { root: string
     networkCalls: attempts, lifecycle: "manual checkpoints; prepared-masked-history; automatic thresholds not measured",
     config: { seeds, armSettings: Object.fromEntries(comparisonArms.map(arm => [arm, settings(arm)])), stages: 3, compaction: DEFAULT_COMPACTION_SETTINGS, answerModel: MODEL,
       order: seeds.map((seed, index) => ({ seed, arms: orderedArms(comparisonArms, index) })),
-      classifierContextWindow: options.classifierContextWindow ?? classifier.contextWindow, classifier: classifierSettings(options.fourWay ? "hybrid-summary" : comparisonArms[1]), limits: LIMITS,
+      classifierContextWindow: options.classifierContextWindow ?? classifier.contextWindow, classifier: classifierSettings(candidateArm(comparisonArms)), limits: LIMITS,
       maximumRequests: {
         model: seeds.length * comparisonArms.length * (3 * LIMITS.modelPerCompaction + LIMITS.modelPerProbe),
         classifier: seeds.length * comparisonArms.filter(arm => classifierSettings(arm).enabled).length * 3 * LIMITS.classifierPerCompaction,
@@ -356,6 +375,7 @@ export async function runComparison(root: string, options: ComparisonOptions = {
           await writeFile(join(f.agentDir, "checkpoint-" + (phase + 1) + ".json"), JSON.stringify(checkpoint, null, 2));
           console.error(JSON.stringify({ seed, arm, phase: phase + 1, outcome: route(checkpoint.details, arm), ms: compactions.at(-1)?.ms }));
         } finally { clearTimeout(timer); s.dispose(); }
+        await registerSavedArtifacts(join(f.agentDir, "cache", "context-masking"), f.manager, f.artifacts);
         if (!(await artifactsPreserved(f))) throw Error("Saved artifact changed");
         if (await workspaceHash(f) !== armRow.workspaceHash) throw Error("Workspace evidence changed");
       }
@@ -391,7 +411,7 @@ export async function runComparison(root: string, options: ComparisonOptions = {
   if (after !== before) failure ??= "Live settings changed";
   const report = { status: failure ? "failed" : "complete", failure, root, model: MODEL, seeds,
     lifecycle: "Manual compactions; native default retention/prompts; prepared historical masks where enabled; automatic trigger thresholds not measured",
-    controls: { limits: LIMITS, compaction: DEFAULT_COMPACTION_SETTINGS, candidate: classifierSettings(options.fourWay ? "hybrid-summary" : comparisonArms[1]), arms: Object.fromEntries(comparisonArms.map(arm => [arm, settings(arm)])), imposedWaitMs: 0, automaticCompaction: false, retries: false, thinkingLevel: "off",
+    controls: { limits: LIMITS, compaction: DEFAULT_COMPACTION_SETTINGS, candidate: classifierSettings(candidateArm(comparisonArms)), arms: Object.fromEntries(comparisonArms.map(arm => [arm, settings(arm)])), imposedWaitMs: 0, automaticCompaction: false, retries: false, thinkingLevel: "off",
       order: seeds.map((seed, index) => ({ seed, arms: orderedArms(comparisonArms, index) })),
       cachePolicy: "Fresh sessions, no warmup; provider cache uncontrolled and usage recorded" },
     pricing: "usage.cost is SDK-reported/catalog pricing only. Actual Codex subscription dollar cost is unknown; do not chart as zero or claim dollar savings.",
@@ -404,7 +424,7 @@ async function main() {
   await mkdir(PREFLIGHT_ROOT, { recursive: true, mode: 0o700 });
   const root = await mkdtemp(join(PREFLIGHT_ROOT, "cohort-"));
   console.error(JSON.stringify({ root }));
-  const options = { hybrid: process.argv.includes("--hybrid"), recallAblation: process.argv.includes("--recall-ablation"), fourWay: process.argv.includes("--four-way") };
+  const options = { hybrid: process.argv.includes("--hybrid"), recallAblation: process.argv.includes("--recall-ablation"), fourWay: process.argv.includes("--four-way"), classifierOnly: process.argv.includes("--classifier-only") };
   const preflight = await buildPreflight({ root: join(root, "preflight"), ...options });
   await writeFile(join(root, "preflight.json"), JSON.stringify(preflight, null, 2));
   console.log(JSON.stringify({ root, preflight }));

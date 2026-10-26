@@ -239,10 +239,14 @@ export function registerClassifierCompaction(
       checkpointBytes: result.checkpointBytes,
       checkpointUnpackedBytes: result.checkpointUnpackedBytes,
       checkpointInlineBytes: result.checkpointInlineBytes,
+      assessmentRequests: result.assessmentRequests ?? 0,
+      reconciliationRequests: result.reconciliationRequests ?? 0,
+      expandedReferences: result.expandedReferences ?? 0,
       classifierMs: result.classifierMs,
       cacheHits: result.cacheHits,
       usageComplete: result.usageComplete,
-      decisions: result.decisions.map(({ entryId, action, forced }) => ({
+      decisions: result.decisions.map(({ id, entryId, action, forced, startLine, endLine }) => ({
+        id, startLine, endLine,
         entryId,
         action,
         forced,

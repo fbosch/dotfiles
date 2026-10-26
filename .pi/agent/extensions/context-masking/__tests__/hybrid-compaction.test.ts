@@ -44,8 +44,9 @@ test("hybrid selects exact relevant evidence with one question each and keeps th
   const f = await fixture(); const requests: ClassifierRequest[] = [];
   const result = await classifyCompaction(f.input, settings, { artifactRoot: f.root, classify: async r => { requests.push(r); return answer(r, k => k === "evidence_r0" ? 0.95 : 0.01); } });
   expect(result.kind).toBe("retained");
-  expect(Object.keys(requests[0]?.questions ?? {})).toEqual(["evidence_r0", "evidence_r1", "evidence_t0", "evidence_t1"]);
-  expect(result.decisions.map(d => d.action)).toEqual(["inline", "omit", "omit", "omit"]);
+  expect(Object.keys(requests[0]?.questions ?? {})).toEqual(["evidence_t0", "evidence_r0", "evidence_r1", "evidence_t1"]);
+  expect(result.decisions.find(decision => decision.id === "r0")?.action).toBe("inline");
+  expect(result.decisions.filter(decision => decision.id !== "r0").map(decision => decision.action)).toEqual(["omit", "omit", "omit"]);
   const p = prepareHybridSummary({ ...f.preparation, isSplitTurn: true }, result.evidence, settings.maxSummaryInputBytes);
   expect(p?.firstKeptEntryId).toBe(f.preparation.firstKeptEntryId);
   expect(p?.tokensBefore).toBe(8000);

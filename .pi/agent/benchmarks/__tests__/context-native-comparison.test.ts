@@ -1,3 +1,5 @@
+import { createHash } from "node:crypto";
+import { SessionManager } from "@earendil-works/pi-coding-agent";
 import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
@@ -5,6 +7,7 @@ import {
   PREFLIGHT_ROOT,
   assertManifestRead,
   buildPreflight,
+  registerSavedArtifacts,
 } from "../context-native-comparison";
 
 const scratch = join(PREFLIGHT_ROOT, "unit");
@@ -162,4 +165,42 @@ describe("native versus enabled-classifier comparison preflight", () => {
     await expect(assertManifestRead(workspace, manifest, "reports/linked.txt")).rejects.toThrow();
     await expect(assertManifestRead(workspace, manifest, "not-listed.txt")).rejects.toThrow();
   });
+});
+
+test("generated manifests require matching snapshots and safe files before probe reads", async () => {
+  const root = await mkdtemp(join(scratch, "generated-"));
+  roots.push(root);
+  const text = "Retained synthetic references: æøå";
+  const id = createHash("sha256").update(text).digest("hex");
+  await mkdir(join(root, "session"));
+  const path = join(root, "session", id + ".txt");
+  await writeFile(path, text);
+  const manager = SessionManager.inMemory(root);
+  manager.appendCustomEntry("context-masking", { items: [{ entryId: id, toolName: "compaction:references", path, text }] });
+  const artifacts = new Map<string, string>();
+  await registerSavedArtifacts(root, manager, artifacts);
+  expect(artifacts.get(path)).toBe(id);
+  await assertManifestRead(root, new Set(["session/" + id + ".txt"]), path);
+  await writeFile(path, "changed");
+  await expect(registerSavedArtifacts(root, manager, new Map())).rejects.toThrow("changed");
+  await rm(path);
+  const outside = join(root, "outside.txt");
+  await writeFile(outside, text);
+  await symlink(outside, path);
+  await expect(registerSavedArtifacts(root, manager, new Map())).rejects.toThrow();
+  manager.appendCustomEntry("context-masking", { items: [{ entryId: id, toolName: "compaction:references", path: outside, text }] });
+  await expect(registerSavedArtifacts(root, manager, new Map())).rejects.toThrow();
+});
+
+test("classifier-only replay keeps the matched four-way seeds and provider limits", async () => {
+  const root = await mkdtemp(join(scratch, "classifier-only-"));
+  roots.push(root);
+  const preflight = await buildPreflight({ root, classifierOnly: true });
+  expect(preflight.networkCalls).toBe(0);
+  expect(preflight.config.seeds).toEqual(FOUR_WAY_SEEDS);
+  expect(Object.keys(preflight.config.armSettings)).toEqual(["enabled-classifier"]);
+  expect(preflight.config.classifier.mode).toBe("extractive");
+  expect(preflight.config.limits.modelPerProbe).toBe(12);
+  expect(preflight.arms).toHaveLength(3);
+  await expect(buildPreflight({ root, classifierOnly: true, fourWay: true })).rejects.toThrow("Choose one comparison variant");
 });
