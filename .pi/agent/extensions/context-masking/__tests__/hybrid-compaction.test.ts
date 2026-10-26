@@ -31,7 +31,7 @@ async function fixture() {
   }
   manager.appendCustomEntry("context-masking", { items: paths.map((path, i) => ({ path, entryId: resultIds[i], toolName: "read" })) });
   manager.appendMessage({ role: "user", content: "Continue the approved migration; preserve Danish exactly.", timestamp: 1 });
-  const input: CompactionInput = { branch: manager.getBranch(), messages: manager.buildSessionProjection().messages };
+  const input: CompactionInput = { sessionId: manager.getSessionId(), branch: manager.getBranch(), messages: manager.buildSessionProjection().messages };
   const preparation: SessionBeforeCompactEvent["preparation"] = {
     firstKeptEntryId: resultIds[0] ?? "", messagesToSummarize: [...input.messages], turnPrefixMessages: [],
     isSplitTurn: false, tokensBefore: 8000, fileOps: { read: new Set(["read-only.ts"]), written: new Set(), edited: new Set(["edited.ts"]) },
@@ -44,8 +44,8 @@ test("hybrid selects exact relevant evidence with one question each and keeps th
   const f = await fixture(); const requests: ClassifierRequest[] = [];
   const result = await classifyCompaction(f.input, settings, { artifactRoot: f.root, classify: async r => { requests.push(r); return answer(r, k => k === "evidence_r0" ? 0.95 : 0.01); } });
   expect(result.kind).toBe("retained");
-  expect(Object.keys(requests[0]?.questions ?? {})).toEqual(["evidence_r0", "evidence_r1"]);
-  expect(result.decisions.map(d => d.action)).toEqual(["inline", "omit"]);
+  expect(Object.keys(requests[0]?.questions ?? {})).toEqual(["evidence_r0", "evidence_r1", "evidence_t0", "evidence_t1"]);
+  expect(result.decisions.map(d => d.action)).toEqual(["inline", "omit", "omit", "omit"]);
   const p = prepareHybridSummary({ ...f.preparation, isSplitTurn: true }, result.evidence, settings.maxSummaryInputBytes);
   expect(p?.firstKeptEntryId).toBe(f.preparation.firstKeptEntryId);
   expect(p?.tokensBefore).toBe(8000);
@@ -65,7 +65,7 @@ test("uncertain and partial evidence stays available rather than being silently 
   const f = await fixture();
   const result = await classifyCompaction(f.input, { ...settings, maxArtifactBytes: 12 }, { artifactRoot: f.root, classify: async r => answer(r, () => 0) });
   expect(result.kind).toBe("retained");
-  expect(result.requestBytes).toEqual([]);
+  expect(result.requestBytes).toHaveLength(1);
   expect(result.evidence.every(e => e.partial && e.action === "reference")).toBe(true);
   const p = prepareHybridSummary(f.preparation, result.evidence, settings.maxSummaryInputBytes);
   expect(JSON.stringify(p)).toContain("partial excerpt");
@@ -121,7 +121,7 @@ test("read/summary bounds fail before further model work and leave files intact"
   const deps = { artifactRoot: f.root, classify: async (r: ClassifierRequest) => { calls++; return answer(r); } };
   const readBound = await classifyCompaction(f.input, { ...settings, maxTotalArtifactBytes: 1 }, deps);
   expect(readBound.reason).toBe("artifact-read-budget"); expect(calls).toBe(0);
-  const historyBound = await classifyCompaction({ ...f.input, previousSummary: "x".repeat(30000) }, settings, deps);
+  const historyBound = await classifyCompaction({ ...f.input, instructions: "x".repeat(30000) }, settings, deps);
   expect(historyBound.reason).toBe("conversation-request-limit"); expect(calls).toBe(0);
   expect(prepareHybridSummary(f.preparation, [], 1)).toBeUndefined();
   expect(restoreCheckpointFiles(f.preparation, f.manager.getBranch())).toBe(f.preparation);
@@ -152,7 +152,8 @@ test("hybrid hook invokes native summarization on selected facts and accounts fr
   expect(isHybridCheckpoint(result?.compaction?.details)).toBe(true);
   expect(result?.compaction?.summary).toContain("Working summary");
   expect(result?.compaction?.summary).toContain("recall");
-  expect(records.length).toBe(1);
+  expect(records).toHaveLength(2);
+  expect(records).toContainEqual(expect.objectContaining({ items: expect.any(Array) }));
   expect(JSON.stringify(result?.compaction?.details)).not.toContain("udtræk_æøå_123");
   expect(JSON.stringify(result?.compaction?.details)).toContain("read-only.ts");
   f.manager.appendCompaction(result?.compaction?.summary ?? "", f.preparation.firstKeptEntryId, 8000, result?.compaction?.details, true);

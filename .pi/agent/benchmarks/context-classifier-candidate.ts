@@ -145,6 +145,7 @@ async function main() {
       if (activeArm !== "summary") {
         outcome = await classifyCompaction(
           {
+            sessionId: prepared.sessionId,
             branch: prepared.branch,
             messages: prepared.messages,
             instructions: task.goal,

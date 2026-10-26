@@ -143,6 +143,7 @@ export async function prepareTaskHistory(task: CodingCase, dir: string) {
   const lookup = performance.now();
   const continuation = await recallSaved(manager.getBranch(), root, task.request.slice(0, 500), 2);
   return {
+    sessionId: manager.getSessionId(),
     branch: manager.getBranch(),
     messages: manager.buildSessionProjection().messages,
     artifactRoot: root,

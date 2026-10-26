@@ -91,6 +91,7 @@ export async function prepareRecallHistory(fixture: RecallFixture, dir: string) 
     items,
     visible: visible.join("\n\n"),
     input: {
+      sessionId: manager.getSessionId(),
       branch: manager.getBranch(),
       messages: manager.buildSessionProjection().messages,
       instructions: fixture.goal,

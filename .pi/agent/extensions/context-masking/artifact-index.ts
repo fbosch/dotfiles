@@ -13,6 +13,7 @@ export interface MaskedItem {
   entryId: string;
   toolName: string;
   path: string;
+  text?: string;
 }
 
 const RecordPattern = {
@@ -90,7 +91,7 @@ export function buildIndex(
   });
   const omitted = hidden.length - shown.length;
   return [
-    `${MARKER} Tool results saved before the last compaction. Read a file with offset and limit if you need its full output again.`,
+    `${MARKER} Content saved before the last compaction. Read a file with offset and limit if you need its full output again.`,
     ...lines,
     ...(omitted > 0 ? [`(${omitted} older saved results not listed.)`] : []),
   ].join("\n");

@@ -86,7 +86,7 @@ Extractive checkpoints embed their selected references. Hybrid checkpoints keep 
 
 The extension includes an experimental classifier-driven alternative to generative compaction. It is disabled by default. This repository opts into an extractive live trial after approval to send eligible content to Jev. Masking, batched recall and native fallback remain enabled; hybrid mode stays off.
 
-Enabling it sends conversation text, tool arguments, masks, artifact addresses and eligible saved output to the configured classifier provider. The synthetic evaluations send generated data only. Do not enable it for recorded sessions without accepting that data transfer.
+Enabling it sends conversation text, tool arguments, masks, artifact addresses, eligible saved output and normalized image copies to the configured classifier provider. The synthetic evaluations send generated data only. Do not enable it for recorded sessions without accepting that data transfer.
 
 ```json
 {
@@ -108,27 +108,27 @@ Enabling it sends conversation text, tool arguments, masks, artifact addresses a
 
 This is a separate global setting, not a field inside `contextMasking`. With `enabled: false`, the compaction hook makes no artifact reads or classifier requests.
 
-The host resolves artifacts recorded on the current branch and reads them through the same path and symlink checks as local recall. Jev receives the actual output alongside the original call, mask and saved address. It cannot open local files itself. With `includeContent: false`, requests omit the hydrated output but still contain the visible conversation and metadata.
+The host archives ordinary user and assistant text, the previous summary and unmasked tool output before classification. Each text unit has a content-addressed `.txt` file under the session's artifact directory. The session catalog also records its exact snapshot so bounded recall can verify retrieved text. Jev receives complete candidate text, tool arguments and normalized images with the same goal, current task and compaction focus. It cannot open local files itself. `includeContent: false` withholds hydrated tool output, not conversation text or images.
 
-In the default `extractive` mode, two probability questions per result decide whether the full output needs to remain inline and whether the call and reference are useful. The host renders coherent pairs as full output, saved references, or omissions. It never deletes an artifact. The decisions cannot supply replacement addresses.
+In the default `extractive` mode, two probability questions per text unit or tool result choose `inline`, `reference` or `omit`. The host preserves the order of selected text and keeps tool calls coherent with retained results. A reference points to the saved original. An omission removes content from active context, not from its archive. Uncertain prose keeps a reference. The classifier cannot replace text or supply new addresses.
 
-The candidate preserves user and assistant text in order, unrecorded tool results and the previous summary. Pi stores this extractive history as a labeled summary string, not as the original structured messages. Ambiguous tool-call identities, images and other unsupported content cause normal compaction to take over.
+Ordinary prose, prior summaries and unmasked tool outputs participate even when no masked tool results exist. Only an empty eligible prefix returns `no-content`. Pi stores the selected history as a labeled summary string, not the original structured messages. The native retained tail stays outside these decisions. Images use the shared goal and retention path below; ambiguous call identities or unsupported content use native fallback.
 
 | Setting | Default | Meaning |
 |---|---|---|
 | `mode` | `"extractive"` | Use extractive checkpoints or opt in to `"hybrid"` native summaries. |
 | `maxSummaryInputBytes` | `48000` | Hybrid input budget for selected messages and the previous summary. |
 | `maxRequestBytes` | `24000` | Serialized classifier state and questions per request. |
-| `maxArtifactBytes` | `12000` | Maximum bytes read from one artifact. Partial output keeps a reference without classification. |
-| `maxTotalArtifactBytes` | `256000` | Maximum artifact bytes per attempt. |
-| `maxArtifacts` | `40` | Maximum saved results considered per attempt. |
+| `maxArtifactBytes` | `12000` | Tool-output read limit and maximum complete prose-unit size eligible for classification. Larger units keep a reference. |
+| `maxTotalArtifactBytes` | `256000` | Existing-output read budget and separate new-text archive budget per attempt. |
+| `maxArtifacts` | `40` | Maximum tool results per attempt. Prose has a separate 256-unit ceiling. |
 | `maxOutputBytes` | `24000` | Extractive checkpoint byte limit, excluding Pi wrappers and the retained tail. Does not cap a hybrid native summary. |
 | `threshold` | `0.5` | Extractive probability threshold. Inline takes precedence over a reference. |
-| `minFreedRatio` | `0.25` | Required additional reduction in extractive history bytes. |
+| `minFreedRatio` | `0.25` | Required extractive reduction for text-only attempts. Image attempts use output and transport bounds instead of this text-byte estimate. |
 
 This repository sets `maxOutputBytes` to `4000` for extractive mode. Conversation text or checkpoints that cannot fit the applicable limits fall back to normal compaction.
 
-These are byte limits, not exact token counts. The host does not abridge conversation text to fit a classifier request. It retains a reference when an individual result cannot fit. If the conversation itself is too large, an artifact cannot be read safely, or a limit prevents a valid checkpoint, the hook runs Pi's native summarizer with the global `compactionModel.model` and `compactionModel.thinkingLevel`. Malformed classifier answers and API failures also fall back. Cancellation cancels the attempt instead of starting another model request. Missing or invalid fallback settings, an unavailable model, or a failed summary cancel the attempt rather than retrying with the active conversation model.
+These are byte limits, not exact token counts. The host does not split a constraint or code block into independently prunable fragments. Oversized or unclassifiable units keep references. Request context uses marked excerpts of prior state and recent evidence; the current task and compaction focus remain complete. If that context or the checkpoint cannot fit, or classification fails, the hook uses Pi's native summarizer with the global `compactionModel.model` and `compactionModel.thinkingLevel`. If new text cannot be archived within its limits, the hook cancels instead. Each text archive has a 4 MB hard limit. Cancellation also cancels the attempt. Missing fallback settings, an unavailable model or a failed native summary do not retry with the active conversation model.
 
 Selected references are embedded in accepted checkpoints. The general post-compaction index does not reinsert addresses that this candidate omitted. Session records, exact artifacts and local recall remain available.
 
@@ -152,6 +152,26 @@ CLASSIFIER_DISTRACTORS=12 bun .pi/agent/benchmarks/context-classifier-candidate.
 ```
 
 The second command adds closed background outputs to exercise pruning of surplus pointers. Both runs use synthetic coding continuations and identical continuation-time retrieval. The benchmark checks a 1,600-token ceiling with provider-reported counts, uses a tighter 4,000-byte checkpoint cap, and includes failed candidate work and summary fallbacks in cost. It does not measure longitudinal cache savings.
+
+## Image retention
+
+Classifier compaction archives eligible single-frame PNG and JPEG images before making provider requests. Originals are content-addressed files under `~/.pi/agent/cache/context-masking/<session-id>/image-<id>.png` or `.jpg`. Files have owner-only permissions, and existing originals are never overwritten. Reads validate the session, expected path, size and SHA-256 digest and reject symlinked sessions or files.
+
+Text selection judges ordinary prose and tool output with normalized images and the shared retention goal. A separate image pass receives the same current task, prior-state context and compaction focus, alongside the selected text. Both passes can run without any previously saved tool outputs. Each decision controls active context:
+
+- `inline` restores the original pixels from the verified archive after the summary on subsequent model requests.
+- `reference` keeps a saved path that the main agent can read when needed.
+- `omit` removes both pixels and the path from the active checkpoint. The saved original and session archive record remain intact.
+
+Uncertain image decisions keep a reference. Classifier errors use native fallback and conservatively keep archived images inline. If originals cannot be archived or verified, the hook cancels compaction instead of discarding them. If a kept image later becomes unavailable, context includes an explicit missing-pixels notice. Nothing deletes an image automatically.
+
+The deferred `recall_images` tool finds references by source label, identifier or path, including pruned images. It searches the latest 80 image archive records on the current branch, returns at most eight references and validates at most 16 MB per call. It does not search visual contents or call a model. Use `read` on a returned path to view its pixels. Older originals remain on disk and in session records even when outside this bounded lookup.
+
+The image path allows at most 32 originals and 16 MB per attempt, with a 4 MB and 8-million-pixel limit per original. ImageMagick creates metadata-stripped classifier copies with white padding rather than upscaling small images. Copies fit 256–1,568 pixels per side, 78,400–2,458,624 pixels in area and 500 KB encoded. The source pixels remain unchanged. The serialized multimodal packet has a separate 1 MB ceiling; `maxRequestBytes` still bounds its text state and questions. `includeContent: false` disables saved-text hydration, not image transfer.
+
+Valid decision reuse requires identical image evidence, text, focus, model and settings. Normalization failure or packet limits use native fallback. Invalid or unsupported originals cancel compaction. The image processor currently requires `/run/current-system/sw/bin/magick`; this path is NixOS-specific. Descriptor-pinned directory operations reduce path-swap risk on Linux. Other platforms use canonical paths without equivalent concurrent-swap protection.
+
+Unified text and image retention has offline tests with synthetic data and stub classifiers, including the live hook, pruned-prose recall and text-only prefixes. Hosted multimodal Jev behavior remains unverified. The earlier four-way benchmark measured the saved-tool-output selector, not unified prose pruning or image retention.
 
 ## Experimental hybrid summaries
 

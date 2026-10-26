@@ -250,6 +250,7 @@ export async function buildPreflight(options: ComparisonOptions & { root: string
       if (!p) throw Error("Native preparation not observed");
       const row = snapshot(f, p, phase), requests: Array<{ bytes: number; questions: number }> = [];
       if (classifierSettings(arm).enabled) await classifyCompaction({
+        sessionId: f.manager.getSessionId(),
         branch: f.manager.getBranch(), messages: [...p.messagesToSummarize, ...p.turnPrefixMessages],
         ...(p.previousSummary ? { previousSummary: p.previousSummary } : {}),
       }, classifierSettings(arm), {

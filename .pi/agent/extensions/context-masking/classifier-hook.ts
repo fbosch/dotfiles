@@ -18,6 +18,8 @@ import {
 import { ClassifierDecisionCache } from "./classifier-cache";
 import { HYBRID_CHECKPOINT, prepareHybridSummary, restoreCheckpointFiles } from "./hybrid-summary";
 import { sumUsage } from "./classifier-compaction";
+import { checkpointImages, IMAGE_ARCHIVE, imageReferences } from "./image-retention";
+import { readImageArtifact } from "./image-artifact";
 export const CLASSIFIER_CHECKPOINT = "context-masking-classifier-compaction";
 
 export function isClassifierCheckpoint(details: unknown): boolean {
@@ -139,6 +141,8 @@ export function registerClassifierCompaction(
     }
   };
   pi.on("session_before_compact", async (event, ctx) => {
+    const imageInput = [...event.preparation.messagesToSummarize, ...event.preparation.turnPrefixMessages].some(message =>
+      "content" in message && Array.isArray(message.content) && message.content.some(block => block.type === "image")) || checkpointImages(event.branchEntries).some(image => image.action !== "omit");
     let settings: ClassifierSettings;
     try {
       settings = dependencies.settings(ctx);
@@ -148,7 +152,7 @@ export function registerClassifierCompaction(
           "Invalid classifier compaction settings; using normal compaction.",
           "warning",
         );
-      return fallback(event, ctx);
+      return imageInput ? { cancel: true } : fallback(event, ctx);
     }
     if (!settings.enabled) return undefined;
     if (event.signal.aborted) return { cancel: true };
@@ -156,12 +160,10 @@ export function registerClassifierCompaction(
     if (!model) {
       if (ctx.hasUI)
         ctx.ui.notify("Classifier model unavailable; using normal compaction.", "warning");
-      return fallback(event, ctx);
+      return imageInput ? { cancel: true } : fallback(event, ctx);
     }
-    if (settings.mode === "hybrid") {
-      const sessionId = ctx.sessionManager.getSessionId();
-      if (sessionId !== cacheSessionId) { cache = new ClassifierDecisionCache(); cacheSessionId = sessionId; }
-    }
+    const sessionId = ctx.sessionManager.getSessionId();
+    if (sessionId !== cacheSessionId) { cache = new ClassifierDecisionCache(); cacheSessionId = sessionId; }
     const result = await classifyCompaction(
       {
         messages: [
@@ -169,6 +171,8 @@ export function registerClassifierCompaction(
           ...event.preparation.turnPrefixMessages,
         ],
         branch: event.branchEntries,
+        sessionId,
+        previousImages: checkpointImages(event.branchEntries),
         ...(event.preparation.previousSummary
           ? { previousSummary: event.preparation.previousSummary }
           : {}),
@@ -177,14 +181,47 @@ export function registerClassifierCompaction(
       settings,
       {
         artifactRoot: dependencies.artifactRoot(),
-        ...(settings.mode === "hybrid" ? { cache } : {}),
+        cache,
         classify: (request, signal) =>
           ctx.modelRegistry.classify(model, request, signal ? { signal } : {}),
       },
       event.signal,
     );
-    const selectedPreparation = settings.mode === "hybrid" && result.kind === "retained"
-      ? prepareHybridSummary(event.preparation, result.evidence, settings.maxSummaryInputBytes) : undefined;
+    if (result.images?.length) pi.appendEntry(IMAGE_ARCHIVE, { version: 1, images: result.images });
+    if (result.savedItems?.length) pi.appendEntry("context-masking", { items: result.savedItems });
+    if (result.reason.startsWith("conversation-archive") || result.reason === "conversation-count-limit") {
+      if (ctx.hasUI) ctx.ui.notify("Compaction cancelled: conversation text could not be archived.", "error");
+      return { cancel: true };
+    }
+    if (result.reason === "image-archive-failed") {
+      if (ctx.hasUI) ctx.ui.notify("Compaction cancelled: image originals could not be safely archived.", "error");
+      return { cancel: true };
+    }
+    if (result.images?.length) {
+      try {
+        for (const image of result.images) await readImageArtifact(dependencies.artifactRoot(), sessionId, image);
+      } catch {
+        if (ctx.hasUI) ctx.ui.notify("Compaction cancelled: an archived image is unavailable.", "error");
+        return { cancel: true };
+      }
+    }
+    const imageFallback = async (preparation = event.preparation) => {
+      const native = await fallback(event, ctx, preparation);
+      if (!native?.compaction || !result.images?.length) return native;
+      const details: unknown = native.compaction.details ?? {};
+      if (!isMatching(P.record(P.string, P.unknown), details)) return { cancel: true };
+      const images = result.images.map(image => ({ ...image, action: "inline" as const, forced: true }));
+      return { compaction: { ...native.compaction,
+        summary: native.compaction.summary + "\n\n" + imageReferences(images),
+        details: { ...details, images },
+      } };
+    };
+    let selectedPreparation: SessionBeforeCompactEvent["preparation"] | undefined;
+    if (settings.mode === "hybrid" && result.kind === "retained") {
+      const selected = { ...event.preparation, messagesToSummarize: [{ role: "user" as const, content: result.text, timestamp: 0 }], turnPrefixMessages: [] };
+      delete selected.previousSummary;
+      selectedPreparation = prepareHybridSummary(selected, [], settings.maxSummaryInputBytes);
+    }
     if (settings.mode === "hybrid" && result.kind === "retained" && !selectedPreparation) {
       result.kind = "fallback"; result.reason = "summary-input-limit";
     }
@@ -215,7 +252,7 @@ export function registerClassifierCompaction(
     if (result.reason === "aborted") return { cancel: true };
     if (result.kind === "fallback") {
       if (ctx.hasUI) ctx.ui.notify(`Classifier compaction fell back: ${result.reason}.`, "warning");
-      return fallback(event, ctx);
+      return imageFallback();
     }
     if (settings.mode === "hybrid" && selectedPreparation) {
       const native = await fallback(event, ctx, selectedPreparation);
@@ -226,10 +263,10 @@ export function registerClassifierCompaction(
       const usage = result.usage ? sumUsage(native.compaction.usage, result.usage) : native.compaction.usage;
       return { compaction: {
         ...native.compaction,
-        summary: native.compaction.summary + "\n\nSaved tool evidence is available through recall; discover it with tool_search.",
+        summary: native.compaction.summary + (result.imageSummary ? "\n\n" + result.imageSummary : "") + "\n\nSaved tool evidence is available through recall; discover it with tool_search.",
         ...(usage ? { usage } : {}),
         details: { ...nativeDetails, ...audit, type: HYBRID_CHECKPOINT,
-          artifactIndex: "external", usageComplete: audit.usageComplete && !!native.compaction.usage },
+          artifactIndex: "external", ...(result.images ? { images: result.images } : {}), usageComplete: audit.usageComplete && !!native.compaction.usage },
       } };
     }
     const readFiles = new Set(event.preparation.fileOps.read);
@@ -264,6 +301,7 @@ export function registerClassifierCompaction(
         details: {
           ...audit,
           artifactIndex: "embedded",
+          ...(result.images ? { images: result.images } : {}),
           readFiles: [...readFiles].filter((path) => !modifiedFiles.has(path)),
           modifiedFiles: [...modifiedFiles],
         },

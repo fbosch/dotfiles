@@ -52,7 +52,7 @@ function answer(
     answers: Object.fromEntries(
       Object.keys(request.questions).map((name) => [
         name,
-        { type: "bool", probability: probabilities(name) },
+        { type: "bool", probability: name.startsWith("inline_t") ? 1 : probabilities(name) },
       ]),
     ),
   };
@@ -85,7 +85,7 @@ async function fixture(texts = ["approved value: æøå-123", "obsolete result",
     content: "Continue after preserving Danish exactly; never change current constraints.",
     timestamp: 1,
   });
-  const input: CompactionInput = {
+  const input: CompactionInput = { sessionId: manager.getSessionId(),
     branch: manager.getBranch(),
     messages: manager.buildSessionProjection().messages,
   };
@@ -123,11 +123,11 @@ test("content-aware packet contains actual output, original call, mask, and exac
   expect(json).toContain("source-0.txt");
   expect(json).toContain("[context-masking]");
   expect(json).toContain(f.paths[0] ?? "");
-  expect(Object.keys(requests[0]?.questions ?? {})).toHaveLength(6);
+  expect(Object.keys(requests[0]?.questions ?? {})).toHaveLength(10);
   expect(result.kind).toBe("retained");
   expect(result.text).toContain("never change current constraints");
   expect(result.text).not.toContain("source-0.txt");
-  expect(result.decisions.map((d) => d.action)).toEqual(["omit", "omit", "omit"]);
+  expect(result.decisions.map((d) => d.action)).toEqual(["omit", "omit", "omit", "inline", "inline"]);
   for (const path of f.paths) expect(await readFile(path, "utf8")).toBeTruthy();
 });
 
@@ -358,6 +358,7 @@ test("compaction hook uses real session projection and preserves cut boundary, u
   });
   const ctx = {
     hasUI: false,
+    sessionManager: f.manager,
     model: { ...fallbackModel, id: "unsupported-active-session-model" },
     modelRegistry: {
       getModelOfType: () => (classifierAvailable ? { id: "test" } : undefined),
@@ -393,7 +394,9 @@ test("compaction hook uses real session projection and preserves cut boundary, u
     readFiles: ["read-only.ts"],
     modifiedFiles: ["edited.ts"],
   });
-  expect(records.length).toBe(1);
+  expect(records).toHaveLength(2);
+  expect(records).toContainEqual(expect.objectContaining({ type: "context-masking" }));
+  expect(records).toContainEqual(expect.objectContaining({ type: CLASSIFIER_CHECKPOINT }));
   expect(fallbackCalls).toHaveLength(0);
   // Exhaust the read budget after the first artifact, matching the reported fallback.
   maxTotalArtifactBytes = 1;
@@ -455,7 +458,7 @@ test("preserves assistant block order around retained tool calls", async () => {
   expect(result.text.indexOf("source-0.txt")).toBeLessThan(result.text.indexOf("After the call."));
 });
 
-test("retains previous summary verbatim and rejects unsupported content without a classifier call", async () => {
+test("retains previous summary verbatim and rejects malformed images before a classifier call", async () => {
   const f = await fixture();
   const previousSummary = "Persistent constraint: preserve æ, ø, å.";
   let result = await classifyCompaction({ ...f.input, previousSummary }, settings, {
@@ -466,6 +469,7 @@ test("retains previous summary verbatim and rejects unsupported content without 
   result = await classifyCompaction(
     {
       ...f.input,
+      sessionId: "malformed_image_session",
       messages: [
         ...f.input.messages,
         {
@@ -483,7 +487,7 @@ test("retains previous summary verbatim and rejects unsupported content without 
       },
     },
   );
-  expect(result.reason).toBe("unsupported-content");
+  expect(result.reason).toBe("image-archive-failed");
   expect(result.requestBytes).toHaveLength(0);
 });
 

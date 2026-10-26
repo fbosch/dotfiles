@@ -138,6 +138,7 @@ export function compactionInput(history: AutonomousHistory, goal: string): Compa
   const messages = history.manager.buildSessionProjection().messages;
   const previous = messages.find((m) => m.role === "compactionSummary");
   return {
+    sessionId: history.manager.getSessionId(),
     branch: history.manager.getBranch(),
     messages: messages.filter((m) => m.role !== "compactionSummary"),
     instructions: goal,
