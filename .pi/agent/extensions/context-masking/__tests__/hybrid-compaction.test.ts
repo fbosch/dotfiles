@@ -120,7 +120,7 @@ test("read/summary bounds fail before further model work and leave files intact"
   const f = await fixture(); let calls = 0;
   const deps = { artifactRoot: f.root, classify: async (r: ClassifierRequest) => { calls++; return answer(r); } };
   const readBound = await classifyCompaction(f.input, { ...settings, maxTotalArtifactBytes: 1 }, deps);
-  expect(readBound.reason).toBe("artifact-read-budget"); expect(calls).toBe(0);
+  expect(readBound.reason).toBe("conversation-archive-limit"); expect(calls).toBe(0);
   const historyBound = await classifyCompaction({ ...f.input, instructions: "x".repeat(30000) }, settings, deps);
   expect(historyBound.reason).toBe("conversation-request-limit"); expect(calls).toBe(0);
   expect(prepareHybridSummary(f.preparation, [], 1)).toBeUndefined();

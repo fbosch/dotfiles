@@ -248,3 +248,37 @@ test("changing pruned prose invalidates image decisions even when the retained t
   expect(changed.kind).toBe("retained"); expect(changed.text).toBe(first.text);
   expect(calls).toBe(4);
 });
+
+test("packed image addresses preserve decisions, original files and kept pixel restoration", async () => {
+  const f = await fixture(8);
+  const result = await classifyCompaction(f.input, { ...settings, maxOutputBytes: 1200 }, {
+    artifactRoot: f.root,
+    classify: async request => answer(request, name => name === "inline_i0" || name.startsWith("reference_i") ? 1 : 0),
+  });
+  expect({ kind: result.kind, reason: result.reason }).toEqual({ kind: "retained", reason: "accepted" });
+  expect(result.checkpointBytes).toBe(Buffer.byteLength(result.text));
+  expect(result.checkpointBytes).toBeLessThanOrEqual(1200);
+  expect(result.checkpointUnpackedBytes).toBeGreaterThan(1200);
+  expect(result.text).toContain("æøå");
+  expect(result.images?.map(image => image.action)).toEqual(f.originals.map((_, i) => i === 0 ? "inline" : "reference"));
+  const manifest = result.savedItems?.find(item => item.toolName === "compaction:references");
+  if (!manifest) throw Error("Missing image-address manifest");
+  const text = await readFile(manifest.path, "utf8");
+  for (const [i, image] of (result.images ?? []).entries()) {
+    expect(text).toContain(image.path);
+    const original = f.originals[i];
+    if (original === undefined) throw Error("Missing original image");
+    expect((await readFile(image.path)).toString("base64")).toBe(original);
+  }
+  f.manager.appendCompaction(result.text, f.keptId, 20_000, { images: result.images });
+  type Handler = (event: ContextEvent, ctx: ExtensionContext) => Promise<ContextEventResult | undefined>;
+  let handler: Handler | undefined;
+  registerImageContext({ on: (_event: string, fn: Handler) => { handler = fn; } } as unknown as Pick<ExtensionAPI, "on">, () => f.root);
+  if (!handler) throw Error("Missing image handler");
+  const restored = await handler({ type: "context", messages: f.manager.buildSessionProjection().messages }, { hasUI: false, sessionManager: f.manager } as unknown as ExtensionContext);
+  const custom = restored?.messages?.find(message => message.role === "custom" && message.customType === IMAGE_CONTEXT);
+  if (!custom || custom.role !== "custom" || typeof custom.content === "string") throw Error("Missing restored pixels");
+  const keptOriginal = f.originals[0];
+  if (keptOriginal === undefined) throw Error("Missing kept original");
+  expect(custom.content.filter(block => block.type === "image").map(block => block.data)).toEqual([keptOriginal]);
+});

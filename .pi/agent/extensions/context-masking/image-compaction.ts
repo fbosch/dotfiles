@@ -1,3 +1,4 @@
+import { packCheckpoint } from "./checkpoint-packing";
 import { retentionContext } from "./retention-context";
 import { createHash } from "node:crypto";
 import type { CompactionInput, CompactionOutcome, ClassifierSettings, ClassifierRequest, ClassifierResponse } from "./classifier-compaction";
@@ -125,7 +126,23 @@ export async function classifyWithImages(
   if (signal?.aborted) return fail("aborted", result);
   if (!cached && scope && dependencies.cache) dependencies.cache.set(scope, request, response);
   result.imageSummary = imageReferences(images);
-  if (result.imageSummary) result.text += "\n\n" + result.imageSummary;
-  if (new TextEncoder().encode(result.text).length > (settings.mode === "hybrid" ? settings.maxSummaryInputBytes : settings.maxOutputBytes)) return fail("output-byte-limit", result);
+  const hybrid = settings.mode === "hybrid";
+  const parts = [...(result.checkpointParts ?? [{ text: result.text }])];
+  const unpackedBytes = (result.checkpointUnpackedBytes ?? new TextEncoder().encode(result.text).length) +
+    (result.imageSummary ? 2 + new TextEncoder().encode(result.imageSummary).length : 0);
+  // Pixel restoration uses result.images, so image address metadata may move to a manifest.
+  if (result.imageSummary) parts.push({ text: result.imageSummary, ...(hybrid ? {} : { reference: "images" }) });
+  try {
+    const packed = await packCheckpoint(parts, hybrid ? settings.maxSummaryInputBytes : settings.maxOutputBytes, dependencies.artifactRoot, sessionId, signal);
+    result.savedItems ??= [];
+    result.savedItems.push(...packed.savedItems);
+    result.text = packed.text;
+    result.checkpointParts = packed.parts;
+    result.checkpointBytes = new TextEncoder().encode(packed.text).length;
+    result.checkpointUnpackedBytes = unpackedBytes;
+    result.checkpointInlineBytes = packed.inlineBytes;
+    if (signal?.aborted) return fail("aborted", result);
+    if (!packed.fits) return fail("output-byte-limit", result);
+  } catch { return fail(signal?.aborted ? "aborted" : "reference-manifest-failed", result); }
   return result;
 }

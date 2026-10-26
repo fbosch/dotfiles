@@ -80,7 +80,7 @@ A compaction summary can drop placeholders and their file paths, which would lea
 
 The index is built from session entries, not from the summary, so it works whichever extension writes the summary. It is added per request rather than stored in the session. It changes only when a new compaction lands, so it does not break the prompt cache between compactions. It is added even when `enabled` is `false`, because earlier batches may still hide results.
 
-Extractive checkpoints embed their selected references. Hybrid checkpoints keep the catalogue in session entries and expose it through recall. Neither receives the general index again.
+Extractive checkpoints contain their selected references or a pointer to a saved reference manifest. Hybrid checkpoints keep the catalogue in session entries and expose it through recall. Neither receives the general index again.
 
 ## Classifier compaction candidate
 
@@ -112,6 +112,10 @@ The host archives ordinary user and assistant text, the previous summary and unm
 
 In the default `extractive` mode, two probability questions per text unit or tool result choose `inline`, `reference` or `omit`. The host preserves the order of selected text and keeps tool calls coherent with retained results. A reference points to the saved original. An omission removes content from active context, not from its archive. Uncertain prose keeps a reference. The classifier cannot replace text or supply new addresses.
 
+If retained references make a checkpoint exceed its budget, the host archives reference groups in a manifest and leaves one pointer in active context. The manifest preserves saved addresses, original call metadata and reference order. Inline choices remain inline. Image addresses can move to a manifest without changing which pixels the extension restores.
+
+Manifests use the same private, content-addressed store and 4 MB per-file cap. Their metadata does not consume the original-text archive budget. Use bounded read or recall to inspect them. Hybrid native-summary input is not replaced by a manifest pointer.
+
 Ordinary prose, prior summaries and unmasked tool outputs participate even when no masked tool results exist. Only an empty eligible prefix returns `no-content`. Pi stores the selected history as a labeled summary string, not the original structured messages. The native retained tail stays outside these decisions. Images use the shared goal and retention path below; ambiguous call identities or unsupported content use native fallback.
 
 | Setting | Default | Meaning |
@@ -120,19 +124,21 @@ Ordinary prose, prior summaries and unmasked tool outputs participate even when 
 | `maxSummaryInputBytes` | `48000` | Hybrid input budget for selected messages and the previous summary. |
 | `maxRequestBytes` | `24000` | Serialized classifier state and questions per request. |
 | `maxArtifactBytes` | `12000` | Tool-output read limit and maximum complete prose-unit size eligible for classification. Larger units keep a reference. |
-| `maxTotalArtifactBytes` | `256000` | Existing-output read budget and separate new-text archive budget per attempt. |
-| `maxArtifacts` | `40` | Maximum tool results per attempt. Prose has a separate 256-unit ceiling. |
-| `maxOutputBytes` | `24000` | Extractive checkpoint byte limit, excluding Pi wrappers and the retained tail. Does not cap a hybrid native summary. |
+| `maxTotalArtifactBytes` | `256000` | Existing-output read budget per window and separate original-text archive budget per attempt. |
+| `maxArtifacts` | `40` | Maximum tool results per read window, not per compaction. Prose has a separate 256-unit ceiling. |
+| `maxOutputBytes` | `24000` | Extractive checkpoint text limit, excluding Pi wrappers, the retained tail and restored image pixels. Does not cap a hybrid native summary. |
 | `threshold` | `0.5` | Extractive probability threshold. Inline takes precedence over a reference. |
 | `minFreedRatio` | `0.25` | Required extractive reduction for text-only attempts. Image attempts use output and transport bounds instead of this text-byte estimate. |
 
-This repository sets `maxOutputBytes` to `4000` for extractive mode. Conversation text or checkpoints that cannot fit the applicable limits fall back to normal compaction.
+The host processes larger prefixes in read windows. It renews the count and read-byte budgets before a new artifact would exceed either limit. Classifier packets contain tool results from at most one window and still obey `maxRequestBytes`. More results can require more Jev requests. Audit totals cover the entire attempt and can exceed a single window's limits. Cancellation stops later requests.
+
+This repository sets `maxOutputBytes` to `4000` for extractive mode. A checkpoint that still exceeds that limit after reference packing falls back to normal compaction. The host does not demote inline choices to make the output fit.
 
 These are byte limits, not exact token counts. The host does not split a constraint or code block into independently prunable fragments. Oversized or unclassifiable units keep references. Request context uses marked excerpts of prior state and recent evidence; the current task and compaction focus remain complete. If that context or the checkpoint cannot fit, or classification fails, the hook uses Pi's native summarizer with the global `compactionModel.model` and `compactionModel.thinkingLevel`. If new text cannot be archived within its limits, the hook cancels instead. Each text archive has a 4 MB hard limit. Cancellation also cancels the attempt. Missing fallback settings, an unavailable model or a failed native summary do not retry with the active conversation model.
 
-Selected references are embedded in accepted checkpoints. The general post-compaction index does not reinsert addresses that this candidate omitted. Session records, exact artifacts and local recall remain available.
+Accepted extractive checkpoints contain references directly or point to their recovery manifest. The general post-compaction index does not reinsert addresses that this candidate omitted. Session records, exact artifacts and local recall remain available.
 
-Successful checkpoints carry classifier usage. Paid fallback attempts have separate `context-masking-classifier-compaction` audit entries. Those entries preserve reported usage but do not add it to the default summary's headline usage. Telemetry stores decisions and sizes, not classifier packets or saved output.
+Successful checkpoints carry classifier usage. Paid fallback attempts have separate `context-masking-classifier-compaction` audit entries. Those entries preserve reported usage but do not add it to the default summary's headline usage. Telemetry stores decisions and sizes, not classifier packets or saved output. `checkpointUnpackedBytes`, `checkpointBytes` and `checkpointInlineBytes` report text bytes before packing, after packing and without reference groups. Restored pixels are not included.
 
 Pi runs all `session_before_compact` handlers, and the last non-cancel result wins. Multiple custom compactors can spend money even when only one result is committed. This repository keeps `pi-compaction-model` installed but disables its standalone handler. The classifier hook owns extractive checkpoints and native fallback in the live trial. Both hybrid summaries and fallback read the global `compactionModel` model and thinking level while the standalone compactor is disabled. Its `enabled` and `reasons` fields do not gate those requests.
 

@@ -1,3 +1,4 @@
+import { packCheckpoint, type CheckpointPart, type PackedCheckpoint } from "./checkpoint-packing";
 import { retentionContext } from "./retention-context";
 import type { ContextEvent, ModelRuntime, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { savedItems, type MaskedItem } from "./artifact-index";
@@ -52,6 +53,7 @@ interface Candidate {
   complete: boolean;
   totalBytes: number;
   readStatus: "complete" | "partial" | "unreadable" | "budget";
+  readWindow?: number;
 }
 interface Piece {
   text: string;
@@ -91,6 +93,10 @@ export interface CompactionOutcome {
   imageMessages?: Message[];
   imageSummary?: string;
   savedItems?: MaskedItem[];
+  checkpointParts?: CheckpointPart[];
+  checkpointBytes?: number;
+  checkpointUnpackedBytes?: number;
+  checkpointInlineBytes?: number;
 }
 export const byteLength = (text: string) => new TextEncoder().encode(text).length;
 
@@ -235,6 +241,7 @@ async function classifyTextCompaction(
   const archived: MaskedItem[] = [];
   outcome.savedItems = archived;
   let archiveBytes = 0, proseCount = 0;
+  let readWindow = 0, windowArtifacts = 0, windowBytes = 0;
   const archive = async (text: string, toolName: string): Promise<MaskedItem> => {
     if (signal?.aborted) throw new ArchiveFailure("aborted");
     if (!input.sessionId) throw new ArchiveFailure("conversation-archive-failed");
@@ -266,6 +273,7 @@ async function classifyTextCompaction(
     if (input.previousSummary) await prose(input.previousSummary, "previous compaction state");
     for (const message of input.messages) {
       if (message.role !== "toolResult") continue;
+      if (signal?.aborted) return fallback("aborted");
       if (ambiguous.has(message.toolCallId)) return fallback("ambiguous-tool-call");
       const source = sources.get(message.toolCallId);
       const call = calls.get(message.toolCallId);
@@ -275,20 +283,25 @@ async function classifyTextCompaction(
       if (!record) record = await archive(textOf(message), source.tool);
       if (record.toolName !== source.tool) return fallback("orphan-or-mismatched-result");
       if (byCall.has(message.toolCallId)) return fallback("duplicate-tool-result");
-      if (byCall.size >= settings.maxArtifacts) return fallback("artifact-count-limit");
+      const readLimit = Math.min(settings.maxArtifactBytes, settings.maxTotalArtifactBytes);
+      // Renew before a full read would cross the window, rather than making that result artificially partial.
+      if (windowArtifacts >= settings.maxArtifacts || (windowBytes > 0 && windowBytes + readLimit > settings.maxTotalArtifactBytes)) {
+        readWindow++; windowArtifacts = 0; windowBytes = 0;
+      }
       const candidate: Candidate = {
-        kind: "tool", id: `r${byCall.size}`, entryId: record.entryId,
+        kind: "tool", id: `r${byCall.size}`, entryId: record.entryId, readWindow,
         toolCallId: message.toolCallId, tool: call.tool, arguments: call.arguments,
         mask: textOf(message).startsWith(MARKER) ? textOf(message)
           : placeholder({ entryId: record.entryId, toolName: call.tool, text: textOf(message) }, record.path),
         path: record.path, content: "", complete: false, totalBytes: 0, readStatus: "budget",
       };
-      const remaining = settings.maxTotalArtifactBytes - outcome.artifactBytes;
-      if (remaining <= 0) return fallback("artifact-read-budget");
+      const remaining = settings.maxTotalArtifactBytes - windowBytes;
       try {
         const artifact = await readSavedArtifact(dependencies.artifactRoot, record.path, record.entryId, Math.min(settings.maxArtifactBytes, remaining));
         outcome.artifactsRead++;
         outcome.artifactBytes += artifact.bytes;
+        windowArtifacts++;
+        windowBytes += artifact.bytes;
         Object.assign(candidate, { content: artifact.text, complete: !artifact.partial, totalBytes: artifact.totalBytes, readStatus: artifact.partial ? "partial" : "complete" });
       } catch { return fallback("artifact-unreadable"); }
       candidates.push(candidate);
@@ -351,8 +364,9 @@ async function classifyTextCompaction(
       continue;
     }
     const proposed = [...batch, candidate];
+    const sameWindow = candidate.kind !== "tool" || batch.every(item => item.kind !== "tool" || item.readWindow === candidate.readWindow);
     if (
-      byteLength(JSON.stringify(packet(history, proposed, settings))) <= settings.maxRequestBytes
+      sameWindow && byteLength(JSON.stringify(packet(history, proposed, settings))) <= settings.maxRequestBytes
     ) {
       batch = proposed;
     } else {
@@ -439,29 +453,38 @@ async function classifyTextCompaction(
       },
   );
   const candidateById = new Map(candidates.map((c) => [c.id, c]));
-  const rendered: string[] = [
-    "Extractive compaction: selected historical text and evidence; originals remain recoverable through recall.",
+  const rendered: CheckpointPart[] = [
+    { text: "Extractive compaction: selected historical text and evidence; originals remain recoverable through recall." },
   ];
   for (const piece of pieces) {
     if (!piece.candidate) {
-      rendered.push(piece.text);
+      rendered.push({ text: piece.text });
       continue;
     }
     const candidate = candidateById.get(piece.candidate);
     const decision = decisions.get(piece.candidate);
     if (!candidate || !decision) return fallback("incomplete-decisions");
     if (decision.action === "omit") continue;
-    if (piece.part === "call") rendered.push(piece.text);
-    else
-      rendered.push(
-        hybrid || decision.action === "inline"
-          ? candidate.kind === "conversation" ? candidate.content : `[tool output; saved copy: ${candidate.path}]\n${candidate.content}`
-          : candidate.mask,
-      );
+    const reference = !hybrid && decision.action === "reference" ? { reference: candidate.id } : {};
+    const text = piece.part === "call" ? piece.text : hybrid || decision.action === "inline"
+      ? candidate.kind === "conversation" ? candidate.content : `[tool output; saved copy: ${candidate.path}]\n${candidate.content}`
+      : `[saved ${candidate.kind === "tool" ? "tool output" : "conversation"}; use read or recall]: ${candidate.path}`;
+    rendered.push({ text, ...reference });
   }
-  const text = rendered.join("\n\n");
   const outputLimit = hybrid ? settings.maxSummaryInputBytes : settings.maxOutputBytes;
-  if (byteLength(text) > outputLimit) return fallback(hybrid ? "summary-input-limit" : "output-byte-limit");
+  let packed: PackedCheckpoint;
+  try {
+    packed = await packCheckpoint(rendered, outputLimit, dependencies.artifactRoot, input.sessionId, signal);
+  } catch { return fallback(signal?.aborted ? "aborted" : "reference-manifest-failed"); }
+  outcome.savedItems ??= [];
+  outcome.savedItems.push(...packed.savedItems);
+  outcome.checkpointParts = packed.parts;
+  outcome.checkpointBytes = byteLength(packed.text);
+  outcome.checkpointUnpackedBytes = packed.unpackedBytes;
+  outcome.checkpointInlineBytes = packed.inlineBytes;
+  if (signal?.aborted) return fallback("aborted");
+  if (!packed.fits) return fallback(hybrid ? "summary-input-limit" : "output-byte-limit");
+  const text = packed.text;
   if (!hybrid && !dependencies.deferReduction && byteLength(text) > byteLength(original) * (1 - settings.minFreedRatio))
     return fallback("insufficient-reduction");
   outcome.evidence = candidates.filter(c => c.kind === "tool").map(c => ({
