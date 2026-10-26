@@ -11,7 +11,9 @@ import {
   loadThemeFromPath,
   theme,
 } from "@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
-import type { TUI } from "@earendil-works/pi-tui";
+import { stripTerminalSequences, type TUI, visibleWidth } from "@earendil-works/pi-tui";
+import { sessionWith } from "../../context-masking/__tests__/fixtures";
+import { MARKER } from "../../context-masking/policy";
 import { AgentMentionCache, type AgentMentionCacheFileSystem } from "../../mentions/agent-mentions";
 import { PromptEditor, type PromptEditorState, type PromptRenderInput } from "../prompt-editor";
 
@@ -31,10 +33,10 @@ class CountingPromptEditor extends PromptEditor {
 
   protected override renderContextLine(
     currentTheme: Theme,
-    usage: PromptRenderInput["usage"],
+    context: PromptRenderInput["context"],
   ): string {
     this.operations.context++;
-    return super.renderContextLine(currentTheme, usage);
+    return super.renderContextLine(currentTheme, context);
   }
 
   protected override buildPromptLayout(input: PromptRenderInput) {
@@ -93,6 +95,7 @@ test("reuses prompt highlighting, layout, and context until render inputs change
     getProfileName: () => profileName,
     getStatuses: () => [],
   };
+  const { manager: sessionManager, resultIds } = sessionWith([{ resultChars: 2_000 }]);
   const editor = new CountingPromptEditor(
     tui,
     getEditorTheme(),
@@ -100,6 +103,7 @@ test("reuses prompt highlighting, layout, and context until render inputs change
     { getThinkingLevel: () => "low" } as ExtensionAPI,
     {
       cwd: "/tmp/project",
+      sessionManager,
       isProjectTrusted: () => false,
       getContextUsage: () => {
         contextReads++;
@@ -151,6 +155,38 @@ test("reuses prompt highlighting, layout, and context until render inputs change
 
   expect(editor.operations).toEqual({ highlight: 8, context: 8, layout: 8 });
   expect(contextReads).toBe(3);
+  for (const read of syncReads) expect(read).not.toHaveBeenCalled();
+
+  const id = resultIds[0];
+  const originalLeaf = sessionManager.getLeafId();
+  if (!id || !originalLeaf) throw new Error("Missing test session");
+  const maskText = `${MARKER} saved output: /saved/${id}.txt`;
+  const freedTokens = 500 - Math.ceil(maskText.length / 4);
+  sessionManager.appendContextEdit(id, {
+    content: [{ type: "text", text: maskText }],
+  });
+  sessionManager.appendCustomEntry("context-masking", {
+    items: [{ entryId: id, path: `/saved/${id}.txt`, toolName: "read" }],
+  });
+  const maskedLeaf = sessionManager.getLeafId();
+  if (!maskedLeaf) throw new Error("Missing masked leaf");
+  usage = { tokens: 10_000, percent: 5, contextWindow: 200_000 };
+  expect(stripTerminalSequences(editor.render(100).join("\n"))).toContain(
+    `~10K (5%) 󰈉 ~${freedTokens}`,
+  );
+  expect(contextReads).toBe(4);
+  for (let frame = 0; frame < 20; frame++) editor.render(100);
+  expect(contextReads).toBe(4);
+  for (const width of [20, 40, 80]) {
+    for (const line of editor.render(width)) expect(visibleWidth(line)).toBeLessThanOrEqual(width);
+  }
+
+  sessionManager.branch(originalLeaf);
+  expect(stripTerminalSequences(editor.render(100).join("\n"))).not.toContain("󰈉");
+  expect(contextReads).toBe(5);
+  sessionManager.branch(maskedLeaf);
+  expect(stripTerminalSequences(editor.render(100).join("\n"))).toContain(`󰈉 ~${freedTokens}`);
+  expect(contextReads).toBe(6);
   for (const read of syncReads) expect(read).not.toHaveBeenCalled();
   editor.dispose();
   cache.dispose();

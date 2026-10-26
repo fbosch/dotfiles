@@ -21,6 +21,7 @@ export function contextHealthColor(percent: number): ContextHealthColor {
 export function contextIndicator(
   tokens: number | null | undefined,
   percent: number | null | undefined,
+  estimated: boolean,
 ): ContextIndicator {
   if (tokens === null || tokens === undefined || percent === null || percent === undefined) {
     return { text: "?", color: "muted" };
@@ -28,7 +29,11 @@ export function contextIndicator(
 
   const roundedPercent = Math.round(percent);
   return {
-    text: `${compactTokenFormatter.format(tokens)} (${roundedPercent}%)`,
+    text: `${estimated ? "~" : ""}${compactTokenFormatter.format(tokens)} (${roundedPercent}%)`,
     color: contextHealthColor(roundedPercent),
   };
+}
+
+export function freedTokenIndicator(tokens: number): string {
+  return tokens > 0 ? `󰈉 ~${compactTokenFormatter.format(tokens)}` : "";
 }

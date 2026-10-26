@@ -353,6 +353,12 @@ in
       cd .pi/agent
       bun test extensions/mentions extensions/prompt-ui/__tests__/autocomplete.test.ts extensions/prompt-ui/__tests__/autocomplete-dismissal.test.ts
     '';
+    "test:pi-prompt-context".exec = ''
+      set -euo pipefail
+      cd .pi/agent
+      bun run typecheck
+      bun test extensions/prompt-ui/__tests__/context-health.test.ts extensions/prompt-ui/__tests__/context-status.test.ts extensions/prompt-ui/__tests__/render-cache.test.ts extensions/prompt-ui/__tests__/index.test.ts
+    '';
     "test:pi-subagents".exec = ''
       set -euo pipefail
       cd .pi/agent
@@ -373,7 +379,7 @@ in
     "test:pi-context-baseline".exec = ''
       set -euo pipefail
       cd .pi/agent
-      bun test benchmarks/__tests__/context-baseline.test.ts benchmarks/__tests__/context-masking-replay.test.ts benchmarks/__tests__/context-masking-recall-probe.test.ts benchmarks/__tests__/context-compaction.test.ts benchmarks/__tests__/context-pruning-recall.test.ts
+      bun test benchmarks/__tests__/context-baseline.test.ts benchmarks/__tests__/context-masking-replay.test.ts benchmarks/__tests__/context-masking-recall-probe.test.ts benchmarks/__tests__/context-compaction.test.ts benchmarks/__tests__/context-pruning-recall.test.ts benchmarks/__tests__/context-compaction-tasks.test.ts benchmarks/__tests__/context-classifier-recall.test.ts
       node_modules/.bin/tsc --project benchmarks/tsconfig.context-baseline.json
     '';
     "test:pi-diff-rendering-extension".exec = ''

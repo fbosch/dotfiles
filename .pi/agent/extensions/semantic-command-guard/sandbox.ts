@@ -2,6 +2,7 @@ import { lstatSync } from "node:fs";
 import { join } from "node:path";
 import { type AccessGrants, explainAccess } from "../../lib/nono-access";
 import { commandFileAccesses } from "./file-access";
+import { temporaryScriptParent } from "./temporary-script";
 
 export type SandboxGrants = AccessGrants;
 export function commandFitsSandbox(
@@ -11,7 +12,12 @@ export function commandFitsSandbox(
 ): boolean {
   if (!capabilities) return false;
   const accesses = commandFileAccesses(command);
-  if (!accesses) return false;
+  if (!accesses) {
+    const parent = temporaryScriptParent(command);
+    if (!parent) return false;
+    const decision = explainAccess(capabilities, cwd, parent, "write");
+    return decision.kind === "granted" && !decision.grant.is_file;
+  }
   try {
     const granted = (path: string, access: "read" | "write"): string | undefined => {
       const decision = explainAccess(capabilities, cwd, path, access);

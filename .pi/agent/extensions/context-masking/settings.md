@@ -1,6 +1,6 @@
 # Context masking
 
-This extension hides old, large tool results from the model's context before Pi needs to compact. Each hidden result is saved to a local file, and a short placeholder in the conversation points to it. User messages, assistant messages, tool calls, and recent tool results stay verbatim. It does not call a model.
+This extension hides old, large tool results from the model's context before Pi needs to compact. Each hidden result is saved to a local file, and a short placeholder in the conversation points to it. User messages, assistant messages, tool calls, and recent tool results stay verbatim. Deterministic masking and local recall do not call a model. The optional classifier compaction candidate below is disabled by default.
 
 ## Enable it
 
@@ -62,13 +62,65 @@ Omit `PROBE_PREFETCH=1` to test the tool alone. The probe records correctness, r
 
 Masking runs as a batch, then history stays append-only until the next batch. Each batch changes context from the first masked result onward, so the next request rewrites the provider's prompt cache from that point. `minFreedRatio` stops small batches that would cost a cache rebuild for little gain.
 
-Pi re-estimates context from the edited projection as soon as a masking batch is committed, before its own compaction check. If masking frees enough, compaction does not run on that turn. When masking cannot keep context under Pi's compaction threshold, normal compaction, including `pi-compaction-model`, still runs; its summary then sees placeholders instead of the hidden results.
+Pi re-estimates context from the edited projection as soon as a masking batch is committed, before its own compaction check. If masking frees enough, compaction does not run on that turn. When masking cannot keep context under Pi's compaction threshold and the classifier candidate is disabled, normal compaction, including `pi-compaction-model`, still runs; its summary then sees placeholders instead of the hidden results.
 
 ## After compaction
 
 A compaction summary can drop placeholders and their file paths, which would leave hidden results unreachable. After a compaction, the extension adds an index of saved results to each request, right after the compaction summary. The index lists each result whose placeholder is no longer in context, with its tool, command or path, and file. It lists at most 40 results, newest first, and skips files that no longer exist.
 
 The index is built from session entries, not from the summary, so it works whichever extension writes the summary. It is added per request rather than stored in the session. It changes only when a new compaction lands, so it does not break the prompt cache between compactions. It is added even when `enabled` is `false`, because earlier batches may still hide results.
+
+## Classifier compaction candidate
+
+The extension includes a classifier-driven alternative to generative compaction. It is disabled by default and is not enabled in this repository's settings.
+
+Enabling it sends conversation text, tool arguments, masks, artifact addresses and eligible saved output to the configured classifier provider. The synthetic evaluations send generated data only. Do not enable it for recorded sessions without accepting that data transfer.
+
+```json
+{
+  "contextClassifierCompaction": {
+    "enabled": false,
+    "provider": "openrouter",
+    "model": "typesafe/jev-1.14",
+    "includeContent": true
+  }
+}
+```
+
+This is a separate global setting, not a field inside `contextMasking`. With `enabled: false`, the compaction hook makes no artifact reads or classifier requests.
+
+The host resolves artifacts recorded on the current branch and reads them through the same path and symlink checks as local recall. Jev receives the actual output alongside the original call, mask and saved address. It cannot open local files itself. With `includeContent: false`, requests omit the hydrated output but still contain the visible conversation and metadata.
+
+Two probability questions per result decide whether the full output needs to remain inline and whether the call and reference are useful. The host renders coherent pairs as full output, saved references, or omissions. It never deletes an artifact. The decisions cannot supply replacement addresses.
+
+The candidate preserves user and assistant text in order, unrecorded tool results and the previous summary. Pi stores this extractive history as a labeled summary string, not as the original structured messages. Ambiguous tool-call identities, images and other unsupported content cause normal compaction to take over.
+
+| Setting | Default | Meaning |
+|---|---|---|
+| `maxRequestBytes` | `24000` | Serialized classifier state and questions per request. Batches repeat shared conversation state. |
+| `maxArtifactBytes` | `12000` | Maximum bytes read from one artifact. Partial output keeps a reference without classification. |
+| `maxTotalArtifactBytes` | `256000` | Maximum artifact bytes per attempt. |
+| `maxArtifacts` | `40` | Maximum saved results considered per attempt. |
+| `maxOutputBytes` | `24000` | Maximum UTF-8 bytes in the rendered checkpoint, excluding Pi wrappers and the retained tail. |
+| `threshold` | `0.5` | Minimum probability for an inline or reference decision. Inline takes precedence. |
+| `minFreedRatio` | `0.25` | Required additional reduction in rendered history bytes. |
+
+These are byte limits, not exact token counts. The host does not abridge conversation text to fit a classifier request. It retains a reference when an individual result cannot fit. If the conversation itself is too large, an artifact cannot be read safely, or a limit prevents a valid checkpoint, the hook returns no override and Pi's remaining compaction path runs. Malformed classifier answers and API failures also fall back. Cancellation cancels the attempt instead of starting another model request.
+
+Selected references are embedded in accepted checkpoints. The general post-compaction index does not reinsert addresses that this candidate omitted. Session records, exact artifacts and local recall remain available.
+
+Successful checkpoints carry classifier usage. Paid fallback attempts have separate `context-masking-classifier-compaction` audit entries. Those entries preserve reported usage but do not add it to the default summary's headline usage. Telemetry stores decisions and sizes, not classifier packets or saved output.
+
+Before a live trial, verify which extension owns `session_before_compact`. Pi runs all such handlers and the last non-cancel result wins, so multiple custom compactors can spend money even when only one result is committed. This repository also configures `pi-compaction-model`. The candidate does not change or coordinate that extension.
+
+The benchmark uses the extension's `classifyCompaction` function:
+
+```bash
+bun .pi/agent/benchmarks/context-classifier-candidate.ts
+CLASSIFIER_DISTRACTORS=12 bun .pi/agent/benchmarks/context-classifier-candidate.ts routing
+```
+
+The second command adds closed background outputs to exercise pruning of surplus pointers. Both runs use synthetic coding continuations and identical continuation-time retrieval. The benchmark checks a 1,600-token ceiling with provider-reported counts, uses a tighter 4,000-byte checkpoint cap, and includes failed candidate work and summary fallbacks in cost. It does not measure longitudinal cache savings.
 
 ## Limits
 

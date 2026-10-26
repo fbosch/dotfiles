@@ -88,9 +88,35 @@ The exemption recognizes standalone literal `rm`, `rmdir`, `unlink`, `mv`,
 supported options. Relative paths use the working directory. Symlinks resolve
 before parent traversal. Copy sources require read access, and copy destinations
 require write access. Mixed or ungranted targets, denied paths and their parents,
-unknown options, shell expansion, compound commands, inline code, network
-transfers, and destructive Git operations remain eligible for semantic review.
+unknown options, unresolved shell syntax, inline code, network transfers, and
+destructive Git operations remain eligible for semantic review.
 Nono bypass exceptions overlapping denied paths also remain under review.
+
+A narrow temporary-script exemption also accepts this form:
+
+```bash
+T=$(mktemp -d /tmp/guard.XXXXXX) && chmod 700 "$T" && touch "$T/file" && rm -rf "$T"
+```
+
+The template must be an absolute literal path with a trailing run of at least
+three `X` characters. The variable must be `T` or a lowercase name starting
+with a letter and containing only letters, digits, and underscores. Every
+operation must follow `&&`, so creation failure skips all file operations.
+Targets must be double-quoted references to that variable, optionally followed
+by literal child components without `.` or `..`.
+
+Only supported `rm`, `rmdir`, `unlink`, `chmod`, `truncate`, `touch`, and
+`shred` operations qualify. Permission changes must use numeric owner-only
+modes such as `600` or `700`. Copies, moves, ownership changes, other commands,
+redirections, and variable reassignment remain under review. The entire
+template parent must have a directory write grant and no denied descendants.
+The exemption checks the parent conservatively rather than inventing the
+future random directory name.
+
+Bare `mktemp -d` remains unresolved because its parent depends on the shell's
+environment. Scripts such as GPG key-generation tests still require review;
+recognizing their cleanup path does not establish the effects of every command.
+No command, path, or grant information is added to classifier requests.
 
 Missing, unreadable, or malformed runtime metadata silently disables path
 exemptions; semantic review continues normally. Launching Pi without nono is

@@ -11,6 +11,7 @@ import {
   type TurnEndEventResult,
 } from "@earendil-works/pi-coding-agent";
 import { buildIndex, withIndex } from "./artifact-index";
+import { isClassifierCheckpoint, registerClassifierCompaction } from "./classifier-hook";
 import {
   estimateTokens,
   type MaskCandidate,
@@ -70,7 +71,15 @@ export function registerContextMasking(
   pi.on("context", (event, ctx) => {
     const branch = ctx.sessionManager.getBranch();
     let compactionId: string | undefined;
-    for (const entry of branch) if (entry.type === "compaction") compactionId = entry.id;
+    let embeddedIndex = false;
+    for (const entry of branch) {
+      if (entry.type !== "compaction") continue;
+      compactionId = entry.id;
+      embeddedIndex = isClassifierCheckpoint(entry.details);
+    }
+    // Classifier checkpoints already contain selected references; reindexing every artifact
+    // would put intentionally omitted addresses back into active context.
+    if (embeddedIndex) return undefined;
     if (compactionId === undefined) return undefined;
     let current = cached;
     if (current?.compactionId !== compactionId) {
@@ -154,6 +163,7 @@ export function registerContextMasking(
 
 export default function contextMasking(pi: ExtensionAPI): void {
   registerContextMasking(pi);
+  registerClassifierCompaction(pi);
   registerRecall(pi);
   registerRecallPrefetch(pi, undefined, (ctx) => {
     try {

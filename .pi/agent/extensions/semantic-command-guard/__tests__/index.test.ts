@@ -118,7 +118,13 @@ test.each(["shadow", "confirm"])(
       () => ({ fs: [{ path: root, access: "readwrite", is_file: false }], deny_paths: [] }),
     );
     h.handlers.get("session_start")?.({}, h.ctx);
-    for (const command of ["rm -rf src", "truncate -s 0 file", "chmod 600 file", "mv old new"]) {
+    for (const command of [
+      "rm -rf src",
+      "truncate -s 0 file",
+      "chmod 600 file",
+      "mv old new",
+      `T=$(mktemp -d ${root}/guard.XXXXXX) && chmod 700 "$T" && rm -rf "$T"`,
+    ]) {
       expect(await h.call(command)).toBeUndefined();
       await flush();
     }

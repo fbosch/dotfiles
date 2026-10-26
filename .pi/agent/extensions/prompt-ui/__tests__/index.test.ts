@@ -3,10 +3,11 @@ import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-  KeybindingsManager,
+import {
+  type ExtensionAPI,
+  type ExtensionContext,
+  type KeybindingsManager,
+  SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import {
   getEditorTheme,
@@ -172,7 +173,7 @@ test("uses MCP extension status in the footer and refreshes the editor after com
     mode: "tui",
     isProjectTrusted: () => false,
     modelRegistry: { find: () => undefined },
-    sessionManager: { getSessionId: () => "test-session" },
+    sessionManager: SessionManager.inMemory(REPO_ROOT),
     getContextUsage: () => usage,
     ui,
     model: { name: "Test", provider: "openai" },
@@ -226,5 +227,11 @@ test("uses MCP extension status in the footer and refreshes the editor after com
 
   expect(renderRequests).toBe(requestsBeforeCompaction + 1);
   expect(editor?.render(100).join("\n")).toContain("20K (10%)");
+
+  usage = { tokens: 5_000, percent: 2.5, contextWindow: 200_000 };
+  const requestsBeforeSettled = renderRequests;
+  await handlers.get("agent_settled")?.({}, ctx);
+  expect(renderRequests).toBe(requestsBeforeSettled + 1);
+  expect(editor?.render(100).join("\n")).toContain("~5K (3%)");
   await handlers.get("session_shutdown")?.({}, ctx);
 });

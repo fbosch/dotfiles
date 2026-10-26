@@ -12,6 +12,13 @@
     "__tests__/context-compaction.test.ts",
     "context-pruning-recall.ts",
     "context-artifact-discovery-probe.ts",
+    "context-compaction-task-fixtures.ts",
+    "context-compaction-tasks.ts",
+    "context-classifier-candidate.ts",
+    "context-classifier-recall-fixtures.ts",
+    "context-classifier-recall.ts",
+    "__tests__/context-classifier-recall.test.ts",
+    "__tests__/context-compaction-tasks.test.ts",
     "__tests__/context-pruning-recall.test.ts"
   ]
 }

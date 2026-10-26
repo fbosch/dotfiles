@@ -1,9 +1,10 @@
 import { expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-  KeybindingsManager,
+import {
+  type ExtensionAPI,
+  type ExtensionContext,
+  type KeybindingsManager,
+  SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import type { TUI } from "@earendil-works/pi-tui";
 import {
@@ -46,6 +47,7 @@ function createEditor(working: boolean) {
       cwd: REPO_ROOT,
       isProjectTrusted: () => true,
       getContextUsage: () => undefined,
+      sessionManager: SessionManager.inMemory(REPO_ROOT),
       ui: { theme },
     } as unknown as ExtensionContext,
     state,

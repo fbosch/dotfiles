@@ -1,6 +1,4 @@
-import { constants } from "node:fs";
-import { open, realpath } from "node:fs/promises";
-import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { join } from "node:path";
 import {
   defineTool,
   type ExtensionAPI,
@@ -10,6 +8,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { callsFor, savedItems } from "./artifact-index";
+import { readSavedArtifact as readArtifact } from "./saved-artifact";
 
 export const RECALL_LIMITS = {
   artifacts: 80,
@@ -24,7 +23,6 @@ const STOP = new Set(
   ),
 );
 const words = (value: string) => value.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
-const safeName = (value: string) => value.replace(/[^A-Za-z0-9_-]/gu, "_");
 
 function excerptLine(line: string, terms: readonly string[]): string {
   if (line.length <= 800) return line;
@@ -49,47 +47,6 @@ export interface RecallReport {
   limited: boolean;
   bytes: number;
   text: string;
-}
-
-/** Only branch-recorded, correctly named regular files directly within a cache session directory. */
-async function readArtifact(root: string, path: string, entryId: string, bytes: number) {
-  const rel = relative(resolve(root), resolve(path));
-  const parts = rel.split(sep);
-  if (
-    isAbsolute(rel) ||
-    parts.length !== 2 ||
-    !/^[A-Za-z0-9_-]+$/u.test(parts[0] ?? "") ||
-    basename(path) !== `${safeName(entryId)}.txt`
-  )
-    throw new Error("Invalid saved-result path");
-  const canonicalRoot = await realpath(root);
-  const dir = await realpath(dirname(path));
-  // Reject symlinked session directories as well as symlinked files.
-  if (dir !== join(canonicalRoot, parts[0] ?? ""))
-    throw new Error("Invalid saved-result directory");
-  const file = await open(
-    join(dir, basename(path)),
-    constants.O_RDONLY | constants.O_NOFOLLOW | constants.O_NONBLOCK,
-  );
-  try {
-    const stat = await file.stat();
-    if (!stat.isFile()) throw new Error("Saved result is not a regular file");
-    const buffer = Buffer.alloc(Math.min(stat.size, bytes));
-    let length = 0;
-    while (length < buffer.length) {
-      const next = await file.read(buffer, length, buffer.length - length, length);
-      if (next.bytesRead === 0) break;
-      length += next.bytesRead;
-    }
-    const partial = stat.size > length;
-    return {
-      text: new TextDecoder().decode(buffer.subarray(0, length), { stream: partial }),
-      bytes: length,
-      partial,
-    };
-  } finally {
-    await file.close();
-  }
 }
 
 export async function recallSaved(

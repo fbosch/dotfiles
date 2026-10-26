@@ -55,6 +55,8 @@ export default function promptUi(pi: ExtensionAPI): void {
   });
 
   pi.on("agent_settled", () => {
+    // Boundary edits commit after message_end, so refresh again at final settlement.
+    invalidateContextUsage();
     isWorking = false;
     stopWorkingPulse();
     activeTui?.requestRender();

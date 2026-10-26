@@ -42,7 +42,7 @@
   "quickReplies": {
     "enabled": true
   },
-  "hideThinkingBlock": true,
+  "hideThinkingBlock": false,
   "showFileChanges": false,
   "tuiMode": "fullscreen",
   "selectorOverlayWidth": 72,
@@ -157,8 +157,8 @@
     "npm:pi-codex-goal@latest",
     "npm:pi-context-view@0.8.0",
     "npm:@ff-labs/pi-fff@0.11.0",
-    "npm:pi-web-access@0.44.0",
-    "npm:pi-lens@4.4.4",
+    "npm:pi-web-access@0.45.0",
+    "npm:pi-lens@4.4.5",
     "npm:pi-compaction-model@0.1.0",
     "npm:pi-codemode-compact@0.5.0",
     "npm:pi-claude-bridge@0.9.3"

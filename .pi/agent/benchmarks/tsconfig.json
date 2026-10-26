@@ -1,0 +1,4 @@
+{
+  "//": "Give tsserver the same project as the named benchmark validation config.",
+  "extends": "./tsconfig.context-baseline.json"
+}

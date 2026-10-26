@@ -11,6 +11,7 @@ import type {
   TurnEndEventResult,
 } from "@earendil-works/pi-coding-agent";
 import { buildIndex, INDEX_TYPE, MAX_INDEX_ITEMS } from "../artifact-index";
+import { CLASSIFIER_CHECKPOINT } from "../classifier-hook";
 import { registerContextMasking } from "../index";
 import { DEFAULT_SETTINGS, MARKER } from "../policy";
 import { sessionWith } from "./fixtures";
@@ -145,4 +146,21 @@ test("buildIndex skips missing files, describes calls, and caps the list", () =>
   expect(text.split("\n").filter((line) => line.startsWith("- bash"))).toHaveLength(
     MAX_INDEX_ITEMS,
   );
+});
+
+test("classifier checkpoints do not reintroduce omitted pointers, and normal compaction restores indexing", async () => {
+  const { session, context } = await maskedThenCompacted();
+  session.manager.appendCompaction(
+    "Extractive state with selected references only",
+    session.resultIds[2] ?? "",
+    9_000,
+    {
+      type: CLASSIFIER_CHECKPOINT,
+      version: 1,
+      artifactIndex: "embedded",
+    },
+  );
+  expect(context()).toBeUndefined();
+  session.manager.appendCompaction("Normal summary", session.resultIds[3] ?? "", 9_000);
+  expect(indexText(context())).toContain("bun test --filter slow");
 });

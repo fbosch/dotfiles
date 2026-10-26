@@ -1,9 +1,10 @@
 import { describe, expect, test } from "bun:test";
 import { fileURLToPath } from "node:url";
-import type {
-  ExtensionAPI,
-  ExtensionContext,
-  KeybindingsManager,
+import {
+  type ExtensionAPI,
+  type ExtensionContext,
+  type KeybindingsManager,
+  SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import { getKeybindings, type TUI } from "@earendil-works/pi-tui";
 import {
@@ -43,6 +44,7 @@ describe("prompt reference colors", () => {
         cwd: REPO_ROOT,
         isProjectTrusted: () => true,
         getContextUsage: () => undefined,
+        sessionManager: SessionManager.inMemory(REPO_ROOT),
         ui: { theme },
       } as unknown as ExtensionContext,
       state,

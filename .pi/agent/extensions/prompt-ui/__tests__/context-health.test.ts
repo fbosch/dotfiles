@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import { contextHealthColor, contextIndicator } from "../context-health";
+import { contextHealthColor, contextIndicator, freedTokenIndicator } from "../context-health";
 
 describe("context health color", () => {
   test("uses success through 25 percent", () => {
@@ -20,24 +20,42 @@ describe("context health color", () => {
 
 describe("context indicator", () => {
   test("matches OpenCode compact token usage", () => {
-    expect(contextIndicator(139_800, 35)).toEqual({
+    expect(contextIndicator(139_800, 35, false)).toEqual({
       text: "139.8K (35%)",
       color: "warning",
     });
   });
 
   test("colors based on the displayed percentage", () => {
-    expect(contextIndicator(83_500, 50.4)).toEqual({
+    expect(contextIndicator(83_500, 50.4, false)).toEqual({
       text: "83.5K (50%)",
       color: "warning",
     });
-    expect(contextIndicator(83_500, 50.5)).toEqual({
+    expect(contextIndicator(83_500, 50.5, false)).toEqual({
       text: "83.5K (51%)",
       color: "error",
     });
   });
 
   test("uses a muted placeholder when usage is unknown", () => {
-    expect(contextIndicator(null, null)).toEqual({ text: "?", color: "muted" });
+    expect(contextIndicator(null, null, false)).toEqual({ text: "?", color: "muted" });
+  });
+
+  test("marks estimates without implying a known count after compaction", () => {
+    expect(contextIndicator(20_000, 10, true)).toEqual({ text: "~20K (10%)", color: "success" });
+    expect(contextIndicator(null, null, true)).toEqual({ text: "?", color: "muted" });
+  });
+});
+
+describe("freed token indicator", () => {
+  test("uses compact approximate token savings", () => {
+    expect(freedTokenIndicator(42_000)).toBe("󰈉 ~42K");
+    expect(freedTokenIndicator(1_234)).toBe("󰈉 ~1.2K");
+    expect(freedTokenIndicator(450)).toBe("󰈉 ~450");
+  });
+
+  test("hides the badge when there is no net reduction", () => {
+    expect(freedTokenIndicator(0)).toBe("");
+    expect(freedTokenIndicator(-10)).toBe("");
   });
 });

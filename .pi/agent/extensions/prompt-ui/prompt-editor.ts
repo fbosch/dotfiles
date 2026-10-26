@@ -34,7 +34,8 @@ import {
   getSuggestionGitStatus,
   splitEditorLines,
 } from "./autocomplete";
-import { contextIndicator } from "./context-health";
+import { contextIndicator, freedTokenIndicator } from "./context-health";
+import { type ContextSnapshot, readContextSnapshot } from "./context-status";
 import {
   backgroundToForeground,
   fitColumns,
@@ -93,11 +94,14 @@ function formatCwd(cwd: string): string {
   return cwd;
 }
 
-type ContextUsage = ReturnType<ExtensionContext["getContextUsage"]>;
-
-function renderContext(theme: Theme, usage: ContextUsage): string {
-  const indicator = contextIndicator(usage?.tokens, usage?.percent);
-  return theme.fg(indicator.color, indicator.text);
+function renderContext(theme: Theme, context: ContextSnapshot): string {
+  const indicator = contextIndicator(
+    context.usage?.tokens,
+    context.usage?.percent,
+    context.estimated,
+  );
+  const freed = freedTokenIndicator(context.freedTokens);
+  return theme.fg(indicator.color, indicator.text) + (freed ? theme.fg("muted", ` ${freed}`) : "");
 }
 
 function promptThemeKey(theme: Theme): string {
@@ -125,7 +129,7 @@ export interface PromptRenderInput {
   readonly modelName: string | undefined;
   readonly modelProvider: string | undefined;
   readonly thinkingLevel: ThinkingLevel;
-  readonly usage: ContextUsage;
+  readonly context: ContextSnapshot;
   readonly profileName: string;
   readonly isWorking: boolean;
 }
@@ -266,7 +270,13 @@ export class PromptEditor extends CustomEditor {
   private autocompleteItems: readonly AutocompleteItem[] = [];
   private autocompleteTokenPrefixes = new Set(["/", "@", "#"]);
   private layoutCache: CachedPromptLayout | undefined;
-  private contextCache: { model: ExtensionContext["model"]; usage: ContextUsage } | undefined;
+  private contextCache:
+    | {
+        model: ExtensionContext["model"];
+        leafId: string | null;
+        snapshot: ContextSnapshot;
+      }
+    | undefined;
 
   constructor(
     tui: TUI,
@@ -321,12 +331,17 @@ export class PromptEditor extends CustomEditor {
     this.contextCache = undefined;
   }
 
-  private contextUsage(): ContextUsage {
+  private contextSnapshot(): ContextSnapshot {
     const model = this.ctx.model;
-    if (this.contextCache === undefined || this.contextCache.model !== model) {
-      this.contextCache = { model, usage: this.ctx.getContextUsage() };
+    const leafId = this.ctx.sessionManager.getLeafId();
+    if (
+      this.contextCache === undefined ||
+      this.contextCache.model !== model ||
+      this.contextCache.leafId !== leafId
+    ) {
+      this.contextCache = { model, leafId, snapshot: readContextSnapshot(this.ctx) };
     }
-    return this.contextCache.usage;
+    return this.contextCache.snapshot;
   }
 
   dispose(): void {
@@ -425,7 +440,7 @@ export class PromptEditor extends CustomEditor {
     const inputLines = super.render(editorWidth);
     const model = this.ctx.model;
     const thinkingLevel = this.pi.getThinkingLevel();
-    const usage = this.contextUsage();
+    const context = this.contextSnapshot();
     const profileName = sanitizeStatus(this.promptState.getProfileName() ?? "");
     const isWorking = this.promptState.isWorking();
     const key = JSON.stringify([
@@ -436,8 +451,10 @@ export class PromptEditor extends CustomEditor {
       model?.provider,
       thinkingLevel,
       theme.getThinkingBorderColor(thinkingLevel)(thinkingLevel),
-      usage?.tokens,
-      usage?.percent,
+      context.usage?.tokens,
+      context.usage?.percent,
+      context.estimated,
+      context.freedTokens,
       profileName,
       isWorking,
       this.agentMentionCache.version,
@@ -452,7 +469,7 @@ export class PromptEditor extends CustomEditor {
         modelName: model?.name,
         modelProvider: model?.provider,
         thinkingLevel,
-        usage,
+        context,
         profileName,
         isWorking,
       });
@@ -504,8 +521,8 @@ export class PromptEditor extends CustomEditor {
     });
   }
 
-  protected renderContextLine(theme: Theme, usage: ContextUsage): string {
-    return renderContext(theme, usage);
+  protected renderContextLine(theme: Theme, context: ContextSnapshot): string {
+    return renderContext(theme, context);
   }
 
   protected buildPromptLayout(input: PromptRenderInput): {
@@ -527,7 +544,7 @@ export class PromptEditor extends CustomEditor {
             input.theme.getThinkingBorderColor(input.thinkingLevel)(input.thinkingLevel),
           ].join("");
     const modelRight = [
-      this.renderContextLine(input.theme, input.usage),
+      this.renderContextLine(input.theme, input.context),
       input.profileName.length > 0
         ? `${separator}${input.theme.fg("muted", input.profileName)}`
         : "",
