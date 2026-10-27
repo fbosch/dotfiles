@@ -16,7 +16,6 @@
     g: "https://www.google.com/search?q={{{s}}}",
     gh: "https://github.com/search?q={{{s}}}",
     yt: "https://www.youtube.com/results?search_query={{{s}}}",
-    reddit: "https://www.reddit.com/search?q={{{s}}}",
     wikipedia: "https://wikipedia.org/w/index.php?search={{{s}}}",
     gmap: "https://maps.google.com/maps?q={{{s}}}",
     gma: "https://mail.google.com/mail/u/0/#search/{{{s}}}",
@@ -25,7 +24,6 @@
   };
   const BANG_ALIASES = {
     w: "wikipedia",
-    rd: "reddit",
     so: "ov",
     maps: "gmap",
   };
