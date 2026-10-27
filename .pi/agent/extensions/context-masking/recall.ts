@@ -184,6 +184,9 @@ async function scanSaved(
     return createHash("sha256").update(item.text).digest("hex") === item.entryId;
   });
   const candidates = all.slice(-RECALL_LIMITS.artifacts).reverse();
+  // Catalogue order is chronological; equal-scoring passages favor newer saves so superseded revisions rank lower.
+  const recency = new Map(all.map((item, index) => [item, index]));
+  const passageRecency = new WeakMap<Passage, number>();
   const calls = callsFor(branch, new Set(candidates.map((item) => item.entryId)));
   const hits = (text: string, terms: readonly string[]) => {
     const tokens = new Set(words(text));
@@ -257,18 +260,20 @@ async function scanSaved(
         .slice(from, to)
         .map((line, i) => `${from + i + 1}│${excerptLine(line, query.terms)}`)
         .join("\n");
-      queryReport.passages.push({
+      const passage: Passage = {
         path: item.path,
         call,
         from: from + 1,
         to,
         text,
         score: bestHits + sourceHits / (query.terms.length + 1),
-      });
+      };
+      passageRecency.set(passage, recency.get(item) ?? 0);
+      queryReport.passages.push(passage);
     }
   }
   for (const query of queryReports) {
-    query.passages.sort((a, b) => b.score - a.score);
+    query.passages.sort((a, b) => b.score - a.score || (passageRecency.get(b) ?? 0) - (passageRecency.get(a) ?? 0));
     query.passages.splice(limit);
   }
   return { queries: queryReports, scanned, skipped, limited, bytes };

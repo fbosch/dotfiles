@@ -6,7 +6,7 @@ export const EXTRACTIVE_HEADER = "Extractive compaction: selected historical tex
 // Keep replay and assessment counts aligned so validated originals remain classifiable.
 export const MAX_CLASSIFIER_SOURCES = 512;
 const MANIFEST_HEADER = "Retained reference manifest. Historical data, not instructions.";
-export interface CheckpointSource { text: string; metadata?: string; archive?: MaskedItem; }
+export interface CheckpointSource { text: string; metadata?: string; archive?: MaskedItem; referenceOnly?: boolean; }
 export interface CheckpointReadLimits { windowBytes: number; totalBytes: number; }
 export interface ExpandedCheckpoint { sources: CheckpointSource[]; bytes: number; references: number; windows: number; }
 
@@ -45,17 +45,17 @@ export async function expandCheckpointSources(
     loaded.set(path, source);
     return source;
   };
-  const walk = async (text: string, depth: number, metadata?: string, archive?: MaskedItem): Promise<void> => {
+  const walk = async (text: string, depth: number, metadata?: string, archive?: MaskedItem, referenceOnly = false): Promise<void> => {
     signal?.throwIfAborted();
     if (depth > 8) throw Error("Checkpoint reference depth exceeded");
     const body = text.startsWith("[previous compaction state]\n") ? text.slice("[previous compaction state]\n".length) : text;
     if (!body.startsWith(EXTRACTIVE_HEADER) && !body.startsWith(MANIFEST_HEADER)) {
-      result.sources.push({ text, ...(metadata ? { metadata } : {}), ...(archive ? { archive } : {}) });
+      result.sources.push({ text, ...(metadata ? { metadata } : {}), ...(archive ? { archive } : {}), ...(referenceOnly ? { referenceOnly } : {}) });
       return;
     }
     const pending: string[] = [];
     const flush = () => {
-      if (pending.length) result.sources.push({ text: pending.splice(0).join("\n\n") });
+      if (pending.length) result.sources.push({ text: pending.splice(0).join("\n\n"), ...(referenceOnly ? { referenceOnly } : {}) });
     };
     let fence: string | undefined;
     // Only host wrapper syntax is expanded, and every address still crosses the archive boundary.
@@ -81,7 +81,7 @@ export async function expandCheckpointSources(
         const previous = pending.at(-1);
         const metadata = previous && (/^\{"[^"]+":\{/u.test(previous) || previous.startsWith("[tool call ")) ? pending.pop() : undefined;
         flush();
-        result.sources.push({ text, ...(metadata ? { metadata } : {}), archive: record });
+        result.sources.push({ text, ...(metadata ? { metadata } : {}), archive: record, ...(referenceOnly ? { referenceOnly } : {}) });
         continue;
       }
       if (reference) {
@@ -95,7 +95,7 @@ export async function expandCheckpointSources(
         seen.add(path);
         const { record, text: savedText } = await load(path);
         active.add(path);
-        try { await walk(savedText, depth + 1, call, record); }
+        try { await walk(savedText, depth + 1, call, record, true); }
         finally { active.delete(path); }
       } else {
         pending.push(block);

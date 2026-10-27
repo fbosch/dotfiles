@@ -98,6 +98,35 @@ async function fixture(texts = ["approved value: æøå-123", "obsolete result",
 }
 const omitAll = async (request: ClassifierRequest) => answer(request, () => 0);
 
+test("repeated checkpoints keep demoted sources recoverable without re-promoting them", async () => {
+  const old = "Exporter approved schema_tag=old_æøå. Initial decision.";
+  const current = "Exporter revised schema_tag=new_æøå. Replaces the initial decision.";
+  const f = await fixture([old, current]);
+  let result = await classifyCompaction(f.input, settings, {
+    artifactRoot: f.root, deferReduction: true,
+    classify: async request => answer(request, name => name === "reference_r0" || name === "inline_r1" ? 1 : 0),
+  });
+  expect(result.kind).toBe("retained");
+  expect(result.decisions.find(decision => decision.id === "r0")?.action).toBe("reference");
+  const cache = new ClassifierDecisionCache();
+  for (let round = 0; round < 3; round++) {
+    f.manager.appendCustomEntry("context-masking", { items: result.savedItems });
+    result = await classifyCompaction({
+      sessionId: f.manager.getSessionId(), branch: f.manager.getBranch(), previousSummary: result.text,
+      messages: [{ role: "user", content: "New independent constraint: keep the exporter running.", timestamp: round + 2 }],
+    }, settings, {
+      artifactRoot: f.root, deferReduction: true, cache,
+      classify: async request => answer(request, name => name.startsWith("inline_") ? 1 : 0),
+    });
+    expect(result.kind).toBe("retained");
+    expect(result.decisions.find(decision => decision.path === f.paths[0])?.action).toBe("reference");
+    expect(result.decisions.find(decision => decision.path === f.paths[1])?.action).toBe("inline");
+    expect(result.text).toContain(current);
+    expect(result.text).toContain("New independent constraint");
+    expect(await readFile(f.paths[0]!, "utf8")).toBe(old);
+  }
+});
+
 test("keeps a recovery pointer when an archived bash result is otherwise omitted", async () => {
   const payload = `diagnostic_digest=sha256:2b1d0e7b ${"noise ".repeat(150)}`;
   const f = await fixture([payload], "bash");
@@ -950,6 +979,37 @@ test("joint reconciliation can supersede an older selection within one extra bou
   expect(result.requestBytes.every(bytes => bytes <= 9000)).toBe(true);
 });
 
+test("reconciliation can promote a later referenced revision over an older inline approval", async () => {
+  const f = await fixture(["Exporter approved schema_tag=old_value. Initial decision.", "Routine unrelated status.",
+    "Exporter revision 2 FINAL approved schema_tag=new_value. Replaces the earlier schema approval."]);
+  const phases: string[] = [];
+  let reconciliationQuestions: string[] = [];
+  const result = await classifyCompaction(f.input, settings, { artifactRoot: f.root, classify: async request => {
+    const reconciliation = JSON.stringify(request.state).includes('"phase":"reconciliation"');
+    phases.push(reconciliation ? "reconciliation" : "assessment");
+    if (reconciliation) reconciliationQuestions = Object.keys(request.questions);
+    return answer(request, name => reconciliation
+      ? name === "inline_r2" || name.startsWith("reference_r") ? 1 : 0
+      : name === "inline_r0" || name.startsWith("reference_r") ? 1 : 0);
+  } });
+
+  expect(phases).toEqual(["assessment", "reconciliation"]);
+  expect(reconciliationQuestions.filter(name => /_r\d+$/u.test(name))).toEqual(["inline_r0", "reference_r0", "inline_r2", "reference_r2"]);
+  expect(result.decisions.filter(d => d.id.startsWith("r")).map(d => d.action)).toEqual(["reference", "reference", "inline"]);
+  expect(result.text).toContain("new_value");
+  expect(result.text).not.toContain("old_value");
+});
+
+test("reconciliation never weakens a nominated revision the classifier does not promote", async () => {
+  const f = await fixture(["Exporter approved schema_tag=old_value. Initial decision.",
+    "Exporter revision 2 approved schema_tag notes, unrelated to the current value."]);
+  const result = await classifyCompaction(f.input, settings, { artifactRoot: f.root, classify: async request =>
+    answer(request, name => name === "inline_r0" || name === "reference_r1" ? 1 : 0) });
+
+  expect(result.reconciliationRequests).toBe(1);
+  expect(result.decisions.filter(d => d.id.startsWith("r")).map(d => d.action)).toEqual(["inline", "reference"]);
+});
+
 test("28 KB packets reduce large-history requests without changing retention", async () => {
   const f = await fixture(Array.from({ length: 137 }, (_, i) => `Evidence ${i} æøå ` + "x".repeat(1700)));
   const classify = async (request: ClassifierRequest) => answer(request, name =>
@@ -1105,16 +1165,15 @@ test("recovered originals do not consume the new conversation archive budget", a
   const original = "Saved approval æøå\n" + "x".repeat(1200);
   const record = { ...await saveConversationArtifact(f.root, f.manager.getSessionId(), original), text: original };
   f.manager.appendCustomEntry("context-masking", { items: [record] });
-  let calls = 0;
   const result = await classifyCompaction({
     ...f.input, branch: f.manager.getBranch(), messages: [],
     previousSummary: EXTRACTIVE_HEADER + "\n\n[saved conversation; use read or recall]: " + record.path,
   }, { ...settings, maxTotalArtifactBytes: Buffer.byteLength(original) }, {
     artifactRoot: f.root, deferReduction: true,
-    classify: async request => { calls++; return answer(request, () => 0); },
+    classify: omitAll,
   });
   expect({ kind: result.kind, reason: result.reason }).toEqual({ kind: "retained", reason: "accepted" });
-  expect(calls).toBe(1);
+  expect(result.decisions[0]?.action).toBe("reference");
   expect(result.savedItems).toHaveLength(0);
   expect(result.decisions[0]?.entryId).toBe(record.entryId);
   expect(await readFile(record.path, "utf8")).toBe(original);
@@ -1129,7 +1188,7 @@ test("recovered originals do not consume the new conversation archive budget", a
   expect(next.decisions[0]?.entryId).toBe(record.entryId);
 });
 
-test("reassesses more than 256 saved checkpoint originals across read windows", async () => {
+test("replays more than 256 saved checkpoint references across read windows", async () => {
   const f = await fixture([]);
   const originals = Array.from({ length: 289 }, (_, index) => `Evidence ${index}: ${"x".repeat(10_000)}`);
   const totalBytes = originals.reduce((bytes, text) => bytes + Buffer.byteLength(text), 0);
@@ -1137,12 +1196,11 @@ test("reassesses more than 256 saved checkpoint originals across read windows", 
   for (const text of originals) records.push(await saveConversationArtifact(f.root, f.manager.getSessionId(), text));
   f.manager.appendCustomEntry("context-masking", { items: records });
   const previousSummary = `${EXTRACTIVE_HEADER}\n\n${records.map(record => `[saved conversation; use read or recall]: ${record.path}`).join("\n\n")}`;
-  let calls = 0;
   const result = await classifyCompaction({
     ...f.input, branch: f.manager.getBranch(), messages: [], previousSummary,
   }, settings, {
     artifactRoot: f.root, deferReduction: true,
-    classify: async request => { calls++; return answer(request, () => 0); },
+    classify: omitAll,
   });
 
   expect({ kind: result.kind, reason: result.reason }).toEqual({ kind: "retained", reason: "accepted" });
@@ -1151,7 +1209,7 @@ test("reassesses more than 256 saved checkpoint originals across read windows", 
   expect(result.artifactBytes).toBe(totalBytes);
   const recoveredIds = new Set(records.map(record => record.entryId));
   expect(result.savedItems?.every(item => !recoveredIds.has(item.entryId))).toBe(true);
-  expect(calls).toBeGreaterThan(0);
+  expect(result.decisions.map(decision => decision.action)).toEqual(records.map(() => "reference"));
   for (const [index, record] of records.entries()) {
     const original = originals[index];
     if (original === undefined) throw Error("Missing archived original");

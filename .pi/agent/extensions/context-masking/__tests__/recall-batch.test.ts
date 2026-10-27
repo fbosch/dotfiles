@@ -216,6 +216,15 @@ test("batched prefetch does not let a strong question admit weak matches for ano
   expect(result?.message?.content).not.toContain("weak-only-marker");
 });
 
+test("equal-scoring passages rank the newer saved revision first", async () => {
+  const f = await fixture([
+    "Ledger exporter approved retention_days=30.\n",
+    "Ledger exporter approved retention_days=106.\n",
+  ]);
+  const report = await recallSavedBatch(f.manager.getBranch(), f.root, ["approved retention_days for the ledger exporter"], 2);
+  expect(report.queries[0]?.passages.map(passage => passage.path)).toEqual([...f.paths].reverse());
+});
+
 test("prefetch covers questions beyond the tool's eight-query batch within one output budget", async () => {
   const f = await fixture(Array.from({ length: 12 }, (_, index) => `Archived marker${index} value: fact-${index}\n`));
   type Handler = (event: import("@earendil-works/pi-coding-agent").BeforeAgentStartEvent,
