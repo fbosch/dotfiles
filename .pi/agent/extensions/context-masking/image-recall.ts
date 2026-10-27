@@ -1,8 +1,7 @@
 import { defineTool, type ExtensionAPI, type SessionEntry } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { isMatching, P } from "ts-pattern";
-import { readImageArtifact } from "./image-artifact";
-import { IMAGE_ARCHIVE, imagePattern, MAX_IMAGES, MAX_TOTAL_IMAGE_BYTES, type ImageRetention } from "./image-retention";
+import { readImageArtifact, isImageArchiveEntry, imageArchiveRecords, type ImageArchiveRecord as ImageRetention } from "./evidence-archive";
+import { MAX_IMAGES, MAX_TOTAL_IMAGE_BYTES } from "./image-retention";
 
 export async function recallImages(
   branch: readonly SessionEntry[], root: string, sessionId: string,
@@ -13,10 +12,11 @@ export async function recallImages(
   let archives = 0;
   for (let index = branch.length - 1; index >= 0 && archives < 80; index--) {
     const entry = branch[index];
-    if (entry?.type !== "custom" || entry.customType !== IMAGE_ARCHIVE) continue;
+    if (!entry || !isImageArchiveEntry(entry)) continue;
     archives++;
-    if (!isMatching({ images: P.array(imagePattern) }, entry.data) || entry.data.images.length > MAX_IMAGES) continue;
-    for (const image of [...entry.data.images].reverse()) if (!images.has(image.id)) images.set(image.id, image);
+    const records = imageArchiveRecords(entry);
+    if (!records || records.length > MAX_IMAGES) continue;
+    for (const image of [...records].reverse()) if (!images.has(image.id)) images.set(image.id, image);
   }
   const terms = query.toLowerCase().split(/\s+/u).filter(Boolean);
   const found: ImageRetention[] = [];

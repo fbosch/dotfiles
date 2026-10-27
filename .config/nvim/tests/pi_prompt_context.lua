@@ -2,14 +2,7 @@ local repo_root = assert(vim.env.REPO_ROOT)
 local bridge = require("plugins.ai.pi.bridge")
 local original_input = vim.ui.input
 local original_notify = vim.notify
-local original_broker = package.loaded["plugins.ai.pi.broker"]
-local broker = {
-	open = function(launch)
-		return "/fixture/" .. launch .. ".sock"
-	end,
-	close = function() end,
-}
-package.loaded["plugins.ai.pi.broker"] = broker
+local original_rpcnotify, original_channel_info = vim.rpcnotify, vim.api.nvim_get_chan_info
 local original_integration = package.loaded["plugins.ai.pi"]
 local original_prompt = package.loaded["plugins.ai.pi.prompt"]
 local original_snacks = package.loaded["snacks"]
@@ -88,10 +81,14 @@ end)
 rawset(vim, "notify", function(message)
 	table.insert(notifications, message)
 end)
-broker.send = function(_, request)
+rawset(vim, "rpcnotify", function(_, method, request)
+	assert(method == "pi:nvim-prompt/v1")
 	table.insert(requests, vim.deepcopy(request))
 	return true
-end
+end)
+rawset(vim.api, "nvim_get_chan_info", function(channel)
+	return { id = channel, mode = "rpc" }
+end)
 vim.cmd.cd(repo_root)
 local source = vim.api.nvim_create_buf(true, false)
 vim.api.nvim_set_current_buf(source)
@@ -285,7 +282,8 @@ vim.api.nvim_buf_delete(source, { force = true })
 vim.api.nvim_buf_delete(input_buffer, { force = true })
 rawset(vim.ui, "input", original_input)
 rawset(vim, "notify", original_notify)
-package.loaded["plugins.ai.pi.broker"] = original_broker
+rawset(vim, "rpcnotify", original_rpcnotify)
+rawset(vim.api, "nvim_get_chan_info", original_channel_info)
 package.loaded["plugins.ai.pi"] = original_integration
 package.loaded["plugins.ai.pi.prompt"] = original_prompt
 package.loaded["snacks"] = original_snacks

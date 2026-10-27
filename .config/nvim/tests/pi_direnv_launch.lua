@@ -22,12 +22,6 @@ package.loaded["config.direnv"] = nil
 package.preload["config.direnv"] = function()
 	error("Pi launch must not load the Neovim direnv module")
 end
-package.loaded["plugins.ai.pi.broker"] = {
-	open = function(launch)
-		return "/fixture/" .. launch .. ".sock"
-	end,
-	close = function() end,
-}
 package.loaded["plugins.ai.pi.session"] = {
 	find_exact = function(_, cwd)
 		return { directory = test_root .. "/pi-sessions", cwd = cwd }, nil

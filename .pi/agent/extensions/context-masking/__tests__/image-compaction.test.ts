@@ -7,7 +7,8 @@ import { SessionManager, type ContextEvent, type ContextEventResult, type Extens
 import { CLASSIFIER_DEFAULTS, classifyCompaction, type ClassifierRequest, type ClassifierResponse } from "../classifier-compaction";
 import { ClassifierDecisionCache } from "../classifier-cache";
 import { registerClassifierCompaction } from "../classifier-hook";
-import { IMAGE_ARCHIVE, IMAGE_CONTEXT, RETENTION_GOAL, checkpointImages, registerImageContext } from "../image-retention";
+import { IMAGE_ARCHIVE, checkpointImages } from "../evidence-archive";
+import { IMAGE_CONTEXT, RETENTION_GOAL, registerImageContext } from "../image-retention";
 import { recallImages } from "../image-recall";
 import { placeholder } from "../policy";
 

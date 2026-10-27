@@ -2,8 +2,9 @@ import { packCheckpoint } from "./checkpoint-packing";
 import { retentionContext } from "./retention-context";
 import { createHash } from "node:crypto";
 import type { CompactionInput, CompactionOutcome, ClassifierSettings, ClassifierRequest, ClassifierResponse } from "./classifier-compaction";
-import { classifierImage, readImageArtifact, saveImageArtifact } from "./image-artifact";
-import { MAX_IMAGES, MAX_TOTAL_IMAGE_BYTES, MAX_IMAGE_REQUEST_BYTES, RETENTION_GOAL, imageReferences, type ImageRetention } from "./image-retention";
+import { classifierImage, readImageArtifact, saveImageArtifact } from "./evidence-archive";
+import { MAX_IMAGES, MAX_TOTAL_IMAGE_BYTES, MAX_IMAGE_REQUEST_BYTES, RETENTION_GOAL, imageReferences } from "./image-retention";
+import type { ImageArchiveRecord as ImageRetention } from "./evidence-archive";
 
 type Message = CompactionInput["messages"][number];
 type Dependencies = Parameters<typeof import("./classifier-compaction").classifyCompaction>[2];

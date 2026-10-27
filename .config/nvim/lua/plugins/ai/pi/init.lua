@@ -1,4 +1,3 @@
-local broker = require("plugins.ai.pi.broker")
 local pi_bridge = require("plugins.ai.pi.bridge")
 local pi_session = require("plugins.ai.pi.session")
 local session = require("utils.session")
@@ -38,7 +37,10 @@ local function clear_terminal_state()
 	local closed_session_id = terminal_session_id
 	local closed_owner = terminal_owner
 	local closed_launch_id = terminal_launch_id
-	broker.close(closed_launch_id)
+	if terminal_channel_id ~= nil then
+		pcall(vim.fn.chanclose, terminal_channel_id)
+		M.prompt_channel_closed(terminal_channel_id)
+	end
 	terminal_instance = nil
 	terminal_session_id = nil
 	terminal_owner = nil
@@ -166,7 +168,7 @@ end
 
 local function launch_command(session_flag, session_id, session_dir, socket, launch_id)
 	if type(socket) ~= "string" or socket == "" then
-		error("pi requires a Pi Ask broker socket")
+		error("pi requires a Neovim RPC socket")
 	end
 	if type(launch_id) ~= "string" or launch_id:match("^[a-f0-9]+$") == nil or #launch_id ~= 32 then
 		error("pi requires a valid Neovim launch ID")
@@ -175,7 +177,7 @@ local function launch_command(session_flag, session_id, session_dir, socket, lau
 	local environment = "PI_NVIM_LAUNCH_ID="
 		.. vim.fn.shellescape(launch_id)
 		.. " "
-		.. "PI_NVIM_BROKER="
+		.. "PI_NVIM_SOCKET="
 		.. vim.fn.shellescape(socket)
 		.. " "
 	if vim.env.HERDR_ENV == "1" then
@@ -227,33 +229,14 @@ local function open_terminal(session_flag, session_id, session_dir, cwd, expecte
 		-- Snacks auto-close deletes its event group before our cleanup can run.
 		auto_close = false,
 	}
-	local broker_socket = broker.open(launch_id, canonical_path(cwd), {
-		bind = function(channel, payload)
-			return M.bind_session({
-				sessionId = payload.sessionId,
-				launchId = launch_id,
-				channelId = channel,
-				cwd = canonical_path(cwd),
-				editorPid = vim.fn.getpid(),
-				replacePending = terminal_prompt_channel == nil and terminal_session_id ~= payload.sessionId,
-			})
-		end,
-		ack = function(payload, channel)
-			return M.prompt_acknowledge(payload, channel)
-		end,
-		disconnect = function(channel)
-			M.prompt_channel_closed(channel)
-		end,
-	})
-	local opened, terminal = pcall(function()
-		return snacks_terminal().open(
-			launch_command(session_flag, session_id, session_dir, broker_socket, launch_id),
-			options
-		)
-	end)
-	if not opened or terminal == nil then
-		broker.close(launch_id)
-		error(terminal or "Pi terminal did not open")
+	local socket = vim.v.servername
+	if socket == "" then
+		socket = vim.fn.serverstart()
+	end
+	local terminal =
+		snacks_terminal().open(launch_command(session_flag, session_id, session_dir, socket, launch_id), options)
+	if terminal == nil then
+		error("Pi terminal did not open")
 	end
 	terminal_instance = terminal
 	terminal_session_id = session_id
@@ -309,7 +292,6 @@ local function prepare_editor_exit()
 	-- Snacks wipes the terminal on ExitPre, before MiniSessions saves on VimLeavePre.
 	save_terminal_state()
 	editor_exiting = true
-	broker.close()
 end
 
 local function notify_restore_failure(reason)
@@ -431,6 +413,10 @@ function M.restore()
 end
 
 function M.bind_session(binding)
+	-- Incoming RPC has no close autocmd; retire dead channels when binding or sending.
+	if terminal_channel_id ~= nil and vim.api.nvim_get_chan_info(terminal_channel_id).id == nil then
+		M.prompt_channel_closed(terminal_channel_id)
+	end
 	local session_id = type(binding) == "table" and binding.sessionId or binding
 	if not session.is_valid_pi_session_id(session_id) then
 		return false
@@ -450,6 +436,7 @@ function M.bind_session(binding)
 			or type(binding.channelId) ~= "number"
 			or binding.channelId < 1
 			or binding.channelId % 1 ~= 0
+			or vim.api.nvim_get_chan_info(binding.channelId).mode ~= "rpc"
 			or binding.editorPid ~= vim.fn.getpid()
 			or (binding.replacePending ~= nil and type(binding.replacePending) ~= "boolean")
 			or binding_cwd == nil
@@ -459,6 +446,9 @@ function M.bind_session(binding)
 			return false
 		end
 		local replacing = binding.replacePending == true
+		if terminal_channel_id ~= nil and terminal_channel_id ~= binding.channelId then
+			return false
+		end
 		-- In-process child agents inherit this launch ID; only the terminal session or an explicit replacement may bind.
 		if
 			not replacing
@@ -713,7 +703,7 @@ local function send_prompt()
 	prompt_next_sequence = sequence + 1
 	pending.sequence, pending.request_id, pending.session_id, pending.sent =
 		sequence, request.requestId, identity.sessionId, true
-	local sent_ok, sent = pcall(broker.send, identity.channelId, request)
+	local sent_ok, sent = pcall(vim.rpcnotify, identity.channelId, "pi:nvim-prompt/v1", request)
 	if not sent_ok or sent == false then
 		if prompt_sequence_launch_id == identity.launchId and prompt_next_sequence == sequence + 1 then
 			prompt_next_sequence = sequence
@@ -748,6 +738,9 @@ bound = function(identity)
 end
 
 function M.prompt_available()
+	if terminal_channel_id ~= nil and vim.api.nvim_get_chan_info(terminal_channel_id).id == nil then
+		M.prompt_channel_closed(terminal_channel_id)
+	end
 	if prompt_uncertain_launch_id ~= nil then
 		M.prompt_failed("PI_DELIVERY_UNKNOWN")
 		return false

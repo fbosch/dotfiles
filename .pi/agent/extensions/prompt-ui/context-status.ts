@@ -3,7 +3,7 @@ import {
   type ExtensionContext,
   estimateTokens,
 } from "@earendil-works/pi-coding-agent";
-import { savedItems } from "../context-masking/artifact-index";
+import { savedItems } from "../context-masking/evidence-archive";
 import { MARKER } from "../context-masking/policy";
 
 export interface ContextSnapshot {

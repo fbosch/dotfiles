@@ -18,8 +18,8 @@ import {
 import { ClassifierDecisionCache } from "./classifier-cache";
 import { HYBRID_CHECKPOINT, prepareHybridSummary, restoreCheckpointFiles } from "./hybrid-summary";
 import { sumUsage } from "./classifier-compaction";
-import { checkpointImages, IMAGE_ARCHIVE, imageReferences } from "./image-retention";
-import { readImageArtifact } from "./image-artifact";
+import { imageReferences } from "./image-retention";
+import { checkpointImages, IMAGE_ARCHIVE, readImageArtifact } from "./evidence-archive";
 export const CLASSIFIER_CHECKPOINT = "context-masking-classifier-compaction";
 
 export function isClassifierCheckpoint(details: unknown): boolean {
@@ -249,6 +249,8 @@ export function registerClassifierCompaction(
       assessmentRequests: result.assessmentRequests ?? 0,
       reconciliationRequests: result.reconciliationRequests ?? 0,
       reconciliationIncomplete: result.reconciliationIncomplete ?? false,
+      revisionNominations: result.revisionNominations ?? [],
+      revisionPromotions: result.revisionPromotions ?? 0,
       budgetDemotions: result.budgetDemotions ?? 0,
       archiveWindows: result.archiveWindows ?? 0,
       expandedReferences: result.expandedReferences ?? 0,

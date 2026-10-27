@@ -1,6 +1,6 @@
 import { Buffer } from "node:buffer";
-import type { MaskedItem } from "./artifact-index";
-import { MAX_IMAGE_BYTES as MAX_ARCHIVE_BYTES, saveConversationArtifact } from "./image-artifact";
+import type { MaskedItem } from "./evidence-archive";
+import { MAX_IMAGE_BYTES as MAX_ARCHIVE_BYTES, saveConversationArtifact } from "./evidence-archive";
 
 export type CheckpointPart = { text: string; reference?: string };
 export type PackedCheckpoint = {

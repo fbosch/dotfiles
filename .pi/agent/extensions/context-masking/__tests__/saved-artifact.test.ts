@@ -3,7 +3,7 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { saveConversationArtifact } from "../image-artifact";
+import { saveConversationArtifact } from "../evidence-archive";
 import { recallSaved } from "../recall";
 import { readSavedArtifact, SavedArtifactSnapshotChanged } from "../saved-artifact";
 

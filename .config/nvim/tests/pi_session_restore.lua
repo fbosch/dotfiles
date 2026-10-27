@@ -1,4 +1,8 @@
 local repo_root = assert(vim.env.REPO_ROOT)
+local original_channel_info = vim.api.nvim_get_chan_info
+rawset(vim.api, "nvim_get_chan_info", function(channel)
+	return { id = channel, mode = "rpc" }
+end)
 local test_root = vim.fn.tempname()
 vim.fn.mkdir(test_root, "p")
 test_root = vim.uv.fs_realpath(test_root) or test_root
@@ -39,12 +43,6 @@ package.loaded["config.direnv"] = {
 	failure_message = function()
 		return "project environment fixture failure"
 	end,
-}
-package.loaded["plugins.ai.pi.broker"] = {
-	open = function(launch)
-		return "/fixture/" .. launch .. ".sock"
-	end,
-	close = function() end,
 }
 
 local notifications = {}
@@ -136,8 +134,8 @@ local function assert_exact_command(command, directory, session_id, message)
 		command
 			== "PI_NVIM_LAUNCH_ID="
 				.. vim.fn.shellescape(launch_id)
-				.. " PI_NVIM_BROKER="
-				.. vim.fn.shellescape("/fixture/" .. launch_id .. ".sock")
+				.. " PI_NVIM_SOCKET="
+				.. vim.fn.shellescape(vim.v.servername)
 				.. " pi --session-dir "
 				.. vim.fn.shellescape(directory)
 				.. " --session "
@@ -153,8 +151,8 @@ local function assert_fresh_command(command, message)
 		command
 			== "PI_NVIM_LAUNCH_ID="
 				.. vim.fn.shellescape(launch_id)
-				.. " PI_NVIM_BROKER="
-				.. vim.fn.shellescape("/fixture/" .. launch_id .. ".sock")
+				.. " PI_NVIM_SOCKET="
+				.. vim.fn.shellescape(vim.v.servername)
 				.. " pi",
 		message .. ": fresh Pi command was not session-neutral"
 	)
@@ -489,3 +487,4 @@ vim.env.HERDR_ENV = previous_herdr_env
 vim.env.HERDR_PANE_ID = previous_herdr_pane_id
 vim.env.PI_NVIM_HERDR_PANE_ID = previous_pi_herdr_pane_id
 vim.fn.delete(test_root, "rf")
+rawset(vim.api, "nvim_get_chan_info", original_channel_info)

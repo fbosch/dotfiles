@@ -17,7 +17,7 @@ function fixture() {
         handlers.set(name, handler);
       },
     } as unknown as ExtensionAPI,
-    { launchId: "0123456789abcdef0123456789abcdef", socketPath: "/missing/pi-ask-broker.sock" },
+    { launchId: "0123456789abcdef0123456789abcdef", socketPath: "/missing/pi-ask-RPC.sock" },
   );
   const context = {
     mode: "tui",
@@ -32,7 +32,7 @@ function fixture() {
   return { handlers, notices, context };
 }
 
-test("PiAsk reports a disconnected broker without preventing standalone Pi use", async () => {
+test("PiAsk reports a disconnected RPC without preventing standalone Pi use", async () => {
   const { handlers, notices, context } = fixture();
   await getHandler(handlers, "session_start")({}, context);
   expect(notices).toHaveLength(1);
@@ -40,7 +40,7 @@ test("PiAsk reports a disconnected broker without preventing standalone Pi use",
   getHandler(handlers, "session_shutdown")({}, context);
 });
 
-test("non-TUI sessions do not attach to the editor broker", async () => {
+test("non-TUI sessions do not attach to the editor RPC", async () => {
   const { handlers, notices, context } = fixture();
   await getHandler(handlers, "session_start")({}, { ...context, mode: "rpc" });
   expect(notices).toEqual([]);

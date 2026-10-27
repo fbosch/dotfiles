@@ -5,7 +5,7 @@ import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { isMatching, P } from "ts-pattern";
 
-export async function startBroker(noPrompt = false, failFirstOpen = false) {
+export async function startEditor(noPrompt = false, failFirstOpen = false, binding?: unknown) {
   const root = realpathSync(mkdtempSync(join(tmpdir(), "pi-ask-")));
   const runtime = join(root, "run");
   mkdirSync(runtime, { mode: 0o700 });
@@ -13,6 +13,8 @@ export async function startBroker(noPrompt = false, failFirstOpen = false) {
     "nvim",
     [
       "--headless",
+      "--listen",
+      join(root, "nvim.sock"),
       "-u",
       "NONE",
       "-i",
@@ -27,6 +29,7 @@ export async function startBroker(noPrompt = false, failFirstOpen = false) {
         PI_ASK_FIXTURE_ROOT: root,
         PI_ASK_FIXTURE_CONFIG: resolve(import.meta.dir, "../../../../../../.config/nvim"),
         PI_ASK_FIXTURE_NO_PROMPT: noPrompt ? "1" : "0",
+        ...(binding === undefined ? {} : { PI_ASK_FIXTURE_BINDING: JSON.stringify(binding) }),
         PI_ASK_FIXTURE_FAIL_FIRST_OPEN: failFirstOpen ? "1" : "0",
       },
       stdio: ["ignore", "pipe", "pipe"],
