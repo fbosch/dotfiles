@@ -38,6 +38,7 @@
   },
   "contextMasking": {
     "enabled": true,
+    "rollingEnabled": true,
     "prefetchRecall": true
   },
   "contextClassifierCompaction": {
