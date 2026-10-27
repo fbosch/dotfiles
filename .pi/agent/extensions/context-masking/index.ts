@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { saveMaskedTextArtifacts } from "./evidence-archive";
+import { saveConversationArtifact, saveMaskedTextArtifacts, type MaskedItem } from "./evidence-archive";
 import { join } from "node:path";
 import {
   type ExtensionAPI,
@@ -11,6 +11,7 @@ import {
   type TurnEndEventResult,
 } from "@earendil-works/pi-coding-agent";
 import { buildIndex, withIndex } from "./artifact-index";
+import { CLASSIFIER_DEFAULTS } from "./classifier-compaction";
 import { isClassifierCheckpoint, registerClassifierCompaction } from "./classifier-hook";
 import { isHybridCheckpoint } from "./hybrid-summary";
 import {
@@ -20,6 +21,21 @@ import {
   placeholder,
   selectMasks,
 } from "./policy";
+import {
+  awaitWithAbort,
+  buildRollingContext,
+  collectRollingCandidates,
+  digestText,
+  estimatedUtf8Tokens,
+  packRollingRequests,
+  readRollingAssessments,
+  ROLLING_LIMITS,
+  validateRollingDecisions,
+  type RollingCandidate,
+  type RollingClassifier,
+  type RollingClassifierRequest,
+  type RollingClassifierResponse,
+} from "./masking-retention";
 import { registerRecall, registerRecallPrefetch } from "./recall";
 import { registerImageContext } from "./image-retention";
 import { registerImageRecall } from "./image-recall";
@@ -37,6 +53,203 @@ function loadSettings(ctx: ExtensionContext): MaskingSettings {
 interface Dependencies {
   settings: (ctx: ExtensionContext) => MaskingSettings;
   artifactRoot: () => string;
+  classify?: (
+    ctx: ExtensionContext,
+    request: RollingClassifierRequest,
+    signal: AbortSignal,
+  ) => Promise<RollingClassifierResponse>;
+  deadlineMs?: number;
+}
+
+async function rollingBoundary(
+  event: TurnEndEvent,
+  ctx: ExtensionContext,
+  settings: MaskingSettings,
+  dependencies: Dependencies,
+  lifecycleSignal: AbortSignal,
+  generationIsCurrent: () => boolean,
+): Promise<TurnEndEventResult | undefined> {
+  if (event.outcome !== "completed") return undefined;
+
+  const sessionId = ctx.sessionManager.getSessionId();
+  const leafId = ctx.sessionManager.getLeafId();
+  const projection = event.context.contextEntries;
+  const projectionDigest = digestText(JSON.stringify(
+    projection.map((entry) => [entry.sourceEntry.id, entry.messages]),
+  ));
+  const isFresh = (signal: AbortSignal) =>
+    !signal.aborted &&
+    generationIsCurrent() &&
+    ctx.sessionManager.getSessionId() === sessionId &&
+    ctx.sessionManager.getLeafId() === leafId &&
+    digestText(JSON.stringify(
+      ctx.sessionManager.buildSessionProjection().entries.map((entry) => [
+        entry.sourceEntry.id,
+        entry.messages,
+      ]),
+    )) === projectionDigest;
+
+  if (!isFresh(lifecycleSignal)) return undefined;
+  const assessed = readRollingAssessments(ctx.sessionManager.getBranch());
+  const candidates = collectRollingCandidates(projection, settings, assessed);
+  const eligibleTokens = candidates.reduce((total, candidate) => total + candidate.estimatedTokens, 0);
+  if (eligibleTokens < ROLLING_LIMITS.triggerTokens) return undefined;
+
+  const timeout = AbortSignal.timeout(dependencies.deadlineMs ?? ROLLING_LIMITS.deadlineMs);
+  const signals = [lifecycleSignal, timeout];
+  if (ctx.signal) signals.push(ctx.signal);
+  const signal = AbortSignal.any(signals);
+  const context = buildRollingContext(projection);
+  const packed = packRollingRequests(context, candidates);
+  const deferredIds = new Set(packed.deferred.map((candidate) => candidate.sourceId));
+  const decisions = new Map<string, boolean>();
+  const usageRecords: NonNullable<RollingClassifierResponse["usage"]>[] = [];
+  let usageUnavailable = false;
+  let requestCount = 0;
+  let requestBytes = 0;
+  let classifierDurationMs = 0;
+
+  let classify: RollingClassifier | undefined;
+  if (dependencies.classify) {
+    const injected = dependencies.classify;
+    classify = (request, requestSignal) => injected(ctx, request, requestSignal);
+  } else {
+    const model = packed.batches.length
+      ? ctx.modelRegistry.getModelOfType("classifier", CLASSIFIER_DEFAULTS.provider, CLASSIFIER_DEFAULTS.model)
+      : undefined;
+    classify = model
+      ? (request, requestSignal) =>
+          ctx.modelRegistry.classify(model, request, { signal: requestSignal, maxRetries: 0 })
+      : undefined;
+  }
+
+  if (!classify) {
+    for (const batch of packed.batches)
+      for (const candidate of batch.candidates) deferredIds.add(candidate.sourceId);
+  } else {
+    for (const batch of packed.batches) {
+      if (!isFresh(signal)) return undefined;
+      requestCount++;
+      requestBytes += batch.bytes;
+      const started = performance.now();
+      try {
+        const result = await awaitWithAbort(classify(batch.request, signal), signal);
+        classifierDurationMs += performance.now() - started;
+        if (!isFresh(signal)) return undefined;
+        if (result.usage) usageRecords.push(result.usage);
+        else usageUnavailable = true;
+        const batchDecisions = validateRollingDecisions(result, batch.candidates);
+        if (!batchDecisions) {
+          for (const candidate of batch.candidates) deferredIds.add(candidate.sourceId);
+          continue;
+        }
+        for (const [sourceId, keep] of batchDecisions) decisions.set(sourceId, keep);
+      } catch {
+        classifierDurationMs += performance.now() - started;
+        if (!isFresh(signal)) return undefined;
+        usageUnavailable = true;
+        for (const candidate of batch.candidates) deferredIds.add(candidate.sourceId);
+      }
+    }
+  }
+  if (!isFresh(signal)) return undefined;
+
+  const keptCandidates = candidates.filter((candidate) => decisions.get(candidate.sourceId) === true);
+  const maskCandidates = candidates.filter((candidate) => decisions.get(candidate.sourceId) === false);
+  const archived = new Map<string, { candidate: RollingCandidate; item: MaskedItem }>();
+  for (const candidate of maskCandidates) {
+    if (!isFresh(signal)) return undefined;
+    try {
+      const artifact = await awaitWithAbort(
+        saveConversationArtifact(
+          dependencies.artifactRoot(),
+          sessionId,
+          candidate.text,
+        ),
+        signal,
+      );
+      if (!isFresh(signal)) return undefined;
+      archived.set(candidate.sourceId, {
+        candidate,
+        item: { ...artifact, toolName: candidate.toolName, text: candidate.text },
+      });
+    } catch {
+      if (!isFresh(signal)) return undefined;
+      deferredIds.add(candidate.sourceId);
+    }
+  }
+
+  const plannedMasks = [...archived.values()].map(({ candidate, item }) => {
+    const replacement = placeholder(
+      { entryId: candidate.sourceId, toolName: candidate.toolName, text: candidate.text },
+      item.path,
+    );
+    const savedTokens = candidate.estimatedTokens - estimatedUtf8Tokens(replacement);
+    return { candidate, item, replacement, savedTokens };
+  });
+  const estimatedSavedTokens = plannedMasks.reduce((total, item) => total + item.savedTokens, 0);
+  const applyMasks = estimatedSavedTokens >= ROLLING_LIMITS.minSavedTokens;
+  if (!applyMasks)
+    for (const item of plannedMasks) deferredIds.add(item.candidate.sourceId);
+
+  const edits: SessionBoundaryDraft[] = applyMasks
+    ? plannedMasks.map(({ candidate, replacement }) => ({
+        type: "context_edit",
+        targetId: candidate.sourceId,
+        replacement: { content: [{ type: "text", text: replacement }] },
+      }))
+    : [];
+  const catalogItems: MaskedItem[] = applyMasks
+    ? plannedMasks.map(({ item }) => item)
+    : [];
+  const maskedIds = applyMasks
+    ? new Set(plannedMasks.map(({ candidate }) => candidate.sourceId))
+    : new Set<string>();
+  const assessments = [
+    ...keptCandidates,
+    ...maskCandidates.filter((candidate) => maskedIds.has(candidate.sourceId)),
+  ].map(({ sourceId, bodyDigest }) => ({ sourceId, bodyDigest }));
+  const deferredCandidates = candidates.filter((candidate) =>
+    deferredIds.has(candidate.sourceId) || !assessments.some((item) =>
+      item.sourceId === candidate.sourceId && item.bodyDigest === candidate.bodyDigest
+    ),
+  );
+  const pendingTokens = deferredCandidates.reduce((total, candidate) => total + candidate.estimatedTokens, 0);
+  const drafts: SessionBoundaryDraft[] = [...edits];
+  if (catalogItems.length)
+    drafts.push({
+      type: "custom",
+      customType: CUSTOM_TYPE,
+      data: {
+        items: catalogItems.map(({ entryId, toolName, path }) => ({ entryId, toolName, path })),
+        masked: maskedIds.size,
+        savedTokens: estimatedSavedTokens,
+      },
+    });
+  drafts.push({
+    type: "custom",
+    customType: "context-masking-rolling",
+    data: {
+      version: 1,
+      sourceLeafId: leafId,
+      eligibleTokens,
+      pendingTokens,
+      assessedCount: assessments.length,
+      keptCount: keptCandidates.length,
+      maskedCount: maskedIds.size,
+      deferredCount: deferredCandidates.length,
+      estimatedSavedTokens: applyMasks ? estimatedSavedTokens : 0,
+      classifierDurationMs,
+      requestCount,
+      requestBytes,
+      usage: requestCount > 0 && !usageUnavailable && usageRecords.length === requestCount
+        ? { status: "available", requests: usageRecords }
+        : { status: "unavailable" },
+      assessments,
+    },
+  });
+  if (!isFresh(signal)) return undefined;
+  return { entries: [...event.entries, ...drafts] };
 }
 
 export function registerContextMasking(
@@ -48,6 +261,17 @@ export function registerContextMasking(
 ): void {
   // Keyed by the latest compaction: the hidden set only changes when a compaction lands.
   let cached: { compactionId: string; text: string | undefined } | undefined;
+  let lifecycleGeneration = 0;
+  let lifecycleController = new AbortController();
+  const invalidateRolling = () => {
+    lifecycleGeneration++;
+    lifecycleController.abort();
+    lifecycleController = new AbortController();
+  };
+  pi.on("session_start", invalidateRolling);
+  pi.on("session_tree", invalidateRolling);
+  pi.on("session_compact", invalidateRolling);
+  pi.on("session_shutdown", invalidateRolling);
   pi.on("context", (event, ctx) => {
     const branch = ctx.sessionManager.getBranch();
     let compactionId: string | undefined;
@@ -86,6 +310,17 @@ export function registerContextMasking(
         return undefined;
       }
       if (!settings.enabled) return undefined;
+      if (settings.rollingEnabled) {
+        const generation = lifecycleGeneration;
+        return rollingBoundary(
+          event,
+          ctx,
+          settings,
+          dependencies,
+          lifecycleController.signal,
+          () => lifecycleGeneration === generation,
+        );
+      }
       const usage = ctx.getContextUsage();
       if (usage?.tokens == null || usage.contextWindow <= 0) return undefined;
       if (usage.tokens < settings.triggerRatio * usage.contextWindow) return undefined;

@@ -78,6 +78,13 @@ describe("parseSettings", () => {
       protectRecentTurns: 5,
     });
   });
+  test("rolling masking is opt-in and requires deterministic masking enabled", () => {
+    expect(DEFAULT_SETTINGS.rollingEnabled).toBe(false);
+    expect(parseSettings({ contextMasking: { enabled: true, rollingEnabled: true } }).rollingEnabled).toBe(true);
+    expect(() => parseSettings({ contextMasking: { rollingEnabled: true } })).toThrow();
+    expect(() => parseSettings({ contextMasking: { enabled: false, rollingEnabled: true } })).toThrow();
+  });
+
 
   test("rejects invalid values and unknown keys", () => {
     for (const contextMasking of [
@@ -87,6 +94,7 @@ describe("parseSettings", () => {
       { triggerRatio: 1.5 },
       { protectRecentTurns: 0 },
       { minFreedRatio: 1 },
+      { rollingEnabled: "yes" },
       { bogus: true },
       "on",
     ]) {

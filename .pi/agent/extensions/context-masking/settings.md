@@ -1,6 +1,6 @@
 # Context masking
 
-This extension hides old, large tool results from the model's context before Pi needs to compact. Each hidden result is saved to a local file, and a short placeholder in the conversation points to it. User messages, assistant messages, tool calls, and recent tool results stay verbatim. Deterministic masking and local recall do not call a model. The optional classifier compaction candidate below is disabled by default.
+This extension hides old, large tool results from the model's context before Pi needs to compact. Each hidden result is saved to a local file, and a short placeholder in the conversation points to it. User messages, assistant messages, tool calls, and recent tool results stay verbatim. Deterministic masking and local recall do not call a model. Optional rolling masking and classifier compaction are disabled by default.
 
 ## Enable masking with native compaction
 
@@ -28,17 +28,18 @@ Masking reads global settings only. Malformed masking settings leave context unc
 | Setting | Default | Meaning |
 |---|---|---|
 | `enabled` | `false` | Turns masking on. |
+| `rollingEnabled` | `false` | Replace ratio-trigger masking with the classifier-assisted 4,000-token trial. Requires `enabled`. |
 | `prefetchRecall` | `false` | Add matching saved passages when a new text request arrives. Requires `enabled`. |
-| `triggerRatio` | `0.7` | Mask once Pi's context estimate reaches this share of the context window. |
+| `triggerRatio` | `0.7` | With `rollingEnabled` off, mask once Pi's context estimate reaches this share of the context window. |
 | `protectRecentTurns` | `10` | Tool results from the latest N assistant turns stay verbatim. |
 | `minResultChars` | `800` | Shorter results stay verbatim. |
-| `minFreedRatio` | `0.15` | Skip a batch that would free less than this share of the context. |
+| `minFreedRatio` | `0.15` | With `rollingEnabled` off, skip a batch that would free less than this share of the context. |
 
 The defaults come from replaying recorded sessions with `bun run --cwd .pi/agent benchmark:context-masking`.
 
 ## What happens
 
-At the end of a turn, if context usage is at or above the trigger, the extension:
+With `rollingEnabled` off, the extension runs this batch at the end of a turn once context usage reaches the trigger:
 
 1. Selects tool results older than the protected turns that are at least `minResultChars` long. Results that contain images, or that are already masked or omitted, stay as they are.
 2. Writes each result's text to `~/.pi/agent/cache/context-masking/<session-id>/<entry-id>.txt`, readable only by you. A result that cannot be written is not masked.
@@ -50,6 +51,62 @@ The raw session file keeps every original result, and `/tree` navigation to a po
 A hidden result remains available through `read` at its saved path. The extension also registers a deferred `recall` tool that returns matching passages. Tool discovery can activate it; to declare it at startup, add `"+recall"` to `defaultTools`. Automatic lookup does not activate the tool or change the active tool list.
 
 The `recall` tool accepts either `query` for one question or `queries` for one to eight distinct questions. For example, `{"queries":["Which schema was approved?","What retention period was approved?"],"limit":2}` retrieves both in one scan. `limit` applies per question. All questions share the same scan and output budgets, and each gets an output allowance so the first cannot consume the whole response.
+
+## Opt-in rolling masking
+
+This experimental mode sends complete eligible tool text and bounded conversation history to `openrouter/typesafe/jev-1.14`, even when the chat model uses another provider. It is off by default and does not enable, disable, or replace a compaction handler.
+
+1. Merge this fragment into global `~/.pi/agent/settings.json`, keeping existing compaction settings unchanged:
+
+   ```json
+   {
+     "contextMasking": {
+       "enabled": true,
+       "rollingEnabled": true,
+       "prefetchRecall": true
+     }
+   }
+   ```
+
+2. Run `/reload` to load the updated extension and settings.
+
+Rolling masking starts when unassessed eligible text reaches 4,000 estimated tokens, measured as UTF-8 bytes divided by four. It uses `protectRecentTurns` and `minResultChars`, not `triggerRatio` or `minFreedRatio`. Recent results, incomplete tool cycles, images, and unresolved tool errors stay verbatim. A later success resolves an error only when both the tool name and arguments match.
+
+Each classifier request contains complete candidate bodies. History is bounded to 12,000 bytes and each request to 24,000 bytes. A turn allows at most four requests within one 60-second deadline, without retries. Oversized or ambiguous input stays visible. Invalid verdicts, missing models, failures, aborts, and stale session results do not authorize masking. Only a valid keep probability below `0.35` can select a result, and a batch must save at least 100 estimated tokens.
+
+Exact originals are saved before edits and remain available through the existing catalog, `recall`, and `read`. Kept assessments follow the current branch history and body digest rather than being repeated each turn. This avoids repeated classification, but a task change alone does not reconsider old retained text. Deferred text remains visible and counts toward the pending backlog.
+
+### Trial procedure
+
+Rolling metadata lives in `context-masking-rolling` custom session entries:
+
+- `eligibleTokens` and `pendingTokens` estimate the unassessed backlog before and after the batch. Visible text that was already assessed and kept is not pending backlog.
+- `assessedCount`, `keptCount`, `maskedCount`, `deferredCount`, and `estimatedSavedTokens` describe the batch outcome.
+- `requestCount` and `requestBytes` record classifier calls and their total serialized input size, not full network traffic. `classifierDurationMs` measures classification, not the whole turn.
+- `usage.status` distinguishes reported classifier usage from unavailable usage. Main-model cache behavior comes from normal model usage, not this audit.
+
+These records describe committed batches. Aborted or stale attempts may leave no rolling audit record; include their elapsed time in user-visible latency measurements.
+
+Use fresh sessions with the same chat model, workload, protected window, and compaction settings. Disabling `rollingEnabled` stops future rolling batches; it does not undo committed placeholders. Existing originals remain recoverable.
+
+1. Capture a control session with `rollingEnabled: false`, including normal token usage, reported cache usage, recall activity, and user-visible turn duration.
+2. Capture the same workload in a new session with `rollingEnabled: true`, including rolling audit metadata and the same normal usage measurements.
+3. Compare estimated tokens saved, pending backlog, recall needs, cache behavior, and total turn latency including classification. Treat unavailable cache or usage fields as unknown, not zero.
+4. Disable `rollingEnabled` if continuity worsens, the eligible backlog persists, or classifier latency and cache rewrites outweigh the savings.
+
+The pilot used synthetic workloads. Real-work latency and cache behavior remain unverified.
+
+### Scoped validation
+
+Run the masking tests and installed-SDK typecheck through the dedicated devenv task:
+
+```sh
+devenv --option enterTest:string \
+  'bun run --cwd .pi/agent sdk:sync
+devenv tasks run test:pi-context-masking' test
+```
+
+The default `devenv test` still runs the broader `test:all` task.
 
 ## Automatic saved-output lookup
 

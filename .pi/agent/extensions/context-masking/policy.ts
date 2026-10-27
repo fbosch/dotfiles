@@ -5,6 +5,7 @@ export const MARKER = "[context-masking]";
 
 export interface MaskingSettings {
   enabled: boolean;
+  rollingEnabled: boolean;
   prefetchRecall: boolean;
   /** Mask once estimated context reaches this share of the context window. */
   triggerRatio: number;
@@ -19,6 +20,7 @@ export interface MaskingSettings {
 // Replay over recorded sessions favoured a 10-turn window; see benchmarks/context-masking-replay.ts.
 export const DEFAULT_SETTINGS: MaskingSettings = {
   enabled: false,
+  rollingEnabled: false,
   prefetchRecall: false,
   triggerRatio: 0.7,
   protectRecentTurns: 10,
@@ -29,6 +31,7 @@ export const DEFAULT_SETTINGS: MaskingSettings = {
 const RecordPattern = P.record(P.string, P.unknown);
 const SettingsPattern = {
   enabled: P.optional(P.boolean),
+  rollingEnabled: P.optional(P.boolean),
   prefetchRecall: P.optional(P.boolean),
   triggerRatio: P.optional(P.number.gt(0).lte(1)),
   protectRecentTurns: P.optional(P.number.int().gte(1)),
@@ -50,6 +53,8 @@ export function parseSettings(global: unknown): MaskingSettings {
   for (const [key, setting] of Object.entries(value)) {
     if (setting !== undefined) Object.assign(settings, { [key]: setting });
   }
+  if (settings.rollingEnabled && !settings.enabled)
+    throw new Error("contextMasking.rollingEnabled requires enabled=true");
   return settings;
 }
 

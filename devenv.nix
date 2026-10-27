@@ -376,6 +376,13 @@ in
       bun test benchmarks/__tests__/diff-rendering.test.ts
       node_modules/.bin/tsc --project benchmarks/tsconfig.diff-rendering.json
     '';
+    # Standalone selector; test:pi-context-baseline already includes this suite in test:all.
+    "test:pi-context-masking".exec = ''
+      set -euo pipefail
+      cd .pi/agent
+      bun run typecheck
+      bun test extensions/context-masking/__tests__
+    '';
     "test:pi-context-baseline".exec = ''
       set -euo pipefail
       cd .pi/agent
