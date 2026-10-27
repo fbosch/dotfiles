@@ -30,13 +30,14 @@ class DiffOutputComponent implements Component {
   private cachedWidth: number | undefined;
   private cachedLines: string[] | undefined;
 
-  constructor(private readonly lines: readonly string[]) {}
+  constructor(private readonly lines: readonly string[] | ((width: number) => string[])) {}
 
   render(width: number): string[] {
     // Release the previous wrap buffer before allocating rows for a new terminal width.
     if (this.cachedWidth !== width) this.invalidate();
     if (this.cachedLines === undefined) {
-      this.cachedLines = renderDiffLines(this.lines, width);
+      this.cachedLines =
+        typeof this.lines === "function" ? this.lines(width) : renderDiffLines(this.lines, width);
       this.cachedWidth = width;
     }
     return this.cachedLines;
@@ -46,6 +47,10 @@ class DiffOutputComponent implements Component {
     this.cachedLines = undefined;
     this.cachedWidth = undefined;
   }
+}
+
+export function responsiveComponent(render: (width: number) => Component): Component {
+  return new DiffOutputComponent((width) => render(width).render(width));
 }
 
 function statusLine(theme: Theme, label: "Info" | "Warning", message: string): string {

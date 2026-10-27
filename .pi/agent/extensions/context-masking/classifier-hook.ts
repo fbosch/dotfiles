@@ -44,6 +44,7 @@ export function parseClassifierSettings(global: unknown): ClassifierSettings {
         model: P.optional(P.string.minLength(1)),
         includeContent: P.optional(P.boolean),
         maxRequestBytes: P.optional(P.number.int().gte(1_000).lte(28_000)),
+        maxConcurrentAssessments: P.optional(P.number.int().gte(1).lte(4)),
         maxArtifactBytes: P.optional(P.number.int().gte(1).lte(128_000)),
         maxTotalArtifactBytes: P.optional(P.number.int().gte(1).lte(2_000_000)),
         maxArtifacts: P.optional(P.number.int().gte(1).lte(80)),
@@ -246,15 +247,19 @@ export function registerClassifierCompaction(
       checkpointInlineBytes: result.checkpointInlineBytes,
       assessmentRequests: result.assessmentRequests ?? 0,
       reconciliationRequests: result.reconciliationRequests ?? 0,
+      reconciliationIncomplete: result.reconciliationIncomplete ?? false,
+      budgetDemotions: result.budgetDemotions ?? 0,
+      archiveWindows: result.archiveWindows ?? 0,
       expandedReferences: result.expandedReferences ?? 0,
       classifierMs: result.classifierMs,
       cacheHits: result.cacheHits,
       usageComplete: result.usageComplete,
-      decisions: result.decisions.map(({ id, entryId, action, forced, startLine, endLine }) => ({
+      decisions: result.decisions.map(({ id, entryId, action, forced, budgetDemoted, startLine, endLine }) => ({
         id, startLine, endLine,
         entryId,
         action,
         forced,
+        budgetDemoted: budgetDemoted ?? false,
       })),
       usage: result.usage,
     };

@@ -24,8 +24,9 @@ import {
 import { placeholder } from "../policy";
 import { recallSaved } from "../recall";
 import { savedItems } from "../artifact-index";
+import { ClassifierDecisionCache } from "../classifier-cache";
 import { saveConversationArtifact } from "../image-artifact";
-import { EXTRACTIVE_HEADER } from "../checkpoint-sources";
+import { EXTRACTIVE_HEADER, expandCheckpointSources } from "../checkpoint-sources";
 import { sessionWith } from "./fixtures";
 
 const roots: string[] = [];
@@ -96,6 +97,42 @@ async function fixture(texts = ["approved value: æøå-123", "obsolete result",
   return { root, manager, paths, input };
 }
 const omitAll = async (request: ClassifierRequest) => answer(request, () => 0);
+
+test("archives unsaved tool originals across bounded windows", async () => {
+  const root = await mkdtemp(join(tmpdir(), "classifier-archive-windows-"));
+  roots.push(root);
+  const { manager } = sessionWith(Array.from({ length: 4 }, (_, i) => ({
+    resultChars: 900, args: { path: `source-${i}.txt` },
+  })));
+  const result = await classifyCompaction({
+    sessionId: manager.getSessionId(), branch: manager.getBranch(),
+    messages: manager.buildSessionProjection().messages,
+  }, { ...settings, maxTotalArtifactBytes: 2000, maxArtifactBytes: 1000 }, {
+    artifactRoot: root, classify: omitAll,
+  });
+  expect(result.kind).toBe("retained");
+  expect(result.archiveWindows).toBeGreaterThan(1);
+  expect(result.savedItems).toHaveLength(5);
+  expect(await Promise.all((result.savedItems ?? []).map(item => readFile(item.path, "utf8"))))
+    .toContain("x".repeat(900));
+});
+
+test("archive windows retain an attempt-wide hard ceiling without changing session originals", async () => {
+  const root = await mkdtemp(join(tmpdir(), "classifier-archive-ceiling-"));
+  roots.push(root);
+  const { manager } = sessionWith(Array.from({ length: 5 }, () => ({ resultChars: 1_000_000 })));
+  const input: CompactionInput = {
+    sessionId: manager.getSessionId(), branch: manager.getBranch(),
+    messages: manager.buildSessionProjection().messages,
+  };
+  const result = await classifyCompaction(input, { ...settings, maxTotalArtifactBytes: 1_100_000 }, {
+    artifactRoot: root, classify: async () => { throw Error("Archive limit must precede classification"); },
+  });
+  expect(result.reason).toBe("conversation-archive-limit");
+  expect(result.requestBytes).toHaveLength(0);
+  expect(result.archiveWindows).toBeGreaterThan(1);
+  expect(input.messages.filter(message => message.role === "toolResult")).toHaveLength(5);
+});
 
 test("disabled candidate does not read artifacts or call the classifier", async () => {
   const f = await fixture();
@@ -288,10 +325,14 @@ test("configuration defaults to disabled and rejects malformed fields", () => {
   expect(
     parseClassifierSettings({ contextClassifierCompaction: { enabled: true } }).includeContent,
   ).toBe(true);
+  expect(parseClassifierSettings({ contextClassifierCompaction: { maxRequestBytes: 28_000 } }).maxRequestBytes).toBe(28_000);
+  expect(parseClassifierSettings({ contextClassifierCompaction: { maxConcurrentAssessments: 2 } }).maxConcurrentAssessments).toBe(2);
   for (const value of [
     { enabled: "yes" },
     { maxRequestBytes: 100_000 },
     { threshold: -1 },
+    { maxConcurrentAssessments: 0 },
+    { maxConcurrentAssessments: 5 },
     { unknown: true },
   ])
     expect(() => parseClassifierSettings({ contextClassifierCompaction: value })).toThrow();
@@ -724,16 +765,125 @@ test("deduplicates shared content without merging source decisions", async () =>
   expect(result.decisions.filter(decision => decision.id.startsWith("r")).map(decision => decision.action)).toEqual(["inline", "omit"]);
 });
 
-test("reconciles joint working selections once only when they came from multiple batches", async () => {
+test("bounded windows prioritize exact recent working state under the checkpoint cap", async () => {
   const f = await fixture(["approval one " + "a".repeat(1100), "approval two " + "b".repeat(1100), "approval three " + "c".repeat(1100)]);
   const requests: ClassifierRequest[] = [];
-  const result = await classifyCompaction(f.input, { ...settings, maxRequestBytes: 6800 }, { artifactRoot: f.root, classify: async request => {
+  const result = await classifyCompaction(f.input, { ...settings, maxRequestBytes: 6800, maxOutputBytes: 4000, minFreedRatio: 0 }, { artifactRoot: f.root, deferReduction: true, classify: async request => {
     requests.push(request);
-    const reconciliation = JSON.stringify(request.state).includes('"phase":"reconciliation"');
-    return answer(request, name => name.startsWith("inline_r") && (!reconciliation || name === "inline_r2") ? 1 : 0);
+    return answer(request, name => name.startsWith("inline_r") ? 1 : 0);
   } });
-  expect({ kind: result.kind, reason: result.reason }).toEqual({ kind: "fallback", reason: "reconciliation-byte-limit" });
-  expect(result.reconciliationRequests ?? 0).toBe(0);
+  expect({ kind: result.kind, reason: result.reason }).toEqual({ kind: "retained", reason: "accepted" });
+  expect(Buffer.byteLength(result.text)).toBeLessThanOrEqual(4000);
+  expect(result.reconciliationRequests).toBeGreaterThan(0);
+  expect(result.reconciliationIncomplete).toBe(true);
+  expect(result.reconciliationRequests).toBeLessThanOrEqual(result.decisions.length);
+  expect(result.usage?.input).toBe(requests.length * USAGE.input);
+  expect(result.decisions.filter(decision => decision.id.startsWith("r")).map(decision => decision.action)).toEqual(["reference", "inline", "inline"]);
+  expect(result.decisions.find(decision => decision.id === "r0")?.budgetDemoted).toBe(true);
+  expect(result.budgetDemotions).toBe(1);
+  const manifest = result.savedItems?.find(item => item.toolName === "compaction:references");
+  f.manager.appendCustomEntry("context-masking", { items: result.savedItems });
+  const expanded = await expandCheckpointSources(result.text, savedItems(f.manager.getBranch()), f.root, 20_000);
+  expect(expanded?.sources.some(source => source.text.includes("approval one"))).toBe(true);
+  expect(manifest ? await readFile(manifest.path, "utf8") : result.text).toContain(f.paths[0] ?? "");
+  expect(result.text).toContain("approval three");
+  expect(await readFile(f.paths[0] ?? "", "utf8")).toContain("approval one");
+  expect(requests.every(request => Buffer.byteLength(JSON.stringify(request)) <= 6800)).toBe(true);
+});
+
+test("packs many selected source units under 4,000 bytes without losing their archives", async () => {
+  const originals = Array.from({ length: 24 }, (_, i) => `Report ${i}: æøå ` + "x".repeat(1900));
+  originals.push("Current approval: æøå; continue the active task.");
+  const f = await fixture(originals);
+  const result = await classifyCompaction(f.input, { ...settings, maxOutputBytes: 4000, maxRequestBytes: 6800 }, {
+    artifactRoot: f.root, deferReduction: true,
+    classify: async request => answer(request, name => name.startsWith("inline_r") ? 1 : 0),
+  });
+  expect({ kind: result.kind, reason: result.reason }).toEqual({ kind: "retained", reason: "accepted" });
+  expect(Buffer.byteLength(result.text)).toBeLessThanOrEqual(4000);
+  expect(result.text).toContain("Current approval: æøå; continue the active task.");
+  expect(result.budgetDemotions).toBeGreaterThan(0);
+  expect(result.decisions.find(decision => decision.id === "r0")?.action).toBe("reference");
+  const manifest = result.savedItems?.find(item => item.toolName === "compaction:references");
+  if (!manifest) throw Error("Missing retained-reference manifest");
+  expect(await readFile(manifest.path, "utf8")).toContain(f.paths[0] ?? "");
+  expect(await Promise.all(f.paths.map(path => readFile(path, "utf8")))).toEqual(originals);
+});
+
+test("falls back when even the exact checkpoint header and recovery pointer cannot fit", async () => {
+  const f = await fixture(["Approved value: æøå " + "a".repeat(1500)]);
+  const result = await classifyCompaction(f.input, { ...settings, maxOutputBytes: 100 }, {
+    artifactRoot: f.root, deferReduction: true,
+    classify: async request => answer(request, name => name.startsWith("inline_") ? 1 : 0),
+  });
+  expect(result.reason).toBe("output-byte-limit");
+  expect(result.kind).toBe("fallback");
+  expect(result.text).toBe("");
+  expect(await readFile(f.paths[0] ?? "", "utf8")).toContain("Approved value: æøå");
+});
+
+test("prioritizes classifier confidence before recency when the checkpoint cannot hold both", async () => {
+  const f = await fixture(["Active approval: æøå " + "a".repeat(850), "Secondary evidence " + "b".repeat(850)]);
+  const result = await classifyCompaction(f.input, { ...settings, maxOutputBytes: 1800 }, {
+    artifactRoot: f.root, deferReduction: true,
+    classify: async request => answer(request, name =>
+      name === "inline_r0" ? 0.95 : name === "inline_r1" ? 0.6 : 0),
+  });
+  expect(result.kind).toBe("retained");
+  expect(result.decisions.filter(decision => decision.id.startsWith("r")).map(decision => decision.action)).toEqual(["inline", "reference"]);
+  expect(result.text).toContain("Active approval: æøå");
+  expect(Buffer.byteLength(result.text)).toBeLessThanOrEqual(1800);
+});
+
+test("bounded reconciliation references only an explicitly revised earlier approval", async () => {
+  const f = await fixture(["Target=old; approval æøå " + "a".repeat(1100), "Target=new explicitly replaces Target=old; approval æøå " + "b".repeat(1100), "Independent dependency remains " + "c".repeat(1100)]);
+  const requests: ClassifierRequest[] = [];
+  const result = await classifyCompaction(f.input, { ...settings, maxRequestBytes: 6800, maxOutputBytes: 4000 }, {
+    artifactRoot: f.root, deferReduction: true,
+    classify: async request => {
+      requests.push(request);
+      const state = JSON.stringify(request.state);
+      return answer(request, name => name.startsWith("inline_r") ||
+        (name === "superseded_r0" && state.includes("Target=new explicitly replaces Target=old")) ? 1 : 0);
+    },
+  });
+  expect(result.kind).toBe("retained");
+  expect(result.reconciliationIncomplete).toBe(true);
+  expect(result.decisions.filter(decision => decision.id.startsWith("r")).map(decision => decision.action)).toEqual(["reference", "inline", "inline"]);
+  expect(result.text).toContain("Target=new explicitly replaces Target=old");
+  expect(result.text).toContain("Independent dependency remains");
+  expect(requests.every(request => Buffer.byteLength(JSON.stringify(request)) <= 6800)).toBe(true);
+});
+
+test("rejects an incomplete bounded-reconciliation response", async () => {
+  const f = await fixture(["Approval A " + "a".repeat(1100), "Approval B " + "b".repeat(1100), "Approval C " + "c".repeat(1100)]);
+  const result = await classifyCompaction(f.input, { ...settings, maxRequestBytes: 6800, maxOutputBytes: 4000 }, {
+    artifactRoot: f.root, deferReduction: true,
+    classify: async request => {
+      const response = answer(request, name => name.startsWith("inline_") ? 1 : 0);
+      if (JSON.stringify(request.state).includes('"phase":"bounded-reconciliation"'))
+        for (const key of Object.keys(request.questions)) delete response.answers[key];
+      return response;
+    },
+  });
+  expect(result.reason).toBe("invalid-classifier-answer");
+  expect(result.kind).toBe("fallback");
+});
+
+test("retains inline evidence when even two selected sources cannot share a bounded reconciliation packet", async () => {
+  const f = await fixture(["Approval A " + "a".repeat(3100), "Approval B " + "b".repeat(3100)]);
+  const requests: ClassifierRequest[] = [];
+  const result = await classifyCompaction(f.input, { ...settings, maxRequestBytes: 6800 }, {
+    artifactRoot: f.root, deferReduction: true,
+    classify: async request => {
+      requests.push(request);
+      return answer(request, name => name.startsWith("inline_r") ? 1 : 0);
+    },
+  });
+  expect(result.kind).toBe("retained");
+  expect(result.reconciliationIncomplete).toBe(true);
+  expect(requests.some(request => JSON.stringify(request.state).includes('"id":"r0"') && JSON.stringify(request.state).includes('"id":"r1"'))).toBe(false);
+  expect(result.decisions.filter(decision => decision.id.startsWith("r")).map(decision => decision.action)).toEqual(["inline", "inline"]);
   expect(requests.every(request => Buffer.byteLength(JSON.stringify(request)) <= 6800)).toBe(true);
 });
 
@@ -751,6 +901,156 @@ test("joint reconciliation can supersede an older selection within one extra bou
   expect(requests.filter(request => JSON.stringify(request.state).includes('"phase":"reconciliation"'))).toHaveLength(1);
   expect(result.usage?.input).toBe(requests.length * USAGE.input);
   expect(result.requestBytes.every(bytes => bytes <= 9000)).toBe(true);
+});
+
+test("28 KB packets reduce large-history requests without changing retention", async () => {
+  const f = await fixture(Array.from({ length: 137 }, (_, i) => `Evidence ${i} æøå ` + "x".repeat(1700)));
+  const classify = async (request: ClassifierRequest) => answer(request, name =>
+    name.startsWith("inline_r") ? 0.9 : name.startsWith("reference_r") ? 1 : 0);
+  const common = { ...settings, maxOutputBytes: 4000, minFreedRatio: 0 };
+  const baseline = await classifyCompaction(f.input, { ...common, maxRequestBytes: 24000 },
+    { artifactRoot: f.root, deferReduction: true, classify });
+  const wider = await classifyCompaction(f.input, { ...common, maxRequestBytes: 28000 },
+    { artifactRoot: f.root, deferReduction: true, classify });
+  expect([baseline.kind, wider.kind]).toEqual(["retained", "retained"]);
+  const baselineRequests = (baseline.assessmentRequests ?? 0) + (baseline.reconciliationRequests ?? 0);
+  const widerRequests = (wider.assessmentRequests ?? 0) + (wider.reconciliationRequests ?? 0);
+  expect(widerRequests).toBeLessThan(baselineRequests);
+  expect(baseline.requestBytes.every(bytes => bytes <= 24_000)).toBe(true);
+  expect(wider.requestBytes.every(bytes => bytes <= 28_000)).toBe(true);
+  expect(wider.decisions.map(decision => decision.action)).toEqual(baseline.decisions.map(decision => decision.action));
+});
+
+test("bounded assessment concurrency preserves ordered decisions and reconciliation", async () => {
+  const f = await fixture(Array.from({ length: 12 }, (_, i) => `Evidence ${i} æøå ` + "x".repeat(1500)));
+  const config = { ...settings, maxRequestBytes: 6_800, maxOutputBytes: 4_000 };
+  const classify = async (request: ClassifierRequest) => answer(request, name =>
+    name.startsWith("inline_r") || name.startsWith("reference_r") ? 1 : 0);
+  const serial = await classifyCompaction(f.input, config, {
+    artifactRoot: f.root, deferReduction: true, classify,
+  });
+  let active = 0, maximum = 0, ordinal = 0;
+  const completions: number[] = [];
+  const parallel = await classifyCompaction(f.input, { ...config, maxConcurrentAssessments: 2 }, {
+    artifactRoot: f.root, deferReduction: true, classify: async request => {
+      const index = ordinal++;
+      if (JSON.stringify(request.state).includes('"phase":"assessment"')) {
+        active++;
+        maximum = Math.max(maximum, active);
+        await Promise.resolve();
+        if (index === 0) await Promise.resolve();
+        active--;
+        completions.push(index);
+      } else {
+        expect(active).toBe(0);
+      }
+      return classify(request);
+    },
+  });
+  expect(maximum).toBe(2);
+  expect(completions[0]).toBe(1);
+  expect(parallel.decisions).toEqual(serial.decisions);
+  expect(parallel.text).toBe(serial.text);
+  expect(parallel.reconciliationRequests).toBeGreaterThan(0);
+  expect(parallel.usage?.totalTokens).toBe(serial.usage?.totalTokens);
+});
+
+test("assessment failure stops queued requests and awaits cancellation of in-flight work", async () => {
+  const f = await fixture(Array.from({ length: 12 }, (_, i) => `Evidence ${i} ` + "x".repeat(1500)));
+  let started = 0, aborted = 0;
+  const result = await classifyCompaction(f.input, {
+    ...settings, maxRequestBytes: 6_800, maxConcurrentAssessments: 2,
+  }, { artifactRoot: f.root, deferReduction: true, classify: async (_request, signal) => {
+    const index = started++;
+    if (index === 0) { await Promise.resolve(); throw Error("API failure"); }
+    await new Promise<void>((_resolve, reject) => {
+      signal?.addEventListener("abort", () => { aborted++; reject(Error("cancelled")); }, { once: true });
+    });
+    throw Error("cancelled");
+  } });
+  expect(result.reason).toBe("classifier-request-failed");
+  expect(started).toBe(2);
+  expect(aborted).toBe(1);
+  expect(result.assessmentRequests).toBe(2);
+  expect(result.usageComplete).toBe(false);
+});
+
+test("parallel assessment accounts for a paid response after an earlier request fails", async () => {
+  const f = await fixture(Array.from({ length: 12 }, (_, i) => `Evidence ${i} ` + "x".repeat(1500)));
+  let started = 0;
+  const result = await classifyCompaction(f.input, {
+    ...settings, maxRequestBytes: 6_800, maxConcurrentAssessments: 2,
+  }, { artifactRoot: f.root, deferReduction: true, classify: async request => {
+    if (started++ === 0) {
+      await Promise.resolve();
+      await Promise.resolve();
+      throw Error("API failure");
+    }
+    return answer(request, () => 0);
+  } });
+  expect(result.reason).toBe("classifier-request-failed");
+  expect(started).toBe(2);
+  expect(result.assessmentRequests).toBe(2);
+  expect(result.usage?.totalTokens).toBe(100);
+  expect(result.usageComplete).toBe(false);
+});
+
+test("parallel assessment reuses complete cache without provider calls", async () => {
+  const f = await fixture(Array.from({ length: 12 }, (_, i) => `Evidence ${i} ` + "x".repeat(1500)));
+  const cache = new ClassifierDecisionCache();
+  const config = { ...settings, maxRequestBytes: 6_800, maxConcurrentAssessments: 2 };
+  const first = await classifyCompaction(f.input, config, {
+    artifactRoot: f.root, deferReduction: true, cache, classify: omitAll,
+  });
+  const second = await classifyCompaction(f.input, config, {
+    artifactRoot: f.root, deferReduction: true, cache,
+    classify: async () => { throw Error("Cache miss"); },
+  });
+  expect(first.kind).toBe("retained");
+  expect(second.kind).toBe("retained");
+  expect(second.decisions).toEqual(first.decisions);
+  expect(second.cacheHits).toBeGreaterThan(1);
+  expect(second.requestBytes).toHaveLength(0);
+  expect(second.usage).toBeUndefined();
+});
+
+test("invalid parallel assessment cancels another in-flight request", async () => {
+  const f = await fixture(Array.from({ length: 12 }, (_, i) => `Evidence ${i} ` + "x".repeat(1500)));
+  let started = 0, aborted = 0;
+  const result = await classifyCompaction(f.input, {
+    ...settings, maxRequestBytes: 6_800, maxConcurrentAssessments: 2,
+  }, { artifactRoot: f.root, deferReduction: true, classify: async (request, signal) => {
+    if (started++ === 0) return answer(request, () => 2);
+    await new Promise<void>((_resolve, reject) => {
+      signal?.addEventListener("abort", () => { aborted++; reject(Error("cancelled")); }, { once: true });
+    });
+    throw Error("cancelled");
+  } });
+  expect(result.reason).toBe("invalid-classifier-answer");
+  expect(started).toBe(2);
+  expect(aborted).toBe(1);
+  expect(result.usage?.totalTokens).toBe(100);
+  expect(result.usageComplete).toBe(false);
+});
+
+test("external abort settles all parallel assessment requests before returning", async () => {
+  const f = await fixture(Array.from({ length: 12 }, (_, i) => `Evidence ${i} ` + "x".repeat(1500)));
+  const controller = new AbortController();
+  let started = 0, aborted = 0;
+  const result = await classifyCompaction(f.input, {
+    ...settings, maxRequestBytes: 6_800, maxConcurrentAssessments: 2,
+  }, { artifactRoot: f.root, deferReduction: true, classify: async (_request, signal) => {
+    if (++started === 2) controller.abort();
+    await new Promise<void>((_resolve, reject) => {
+      if (signal?.aborted) { aborted++; reject(Error("cancelled")); return; }
+      signal?.addEventListener("abort", () => { aborted++; reject(Error("cancelled")); }, { once: true });
+    });
+    throw Error("cancelled");
+  } }, controller.signal);
+  expect(result.reason).toBe("aborted");
+  expect(started).toBe(2);
+  expect(aborted).toBe(2);
+  expect(result.usageComplete).toBe(false);
 });
 
 test("recovered originals do not consume the new conversation archive budget", async () => {
@@ -798,5 +1098,5 @@ test("recovered evidence leaves the archive budget available for current working
   });
   expect(result.kind).toBe("retained");
   expect(result.savedItems?.map(item => item.text)).toEqual(["[user]\n" + current]);
-  for (const [i, record] of records.entries()) expect(await readFile(record.path, "utf8")).toBe(originals[i]);
+  expect(await Promise.all(records.map(record => readFile(record.path, "utf8")))).toEqual(originals);
 });

@@ -96,7 +96,9 @@ Enabling it sends conversation text, tool arguments, masks, artifact addresses, 
     "provider": "openrouter",
     "model": "typesafe/jev-1.14",
     "includeContent": true,
-    "maxOutputBytes": 4000
+    "maxOutputBytes": 4000,
+    "maxRequestBytes": 28000,
+    "maxConcurrentAssessments": 2
   },
   "compactionModel": {
     "enabled": false,
@@ -112,8 +114,7 @@ The host archives ordinary user and assistant text, the previous summary and unm
 
 In the default `extractive` mode, Jev receives two probability questions per source unit in a combined assessment request. They choose `inline`, `reference` or `omit`. The shared rules distinguish working facts needed without another lookup from supporting evidence. The host assembles selected text in source order, keeps call/result provenance and retains exact source line ranges. An omission removes content from active context, not from its archive. Uncertain prose keeps a reference. The classifier cannot replace text or supply new addresses.
 
-If retained references make a checkpoint exceed its budget, the host archives reference groups in a manifest and leaves one pointer in active context. The manifest preserves saved addresses, original call metadata and reference order. Inline choices remain inline. Image addresses can move to a manifest without changing which pixels the extension restores.
-
+If retained references make a checkpoint exceed its budget, the host archives reference groups in a manifest and leaves one pointer in active context. The manifest preserves saved addresses, original call metadata and reference order. When inline choices alone exceed the cap, the host keeps higher-confidence working units as exact text and changes lower-priority units to references. At equal confidence, it favors user text, then newer units. Image addresses can move to a manifest without changing which pixels the extension restores.
 Manifests use the same private, content-addressed store and 4 MB per-file cap. Their metadata does not consume the original-text archive budget. Use bounded read or recall to inspect them. Hybrid native-summary input is not replaced by a manifest pointer.
 
 Ordinary prose, prior summaries and unmasked tool outputs participate even when no masked tool results exist. Only an empty eligible prefix returns `no-content`. Pi stores the selected history as a labeled summary string, not the original structured messages. The native retained tail stays outside these decisions. Images use the shared goal and retention path below; ambiguous call identities or unsupported content use native fallback.
@@ -123,26 +124,32 @@ Ordinary prose, prior summaries and unmasked tool outputs participate even when 
 | `mode` | `"extractive"` | Use extractive checkpoints or opt in to `"hybrid"` native summaries. |
 | `maxSummaryInputBytes` | `48000` | Hybrid input budget for selected messages and the previous summary. |
 | `maxRequestBytes` | `24000` | Serialized classifier state and questions per request. |
+| `maxConcurrentAssessments` | `1` | Maximum independent extractive assessment requests in flight (1–4). Decisions apply in source order; reconciliation and hybrid mode remain sequential. |
 | `maxArtifactBytes` | `12000` | Tool-output read limit and maximum complete prose-unit size eligible for classification. Larger units keep a reference. |
-| `maxTotalArtifactBytes` | `256000` | Existing-output read budget per window and separate original-text archive budget per attempt. |
-| `maxArtifacts` | `40` | Maximum tool results per read window, not per compaction. Prose has a separate 256-unit ceiling. |
+| `maxTotalArtifactBytes` | `256000` | Existing-output read budget per window and separate new-original write budget per archive window; each attempt also has a 4 MB write ceiling. |
+| `maxArtifacts` | `40` | Maximum tool results per read window and new originals per archive window, not per compaction. Prose has a separate 256-unit ceiling. |
 | `maxOutputBytes` | `24000` | Extractive checkpoint text limit, excluding Pi wrappers, the retained tail and restored image pixels. Does not cap a hybrid native summary. |
 | `threshold` | `0.5` | Extractive probability threshold. Inline takes precedence over a reference. |
 | `minFreedRatio` | `0.25` | Required extractive reduction for text-only attempts. Image attempts use output and transport bounds instead of this text-byte estimate. |
 
-The host processes larger prefixes in read windows and renews the count and read-byte budgets before a new artifact would exceed either limit. Packet packing is independent of these windows and obeys `maxRequestBytes`. Shared instructions, source metadata and identical content appear once per packet. Distinct source decisions remain separate even when their text is identical. Audit totals cover the entire attempt and can exceed a single window's limits. Cancellation stops later requests.
+This repository sets `maxRequestBytes` to `28000` for a bounded packet-size trial. The default remains `24000`. A 137-source synthetic history took 32 requests at `28000` instead of 38 at `24000` with the same retained decisions. The three-seed hosted cohort took 45 requests and recovered 18/18 facts at either limit. The effect on a live compaction remains unmeasured.
 
-When inline working selections come from multiple assessment packets, the host submits their joint contents for one reconciliation request. It checks revisions and dependencies against the same task context. Single-packet selections and supporting references do not require a separate role request. If the joint contents exceed the request cap, compaction falls back rather than dropping context to fit. There is no mandatory metadata-screening pass or generated summary.
+This repository also permits two assessment requests in flight. The host waits for both on failure or cancellation and accounts for completed paid replies. Reconciliation still waits for all assessment decisions and runs in order. Concurrency changes latency, not request count or the checkpoint-expansion limit.
+
+The host renews read and archive windows before a result or original would cross their count or byte limits. A single new original must fit its archive window, and new originals cannot exceed 4 MB across an attempt. Packet packing is independent of these windows and obeys `maxRequestBytes`. Shared instructions, source metadata and identical content appear once per packet. Distinct source decisions remain separate even when their text is identical. Audit totals cover the entire attempt and can exceed a single window's limits. Cancellation stops later requests.
+
+When inline working selections come from multiple assessment packets, the host first tries one joint reconciliation request. If it exceeds `maxRequestBytes`, it compares overlapping bounded windows instead; each window contains exact selected source text. A window that cannot fit two selections is skipped. Bounded windows can turn an older inline selection into a reference only when the classifier identifies an explicit later same-subject revision in that window; other selections remain inline until checkpoint budgeting. The audit sets `reconciliationIncomplete` when the joint view was unavailable: distant revisions can remain unresolved. This may still fall back if retained inline text exceeds the checkpoint cap. Single-packet selections and supporting references require no separate role request. There is no mandatory metadata-screening pass or generated summary.
+
 
 Prior extractive checkpoints and manifests expand through the session catalog before reassessment. The expansion preserves source text and call metadata, flattens repeated references and rejects unknown addresses, changed snapshots, symlinks and cycles. It has a separate `maxTotalArtifactBytes` read budget, a 256-address ceiling and an eight-level nesting limit. Validated source archives are reused rather than copied into new conversation snapshots, leaving the original-text archive budget for unsaved text. Native summaries remain ordinary complete text candidates.
 
-This repository sets `maxOutputBytes` to `4000` for extractive mode. A checkpoint that still exceeds that limit after reference packing falls back to normal compaction. The host does not demote inline choices to make the output fit.
+This repository sets `maxOutputBytes` to `4000` for extractive mode. The host reserves space for a reference manifest, then uses the classifier's inline probabilities, source role and recency to choose exact text that fits. `budgetDemotions` counts inline choices moved to references; originals remain in their archives. If the checkpoint still cannot fit, compaction falls back to normal compaction.
 
 These are byte limits, not exact token counts. The source-unit parser only separates strongly repeated log framing from adjacent non-log blocks. It keeps multiline conditions, fenced code and structured documents atomic. Other formats remain whole until a supported parser is added. Oversized or unclassifiable units keep references. Request context uses marked excerpts of prior state and recent evidence; the current task and compaction focus remain complete. If that context or the checkpoint cannot fit, or classification fails, the hook uses Pi's native summarizer with the global `compactionModel.model` and `compactionModel.thinkingLevel`. If new text cannot be archived within its limits, the hook cancels instead. Each text archive has a 4 MB hard limit. Cancellation also cancels the attempt. Missing fallback settings, an unavailable model or a failed native summary do not retry with the active conversation model.
 
 Accepted extractive checkpoints contain references directly or point to their recovery manifest. The general post-compaction index does not reinsert addresses that this candidate omitted. Session records, exact artifacts and local recall remain available.
 
-Successful checkpoints carry classifier usage. Paid fallback attempts have separate `context-masking-classifier-compaction` audit entries. Those entries preserve reported usage but do not add it to the default summary's headline usage. Telemetry stores source IDs, line ranges, decisions and sizes, not classifier packets or saved output. `assessmentRequests` and `reconciliationRequests` count actual text-classifier requests. `expandedReferences` counts archived references read while expanding prior checkpoints. `checkpointUnpackedBytes`, `checkpointBytes` and `checkpointInlineBytes` report text bytes before packing, after packing and without reference groups. Restored pixels are not included.
+Successful checkpoints carry classifier usage. Paid fallback attempts have separate `context-masking-classifier-compaction` audit entries. Those entries preserve reported usage but do not add it to the default summary's headline usage. Telemetry stores source IDs, line ranges, decisions, budget demotions, archive windows and sizes, not classifier packets or saved output. `assessmentRequests` and `reconciliationRequests` count actual text-classifier requests. `expandedReferences` counts archived references read while expanding prior checkpoints. `checkpointUnpackedBytes`, `checkpointBytes` and `checkpointInlineBytes` report text bytes before packing, after packing and without reference groups. Restored pixels are not included.
 
 Pi runs all `session_before_compact` handlers, and the last non-cancel result wins. Multiple custom compactors can spend money even when only one result is committed. This repository keeps `pi-compaction-model` installed but disables its standalone handler. The classifier hook owns extractive checkpoints and native fallback in the live trial. Both hybrid summaries and fallback read the global `compactionModel` model and thinking level while the standalone compactor is disabled. Its `enabled` and `reasons` fields do not gate those requests.
 
