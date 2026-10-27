@@ -1,7 +1,9 @@
 import { createHash, randomBytes } from "node:crypto";
 import { constants } from "node:fs";
 import { link, mkdir, open, realpath, unlink } from "node:fs/promises";
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcessByStdio } from "node:child_process";
+import type { Readable, Writable } from "node:stream";
+
 import { join, resolve } from "node:path";
 
 export const MAX_IMAGE_BYTES = 4_000_000;
@@ -15,23 +17,12 @@ const MAX_IMAGE_AREA = 2_458_624;
 const MAX_DECODE_AREA = 8_000_000;
 const MAGICK = "/run/current-system/sw/bin/magick";
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/u;
-const SHA_PATTERN = /^[a-f0-9]{64}$/u;
+
 const IMAGE_MIME = ["image/png", "image/jpeg"] as const;
-type ImageMime = (typeof IMAGE_MIME)[number];
+export type ImageMime = (typeof IMAGE_MIME)[number];
 
-export type ArchivedImage = {
-  id: string;
-  entryId: string;
-  blockIndex: number;
-  sessionId: string;
-  path: string;
-  mimeType: string;
-  sha256: string;
-  bytes: number;
-};
-
-type ImageInput = { data: string; mimeType: string };
 type ImageDimensions = { width: number; height: number };
+type ImageInput = { data: string; mimeType: string };
 
 const hasUid = typeof process.getuid === "function";
 const currentUid = typeof process.getuid === "function" ? process.getuid() : undefined;
@@ -75,18 +66,6 @@ function digest(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
 
-function artifactId(
-  sessionId: string,
-  entryId: string,
-  blockIndex: number,
-  mimeType: ImageMime,
-  bytes: number,
-  sha256: string,
-): string {
-  const identity = `${sessionId}\0${entryId}\0${blockIndex}\0${mimeType}\0${bytes}\0${sha256}`;
-  return createHash("sha256").update(identity).digest("hex");
-}
-
 function decodeBase64(data: unknown): Buffer {
   if (
     typeof data !== "string" ||
@@ -121,7 +100,7 @@ function abortError(): Error {
   return Object.assign(new Error("Image processing was aborted"), { name: "AbortError" });
 }
 
-function checkAbort(signal?: AbortSignal): void {
+export function checkImageProcessingAbort(signal?: AbortSignal): void {
   if (signal?.aborted) throw abortError();
 }
 
@@ -144,9 +123,9 @@ function runMagick(
   maxOutputBytes: number,
   signal?: AbortSignal,
 ): Promise<Buffer> {
-  checkAbort(signal);
+  checkImageProcessingAbort(signal);
   return new Promise((resolvePromise, rejectPromise) => {
-    let child;
+    let child: ChildProcessByStdio<Writable, Readable, null>;
     try {
       child = spawn(MAGICK, args, {
         cwd: "/",
@@ -245,6 +224,14 @@ async function inspectImage(
   return { width, height };
 }
 
+export async function validateImageInput(image: ImageInput): Promise<{ bytes: Buffer; mimeType: ImageMime }> {
+  const mimeType = imageMime(image?.mimeType ?? "");
+  const bytes = decodeBase64(image?.data);
+  assertMagic(bytes, mimeType);
+  await inspectImage(bytes, mimeType);
+  return { bytes, mimeType };
+}
+
 function normalizedDimensions({ width, height }: ImageDimensions): ImageDimensions {
   const scale = Math.min(
     1,
@@ -283,7 +270,7 @@ async function normalizeImage(
   mimeType: ImageMime,
   signal?: AbortSignal,
 ): Promise<Buffer> {
-  checkAbort(signal);
+  checkImageProcessingAbort(signal);
   const source = await inspectImage(bytes, mimeType, signal);
   const size = normalizedDimensions(source);
   const scale = Math.min(
@@ -319,7 +306,7 @@ async function normalizeImage(
     MAX_CLASSIFIER_BYTES,
     signal,
   );
-  checkAbort(signal);
+  checkImageProcessingAbort(signal);
   const verified = await inspectImage(output, mimeType, signal);
   if (
     output.length === 0 ||
@@ -335,6 +322,10 @@ async function normalizeImage(
   )
     fail("Normalized image exceeds classifier bounds");
   return output;
+}
+
+export function normalizeImageForClassifier(bytes: Buffer, mimeType: string, signal?: AbortSignal): Promise<Buffer> {
+  return normalizeImage(bytes, imageMime(mimeType), signal);
 }
 
 async function openSessionDirectory(root: string, sessionId: string, create: boolean) {
@@ -416,125 +407,29 @@ async function readFileExactly(
   }
 }
 
-function validateRecord(
-  rootPath: string,
-  sessionId: string,
-  record: ArchivedImage,
-): { mimeType: ImageMime; filePath: string; bytes: number } {
-  if (!record || typeof record !== "object") fail("Invalid archived image record");
-  if (
-    !validId(sessionId) ||
-    !validId(record.sessionId) ||
-    record.sessionId !== sessionId ||
-    !validId(record.entryId) ||
-    !Number.isSafeInteger(record.blockIndex) ||
-    record.blockIndex < 0 ||
-    !SHA_PATTERN.test(record.sha256) ||
-    !Number.isSafeInteger(record.bytes) ||
-    record.bytes < 1 ||
-    record.bytes > MAX_IMAGE_BYTES
-  )
-    fail("Invalid archived image metadata");
-  const mimeType = imageMime(record.mimeType);
-  const id = artifactId(
-    record.sessionId,
-    record.entryId,
-    record.blockIndex,
-    mimeType,
-    record.bytes,
-    record.sha256,
-  );
-  const extension = mimeType === "image/png" ? "png" : "jpg";
-  if (record.id !== id) fail("Archived image ID does not match its metadata");
-  const filePath = `image-${id}.${extension}`;
-  const expectedPath = join(rootPath, sessionId, filePath);
-  if (
-    record.path !== expectedPath ||
-    !/^image-[a-f0-9]{64}\.(?:png|jpg)$/u.test(filePath)
-  )
-    fail("Invalid archived image path");
-  return { mimeType, filePath: `image-${id}.${extension}`, bytes: record.bytes };
-}
-
-export async function saveImageArtifact(
+export async function readImageBytes(
   root: string,
   sessionId: string,
-  entryId: string,
-  blockIndex: number,
-  image: ImageInput,
-): Promise<ArchivedImage> {
-  if (!validId(entryId) || !validId(sessionId)) fail("Invalid image source ID");
-  if (!Number.isSafeInteger(blockIndex) || blockIndex < 0) fail("Invalid image block index");
-  const mimeType = imageMime(image?.mimeType ?? "");
-  const bytes = decodeBase64(image?.data);
-  assertMagic(bytes, mimeType);
-  await inspectImage(bytes, mimeType);
-
-  const sha256 = digest(bytes);
-  const id = artifactId(sessionId, entryId, blockIndex, mimeType, bytes.length, sha256);
-  const extension = mimeType === "image/png" ? "png" : "jpg";
-  const filePath = `image-${id}.${extension}`;
-  const path = await saveArchiveBytes(root, sessionId, filePath, bytes);
-  return { id, entryId, blockIndex, sessionId, path, mimeType, sha256, bytes: bytes.length };
-}
-
-export async function readImageArtifact(
-  root: string,
-  sessionId: string,
-  record: ArchivedImage,
-): Promise<{ type: "image"; data: string; mimeType: string }> {
-  if (typeof root !== "string" || root.length === 0) fail("Invalid image archive root");
-  const canonicalRoot = await realpath(resolve(root));
-  const metadata = validateRecord(canonicalRoot, sessionId, record);
+  fileName: string,
+  expectedBytes: number,
+  expectedHash: string,
+  mimeType: ImageMime,
+): Promise<Buffer> {
   const archive = await openSessionDirectory(root, sessionId, false);
   try {
     const bytes = await readFileExactly(
-      join(archive.operationPath, metadata.filePath),
-      metadata.bytes,
-      record.sha256,
+      join(archive.operationPath, fileName),
+      expectedBytes,
+      expectedHash,
     );
-    assertMagic(bytes, metadata.mimeType);
-    return { type: "image", data: bytes.toString("base64"), mimeType: metadata.mimeType };
+    assertMagic(bytes, mimeType);
+    return bytes;
   } finally {
     await archive.handle.close();
   }
 }
 
-export async function classifierImage(
-  root: string,
-  sessionId: string,
-  record: ArchivedImage,
-  signal?: AbortSignal,
-): Promise<{ type: "image"; data: string; mimeType: ImageMime }> {
-  checkAbort(signal);
-  const original = await readImageArtifact(root, sessionId, record);
-  checkAbort(signal);
-  const normalized = await normalizeImage(
-    Buffer.from(original.data, "base64"),
-    imageMime(original.mimeType),
-    signal,
-  );
-  return {
-    type: "image",
-    data: normalized.toString("base64"),
-    mimeType: imageMime(original.mimeType),
-  };
-}
-
-export async function classifierImagePart(
-  root: string,
-  sessionId: string,
-  record: ArchivedImage,
-  signal?: AbortSignal,
-): Promise<{ type: "image_url"; image_url: { url: string } }> {
-  const image = await classifierImage(root, sessionId, record, signal);
-  return {
-    type: "image_url",
-    image_url: { url: `data:${image.mimeType};base64,${image.data}` },
-  };
-}
-
-async function saveArchiveBytes(root: string, sessionId: string, filePath: string, bytes: Buffer): Promise<string> {
+export async function writeArchiveBytes(root: string, sessionId: string, filePath: string, bytes: Buffer): Promise<string> {
   const archive = await openSessionDirectory(root, sessionId, true);
   const path = join(archive.canonicalRoot, sessionId, filePath);
   const sha256 = digest(bytes);
@@ -563,11 +458,4 @@ async function saveArchiveBytes(root: string, sessionId: string, filePath: strin
     await archive.handle.close();
   }
   return path;
-}
-
-export async function saveConversationArtifact(root: string, sessionId: string, text: string) {
-  const bytes = Buffer.from(text, "utf8");
-  if (!bytes.length || bytes.length > MAX_IMAGE_BYTES) fail("Conversation archive exceeds its size limit");
-  const entryId = digest(bytes);
-  return { entryId, toolName: "conversation", path: await saveArchiveBytes(root, sessionId, `${entryId}.txt`, bytes) };
 }

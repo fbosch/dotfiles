@@ -23,9 +23,9 @@ import {
 } from "../classifier-hook";
 import { placeholder } from "../policy";
 import { recallSaved } from "../recall";
-import { savedItems } from "../artifact-index";
+import { savedItems } from "../evidence-archive";
 import { ClassifierDecisionCache } from "../classifier-cache";
-import { saveConversationArtifact } from "../image-artifact";
+import { saveConversationArtifact } from "../evidence-archive";
 import { EXTRACTIVE_HEADER, expandCheckpointSources } from "../checkpoint-sources";
 import { sessionWith } from "./fixtures";
 

@@ -2,8 +2,8 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { MaskedItem } from "../artifact-index";
-import { saveConversationArtifact } from "../image-artifact";
+import type { MaskedItem } from "../evidence-archive";
+import { saveConversationArtifact } from "../evidence-archive";
 import { EXTRACTIVE_HEADER, expandCheckpointSources } from "../checkpoint-sources";
 import { manifestPointer } from "../checkpoint-packing";
 

@@ -1,12 +1,5 @@
 local repo_root = assert(vim.env.REPO_ROOT)
-local broker = {
-	open = function(launch)
-		return "/fixture/" .. launch .. ".sock"
-	end,
-	close = function() end,
-}
 local module_names = {
-	"plugins.ai.pi.broker",
 	"plugins.ai.pi",
 	"plugins.ai.pi.prompt",
 	"utils.session",
@@ -23,6 +16,7 @@ local function scenario(name, run)
 	end
 	local original_input, original_notify = vim.ui.input, vim.notify
 	local original_defer = vim.defer_fn
+	local original_rpcnotify, original_channel_info = vim.rpcnotify, vim.api.nvim_get_chan_info
 	local original_cwd, original_window = vim.fn.getcwd(), vim.api.nvim_get_current_win()
 	local original_agent_dir, original_session_dir = vim.env.PI_CODING_AGENT_DIR, vim.env.PI_CODING_AGENT_SESSION_DIR
 	local agent_dir = vim.fn.tempname()
@@ -46,7 +40,6 @@ local function scenario(name, run)
 		end,
 	} }
 
-	package.loaded["plugins.ai.pi.broker"] = broker
 	local f =
 		{ requests = {}, notices = {}, timers = {}, terminals = {}, inputs = {}, owner = owner, session = session }
 	f.session_dir = session_dir
@@ -113,13 +106,17 @@ local function scenario(name, run)
 	rawset(vim, "notify", function(message)
 		table.insert(f.notices, message)
 	end)
-	broker.send = function(channel, request)
+	rawset(vim, "rpcnotify", function(channel, method, request)
+		assert(method == "pi:nvim-prompt/v1")
 		if f.fail_send then
 			return false
 		end
 		table.insert(f.requests, { channel = channel, payload = vim.deepcopy(request) })
 		return true
-	end
+	end)
+	rawset(vim.api, "nvim_get_chan_info", function(channel)
+		return { id = channel, mode = "rpc" }
+	end)
 	rawset(vim, "defer_fn", function(callback, delay)
 		local timer = { callback = callback, delay = delay, closed = false }
 		function timer:is_closing()
@@ -204,6 +201,8 @@ local function scenario(name, run)
 	rawset(vim.ui, "input", original_input)
 	rawset(vim, "notify", original_notify)
 	rawset(vim, "defer_fn", original_defer)
+	rawset(vim, "rpcnotify", original_rpcnotify)
+	rawset(vim.api, "nvim_get_chan_info", original_channel_info)
 	for _, key in ipairs(module_names) do
 		package.loaded[key] = saved_modules[key]
 	end
@@ -326,6 +325,14 @@ scenario("unrelated cleanup does not cancel an awaiting acknowledgement", functi
 	f.ask("pending")
 	f.disconnect(99)
 	assert(f.ack() == true and #f.requests == 2)
+end)
+
+scenario("terminal close after send reports uncertain delivery", function(f)
+	f.warm()
+	f.ask("pending")
+	f.close()
+	f.notice("PI_DELIVERY_UNKNOWN")
+	assert(f.ack() == false and #f.requests == 2)
 end)
 
 scenario("disconnect after send retires ingress until close", function(f)

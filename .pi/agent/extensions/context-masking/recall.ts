@@ -1,4 +1,3 @@
-import { createHash } from "node:crypto";
 import { join } from "node:path";
 import {
   defineTool,
@@ -8,8 +7,8 @@ import {
   type SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
-import { callsFor, savedItems } from "./artifact-index";
-import { SavedArtifactSnapshotChanged, readSavedArtifact as readArtifact } from "./saved-artifact";
+import { callsFor } from "./artifact-index";
+import { SavedArtifactSnapshotChanged, readTextArtifact as readArtifact, recallableTextArchiveRecords } from "./evidence-archive";
 
 export const RECALL_LIMITS = {
   artifacts: 80,
@@ -170,19 +169,7 @@ async function scanSaved(
   signal?: AbortSignal,
 ): Promise<RecallScan> {
   signal?.throwIfAborted();
-  const source = new Map(
-    branch.flatMap((entry) =>
-      entry.type === "message" && entry.message.role === "toolResult"
-        ? [[entry.id, entry.message.toolName] as const]
-        : [],
-    ),
-  );
-  // Verify the catalogue identity before scanning; the archive reader checks each saved snapshot.
-  const all = [...savedItems(branch).values()].filter(item => {
-    if (source.get(item.entryId) === item.toolName) return true;
-    if (typeof item.text !== "string" || item.text.length > 4_000_000) return false;
-    return createHash("sha256").update(item.text).digest("hex") === item.entryId;
-  });
+  const all = recallableTextArchiveRecords(branch);
   const candidates = all.slice(-RECALL_LIMITS.artifacts).reverse();
   // Catalogue order is chronological; equal-scoring passages favor newer saves so superseded revisions rank lower.
   const recency = new Map(all.map((item, index) => [item, index]));

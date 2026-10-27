@@ -1,61 +1,25 @@
 import { afterEach, expect, test } from "bun:test";
-import { once } from "node:events";
-import { mkdtempSync, realpathSync, rmSync } from "node:fs";
-import { createServer, type Socket } from "node:net";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { spawnSync } from "node:child_process";
 import { PiAskChannel } from "../channel";
-import type { PromptAcknowledgement } from "../prompt-protocol";
+import type { PromptAcknowledgement, PromptRequest } from "../prompt-protocol";
+import { startEditor } from "./fixtures/editor";
 
 const cleanup: (() => Promise<void>)[] = [];
 afterEach(async () => {
   for (const close of cleanup.splice(0)) await close();
 });
-const launchId = "0123456789abcdef0123456789abcdef";
-const sessionId = "fixture-session";
-
-async function fixture(reply: (socket: Socket, binding: object) => void) {
-  const cwd = realpathSync(mkdtempSync(join(tmpdir(), "pi-ask-client-")));
-  const socketPath = join(cwd, "broker.sock");
-  const connections = new Set<Socket>();
-  const server = createServer((socket) => {
-    connections.add(socket);
-    socket.once("close", () => connections.delete(socket));
-    socket.once("data", () =>
-      reply(socket, {
-        channelId: 12,
-        cwd,
-        editorPid: 80,
-        launchId,
-        ownerId: "fixture-owner",
-        sessionId,
-        version: 1,
-      }),
-    );
-  });
-  server.listen(socketPath);
-  await once(server, "listening");
-  cleanup.push(async () => {
-    for (const socket of connections) socket.destroy();
-    await new Promise<void>((resolve) => server.close(() => resolve()));
-    rmSync(cwd, { recursive: true, force: true });
-  });
-  return { cwd, socketPath };
-}
-
 function handlers() {
   const seen: string[] = [];
   let disconnected = 0;
+  let closed!: () => void;
+  const disconnectedEvent = new Promise<void>((resolve) => {
+    closed = resolve;
+  });
   return {
     seen,
     disconnected: () => disconnected,
-    dispatch: (request: {
-      requestId: string;
-      launchId: string;
-      sessionId: string;
-      ownerId: string;
-      text: string;
-    }): PromptAcknowledgement => {
+    disconnectedEvent,
+    dispatch: (request: PromptRequest): PromptAcknowledgement => {
       seen.push(request.text);
       return {
         version: 1,
@@ -72,65 +36,107 @@ function handlers() {
     },
     disconnect: () => {
       disconnected++;
+      closed();
     },
   };
 }
 
-test("client binds a session, buffers fragmented frames and acknowledges a Unicode prompt", async () => {
-  let received: unknown;
-  let acknowledge!: () => void;
-  const acknowledged = new Promise<void>((resolve) => {
-    acknowledge = resolve;
-  });
-  const { cwd, socketPath } = await fixture((socket, binding) => {
-    socket.once("data", (data) => {
-      received = JSON.parse(data.toString());
-      acknowledge();
-    });
-    socket.write(`${JSON.stringify({ type: "bound", binding })}\n`);
-    const frame = Buffer.from(
-      `${JSON.stringify({ type: "prompt", request: { version: 1, requestId: `nvim:${launchId}:1`, sequence: 1, launchId, sessionId, ownerId: "fixture-owner", cwd, editorPid: 80, text: "første æøå", context: null, operation: "submit" } })}\n`,
-    );
-    const split = frame.indexOf(Buffer.from("æ")) + 1;
-    socket.write(frame.subarray(0, split));
-    setImmediate(() => socket.write(frame.subarray(split)));
-  });
+test("native RPC binds, delivers Unicode prompts, and acknowledges once", async () => {
+  const editor = await startEditor();
+  cleanup.push(editor.close);
   const observed = handlers();
-  const channel = new PiAskChannel(socketPath, cwd, launchId, observed);
-  await channel.open(sessionId);
-  await acknowledged;
-  expect(observed.seen).toEqual(["første æøå"]);
-  expect(received).toMatchObject({ type: "ack", payload: { outcome: "accepted", sessionId } });
-  channel.close();
-  channel.close();
+  const channel = new PiAskChannel(editor.socket, editor.cwd, editor.launchId, observed);
+  try {
+    const binding = await channel.open("fixture-session");
+    expect(binding.channelId).toBeGreaterThan(0);
+    expect(binding.editorPid).toBeGreaterThan(0);
+    expect(await editor.exited).toBe(0);
+    expect(observed.seen).toEqual(["explain æøå"]);
+    expect(editor.messages.at(-1)).toMatchObject({ acknowledged: { outcome: "accepted" } });
+  } finally {
+    channel.close();
+    channel.close();
+  }
   expect(observed.disconnected()).toBe(1);
 });
 
-for (const reply of [
-  "not-json\n",
-  `${"x".repeat(64 * 1024 + 1)}\n`,
-  `${JSON.stringify({ type: "bound", binding: { channelId: 12, editorPid: 80, launchId: "wrong" } })}\n`,
-]) {
-  test("client refuses malformed or mismatched broker bindings", async () => {
-    const { cwd, socketPath } = await fixture((socket) => {
-      socket.write(reply);
-    });
+for (const binding of [false, { version: 2 }, { channelId: 12, sessionId: "wrong-session" }]) {
+  test("native RPC rejects an incompatible session binding", async () => {
+    const editor = await startEditor(true, false, binding);
+    cleanup.push(editor.close);
     const observed = handlers();
-    const channel = new PiAskChannel(socketPath, cwd, launchId, observed);
-    await expect(channel.open(sessionId)).rejects.toThrow();
+    const channel = new PiAskChannel(editor.socket, editor.cwd, editor.launchId, observed);
+    await expect(channel.open("fixture-session")).rejects.toThrow("binding");
     expect(channel.binding()).toBeUndefined();
     expect(observed.disconnected()).toBe(1);
   });
 }
 
-test("connection failure is reported without a raw Neovim RPC fallback", async () => {
+test("RPC connection failure is reported", async () => {
   const observed = handlers();
-  const channel = new PiAskChannel(
-    "/missing/pi-ask-broker.sock",
-    process.cwd(),
-    launchId,
-    observed,
-  );
-  await expect(channel.open(sessionId)).rejects.toThrow();
+  const channel = new PiAskChannel("/missing/nvim.sock", process.cwd(), "0".repeat(32), observed);
+  await expect(channel.open("fixture-session")).rejects.toThrow();
   expect(observed.disconnected()).toBe(1);
+});
+
+test("editor exit retires the RPC connection exactly once", async () => {
+  const editor = await startEditor(true);
+  cleanup.push(editor.close);
+  const observed = handlers();
+  const channel = new PiAskChannel(editor.socket, editor.cwd, editor.launchId, observed);
+  await channel.open("fixture-session");
+  await editor.close();
+  await observed.disconnectedEvent;
+  channel.close();
+  expect(channel.binding()).toBeUndefined();
+  expect(observed.disconnected()).toBe(1);
+});
+
+test("closing a pending RPC bind cancels startup", async () => {
+  const editor = await startEditor(true);
+  cleanup.push(editor.close);
+  const observed = handlers();
+  const channel = new PiAskChannel(editor.socket, editor.cwd, editor.launchId, observed);
+  const opening = channel.open("fixture-session");
+  channel.close();
+  await expect(opening).rejects.toThrow("closed");
+  expect(observed.disconnected()).toBe(1);
+});
+
+test("a second RPC client cannot replace a live terminal session", async () => {
+  const editor = await startEditor(true);
+  cleanup.push(editor.close);
+  const first = new PiAskChannel(editor.socket, editor.cwd, editor.launchId, handlers());
+  const next = new PiAskChannel(editor.socket, editor.cwd, editor.launchId, handlers());
+  try {
+    await first.open("fixture-session");
+    await expect(next.open("another-session")).rejects.toThrow("binding");
+    expect(first.binding()?.sessionId).toBe("fixture-session");
+  } finally {
+    first.close();
+    next.close();
+  }
+});
+
+test("a disconnected native channel can be replaced without polling", async () => {
+  const editor = await startEditor(true);
+  cleanup.push(editor.close);
+  const observed = handlers();
+  const first = new PiAskChannel(editor.socket, editor.cwd, editor.launchId, observed);
+  const next = new PiAskChannel(editor.socket, editor.cwd, editor.launchId, handlers());
+  try {
+    const binding = await first.open("fixture-session");
+    const closed = spawnSync(
+      "nvim",
+      ["--server", editor.socket, "--remote-expr", `chanclose(${binding.channelId})`],
+      { encoding: "utf8", timeout: 3000 },
+    );
+    expect(closed.status).toBe(0);
+    await observed.disconnectedEvent;
+    expect((await next.open("replacement-session")).sessionId).toBe("replacement-session");
+    expect(observed.disconnected()).toBe(1);
+  } finally {
+    first.close();
+    next.close();
+  }
 });

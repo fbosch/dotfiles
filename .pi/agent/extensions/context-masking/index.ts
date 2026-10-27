@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, writeFile } from "node:fs/promises";
+import { saveMaskedTextArtifacts } from "./evidence-archive";
 import { join } from "node:path";
 import {
   type ExtensionAPI,
@@ -15,7 +15,6 @@ import { isClassifierCheckpoint, registerClassifierCompaction } from "./classifi
 import { isHybridCheckpoint } from "./hybrid-summary";
 import {
   estimateTokens,
-  type MaskCandidate,
   type MaskingSettings,
   parseSettings,
   placeholder,
@@ -38,28 +37,6 @@ function loadSettings(ctx: ExtensionContext): MaskingSettings {
 interface Dependencies {
   settings: (ctx: ExtensionContext) => MaskingSettings;
   artifactRoot: () => string;
-}
-
-const safeName = (value: string): string => value.replace(/[^A-Za-z0-9_-]/gu, "_");
-
-async function writeArtifacts(
-  root: string,
-  sessionId: string,
-  candidates: readonly MaskCandidate[],
-): Promise<{ candidate: MaskCandidate; path: string }[]> {
-  const dir = join(root, safeName(sessionId));
-  await mkdir(dir, { recursive: true, mode: 0o700 });
-  const written: { candidate: MaskCandidate; path: string }[] = [];
-  for (const candidate of candidates) {
-    const path = join(dir, `${safeName(candidate.entryId)}.txt`);
-    try {
-      await writeFile(path, candidate.text, { mode: 0o600 });
-      written.push({ candidate, path });
-    } catch {
-      // Never hide a result that cannot be read back.
-    }
-  }
-  return written;
 }
 
 export function registerContextMasking(
@@ -114,7 +91,7 @@ export function registerContextMasking(
       if (usage.tokens < settings.triggerRatio * usage.contextWindow) return undefined;
 
       const candidates = selectMasks(event.context.contextEntries, settings);
-      const written = await writeArtifacts(
+      const written = await saveMaskedTextArtifacts(
         dependencies.artifactRoot(),
         ctx.sessionManager.getSessionId(),
         candidates,

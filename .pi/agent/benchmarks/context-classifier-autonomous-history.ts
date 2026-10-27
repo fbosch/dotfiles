@@ -1,7 +1,7 @@
 import { mkdir, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { savedItems } from "../extensions/context-masking/artifact-index";
+import { savedItems } from "../extensions/context-masking/evidence-archive";
 import type { CompactionInput } from "../extensions/context-masking/classifier-compaction";
 import { DEFAULT_SETTINGS, placeholder } from "../extensions/context-masking/policy";
 import { readSavedArtifact } from "../extensions/context-masking/saved-artifact";

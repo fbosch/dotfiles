@@ -13,13 +13,14 @@ import { CLASSIFIER_CHECKPOINT, isClassifierCheckpoint } from "../extensions/con
 import { isHybridCheckpoint } from "../extensions/context-masking/hybrid-summary";
 import contextMasking from "../extensions/context-masking/index";
 import { DEFAULT_SETTINGS, placeholder, selectMasks } from "../extensions/context-masking/policy";
-import { readImageArtifact } from "../extensions/context-masking/image-artifact";
-import { checkpointImages, MAX_IMAGE_REQUEST_BYTES } from "../extensions/context-masking/image-retention";
+import { readImageArtifact } from "../extensions/context-masking/evidence-archive";
+import { checkpointImages } from "../extensions/context-masking/evidence-archive";
+import { MAX_IMAGE_REQUEST_BYTES } from "../extensions/context-masking/image-retention";
 import { autonomousStages, scoreStagedRecall } from "./context-classifier-autonomous-history";
 import { diverseStages, type DiverseStage } from "./context-classifier-diverse-history";
 import { scoreRecall } from "./context-classifier-recall-fixtures";
 import { assistant } from "./context-masking-recall-probe";
-import { savedItems } from "../extensions/context-masking/artifact-index";
+import { savedItems } from "../extensions/context-masking/evidence-archive";
 import { readSavedArtifact } from "../extensions/context-masking/saved-artifact";
 
 export const PREFLIGHT_ROOT = "/tmp/context-native-comparison-preflight";

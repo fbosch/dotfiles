@@ -9,7 +9,7 @@ import {
   MAX_IMAGE_BYTES,
   readImageArtifact,
   saveImageArtifact,
-} from "../image-artifact";
+} from "../evidence-archive";
 
 const MAGICK = "/run/current-system/sw/bin/magick";
 const roots: string[] = [];

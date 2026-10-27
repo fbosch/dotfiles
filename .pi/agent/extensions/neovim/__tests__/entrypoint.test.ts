@@ -20,8 +20,8 @@ async function runEntrypoint(
       ...process.env,
       PI_NVIM_LAUNCH_ID: "0123456789abcdef0123456789abcdef",
     };
-    if (socketPath === undefined) delete environment.PI_NVIM_BROKER;
-    else environment.PI_NVIM_BROKER = socketPath;
+    if (socketPath === undefined) delete environment.PI_NVIM_SOCKET;
+    else environment.PI_NVIM_SOCKET = socketPath;
     const child = Bun.spawn([process.execPath, "run", join(directory, "run.ts")], {
       env: environment,
       stderr: "pipe",
@@ -61,7 +61,7 @@ test("connected startup awaits registration and keeps the captured launch identi
     "/tmp/original.sock",
     `
 import initialize from "./index";
-process.env.PI_NVIM_BROKER = "/tmp/replacement.sock";
+process.env.PI_NVIM_SOCKET = "/tmp/replacement.sock";
 process.env.PI_NVIM_LAUNCH_ID = "replacement-launch";
 let registered;
 await initialize({ on(_, handler) { registered = handler(); } });

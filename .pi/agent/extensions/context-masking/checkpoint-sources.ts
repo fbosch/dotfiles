@@ -1,5 +1,4 @@
-import type { MaskedItem } from "./artifact-index";
-import { readSavedArtifact } from "./saved-artifact";
+import { readTextArchiveReference, type MaskedItem } from "./evidence-archive";
 
 export const EXTRACTIVE_HEADER = "Extractive compaction: selected historical text and evidence; originals remain recoverable through recall.";
 
@@ -15,7 +14,6 @@ export async function expandCheckpointSources(
   limits: CheckpointReadLimits, signal?: AbortSignal,
 ): Promise<ExpandedCheckpoint | undefined> {
   if (!summary.startsWith(EXTRACTIVE_HEADER)) return undefined;
-  const byPath = new Map([...records.values()].map(record => [record.path, record]));
   const seen = new Set<string>();
   const active = new Set<string>();
   const result: ExpandedCheckpoint = { sources: [], bytes: 0, references: 0, windows: 0 };
@@ -24,12 +22,10 @@ export async function expandCheckpointSources(
   const load = async (path: string) => {
     const cached = loaded.get(path);
     if (cached) return cached;
-    const record = byPath.get(path);
-    if (!record) throw Error("Checkpoint address is not in the session catalogue");
     if (loaded.size >= MAX_CLASSIFIER_SOURCES) throw Error("Checkpoint reference count exceeded");
     const available = Math.min(limits.windowBytes, limits.totalBytes - result.bytes);
     if (available <= 0) throw Error("Checkpoint expansion byte limit");
-    const saved = await readSavedArtifact(root, record, available);
+    const saved = await readTextArchiveReference(root, records, path, available);
     result.bytes += saved.bytes;
     result.references++;
     if (saved.partial) throw Error("Checkpoint expansion byte limit");
@@ -41,7 +37,7 @@ export async function expandCheckpointSources(
       }
       windowBytes += saved.bytes;
     }
-    const source = { record, text: saved.text };
+    const source = { record: saved.record, text: saved.text };
     loaded.set(path, source);
     return source;
   };
@@ -76,7 +72,7 @@ export async function expandCheckpointSources(
         : null;
       if (inline) {
         const path = inline[1], text = inline[2];
-        if (!path || text === undefined || !byPath.has(path)) throw Error("Inline checkpoint source is not in the session catalogue");
+        if (!path || text === undefined) throw Error("Inline checkpoint source is not in the session catalogue");
         const { record } = await load(path);
         const previous = pending.at(-1);
         const metadata = previous && (/^\{"[^"]+":\{/u.test(previous) || previous.startsWith("[tool call ")) ? pending.pop() : undefined;

@@ -1,4 +1,8 @@
 local repo_root = assert(vim.env.REPO_ROOT)
+local original_channel_info = vim.api.nvim_get_chan_info
+rawset(vim.api, "nvim_get_chan_info", function(channel)
+	return { id = channel, mode = "rpc" }
+end)
 local original_herdr_env = vim.env.HERDR_ENV
 local original_herdr_pane_id = vim.env.HERDR_PANE_ID
 local original_pi_herdr_pane_id = vim.env.PI_NVIM_HERDR_PANE_ID
@@ -33,12 +37,6 @@ package.loaded["config.direnv"] = {
 	failure_message = function()
 		return "project environment fixture failure"
 	end,
-}
-package.loaded["plugins.ai.pi.broker"] = {
-	open = function(launch)
-		return "/fixture/" .. launch .. ".sock"
-	end,
-	close = function() end,
 }
 
 local captured_command
@@ -100,8 +98,8 @@ local first_launch_id = assert(captured_command:match("PI_NVIM_LAUNCH_ID='([a-f0
 assert(#first_launch_id == 32, "Pi launcher did not generate a bounded launch ID")
 local expected_prefix = command_prefix
 	.. vim.fn.shellescape(first_launch_id)
-	.. " PI_NVIM_BROKER="
-	.. vim.fn.shellescape("/fixture/" .. first_launch_id .. ".sock")
+	.. " PI_NVIM_SOCKET="
+	.. vim.fn.shellescape(vim.v.servername)
 assert(captured_command == expected_prefix .. " pi", "fresh Pi launcher did not let Pi assign its session ID")
 assert(captured_options.win.position == "left", "Pi terminal was not opened on the left")
 assert(captured_options.win.width == 100, "Pi terminal width changed")
@@ -198,8 +196,8 @@ local restored_launch_id = assert(captured_command:match("PI_NVIM_LAUNCH_ID='([a
 assert(restored_launch_id ~= first_launch_id, "Pi launcher reused a closed terminal launch ID")
 local restored_prefix = command_prefix
 	.. vim.fn.shellescape(restored_launch_id)
-	.. " PI_NVIM_BROKER="
-	.. vim.fn.shellescape("/fixture/" .. restored_launch_id .. ".sock")
+	.. " PI_NVIM_SOCKET="
+	.. vim.fn.shellescape(vim.v.servername)
 assert(
 	captured_command
 		== restored_prefix
@@ -218,6 +216,7 @@ saved_metadata = session.get_metadata(nvim_session)
 assert(saved_metadata.pi_session_id == first_session_id, "resumed Pi session ID changed during save")
 assert(saved_metadata.pi_terminal_open == true, "resumed Pi terminal state was not saved")
 
+rawset(vim.api, "nvim_get_chan_info", original_channel_info)
 vim.env.HERDR_ENV = original_herdr_env
 vim.env.HERDR_PANE_ID = original_herdr_pane_id
 vim.env.PI_NVIM_HERDR_PANE_ID = original_pi_herdr_pane_id

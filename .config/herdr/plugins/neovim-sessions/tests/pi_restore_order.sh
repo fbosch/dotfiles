@@ -109,7 +109,7 @@ set -euo pipefail
 	printf 'PI_NVIM_HERDR_PANE_ID=%s\n' "${PI_NVIM_HERDR_PANE_ID:-}"
 	printf 'PI_IMAGE_PROTOCOL=%s\n' "${PI_IMAGE_PROTOCOL:-}"
 	printf 'PI_NVIM_LAUNCH_ID=%s\n' "${PI_NVIM_LAUNCH_ID:-}"
-	printf 'PI_NVIM_BROKER=%s\n' "${PI_NVIM_BROKER:-}"
+	printf 'PI_NVIM_SOCKET=%s\n' "${PI_NVIM_SOCKET:-}"
 	index=0
 	for argument in "$@"; do
 		index=$((index + 1))

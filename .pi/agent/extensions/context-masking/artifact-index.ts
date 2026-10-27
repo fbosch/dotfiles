@@ -9,18 +9,7 @@ export const INDEX_TYPE = "context-masking-index";
 export const MAX_INDEX_ITEMS = 40;
 const MAX_CALL_CHARS = 120;
 
-export interface MaskedItem {
-  entryId: string;
-  toolName: string;
-  path: string;
-  text?: string;
-}
-
-const RecordPattern = {
-  type: "custom",
-  customType: "context-masking",
-  data: { items: P.array({ entryId: P.string, toolName: P.string, path: P.string }) },
-};
+import { savedItems } from "./evidence-archive";
 
 const oneLine = (text: string): string => {
   const line = text.replace(/\s+/gu, " ").trim();
@@ -57,16 +46,6 @@ export function callsFor(
     }
   }
   return described;
-}
-
-export function savedItems(branch: readonly SessionEntry[]): Map<string, MaskedItem> {
-  const items = new Map<string, MaskedItem>();
-  for (const entry of branch) {
-    const record: unknown = entry;
-    if (!isMatching(RecordPattern, record)) continue;
-    for (const item of record.data.items) items.set(item.entryId, item);
-  }
-  return items;
 }
 
 /**

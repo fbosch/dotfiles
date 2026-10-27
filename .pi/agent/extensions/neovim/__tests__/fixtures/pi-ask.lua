@@ -46,6 +46,9 @@ local pi = require("plugins.ai.pi")
 local location = assert(require("plugins.ai.pi.bridge").capture_prompt_location())
 local bind = pi.bind_session
 pi.bind_session = function(binding)
+	if vim.env.PI_ASK_FIXTURE_BINDING ~= nil then
+		return vim.json.decode(vim.env.PI_ASK_FIXTURE_BINDING)
+	end
 	local result = bind(binding)
 	if type(result) == "table" and vim.env.PI_ASK_FIXTURE_NO_PROMPT ~= "1" then
 		vim.schedule(function()
@@ -71,7 +74,7 @@ if vim.env.PI_ASK_FIXTURE_FAIL_FIRST_OPEN == "1" then
 end
 assert(pi.start())
 local ready = {
-	socket = assert(terminal.command:match("PI_NVIM_BROKER='([^']+)'")),
+	socket = assert(terminal.command:match("PI_NVIM_SOCKET='([^']+)'")),
 	launchId = assert(terminal.command:match("PI_NVIM_LAUNCH_ID='([a-f0-9]+)'")),
 	cwd = root,
 }
@@ -83,5 +86,4 @@ assert(
 	end, 10),
 	"fixture timed out"
 )
-require("plugins.ai.pi.broker").close()
 vim.cmd("qa!")

@@ -1,7 +1,7 @@
 import { constants } from "node:fs";
 import { open, realpath } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
-import type { MaskedItem } from "./artifact-index";
+import type { MaskedItem } from "./evidence-archive";
 
 const safeName = (value: string) => value.replace(/[^A-Za-z0-9_-]/gu, "_");
 

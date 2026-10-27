@@ -18,8 +18,8 @@ import {
 import { ClassifierDecisionCache } from "./classifier-cache";
 import { HYBRID_CHECKPOINT, prepareHybridSummary, restoreCheckpointFiles } from "./hybrid-summary";
 import { sumUsage } from "./classifier-compaction";
-import { checkpointImages, IMAGE_ARCHIVE, imageReferences } from "./image-retention";
-import { readImageArtifact } from "./image-artifact";
+import { imageReferences } from "./image-retention";
+import { checkpointImages, IMAGE_ARCHIVE, readImageArtifact } from "./evidence-archive";
 export const CLASSIFIER_CHECKPOINT = "context-masking-classifier-compaction";
 
 export function isClassifierCheckpoint(details: unknown): boolean {

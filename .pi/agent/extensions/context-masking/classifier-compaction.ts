@@ -3,13 +3,18 @@ import { EXTRACTIVE_HEADER, MAX_CLASSIFIER_SOURCES, expandCheckpointSources } fr
 import { manifestPointer, packCheckpoint, type CheckpointPart, type PackedCheckpoint } from "./checkpoint-packing";
 import { retentionContext } from "./retention-context";
 import type { ContextEvent, ModelRuntime, SessionEntry } from "@earendil-works/pi-coding-agent";
-import { savedItems, type MaskedItem } from "./artifact-index";
-import { MAX_IMAGE_BYTES as MAX_CONVERSATION_ARCHIVE_BYTES, saveConversationArtifact } from "./image-artifact";
+import {
+  MAX_TEXT_ARCHIVE_BYTES as MAX_CONVERSATION_ARCHIVE_BYTES,
+  readTextArtifact,
+  saveConversationArtifact,
+  savedItems,
+  type MaskedItem,
+  type ImageArchiveRecord as ImageRetention,
+} from "./evidence-archive";
 import type { ClassifierDecisionCache } from "./classifier-cache";
 import { MARKER, placeholder } from "./policy";
-import { readSavedArtifact } from "./saved-artifact";
 import { classifyWithImages } from "./image-compaction";
-import { RETENTION_GOAL, type ImageRetention } from "./image-retention";
+import { RETENTION_GOAL } from "./image-retention";
 
 type Message = ContextEvent["messages"][number];
 export type ClassifierRequest = Parameters<ModelRuntime["classify"]>[1];
@@ -387,7 +392,7 @@ async function classifyTextCompaction(
       };
       const remaining = settings.maxTotalArtifactBytes - windowBytes;
       try {
-        const artifact = await readSavedArtifact(dependencies.artifactRoot, record, Math.min(settings.maxArtifactBytes, remaining));
+        const artifact = await readTextArtifact(dependencies.artifactRoot, record, Math.min(settings.maxArtifactBytes, remaining));
         outcome.artifactsRead++;
         outcome.artifactBytes += artifact.bytes;
         windowArtifacts++;
