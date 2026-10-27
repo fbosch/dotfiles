@@ -1,6 +1,6 @@
 import { coherentEvidence } from "./coherent-evidence";
-import { EXTRACTIVE_HEADER, expandCheckpointSources } from "./checkpoint-sources";
-import { packCheckpoint, type CheckpointPart, type PackedCheckpoint } from "./checkpoint-packing";
+import { EXTRACTIVE_HEADER, MAX_CLASSIFIER_SOURCES, expandCheckpointSources } from "./checkpoint-sources";
+import { manifestPointer, packCheckpoint, type CheckpointPart, type PackedCheckpoint } from "./checkpoint-packing";
 import { retentionContext } from "./retention-context";
 import type { ContextEvent, ModelRuntime, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { savedItems, type MaskedItem } from "./artifact-index";
@@ -265,6 +265,7 @@ async function classifyTextCompaction(
   const archived: MaskedItem[] = [];
   outcome.savedItems = archived;
   let archiveBytes = 0, archiveWindowBytes = 0, archiveWindowItems = 0, proseCount = 0;
+  let freshProseCount = 0;
   let readWindow = 0, windowArtifacts = 0, windowBytes = 0;
   const archive = async (text: string, toolName: string): Promise<MaskedItem> => {
     if (signal?.aborted) throw new ArchiveFailure("aborted");
@@ -288,10 +289,13 @@ async function classifyTextCompaction(
   };
   const prose = async (text: string, role: string, metadata = "", existing?: MaskedItem) => {
     if (!text) return;
-    if (proseCount >= 256) throw new ArchiveFailure("conversation-count-limit");
+    // Recovered originals do not consume the separate limit for newly archived text.
+    if (proseCount >= MAX_CLASSIFIER_SOURCES || (!existing && freshProseCount >= 256))
+      throw new ArchiveFailure("conversation-count-limit");
     const content = existing ? text : `[${role}]\n${text}`;
     // Expansion already validated recovered originals; do not copy or charge them as new text.
     const item = existing ?? await archive(content, `conversation:${role}`);
+    if (!existing) freshProseCount++;
     // Never split a constraint or code block into independently prunable fragments.
     const candidate: Candidate = {
       kind: "conversation", id: `t${proseCount++}`, entryId: item.entryId,
@@ -666,10 +670,8 @@ async function classifyTextCompaction(
   };
   const outputLimit = hybrid ? settings.maxSummaryInputBytes : settings.maxOutputBytes;
   if (!hybrid && byteLength(renderDecisions().map(part => part.text).join("\n\n")) > outputLimit) {
-    const manifestPointerBytes = byteLength(
-      "[Retained references: 256 groups; use read or recall to recover evidence. Manifest]: " +
-      dependencies.artifactRoot + "/" + (input.sessionId ?? "") + "/" + "0".repeat(64) + ".txt\n\n",
-    );
+    const manifestPointerBytes = byteLength(manifestPointer(MAX_CLASSIFIER_SOURCES,
+      dependencies.artifactRoot + "/" + (input.sessionId ?? "") + "/" + "0".repeat(64) + ".txt") + "\n\n");
     const inlineBudget = outputLimit - manifestPointerBytes;
     const inlineBytes = () => byteLength(renderDecisions()
       .filter(part => part.reference === undefined).map(part => part.text).join("\n\n"));

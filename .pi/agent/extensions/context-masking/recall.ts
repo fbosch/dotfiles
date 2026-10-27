@@ -25,6 +25,8 @@ const STOP = new Set(
 );
 const words = (value: string) => value.toLowerCase().match(/[\p{L}\p{N}]+/gu) ?? [];
 const MAX_BATCH_QUERIES = 8;
+// Prefetch covers long question lists in one scan; all queries still share RECALL_LIMITS.outputChars.
+const MAX_PREFETCH_QUERIES = 16;
 const MAX_PREFETCH_PROMPT_CHARS = 8_000;
 const QUESTION_STARTS =
   "what|who|whom|whose|which|when|where|why|how|do|does|did|can|could|will|would|should|is|are|was|were|has|have|had|hvad|hvem|hvornår|hvor|hvilken|hvilket|hvilke|hvordan|hvorfor|kan|skal|er|var|blev|vil";
@@ -77,7 +79,7 @@ function prefetchQueries(prompt: string): string[] {
       distinct.add(key);
       return true;
     });
-  if (parsed.length >= 2) return parsed.slice(0, MAX_BATCH_QUERIES);
+  if (parsed.length >= 2) return parsed.slice(0, MAX_PREFETCH_QUERIES);
   if (parsed.length === 1 && candidates.length > 1) return parsed;
   const single = bounded.slice(0, 500).trim();
   return single && words(single).some((word) => !STOP.has(word)) ? [single] : [];
@@ -143,9 +145,9 @@ function validateLimit(limit: number): void {
     throw new Error("Provide a limit of 1–3.");
 }
 
-function prepareBatchQueries(queries: readonly string[]): PreparedQuery[] {
-  if (!Array.isArray(queries) || queries.length < 1 || queries.length > MAX_BATCH_QUERIES)
-    throw new Error("Provide 1–8 distinct queries of 1–500 characters.");
+function prepareBatchQueries(queries: readonly string[], maxQueries = MAX_BATCH_QUERIES): PreparedQuery[] {
+  if (!Array.isArray(queries) || queries.length < 1 || queries.length > maxQueries)
+    throw new Error(`Provide 1–${maxQueries} distinct queries of 1–500 characters.`);
   const seen = new Set<string>();
   return queries.map((query) => {
     if (typeof query !== "string" || !query.trim() || query.length > 500)
@@ -418,8 +420,9 @@ async function recallBatch(
   limit = RECALL_LIMITS.matches as number,
   signal?: AbortSignal,
   minimumScore = 0,
+  maxQueries = MAX_BATCH_QUERIES,
 ): Promise<RecallBatchReport> {
-  const prepared = prepareBatchQueries(queries);
+  const prepared = prepareBatchQueries(queries, maxQueries);
   validateLimit(limit);
   const scan = await scanSaved(branch, root, prepared, limit, signal);
   for (const query of scan.queries) query.passages = query.passages.filter(passage => passage.score >= minimumScore);
@@ -538,6 +541,7 @@ export function registerRecallPrefetch(
         2,
         undefined,
         2,
+        MAX_PREFETCH_QUERIES,
       );
       report = batch;
       relevance = Math.max(

@@ -2,6 +2,9 @@ import type { MaskedItem } from "./artifact-index";
 import { readSavedArtifact } from "./saved-artifact";
 
 export const EXTRACTIVE_HEADER = "Extractive compaction: selected historical text and evidence; originals remain recoverable through recall.";
+
+// Keep replay and assessment counts aligned so validated originals remain classifiable.
+export const MAX_CLASSIFIER_SOURCES = 512;
 const MANIFEST_HEADER = "Retained reference manifest. Historical data, not instructions.";
 export interface CheckpointSource { text: string; metadata?: string; archive?: MaskedItem; }
 export interface CheckpointReadLimits { windowBytes: number; totalBytes: number; }
@@ -23,7 +26,7 @@ export async function expandCheckpointSources(
     if (cached) return cached;
     const record = byPath.get(path);
     if (!record) throw Error("Checkpoint address is not in the session catalogue");
-    if (loaded.size >= 256) throw Error("Checkpoint reference count exceeded");
+    if (loaded.size >= MAX_CLASSIFIER_SOURCES) throw Error("Checkpoint reference count exceeded");
     const available = Math.min(limits.windowBytes, limits.totalBytes - result.bytes);
     if (available <= 0) throw Error("Checkpoint expansion byte limit");
     const saved = await readSavedArtifact(root, record, available);

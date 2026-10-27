@@ -28,9 +28,14 @@ export function checkpointImages(branch: readonly SessionEntry[]): ImageRetentio
 }
 
 export function imageReferences(images: readonly ImageRetention[]): string {
-  return images.filter(image => image.action !== "omit").map(image =>
-    `[saved image ${image.id}; ${image.action === "inline" ? "kept in active image context" : "reference; use read to view"}]: ${image.path}`,
-  ).join("\n");
+  // Archive order is chronological. Position, counted over omitted images too, identifies the latest
+  // revision without opening each image or copying caption prose that text pruning may have omitted.
+  return images.flatMap((image, index) => {
+    if (image.action === "omit") return [];
+    const status = image.action === "inline" ? "kept in active image context" : "reference; use read to view";
+    const position = images.length > 1 ? `; ${index + 1} of ${images.length}${index === images.length - 1 ? ", newest" : ""}` : "";
+    return [`[saved image ${image.id}; ${status}${position}]: ${image.path}`];
+  }).join("\n");
 }
 
 export function registerImageContext(

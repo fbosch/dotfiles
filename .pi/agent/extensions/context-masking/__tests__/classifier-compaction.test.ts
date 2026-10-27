@@ -1129,9 +1129,9 @@ test("recovered originals do not consume the new conversation archive budget", a
   expect(next.decisions[0]?.entryId).toBe(record.entryId);
 });
 
-test("reassesses saved checkpoint originals beyond one read window", async () => {
+test("reassesses more than 256 saved checkpoint originals across read windows", async () => {
   const f = await fixture([]);
-  const originals = Array.from({ length: 28 }, (_, index) => `Evidence ${index}: ${"x".repeat(10_000)}`);
+  const originals = Array.from({ length: 289 }, (_, index) => `Evidence ${index}: ${"x".repeat(10_000)}`);
   const totalBytes = originals.reduce((bytes, text) => bytes + Buffer.byteLength(text), 0);
   const records = [];
   for (const text of originals) records.push(await saveConversationArtifact(f.root, f.manager.getSessionId(), text));
@@ -1147,7 +1147,7 @@ test("reassesses saved checkpoint originals beyond one read window", async () =>
 
   expect({ kind: result.kind, reason: result.reason }).toEqual({ kind: "retained", reason: "accepted" });
   expect(result.expandedReferences).toBe(originals.length);
-  expect(result.expandedWindows).toBe(2);
+  expect(result.expandedWindows).toBe(12);
   expect(result.artifactBytes).toBe(totalBytes);
   const recoveredIds = new Set(records.map(record => record.entryId));
   expect(result.savedItems?.every(item => !recoveredIds.has(item.entryId))).toBe(true);

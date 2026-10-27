@@ -215,3 +215,18 @@ test("batched prefetch does not let a strong question admit weak matches for ano
   expect(result?.message?.content).toContain("audit-prefetched");
   expect(result?.message?.content).not.toContain("weak-only-marker");
 });
+
+test("prefetch covers questions beyond the tool's eight-query batch within one output budget", async () => {
+  const f = await fixture(Array.from({ length: 12 }, (_, index) => `Archived marker${index} value: fact-${index}\n`));
+  type Handler = (event: import("@earendil-works/pi-coding-agent").BeforeAgentStartEvent,
+    ctx: ExtensionContext) => Promise<import("@earendil-works/pi-coding-agent").BeforeAgentStartEventResult | undefined>;
+  let handler: Handler | undefined;
+  registerRecallPrefetch({ on: (_name: string, fn: Handler) => { handler = fn; } } as unknown as Pick<ExtensionAPI, "on">, () => f.root);
+  if (!handler) throw Error("Missing prefetch hook");
+  const prompt = Array.from({ length: 12 }, (_, index) => `What was the archived marker${index} value?`).join(" ");
+  const result = await handler(userStartEvent(prompt), { sessionManager: f.manager } as unknown as ExtensionContext);
+  const content = result?.message?.content;
+  if (typeof content !== "string") throw Error("Missing prefetch content");
+  for (let index = 0; index < 12; index++) expect(content).toContain(`fact-${index}`);
+  expect(content.length).toBeLessThanOrEqual(RECALL_LIMITS.outputChars);
+});

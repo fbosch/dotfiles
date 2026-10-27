@@ -46,7 +46,7 @@ test("images and text share the goal and evidence; keep/reference/prune never de
   const requests: ClassifierRequest[] = [];
   const result = await classifyCompaction(f.input, settings, { artifactRoot: f.root, classify: async request => {
     requests.push(request);
-    return answer(request, name => name === "inline_i0" || name === "reference_i1" ? 1 : 0);
+    return answer(request, name => name === "inline_i1" || name === "reference_i0" ? 1 : 0);
   } });
   expect(result.kind).toBe("retained");
   expect(requests).toHaveLength(2);
@@ -55,7 +55,7 @@ test("images and text share the goal and evidence; keep/reference/prune never de
     expect(request.images).toHaveLength(3);
     expect(JSON.stringify(request.state)).toContain("Prioritize chart evidence");
   }
-  expect(result.images?.map(image => image.action)).toEqual(["inline", "reference", "omit"]);
+  expect(result.images?.map(image => image.action)).toEqual(["reference", "inline", "omit"]);
   expect(result.text).toContain("æøå");
   for (const [index, image] of (result.images ?? []).entries()) {
     expect(f.originals[index]).toBe((await readFile(image.path)).toString("base64"));
@@ -92,13 +92,25 @@ test("four images still receive shared text and pixel decisions", async () => {
   const requests: ClassifierRequest[] = [];
   const result = await classifyCompaction(f.input, settings, { artifactRoot: f.root, classify: async request => {
     requests.push(request);
-    return answer(request, name => name === "inline_i0" || name.startsWith("reference_i") ? 1 : 0);
+    return answer(request, name => name === "inline_i3" || name.startsWith("reference_i") ? 1 : 0);
   } });
 
   expect(result.kind).toBe("retained");
   expect(requests).toHaveLength(2);
   expect(requests.every(request => request.images?.length === 4)).toBe(true);
-  expect(result.images?.map(image => image.action)).toEqual(["inline", "reference", "reference", "reference"]);
+  expect(result.images?.map(image => image.action)).toEqual(["reference", "reference", "reference", "inline"]);
+});
+
+test("later referenced images stay inline once older pixels are kept; omitted images stay omitted", async () => {
+  const f = await fixture(4);
+  const result = await classifyCompaction(f.input, settings, { artifactRoot: f.root, classify: async request =>
+    answer(request, name => name === "inline_i1" || name === "reference_i0" || name === "reference_i2" ? 1 : 0) });
+
+  expect(result.kind).toBe("retained");
+  expect(result.images?.map(image => [image.action, image.forced])).toEqual([
+    ["reference", false], ["inline", false], ["inline", true], ["omit", false],
+  ]);
+  expect(result.text).not.toContain(result.images?.[3]?.path ?? "missing");
 });
 
 test("other classifier models keep multimodal image decisions beyond four", async () => {
@@ -227,7 +239,7 @@ test("image request and output bounds preserve originals before any lossy checkp
 
 async function retainedFixture() {
   const f = await fixture(3);
-  const result = await classifyCompaction(f.input, settings, { artifactRoot: f.root, classify: async request => answer(request, name => name === "inline_i0" || name === "reference_i1" ? 1 : 0) });
+  const result = await classifyCompaction(f.input, settings, { artifactRoot: f.root, classify: async request => answer(request, name => name === "inline_i1" || name === "reference_i0" ? 1 : 0) });
   f.manager.appendCustomEntry(IMAGE_ARCHIVE, { images: result.images });
   f.manager.appendCompaction(result.text, f.keptId, 20_000, { images: result.images });
   return { ...f, result };
@@ -245,9 +257,9 @@ test("kept images restore after the summary without duplicating or reintroducing
   const custom = restored?.messages?.find(message => message.role === "custom" && message.customType === IMAGE_CONTEXT);
   if (!custom || custom.role !== "custom" || typeof custom.content === "string") throw Error("Missing restored image message");
   const images = custom.content.filter(block => block.type === "image");
-  expect(images).toHaveLength(1); expect(images[0]?.data).toBe(f.originals[0]);
+  expect(images).toHaveLength(1); expect(images[0]?.data).toBe(f.originals[1]);
   expect(await handler({ ...event, messages: restored?.messages ?? [] }, ctx)).toBeUndefined();
-  const record = checkpointImages(f.manager.getBranch())[0]; if (!record) throw Error("Missing archive");
+  const record = checkpointImages(f.manager.getBranch())[1]; if (!record) throw Error("Missing archive");
   await rm(record.path);
   const missing = await handler(event, ctx);
   expect(JSON.stringify(missing?.messages)).toContain("pixels are missing");
@@ -386,4 +398,22 @@ test("packed image addresses retain oversized image sets and restore original pi
   const custom = restored?.messages?.find(message => message.role === "custom" && message.customType === IMAGE_CONTEXT);
   if (!custom || custom.role !== "custom" || typeof custom.content === "string") throw Error("Missing restored pixels");
   expect(custom.content.filter(block => block.type === "image").map(block => block.data)).toEqual(f.originals);
+});
+
+test("image references state chronological position so the newest revision is identifiable", async () => {
+  const f = await fixture(3, false);
+  const result = await classifyCompaction(f.input, settings, { artifactRoot: f.root, classify: async request =>
+    answer(request, name => name === "inline_i1" || name === "reference_i0" ? 1 : 0) });
+
+  expect(result.images?.map(image => image.action)).toEqual(["reference", "inline", "omit"]);
+  const [first, second, third] = result.images ?? [];
+  expect(result.text).toContain(`[saved image ${first?.id}; reference; use read to view; 1 of 3]: ${first?.path}`);
+  expect(result.text).toContain(`[saved image ${second?.id}; kept in active image context; 2 of 3]: ${second?.path}`);
+  // The newest image was omitted, so no listed image may claim to be newest.
+  expect(result.text).not.toContain("newest");
+  expect(result.text).not.toContain(third?.path ?? "missing");
+  const referenced = await classifyCompaction(f.input, settings, { artifactRoot: f.root, classify: async request =>
+    answer(request, name => name.startsWith("reference_i") ? 1 : 0) });
+  const newest = referenced.images?.[2];
+  expect(referenced.text).toContain(`[saved image ${newest?.id}; reference; use read to view; 3 of 3, newest]: ${newest?.path}`);
 });

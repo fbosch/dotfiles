@@ -14,6 +14,10 @@ export type PackedCheckpoint = {
 
 const render = (parts: readonly CheckpointPart[]) => parts.map(part => part.text).join("\n\n");
 
+// checkpoint-sources matches `[Retained references:…Manifest]: <path>` on one line; keep that frame.
+// recall is deferred, so the pointer names how to find it for multi-fact lookups.
+export const manifestPointer = (groups: number, path: string) =>
+  `[Retained references: ${groups} groups; for several facts, call recall once with queries (find it with tool_search) before reading references one by one. Manifest]: ${path}`;
 export async function packCheckpoint(
   parts: readonly CheckpointPart[], limit: number, artifactRoot: string,
   sessionId: string | undefined, signal?: AbortSignal,
@@ -38,7 +42,7 @@ export async function packCheckpoint(
   const record = await saveConversationArtifact(artifactRoot, sessionId, manifest);
   const pointer = {
     reference: `manifest:${record.entryId}`,
-    text: `[Retained references: ${new Set(references.map(part => part.reference)).size} groups; use read or recall to recover evidence. Manifest]: ${record.path}`,
+    text: manifestPointer(new Set(references.map(part => part.reference)).size, record.path),
   };
   let inserted = false;
   const packed = parts.flatMap(part => {

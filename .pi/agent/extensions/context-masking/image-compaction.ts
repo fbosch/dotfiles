@@ -162,6 +162,12 @@ export async function classifyWithImages(
     }
     if (!cached && scope && dependencies.cache) dependencies.cache.set(scope, request, response);
   }
+  // Newer evidence must stay at least as visible as older inline pixels, so a later revision
+  // is never only a reference while a superseded one remains in active context.
+  const firstInline = images.findIndex(image => image.action === "inline");
+  if (firstInline >= 0) for (const image of images.slice(firstInline + 1)) {
+    if (image.action === "reference") { image.action = "inline"; image.forced = true; }
+  }
   if (signal?.aborted) return fail("aborted", result);
   result.imageSummary = imageReferences(images);
   const hybrid = settings.mode === "hybrid";
