@@ -173,7 +173,7 @@ export async function renderHistory(input: CompactionInput, root: string, hydrat
         const entryId = sources.get(message.toolCallId);
         const record = entryId ? records.get(entryId) : undefined;
         if (!record) throw new Error("Missing saved result");
-        const result = await readSavedArtifact(root, record.path, record.entryId, 12_000);
+        const result = await readSavedArtifact(root, record, 12_000);
         if (result.partial) throw new Error("Fixture artifact exceeded hydration budget");
         pieces.push(`[saved output ${record.path}]\n${result.text}`);
       }
@@ -184,7 +184,7 @@ export async function renderHistory(input: CompactionInput, root: string, hydrat
 
 export async function artifactsPreserved(history: AutonomousHistory) {
   for (const item of history.artifacts) {
-    const r = await readSavedArtifact(history.artifactRoot, item.path, item.entryId, 12_000);
+    const r = await readSavedArtifact(history.artifactRoot, item, 12_000);
     if (r.partial || r.text !== item.expected) return false;
   }
   return true;

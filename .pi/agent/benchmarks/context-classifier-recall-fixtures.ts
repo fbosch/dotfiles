@@ -5,6 +5,7 @@ export interface RecallProbe {
   question: string;
   expected: string | null;
   category: "current" | "surprise" | "unknown";
+  source: "conversation" | "read" | "bash" | "image" | "unknown";
   rejected?: string;
 }
 export interface RecallFixture {
@@ -64,6 +65,7 @@ export function recallFixture(seed: string): RecallFixture {
         question: "What is the final approved schema_tag for the ledger journal exporter?",
         expected: schema,
         category: "current",
+        source: "read",
         rejected,
       },
       {
@@ -71,6 +73,7 @@ export function recallFixture(seed: string): RecallFixture {
         question: "What is the approved output_path for the ledger journal exporter?",
         expected: output,
         category: "current",
+        source: "read",
       },
       {
         id: "retention",
@@ -78,30 +81,35 @@ export function recallFixture(seed: string): RecallFixture {
           "What is the approved retention_days number for the ledger journal exporter? Return the number as a string.",
         expected: retention,
         category: "current",
+        source: "read",
       },
       {
         id: "restart",
         question: "What is the approved restart_marker for the ledger journal exporter?",
         expected: restart,
         category: "current",
+        source: "read",
       },
       {
         id: "mirror",
         question: "What mirror_checksum was verified by the closed harbor mirror audit?",
         expected: checksum,
         category: "surprise",
+        source: "read",
       },
       {
         id: "build",
         question: "What build_id was accepted by the closed orchard build cache audit?",
         expected: build,
         category: "surprise",
+        source: "read",
       },
       {
         id: "unknown",
         question: "What signing_key_id was approved for the ledger journal exporter?",
         expected: null,
         category: "unknown",
+        source: "unknown",
       },
     ],
   };
@@ -132,6 +140,7 @@ export function scoreRecall(probes: readonly RecallProbe[], text: string) {
   const checks = probes.map((p) => ({
     id: p.id,
     category: p.category,
+    source: p.source,
     expected: p.expected,
     actual: answers[p.id] ?? null,
     correct: valid && answers[p.id] === p.expected,

@@ -105,8 +105,7 @@ export async function hydrateHistory(prepared: Awaited<ReturnType<typeof prepare
   for (const item of prepared.items) {
     const result = await readSavedArtifact(
       prepared.artifactRoot,
-      item.path,
-      item.entryId,
+      item,
       Math.min(
         CLASSIFIER_DEFAULTS.maxArtifactBytes,
         CLASSIFIER_DEFAULTS.maxTotalArtifactBytes - total,

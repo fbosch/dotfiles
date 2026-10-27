@@ -1,15 +1,18 @@
 import { createHash } from "node:crypto";
 import { SessionManager } from "@earendil-works/pi-coding-agent";
-import { mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, mkdir, rm, symlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import {
   PREFLIGHT_ROOT,
   FOUR_WAY_SEEDS,
+  DIVERSE_SEEDS,
   assertManifestRead,
   buildPreflight,
+  finalProbeRequest,
   registerSavedArtifacts,
 } from "../context-native-comparison";
+import { diverseStages } from "../context-classifier-diverse-history";
 
 const scratch = join(PREFLIGHT_ROOT, "unit");
 const roots: string[] = [];
@@ -17,6 +20,16 @@ beforeAll(async () => { await mkdir(scratch, { recursive: true }); });
 
 afterAll(async () => {
   await Promise.all(roots.map((root) => rm(root, { recursive: true, force: true })));
+});
+test("the last probe request requires an answer without offering more tools", () => {
+  const context = { systemPrompt: "Keep exact evidence", messages: [] };
+  const request = finalProbeRequest(context, {});
+  expect(request.context.messages).toBe(context.messages);
+  expect(request.context.tools).toEqual([]);
+  expect(request.context.systemPrompt).toContain("Keep exact evidence");
+  expect(request.context.systemPrompt).toContain("answer the requested IDs");
+  expect(request.options.toolChoice).toBe("none");
+  expect(context.systemPrompt).toBe("Keep exact evidence");
 });
 
 describe("native versus enabled-classifier comparison preflight", () => {
@@ -61,7 +74,7 @@ describe("native versus enabled-classifier comparison preflight", () => {
     expect(report.arms).toHaveLength(6);
     expect(report.config.classifier.mode).toBe("hybrid");
     expect(report.config.classifier.maxSummaryInputBytes).toBe(48000);
-    expect(report.config.limits.modelPerProbe).toBe(12);
+    expect(report.config.limits.modelPerProbe).toBe(16);
     expect(report.config.limits.toolOverheadPerProbe).toBe(12);
     for (const seed of report.config.seeds) {
       const native = report.arms.find(r => r.seed === seed && r.arm === "native-pi-summary");
@@ -85,7 +98,7 @@ describe("native versus enabled-classifier comparison preflight", () => {
     expect(report.config.seeds).toEqual(["recall-holdout-1", "recall-holdout-2", "recall-holdout-3"]);
     expect(report.arms).toHaveLength(6);
     expect(report.config.limits).toEqual({
-      modelPerCompaction: 2, classifierPerCompaction: 40, modelPerProbe: 12,
+      modelPerCompaction: 2, classifierPerCompaction: 40, modelPerProbe: 16,
       toolOverheadPerProbe: 12, operationMs: 180_000, campaignMs: 900_000,
     });
     const nativeConfig = report.config.armSettings["native-recall"];
@@ -123,9 +136,9 @@ describe("native versus enabled-classifier comparison preflight", () => {
     expect(report.networkCalls).toBe(0);
     expect(report.config.seeds).toEqual(["fourway-holdout-1", "fourway-holdout-2", "fourway-holdout-3"]);
     expect(report.arms).toHaveLength(12);
-    expect(report.config.maximumRequests).toEqual({ model: 216, classifier: 720 });
+    expect(report.config.maximumRequests).toEqual({ model: 264, classifier: 720 });
     expect(report.config.limits).toEqual({
-      modelPerCompaction: 2, classifierPerCompaction: 40, modelPerProbe: 12,
+      modelPerCompaction: 2, classifierPerCompaction: 40, modelPerProbe: 16,
       toolOverheadPerProbe: 12, operationMs: 180_000, campaignMs: 900_000,
     });
     for (const [index, seed] of report.config.seeds.entries()) {
@@ -150,6 +163,51 @@ describe("native versus enabled-classifier comparison preflight", () => {
       }
     }
   });
+
+  test("multi-source image cohort tests fifteen facts per seed on paired masked histories", async () => {
+    const root = await mkdtemp(join(scratch, "diverse-"));
+    roots.push(root);
+    for (const seed of DIVERSE_SEEDS) {
+      const stages = diverseStages(seed);
+      expect(stages[2]?.probes.filter(probe => probe.expected !== null)).toHaveLength(15);
+      const positives = stages[2]?.probes.filter(probe => probe.expected !== null) ?? [];
+      expect(Object.fromEntries(["read", "conversation", "bash", "image"].map(source =>
+        [source, positives.filter(probe => probe.source === source).length]))).toEqual({
+        read: 9, conversation: 2, bash: 2, image: 2,
+      });
+      expect(stages[0]?.tools.filter(tool => tool === "bash")).toHaveLength(2);
+      expect(stages[0]?.images).toHaveLength(1);
+      expect(stages[2]?.images).toHaveLength(1);
+      for (const stage of [stages[0], stages[2]]) {
+        if (!stage) throw Error("Missing image stage");
+        const bytes = Buffer.from(stage.images[0]?.data ?? "", "base64");
+        expect(bytes.subarray(0, 8)).toEqual(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]));
+        expect(bytes.readUInt32BE(16)).toBe(640);
+        expect(bytes.readUInt32BE(20)).toBe(320);
+        for (const probe of stage.probes.filter(item => item.source === "image")) {
+          if (probe.expected) expect(stage.goal + stage.images[0]?.label).not.toContain(probe.expected);
+        }
+      }
+    }
+    const report = await buildPreflight({ root, diverse: true });
+    expect(report.networkCalls).toBe(0);
+    expect(report.config.seeds).toEqual(DIVERSE_SEEDS);
+    expect(report.arms).toHaveLength(12);
+    expect(report.config.classifier.maxRequestBytes).toBe(28_000);
+    expect(report.config.classifier.maxConcurrentAssessments).toBe(2);
+    for (const seed of DIVERSE_SEEDS) {
+      const paired = report.arms.filter(arm => arm.seed === seed);
+      const bashIndices = diverseStages(seed)[0]?.tools.flatMap((tool, i) => tool === "bash" ? [i] : []) ?? [];
+      expect(new Set(paired.map(arm => arm.workspaceHash)).size).toBe(1);
+      for (const arm of paired) {
+        expect(arm.compactions[0]?.imageFactEvidence).toBeGreaterThan(0);
+        expect(arm.compactions[2]?.imageFactEvidence).toBeGreaterThan(0);
+        expect(arm.compactions.every(c => c.classifierRequests.every(r => r.textBytes <= 28_000 && r.bytes <= 1_000_000))).toBe(true);
+        expect(arm.compactions.every(c => c.tailContainsTraceBatch)).toBe(true);
+        for (const index of bashIndices) await expect(lstat(join(root, seed, arm.arm, "workspace", "reports", "phase-0", `scan-${index}.txt`))).rejects.toThrow();
+      }
+    }
+  }, 20_000);
 
   test("rejects symlinked and unlisted workspace reads", async () => {
     const root = await mkdtemp(join(scratch, "manifest-"));
@@ -201,7 +259,36 @@ test("classifier-only replay keeps the matched four-way seeds and provider limit
   expect(preflight.config.seeds).toEqual(FOUR_WAY_SEEDS);
   expect(Object.keys(preflight.config.armSettings)).toEqual(["enabled-classifier"]);
   expect(preflight.config.classifier.mode).toBe("extractive");
-  expect(preflight.config.limits.modelPerProbe).toBe(12);
+  expect(preflight.config.limits.modelPerProbe).toBe(16);
   expect(preflight.arms).toHaveLength(3);
   await expect(buildPreflight({ root, classifierOnly: true, fourWay: true })).rejects.toThrow("Choose one comparison variant");
 });
+
+test("diverse classifier-only replay preserves the four-way evidence and probe limits", async () => {
+  const root = await mkdtemp(join(scratch, "diverse-classifier-only-"));
+  roots.push(root);
+  const preflight = await buildPreflight({ root, diverse: true, classifierOnly: true });
+  expect(preflight.networkCalls).toBe(0);
+  expect(preflight.config.seeds).toEqual(DIVERSE_SEEDS);
+  expect(Object.keys(preflight.config.armSettings)).toEqual(["enabled-classifier"]);
+  expect(preflight.config.limits.modelPerProbe).toBe(16);
+  expect(preflight.config.classifier.maxRequestBytes).toBe(28_000);
+  expect(preflight.arms).toHaveLength(3);
+  const one = await buildPreflight({ root: join(root, "seed-3"), diverse: true, classifierOnly: true, diverseSeed: DIVERSE_SEEDS[2] });
+  expect(one.config.seeds).toEqual([DIVERSE_SEEDS[2]]);
+  expect(one.arms).toHaveLength(1);
+  await expect(buildPreflight({ root, diverse: true, diverseSeed: DIVERSE_SEEDS[2] })).rejects.toThrow("Diverse seed requires classifier-only replay");
+  const diagnostic = await buildPreflight({ root: join(root, "diagnostic"), diverse: true, classifierOnly: true,
+    diverseSeed: DIVERSE_SEEDS[2], diagnoseMisses: true });
+  expect(diagnostic.networkCalls).toBe(0);
+  expect(diagnostic.config.factDiagnostics).toEqual({ maxMisses: 3, modelCalls: 5 });
+  expect(diagnostic.config.maximumRequests.model).toBe(37);
+  await expect(buildPreflight({ root, diverse: true, diagnoseMisses: true })).rejects.toThrow("Miss diagnostics require diverse classifier-only replay");
+  const selected = await buildPreflight({ root: join(root, "selected"), diverse: true, classifierOnly: true,
+    diverseSeed: DIVERSE_SEEDS[0], diagnoseMisses: true, diagnoseIds: ["policy", "panel", "tile"] });
+  expect(selected.config.factDiagnostics?.ids).toEqual(["policy", "panel", "tile"]);
+  await expect(buildPreflight({ root: join(root, "invalid"), diverse: true, classifierOnly: true, diverseSeed: DIVERSE_SEEDS[0],
+    diagnoseMisses: true, diagnoseIds: ["missing"] })).rejects.toThrow("Unknown positive diagnostic ID");
+  await expect(buildPreflight({ root, diverse: true, classifierOnly: true, diagnoseMisses: true,
+    diagnoseIds: ["panel"] })).rejects.toThrow("Diagnostic IDs require one diverse seed");
+}, 20_000);

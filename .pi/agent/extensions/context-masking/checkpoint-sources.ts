@@ -24,11 +24,10 @@ export async function expandCheckpointSources(
     if (loaded.size >= 256) throw Error("Checkpoint reference count exceeded");
     const available = byteBudget - result.bytes;
     if (available <= 0) throw Error("Checkpoint expansion byte limit");
-    const saved = await readSavedArtifact(root, path, record.entryId, available);
+    const saved = await readSavedArtifact(root, record, available);
     result.bytes += saved.bytes;
     result.references++;
     if (saved.partial) throw Error("Checkpoint expansion byte limit");
-    if (record.text !== undefined && saved.text !== record.text) throw Error("Checkpoint snapshot changed");
     const source = { record, text: saved.text };
     loaded.set(path, source);
     return source;

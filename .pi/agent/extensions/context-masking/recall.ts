@@ -9,7 +9,7 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { callsFor, savedItems } from "./artifact-index";
-import { readSavedArtifact as readArtifact } from "./saved-artifact";
+import { SavedArtifactSnapshotChanged, readSavedArtifact as readArtifact } from "./saved-artifact";
 
 export const RECALL_LIMITS = {
   artifacts: 80,
@@ -175,14 +175,11 @@ async function scanSaved(
         : [],
     ),
   );
-  // Snapshot hashes and checked prefixes authorize text archives without inventing tool-result identities.
-  const snapshots = new Map<string, string>();
+  // Verify the catalogue identity before scanning; the archive reader checks each saved snapshot.
   const all = [...savedItems(branch).values()].filter(item => {
     if (source.get(item.entryId) === item.toolName) return true;
     if (typeof item.text !== "string" || item.text.length > 4_000_000) return false;
-    if (createHash("sha256").update(item.text).digest("hex") !== item.entryId) return false;
-    snapshots.set(item.entryId, item.text);
-    return true;
+    return createHash("sha256").update(item.text).digest("hex") === item.entryId;
   });
   const candidates = all.slice(-RECALL_LIMITS.artifacts).reverse();
   const calls = callsFor(branch, new Set(candidates.map((item) => item.entryId)));
@@ -217,22 +214,22 @@ async function scanSaved(
     try {
       read = await readArtifact(
         root,
-        item.path,
-        item.entryId,
+        item,
         Math.min(RECALL_LIMITS.fileBytes, RECALL_LIMITS.totalBytes - bytes),
       );
-    } catch {
+    } catch (error) {
+      // A rejected snapshot still consumes the read budget; otherwise corrupt files bypass the cap.
+      if (error instanceof SavedArtifactSnapshotChanged) {
+        scanned++;
+        bytes += error.bytesRead;
+      }
+      signal?.throwIfAborted();
       skipped++;
       continue;
     }
     signal?.throwIfAborted();
     scanned++;
     bytes += read.bytes;
-    const expected = snapshots.get(item.entryId);
-    if (expected !== undefined && (read.partial ? !expected.startsWith(read.text) : expected !== read.text)) {
-      skipped++;
-      continue;
-    }
     limited ||= read.partial;
     const lines = read.text.split("\n");
     const call = calls.get(item.entryId) ?? item.toolName;

@@ -184,11 +184,13 @@ Uncertain image decisions keep a reference. Classifier errors use native fallbac
 
 The deferred `recall_images` tool finds references by source label, identifier or path, including pruned images. It searches the latest 80 image archive records on the current branch, returns at most eight references and validates at most 16 MB per call. It does not search visual contents or call a model. Use `read` on a returned path to view its pixels. Older originals remain on disk and in session records even when outside this bounded lookup.
 
-The image path allows at most 32 originals and 16 MB per attempt, with a 4 MB and 8-million-pixel limit per original. ImageMagick creates metadata-stripped classifier copies with white padding rather than upscaling small images. Copies fit 256–1,568 pixels per side, 78,400–2,458,624 pixels in area and 500 KB encoded. The source pixels remain unchanged. The serialized multimodal packet has a separate 1 MB ceiling; `maxRequestBytes` still bounds its text state and questions. `includeContent: false` disables saved-text hydration, not image transfer.
+The image path allows at most 32 originals and 16 MB per attempt, with a 4 MB and 8-million-pixel limit per original. ImageMagick creates metadata-stripped classifier copies with white padding rather than upscaling small images. Copies fit 280–1,568 pixels per side, 78,400–2,458,624 pixels in area and 500 KB encoded. The source pixels remain unchanged. The serialized multimodal packet has a separate 1 MB ceiling; `maxRequestBytes` still bounds its text state and questions. `includeContent: false` disables saved-text hydration, not image transfer.
+
+The configured OpenRouter Jev route rejects five images in one classifier request, even when the images and total packet fit their byte limits. With more than four archived images, text classification uses image metadata without pixels; every original remains forced inline, and image-pruning decisions are skipped. This preserves visual evidence until cross-image decisions can be batched without losing revisions.
 
 Valid decision reuse requires identical image evidence, text, focus, model and settings. Normalization failure or packet limits use native fallback. Invalid or unsupported originals cancel compaction. The image processor currently requires `/run/current-system/sw/bin/magick`; this path is NixOS-specific. Descriptor-pinned directory operations reduce path-swap risk on Linux. Other platforms use canonical paths without equivalent concurrent-swap protection.
 
-Unified text and image retention has offline tests with synthetic data and stub classifiers, including the live hook, pruned-prose recall and text-only prefixes. Hosted multimodal Jev behavior remains unverified. The earlier four-way benchmark measured the saved-tool-output selector, not unified prose pruning or image retention.
+Unified text and image retention has offline tests with synthetic data and stub classifiers, including the live hook, pruned-prose recall, and text-only prefixes. The multi-source hosted cohort exercised Jev image transport and accepted three extractive checkpoints; it does not establish live multimodal reliability. The earlier four-way benchmark measured the saved-tool-output selector, not unified prose pruning or image retention.
 
 ## Experimental hybrid summaries
 
@@ -252,6 +254,38 @@ bun .pi/agent/benchmarks/context-native-comparison.ts --four-way --run
 The first command runs offline preflight; the second makes hosted requests with synthetic evidence only. All four arms use identical fresh seeds and unchanged per-arm limits. Arm order rotates across three seeds, which does not fully balance four positions. Extractive classifier compaction still allows native fallback, and the results count that work. Live settings remain unchanged.
 
 The four-way comparison recovered 18/18 facts in every arm. Extractive classifier compaction was fastest and used the fewest main-model tokens, with native fallback at three of nine checkpoints. That result supports a trial, not a general reliability claim. The live trial retains `openai-codex/gpt-6-luna` with `xhigh` thinking for fallback, as explicitly selected. The benchmark used `openai-codex/gpt-6.1-sol` with thinking off, so its timing and cost estimates do not directly predict this live fallback configuration.
+
+### Multi-source image cohort
+
+Use `--diverse` for the offline preflight and `--diverse --run` for the hosted four-way comparison. Each of three seeds has 15 scored facts: nine saved reads, two conversation approvals, two one-time command outputs, and two facts visible only in image pixels. A revised panel supersedes the first; an additional unknown-value question tests abstention. The same seeded evidence is used by all four arms. The preflight verifies image placement, retained masks, and separate 28,000-byte text and 1,000,000-byte image transport bounds without provider calls.
+
+| Arm | Facts | Image facts | Main-model requests | Classifier requests | SDK tokens | Recorded time |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Native | 31/45 | 0/6 | 28 | 0 | 277,955 | 224 s |
+| Native + recall | 36/45 | 0/6 | 28 | 0 | 332,898 | 208 s |
+| Extractive | 30/45 | 4/6 | 41 | 26 | 963,123 | 290 s |
+| Hybrid | 45/45 | 6/6 | 35 | 16 | 694,834 | 224 s |
+
+These are the completed hosted cohort's three fresh sessions per arm, with recorded mask preparation, compaction, and final-probe time. Extractive had one invalid probe after its 12-request limit; it remains scored as zero rather than being dropped. Its compaction accepted three checkpoints and fell back six times. Hybrid fell back at all nine checkpoints, so its 45/45 score **does not demonstrate successful hybrid compaction**. Later image checkpoints reported `image-request-limit` (the text or image transport bound); hybrid also hit its 48,000-byte summary-input limit. All three unknown-value probes were answered correctly in each arm except extractive (two of three); valid probes returned no stale revision. Workspace hashes and archived artifact hashes remained intact. SDK tokens and catalog costs do not establish subscription billing or live-task reliability.
+
+That cohort predates multimodal-aware batch sizing. Image assessments now pack against the final request, including image context and normalized pixels. Oversized batches split while the 28,000-byte text and 1 MB total caps remain unchanged. If the final image-decision packet cannot fit, the hook keeps verified pixels inline and accepts the bounded text result instead of rerunning native summarization. The audit records the skipped packet's phase, text bytes and total bytes without its contents; other unfit packets still fall back. The change has offline coverage and two completed hosted reruns.
+
+| Rerun arm | Classifier checkpoints accepted | Facts | Median checkpoint |
+| --- | ---: | ---: | ---: |
+| Native | — | 32/45 | 19.8 s |
+| Native + recall | — | 39/45 | 20.3 s |
+| Extractive | 9/9 | 30/45 | 1.5 s |
+| Hybrid | 5/9 | 45/45 | 16.1 s |
+
+In the final rerun, extractive had no `image-request-limit` fallbacks. Its one failed final probe exhausted the 12-request budget and counts as zero; the earlier batch-sizing-only rerun accepted 9/9 checkpoints and recovered 45/45 facts. Hybrid conservatively kept pixels inline at five oversized image-decision packets and fell back four times for the separate `summary-input-limit`. All archived artifact hashes and paired workspace hashes held, and valid probes reported no stale revisions. Hosted timings and probe outcomes varied across runs; neither result establishes live compaction reliability.
+
+The shared probe ceiling is now 16 model requests; fact scoring remains unchanged. The earlier native, native-with-recall, and hybrid probes each finished within six requests under the old ceiling. A hosted `--diverse --classifier-only --run` replay of the same three seeds accepted 9/9 extractive checkpoints (1.5 s median) and answered 44/45 facts, including 6/6 image facts. It missed one archived one-time command digest: the classifier omitted its chunks from the checkpoint and the answering model did not activate recall. The saved original remained intact. This replay used the same source hashes but ran separately from the other arms, so its timing and outcome are not a new paired four-way result. Use `--diverse --classifier-only --diverse-seed=diverse-holdout-3 --run` for a single-seed diagnostic, not a cohort comparison.
+
+A subsequent classifier-only rerun kept recovery pointers for up to eight recent archived `bash` results and required the 16th probe request to answer without tools. It completed all probes but scored 42/45: one older policy answer and two image answers were wrong or null on seed 1. The image originals remained archived and their references were present in the checkpoint. Seed 2's previously missed diagnostic digest was recovered. This variation is an end-to-end retrieval result, not proof that the retained image pixels were absent. The rerun is separate from the older four-arm cohort; its report is `/tmp/context-native-comparison-preflight/cohort-0WTEen/report.json`.
+
+An extractive-only `--diverse --classifier-only --diagnose-misses --run` replay accepted 9/9 checkpoints and scored 43/45 on the unchanged strict probe. The two misses were seed 1's current image code and tile color; the main probe used a superseded code and color. Separate probes with a five-request cap branched from that checkpoint answered both image facts correctly. The targeted answers establish recoverability from this checkpoint, not a corrected strict score: the full probe still missed them. Fact diagnostics are capped at three misses per seed and reported separately. To inspect named facts on one fresh checkpoint, use `--diverse --classifier-only --diverse-seed=diverse-holdout-1 --diagnose-misses --diagnose-ids=policy,panel,tile --run`. This result was not paired with the older native, native-with-recall and hybrid sessions; see `/tmp/context-native-comparison-preflight/cohort-raZeUU/report.json`.
+
+The fixture panels are 640×320. An earlier 640×240 fixture triggered `Invalid image dimensions`: its classifier copy had been padded to 256 pixels on the short side, below [TypeSafe's 280-pixel minimum](https://docs.typesafe.ai/images). Classifier copies are now padded to at least 280 pixels per side; archived originals remain unchanged. No new hosted cohort has validated this correction.
 
 ## Limits
 

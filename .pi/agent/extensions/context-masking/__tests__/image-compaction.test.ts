@@ -66,6 +66,54 @@ test("images and text share the goal and evidence; keep/reference/prune never de
   expect(result.usage?.input).toBe(20);
 });
 
+test("more than four images stay inline while text compaction avoids unsupported image input", async () => {
+  const f = await fixture(5);
+  const requests: ClassifierRequest[] = [];
+  const result = await classifyCompaction(f.input, settings, { artifactRoot: f.root, classify: async request => {
+    requests.push(request);
+    if ((request.images?.length ?? 0) > 4) return { ...answer(request, () => 0), stopReason: "error", errorMessage: "Invalid classifier image input" };
+    return answer(request, () => 0);
+  } });
+
+  expect(result.kind).toBe("retained");
+  expect(requests.length).toBeGreaterThan(0);
+  expect(requests.every(request => request.images === undefined)).toBe(true);
+  expect(result.images).toHaveLength(5);
+  for (const [index, image] of (result.images ?? []).entries()) {
+    expect(image).toMatchObject({ action: "inline", forced: true });
+    const original = f.originals[index];
+    if (original === undefined) throw Error("Missing original image");
+    expect((await readFile(image.path)).toString("base64")).toBe(original);
+  }
+});
+
+test("four images still receive shared text and pixel decisions", async () => {
+  const f = await fixture(4);
+  const requests: ClassifierRequest[] = [];
+  const result = await classifyCompaction(f.input, settings, { artifactRoot: f.root, classify: async request => {
+    requests.push(request);
+    return answer(request, name => name === "inline_i0" || name.startsWith("reference_i") ? 1 : 0);
+  } });
+
+  expect(result.kind).toBe("retained");
+  expect(requests).toHaveLength(2);
+  expect(requests.every(request => request.images?.length === 4)).toBe(true);
+  expect(result.images?.map(image => image.action)).toEqual(["inline", "reference", "reference", "reference"]);
+});
+
+test("other classifier models keep multimodal image decisions beyond four", async () => {
+  const f = await fixture(5);
+  const requests: ClassifierRequest[] = [];
+  const result = await classifyCompaction(f.input, { ...settings, model: "another-model" }, {
+    artifactRoot: f.root,
+    classify: async request => { requests.push(request); return answer(request, () => 0); },
+  });
+
+  expect(result.kind).toBe("retained");
+  expect(requests).toHaveLength(2);
+  expect(requests.every(request => request.images?.length === 5)).toBe(true);
+});
+
 test("image-only sessions compact and uncertain evidence keeps a recoverable reference", async () => {
   const f = await fixture(1, false);
   const result = await classifyCompaction(f.input, settings, { artifactRoot: f.root, classify: async request => answer(request, () => 0.4) });
@@ -112,6 +160,59 @@ test("bash executions require native fallback rather than losing command output"
   const result = await classifyCompaction(f.input, settings, { artifactRoot: f.root, classify: async request => { calls++; return answer(request, () => 0); } });
   expect(result.reason).toBe("unsupported-content"); expect(calls).toBe(0);
   expect(result.images?.[0]).toMatchObject({ action: "inline", forced: true });
+});
+
+test("image assessment repacks a batch when multimodal context crosses the text cap", async () => {
+  const f = await fixture();
+  const initial: ClassifierRequest[] = [];
+  await classifyCompaction(f.input, settings, { artifactRoot: f.root, classify: async request => {
+    initial.push(request);
+    return answer(request, () => 1);
+  } });
+  const assessment = initial[0];
+  if (!assessment) throw Error("Missing assessment packet");
+  const { images: _images, state: fullState, ...fields } = assessment;
+  const { imageContext: _imageContext, ...state } = fullState;
+  const coreBytes = Buffer.byteLength(JSON.stringify({ ...fields, state }));
+  const textBytes = Buffer.byteLength(JSON.stringify({ ...assessment, images: [] }));
+  expect(textBytes).toBeGreaterThan(coreBytes);
+  const maxRequestBytes = coreBytes + Math.floor((textBytes - coreBytes) / 2);
+  const sent: ClassifierRequest[] = [];
+  const result = await classifyCompaction(f.input, { ...settings, maxRequestBytes }, { artifactRoot: f.root, classify: async request => {
+    sent.push(request);
+    expect(Buffer.byteLength(JSON.stringify({ ...request, images: [] }))).toBeLessThanOrEqual(maxRequestBytes);
+    expect(Buffer.byteLength(JSON.stringify(request))).toBeLessThanOrEqual(1_000_000);
+    return answer(request, () => 1);
+  } });
+  expect({ kind: result.kind, reason: result.reason }).toEqual({ kind: "retained", reason: "accepted" });
+  expect(sent.length).toBeGreaterThan(initial.length);
+  expect(result.images?.[0]?.action).toBe("inline");
+  const original = f.originals[0];
+  if (!original) throw Error("Missing image source");
+  expect((await readFile(result.images?.[0]?.path ?? "missing")).toString("base64")).toBe(original);
+});
+
+test("oversized image decision keeps pixels inline without discarding selected hybrid evidence", async () => {
+  const f = await fixture();
+  const messages = [...f.input.messages, ...[0, 1, 2].map(index => ({
+    role: "user" as const, content: `Approved note ${index}: ${"evidence ".repeat(760)}`, timestamp: 10 + index,
+  }))];
+  const sent: ClassifierRequest[] = [];
+  const result = await classifyCompaction({ ...f.input, messages }, { ...settings, mode: "hybrid" }, {
+    artifactRoot: f.root, classify: async request => { sent.push(request); return answer(request, () => 1); },
+  });
+  expect(result.reason).toBe("accepted");
+  expect(result.kind).toBe("retained");
+  expect(result.text).toContain("Approved note 2");
+  expect(result.evidence.length).toBeGreaterThan(0);
+  expect(result.imageRequestLimit?.phase).toBe("image-decision");
+  expect(result.imageRequestLimit?.textBytes).toBeGreaterThan(settings.maxRequestBytes);
+  expect(sent.some(request => Object.hasOwn(request.questions, "inline_i0"))).toBe(false);
+  expect(result.images?.[0]?.action).toBe("inline");
+  expect(result.images?.[0]?.forced).toBe(true);
+  const original = f.originals[0];
+  if (!original) throw Error("Missing image source");
+  expect((await readFile(result.images?.[0]?.path ?? "missing")).toString("base64")).toBe(original);
 });
 
 test("image request and output bounds preserve originals before any lossy checkpoint", async () => {
@@ -228,6 +329,9 @@ test("the combined normalized image packet is bounded before provider submission
   let calls = 0;
   const result = await classifyCompaction({ ...f.input, messages }, settings, { artifactRoot: f.root, classify: async request => { calls++; return answer(request, () => 0); } });
   expect(result.reason).toBe("image-request-limit"); expect(calls).toBe(0);
+  expect(result.imageRequestLimit).toBeDefined();
+  expect((result.imageRequestLimit?.textBytes ?? 0) > settings.maxRequestBytes ||
+    (result.imageRequestLimit?.totalBytes ?? 0) > 1_000_000).toBe(true);
   expect(result.images).toHaveLength(3);
   expect(result.images?.every(image => image.action === "inline" && image.forced)).toBe(true);
 });
@@ -249,18 +353,21 @@ test("changing pruned prose invalidates image decisions even when the retained t
   expect(calls).toBe(4);
 });
 
-test("packed image addresses preserve decisions, original files and kept pixel restoration", async () => {
+test("packed image addresses retain oversized image sets and restore original pixels", async () => {
   const f = await fixture(8);
+  const requests: ClassifierRequest[] = [];
   const result = await classifyCompaction(f.input, { ...settings, maxOutputBytes: 1200 }, {
     artifactRoot: f.root,
-    classify: async request => answer(request, name => name === "inline_i0" || name.startsWith("reference_i") ? 1 : 0),
+    classify: async request => { requests.push(request); return answer(request, () => 0); },
   });
   expect({ kind: result.kind, reason: result.reason }).toEqual({ kind: "retained", reason: "accepted" });
+  expect(requests.length).toBeGreaterThan(0);
+  expect(requests.every(request => request.images === undefined)).toBe(true);
   expect(result.checkpointBytes).toBe(Buffer.byteLength(result.text));
   expect(result.checkpointBytes).toBeLessThanOrEqual(1200);
   expect(result.checkpointUnpackedBytes).toBeGreaterThan(1200);
   expect(result.text).toContain("æøå");
-  expect(result.images?.map(image => image.action)).toEqual(f.originals.map((_, i) => i === 0 ? "inline" : "reference"));
+  expect(result.images?.map(image => image.action)).toEqual(f.originals.map(() => "inline"));
   const manifest = result.savedItems?.find(item => item.toolName === "compaction:references");
   if (!manifest) throw Error("Missing image-address manifest");
   const text = await readFile(manifest.path, "utf8");
@@ -278,7 +385,5 @@ test("packed image addresses preserve decisions, original files and kept pixel r
   const restored = await handler({ type: "context", messages: f.manager.buildSessionProjection().messages }, { hasUI: false, sessionManager: f.manager } as unknown as ExtensionContext);
   const custom = restored?.messages?.find(message => message.role === "custom" && message.customType === IMAGE_CONTEXT);
   if (!custom || custom.role !== "custom" || typeof custom.content === "string") throw Error("Missing restored pixels");
-  const keptOriginal = f.originals[0];
-  if (keptOriginal === undefined) throw Error("Missing kept original");
-  expect(custom.content.filter(block => block.type === "image").map(block => block.data)).toEqual([keptOriginal]);
+  expect(custom.content.filter(block => block.type === "image").map(block => block.data)).toEqual(f.originals);
 });

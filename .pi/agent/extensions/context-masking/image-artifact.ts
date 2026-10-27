@@ -7,7 +7,8 @@ import { join, resolve } from "node:path";
 export const MAX_IMAGE_BYTES = 4_000_000;
 
 const MAX_CLASSIFIER_BYTES = 500_000;
-const MIN_IMAGE_DIMENSION = 256;
+// TypeSafe rejects either side below 280 pixels, even when the area is sufficient.
+const MIN_IMAGE_DIMENSION = 280;
 const MAX_IMAGE_DIMENSION = 1_568;
 const MIN_IMAGE_AREA = 78_400;
 const MAX_IMAGE_AREA = 2_458_624;

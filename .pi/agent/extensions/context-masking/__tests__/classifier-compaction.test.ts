@@ -62,11 +62,11 @@ function answer(
     ),
   };
 }
-async function fixture(texts = ["approved value: æøå-123", "obsolete result", "background check"]) {
+async function fixture(texts = ["approved value: æøå-123", "obsolete result", "background check"], toolName = "read") {
   const root = await mkdtemp(join(tmpdir(), "classifier-compaction-test-"));
   roots.push(root);
   const session = sessionWith(
-    texts.map((_, i) => ({ resultChars: 1_000, args: { path: `source-${i}.txt` } })),
+    texts.map((_, i) => ({ resultChars: 1_000, tool: toolName, args: { path: `source-${i}.txt` } })),
   );
   const { manager, resultIds } = session;
   const dir = join(root, manager.getSessionId());
@@ -79,11 +79,11 @@ async function fixture(texts = ["approved value: æøå-123", "obsolete result",
     paths.push(path);
     await writeFile(path, text);
     manager.appendContextEdit(entryId, {
-      content: [{ type: "text", text: placeholder({ entryId, toolName: "read", text }, path) }],
+      content: [{ type: "text", text: placeholder({ entryId, toolName, text }, path) }],
     });
   }
   manager.appendCustomEntry("context-masking", {
-    items: paths.map((path, i) => ({ path, entryId: resultIds[i], toolName: "read" })),
+    items: paths.map((path, i) => ({ path, entryId: resultIds[i], toolName })),
   });
   manager.appendMessage({
     role: "user",
@@ -97,6 +97,30 @@ async function fixture(texts = ["approved value: æøå-123", "obsolete result",
   return { root, manager, paths, input };
 }
 const omitAll = async (request: ClassifierRequest) => answer(request, () => 0);
+
+test("keeps a recovery pointer when an archived bash result is otherwise omitted", async () => {
+  const payload = `diagnostic_digest=sha256:2b1d0e7b ${"noise ".repeat(150)}`;
+  const f = await fixture([payload], "bash");
+  const result = await classifyCompaction(f.input, settings, { artifactRoot: f.root, classify: omitAll });
+  const path = f.paths[0];
+  if (!path) throw Error("Missing bash archive");
+  expect(result.kind).toBe("retained");
+  expect(result.text).toContain(path);
+  expect(result.decisions.some(decision => decision.path === path && decision.action === "reference" && decision.forced)).toBe(true);
+  expect(await readFile(path, "utf8")).toBe(payload);
+  const expanded = await expandCheckpointSources(result.text, savedItems(f.manager.getBranch()), f.root, 10_000);
+  expect(expanded?.sources.some(source => source.archive?.path === path && source.text === payload)).toBe(true);
+});
+
+test("bounds forced bash pointers to the eight most recent archived outputs", async () => {
+  const f = await fixture(Array.from({ length: 10 }, (_, i) => `check-${i}: ${"payload ".repeat(120)}`), "bash");
+  const result = await classifyCompaction(f.input, settings, { artifactRoot: f.root, classify: omitAll });
+  expect(result.kind).toBe("retained");
+  const forced = result.decisions.filter(decision => decision.action === "reference" && decision.forced);
+  expect(forced.map(decision => decision.path)).toEqual(f.paths.slice(-8));
+  expect(result.text).not.toContain(f.paths[0]);
+  expect(await readFile(f.paths[0] ?? "missing", "utf8")).toContain("check-0:");
+});
 
 test("archives unsaved tool originals across bounded windows", async () => {
   const root = await mkdtemp(join(tmpdir(), "classifier-archive-windows-"));

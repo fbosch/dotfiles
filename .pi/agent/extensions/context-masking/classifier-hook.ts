@@ -240,6 +240,7 @@ export function registerClassifierCompaction(
       reason: result.reason,
       requests: result.requestBytes.length,
       requestBytes: result.requestBytes,
+      imageRequestLimit: result.imageRequestLimit,
       artifactBytes: result.artifactBytes,
       artifactsRead: result.artifactsRead,
       checkpointBytes: result.checkpointBytes,
@@ -265,7 +266,7 @@ export function registerClassifierCompaction(
     };
     // Failed attempts cannot attach usage to Pi's default summary. Preserve their accounting
     // separately without storing classifier packets or tool-output contents in telemetry.
-    if (result.requestBytes.length || result.cacheHits) pi.appendEntry(CLASSIFIER_CHECKPOINT, audit);
+    if (result.requestBytes.length || result.cacheHits || result.imageRequestLimit) pi.appendEntry(CLASSIFIER_CHECKPOINT, audit);
     if (result.reason === "aborted") return { cancel: true };
     if (result.kind === "fallback") {
       if (ctx.hasUI) ctx.ui.notify(`Classifier compaction fell back: ${result.reason}.`, "warning");

@@ -1,16 +1,23 @@
 import { constants } from "node:fs";
 import { open, realpath } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
+import type { MaskedItem } from "./artifact-index";
 
 const safeName = (value: string) => value.replace(/[^A-Za-z0-9_-]/gu, "_");
+
+export class SavedArtifactSnapshotChanged extends Error {
+  constructor(readonly bytesRead: number) {
+    super("Saved artifact snapshot changed");
+  }
+}
 
 /** Reads a correctly named regular file directly within a cache session directory. */
 export async function readSavedArtifact(
   root: string,
-  path: string,
-  entryId: string,
+  record: Pick<MaskedItem, "path" | "entryId" | "text">,
   bytes: number,
 ) {
+  const { path, entryId } = record;
   const rel = relative(resolve(root), resolve(path));
   const parts = rel.split(sep);
   if (
@@ -40,12 +47,14 @@ export async function readSavedArtifact(
       length += next.bytesRead;
     }
     const partial = stat.size > length;
-    return {
-      text: new TextDecoder().decode(buffer.subarray(0, length), { stream: partial }),
-      bytes: length,
-      totalBytes: stat.size,
-      partial,
-    };
+    const text = new TextDecoder().decode(buffer.subarray(0, length), { stream: partial });
+    // Bounded reads are trusted only when their decoded prefix still matches the saved snapshot.
+    if (
+      record.text !== undefined &&
+      (partial ? !record.text.startsWith(text) : record.text !== text)
+    )
+      throw new SavedArtifactSnapshotChanged(length);
+    return { text, bytes: length, totalBytes: stat.size, partial };
   } finally {
     await file.close();
   }

@@ -152,16 +152,27 @@ test("pads a 720x131 chart without cropping and returns bounded classifier pixel
   const size = await dimensions(bytes, "image/png");
 
   expect(normalized).toMatchObject({ type: "image", mimeType: "image/png" });
-  expect(size).toEqual({ width: 720, height: 256 });
+  expect(size).toEqual({ width: 720, height: 280 });
   expect(size.width * size.height).toBeGreaterThanOrEqual(78_400);
   expect(size.width * size.height).toBeLessThanOrEqual(2_458_624);
   expect(bytes.length).toBeLessThanOrEqual(500_000);
   expect(await pixel(bytes, 20, 20)).toMatch(/255,255,255/u);
-  expect(await pixel(bytes, 20, 80)).toMatch(/17,17,17/u);
+  expect(await pixel(bytes, 20, 95)).toMatch(/17,17,17/u);
 
   const part = await classifierImagePart(root, "session_1", record);
   expect(part.type).toBe("image_url");
   expect(part.image_url.url.startsWith("data:image/png;base64,")).toBe(true);
+});
+
+test("pads a 640x240 PNG to the classifier minimum without changing its archive", async () => {
+  const { root } = await tempRoot();
+  const original = await syntheticImage(640, 240);
+  const record = await save(root, original);
+  const normalized = await classifierImage(root, "session_1", record);
+  const size = await dimensions(Buffer.from(normalized.data, "base64"), "image/png");
+
+  expect(size).toEqual({ width: 640, height: 280 });
+  expect(await readFile(record.path)).toEqual(Buffer.from(original));
 });
 
 test("accepts JPEG originals and normalizes them to valid classifier bounds", async () => {
@@ -175,9 +186,8 @@ test("accepts JPEG originals and normalizes them to valid classifier bounds", as
 
   expect(Buffer.from(restored.data, "base64")).toEqual(Buffer.from(original));
   expect(normalized.mimeType).toBe("image/jpeg");
-  expect(size.width).toBeGreaterThanOrEqual(256);
-  expect(size.height).toBeGreaterThanOrEqual(256);
-  expect(size.width * size.height).toBeGreaterThanOrEqual(78_400);
+  expect(size.width).toBeGreaterThanOrEqual(280);
+  expect(size.height).toBeGreaterThanOrEqual(280);
   expect(size.width * size.height).toBeLessThanOrEqual(2_458_624);
   expect(bytes.length).toBeLessThanOrEqual(500_000);
 });

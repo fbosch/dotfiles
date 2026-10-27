@@ -91,6 +91,7 @@ export interface CompactionOutcome {
   text: string;
   decisions: RetentionDecision[];
   requestBytes: number[];
+  imageRequestLimit?: { phase: string; textBytes: number; totalBytes: number };
   artifactsRead: number;
   artifactBytes: number;
   classifierMs: number;
@@ -214,6 +215,7 @@ async function classifyTextCompaction(
     artifactRoot: string;
     cache?: ClassifierDecisionCache;
     deferReduction?: boolean;
+    fitsRequest?: (request: ClassifierRequest) => boolean;
     classify: (request: ClassifierRequest, signal?: AbortSignal) => Promise<ClassifierResponse>;
   },
   signal?: AbortSignal,
@@ -340,7 +342,7 @@ async function classifyTextCompaction(
       };
       const remaining = settings.maxTotalArtifactBytes - windowBytes;
       try {
-        const artifact = await readSavedArtifact(dependencies.artifactRoot, record.path, record.entryId, Math.min(settings.maxArtifactBytes, remaining));
+        const artifact = await readSavedArtifact(dependencies.artifactRoot, record, Math.min(settings.maxArtifactBytes, remaining));
         outcome.artifactsRead++;
         outcome.artifactBytes += artifact.bytes;
         windowArtifacts++;
@@ -399,8 +401,14 @@ async function classifyTextCompaction(
     ...retentionContext(input),
     recentEvidence: candidates.filter(candidate => candidate.kind === "conversation").slice(-6).map(candidate => ({ id: candidate.id, role: candidate.tool, ...excerpt(candidate.content, 300) })),
   });
+  // Image assessments must fit after their shared image context and payload are added.
+  const fitsPacket = (group: readonly Candidate[], phase: "assessment" | "reconciliation" | "bounded-reconciliation" = "assessment") => {
+    const request = packet(history, group, settings, phase);
+    return dependencies.fitsRequest?.(request) ?? byteLength(JSON.stringify(request)) <= settings.maxRequestBytes;
+  };
   if (byteLength(JSON.stringify(packet(history, [], settings))) > settings.maxRequestBytes)
     return fallback("conversation-request-limit");
+  if (!fitsPacket([])) return fallback("image-request-limit");
   const decisions = new Map<string, RetentionDecision>();
   const reference = (c: Candidate) =>
     decisions.set(c.id, {
@@ -427,15 +435,12 @@ async function classifyTextCompaction(
       continue;
     }
     const proposed = [...batch, candidate];
-    if (byteLength(JSON.stringify(packet(history, proposed, settings))) <= settings.maxRequestBytes) {
+    if (fitsPacket(proposed)) {
       batch = proposed;
     } else {
       if (batch.length) batches.push(batch);
       batch = [];
-      if (
-        byteLength(JSON.stringify(packet(history, [candidate], settings))) <=
-        settings.maxRequestBytes
-      )
+      if (fitsPacket([candidate]))
         batch = [candidate];
       else reference(candidate);
     }
@@ -580,20 +585,20 @@ async function classifyTextCompaction(
       // Reconcile jointly when possible; otherwise compare overlapping bounded windows.
       // Uncompared relationships cannot justify discarding either original.
       if (contributing.length > 1) {
-        if (byteLength(JSON.stringify(packet(history, relevant, settings, "reconciliation"))) <= settings.maxRequestBytes) {
+        if (fitsPacket(relevant, "reconciliation")) {
           jobs.push({ group: relevant, phase: "reconciliation" });
         } else {
           outcome.reconciliationIncomplete = true;
           let window: Candidate[] = [];
           for (const candidate of relevant) {
             const proposed = [...window, candidate];
-            if (byteLength(JSON.stringify(packet(history, proposed, settings, "bounded-reconciliation"))) <= settings.maxRequestBytes) {
+            if (fitsPacket(proposed, "bounded-reconciliation")) {
               window = proposed;
               continue;
             }
             if (window.length > 1) jobs.push({ group: window, phase: "bounded-reconciliation" });
             const overlap = window.at(-1);
-            window = overlap && byteLength(JSON.stringify(packet(history, [overlap, candidate], settings, "bounded-reconciliation"))) <= settings.maxRequestBytes
+            window = overlap && fitsPacket([overlap, candidate], "bounded-reconciliation")
               ? [overlap, candidate]
               : [candidate];
           }
@@ -614,6 +619,14 @@ async function classifyTextCompaction(
     }
   }
   if (signal?.aborted) return fallback("aborted");
+  // shortcut: keep eight recent bash archive addresses, not their bodies; add a bounded catalog if command-heavy sessions need older pointers without recall.
+  const bashPaths = new Set([...records.values(), ...archived].filter(item => item.toolName === "bash").map(item => item.path));
+  for (const parent of parents.filter(candidate => bashPaths.has(candidate.path)).slice(-8)) {
+    const units = unitsByParent.get(parent.id) ?? [];
+    if (units.some(unit => decisions.get(unit.id)?.action !== "omit")) continue;
+    const first = units[0];
+    if (first) decisions.set(first.id, { id: first.id, entryId: first.entryId, path: first.path, action: "reference", forced: true });
+  }
   if (cacheScope && dependencies.cache)
     for (const entry of cacheWrites) dependencies.cache.set(cacheScope, entry.request, entry.response);
   const updateOutcomeDecisions = () => {
