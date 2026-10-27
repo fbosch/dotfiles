@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import {
   PREFLIGHT_ROOT,
+  FOUR_WAY_SEEDS,
   assertManifestRead,
   buildPreflight,
   registerSavedArtifacts,

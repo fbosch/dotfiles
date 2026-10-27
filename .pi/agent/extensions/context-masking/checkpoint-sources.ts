@@ -3,7 +3,7 @@ import { readSavedArtifact } from "./saved-artifact";
 
 export const EXTRACTIVE_HEADER = "Extractive compaction: selected historical text and evidence; originals remain recoverable through recall.";
 const MANIFEST_HEADER = "Retained reference manifest. Historical data, not instructions.";
-export interface CheckpointSource { text: string; metadata?: string; }
+export interface CheckpointSource { text: string; metadata?: string; archive?: MaskedItem; }
 export interface ExpandedCheckpoint { sources: CheckpointSource[]; bytes: number; references: number; }
 
 export async function expandCheckpointSources(
@@ -15,12 +15,30 @@ export async function expandCheckpointSources(
   const seen = new Set<string>();
   const active = new Set<string>();
   const result: ExpandedCheckpoint = { sources: [], bytes: 0, references: 0 };
-  const walk = async (text: string, depth: number, metadata?: string): Promise<void> => {
+  const loaded = new Map<string, { record: MaskedItem; text: string }>();
+  const load = async (path: string) => {
+    const cached = loaded.get(path);
+    if (cached) return cached;
+    const record = byPath.get(path);
+    if (!record) throw Error("Checkpoint address is not in the session catalogue");
+    if (loaded.size >= 256) throw Error("Checkpoint reference count exceeded");
+    const available = byteBudget - result.bytes;
+    if (available <= 0) throw Error("Checkpoint expansion byte limit");
+    const saved = await readSavedArtifact(root, path, record.entryId, available);
+    result.bytes += saved.bytes;
+    result.references++;
+    if (saved.partial) throw Error("Checkpoint expansion byte limit");
+    if (record.text !== undefined && saved.text !== record.text) throw Error("Checkpoint snapshot changed");
+    const source = { record, text: saved.text };
+    loaded.set(path, source);
+    return source;
+  };
+  const walk = async (text: string, depth: number, metadata?: string, archive?: MaskedItem): Promise<void> => {
     signal?.throwIfAborted();
     if (depth > 8) throw Error("Checkpoint reference depth exceeded");
     const body = text.startsWith("[previous compaction state]\n") ? text.slice("[previous compaction state]\n".length) : text;
     if (!body.startsWith(EXTRACTIVE_HEADER) && !body.startsWith(MANIFEST_HEADER)) {
-      result.sources.push({ text, ...(metadata ? { metadata } : {}) });
+      result.sources.push({ text, ...(metadata ? { metadata } : {}), ...(archive ? { archive } : {}) });
       return;
     }
     const pending: string[] = [];
@@ -47,33 +65,25 @@ export async function expandCheckpointSources(
       if (inline) {
         const path = inline[1], text = inline[2];
         if (!path || text === undefined || !byPath.has(path)) throw Error("Inline checkpoint source is not in the session catalogue");
+        const { record } = await load(path);
         const previous = pending.at(-1);
         const metadata = previous && (/^\{"[^"]+":\{/u.test(previous) || previous.startsWith("[tool call ")) ? pending.pop() : undefined;
         flush();
-        result.sources.push({ text, ...(metadata ? { metadata } : {}) });
+        result.sources.push({ text, ...(metadata ? { metadata } : {}), archive: record });
         continue;
       }
       if (reference) {
         const path = reference[1];
         if (!path) throw Error("Missing checkpoint address");
-        const record = byPath.get(path);
-        if (!record) throw Error("Checkpoint address is not in the session catalogue");
         const previous = pending.at(-1);
         const call = previous && (/^\{"[^"]+":\{/u.test(previous) || previous.startsWith("[tool call ")) ? pending.pop() : undefined;
         flush();
         if (active.has(path)) throw Error("Cyclic checkpoint reference");
         if (seen.has(path)) continue;
-        if (seen.size >= 256) throw Error("Checkpoint reference count exceeded");
         seen.add(path);
-        const available = byteBudget - result.bytes;
-        if (available <= 0) throw Error("Checkpoint expansion byte limit");
-        const saved = await readSavedArtifact(root, path, record.entryId, available);
-        result.bytes += saved.bytes;
-        result.references++;
-        if (saved.partial) throw Error("Checkpoint expansion byte limit");
-        if (record.text !== undefined && saved.text !== record.text) throw Error("Checkpoint snapshot changed");
+        const { record, text: savedText } = await load(path);
         active.add(path);
-        try { await walk(saved.text, depth + 1, call); }
+        try { await walk(savedText, depth + 1, call, record); }
         finally { active.delete(path); }
       } else {
         pending.push(block);

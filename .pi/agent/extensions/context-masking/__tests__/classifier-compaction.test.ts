@@ -24,6 +24,8 @@ import {
 import { placeholder } from "../policy";
 import { recallSaved } from "../recall";
 import { savedItems } from "../artifact-index";
+import { saveConversationArtifact } from "../image-artifact";
+import { EXTRACTIVE_HEADER } from "../checkpoint-sources";
 import { sessionWith } from "./fixtures";
 
 const roots: string[] = [];
@@ -360,8 +362,10 @@ test("compaction hook uses real session projection and preserves cut boundary, u
     },
     artifactRoot: () => f.root,
   });
+  const notices: string[] = [];
   const ctx = {
-    hasUI: false,
+    hasUI: true,
+    ui: { notify: (message: string) => notices.push(message) },
     sessionManager: f.manager,
     model: { ...fallbackModel, id: "unsupported-active-session-model" },
     modelRegistry: {
@@ -406,7 +410,16 @@ test("compaction hook uses real session projection and preserves cut boundary, u
   maxTotalArtifactBytes = 1;
   expect(await handler(event, ctx)).toEqual({ cancel: true });
   expect(fallbackCalls).toHaveLength(0);
+  expect(notices.at(-1)).toBe("Compaction cancelled: the conversation archive byte limit was exceeded.");
   maxTotalArtifactBytes = settings.maxTotalArtifactBytes;
+  expect(await handler({
+    ...event,
+    preparation: { ...preparation, messagesToSummarize: Array.from({ length: 257 }, (_, i) => ({
+      role: "user" as const, content: "Working unit " + i, timestamp: i,
+    })) },
+  }, ctx)).toEqual({ cancel: true });
+  expect(notices.at(-1)).toBe("Compaction cancelled: the conversation unit limit was exceeded.");
+  expect(fallbackCalls).toHaveLength(0);
   maxRequestBytes = 1;
   const fallback = await handler(event, ctx);
   expect(fallback?.compaction?.summary).toBe("Configured fallback");
@@ -738,4 +751,52 @@ test("joint reconciliation can supersede an older selection within one extra bou
   expect(requests.filter(request => JSON.stringify(request.state).includes('"phase":"reconciliation"'))).toHaveLength(1);
   expect(result.usage?.input).toBe(requests.length * USAGE.input);
   expect(result.requestBytes.every(bytes => bytes <= 9000)).toBe(true);
+});
+
+test("recovered originals do not consume the new conversation archive budget", async () => {
+  const f = await fixture([]);
+  const original = "Saved approval æøå\n" + "x".repeat(1200);
+  const record = { ...await saveConversationArtifact(f.root, f.manager.getSessionId(), original), text: original };
+  f.manager.appendCustomEntry("context-masking", { items: [record] });
+  let calls = 0;
+  const result = await classifyCompaction({
+    ...f.input, branch: f.manager.getBranch(), messages: [],
+    previousSummary: EXTRACTIVE_HEADER + "\n\n[saved conversation; use read or recall]: " + record.path,
+  }, { ...settings, maxTotalArtifactBytes: Buffer.byteLength(original) }, {
+    artifactRoot: f.root, deferReduction: true,
+    classify: async request => { calls++; return answer(request, () => 0); },
+  });
+  expect({ kind: result.kind, reason: result.reason }).toEqual({ kind: "retained", reason: "accepted" });
+  expect(calls).toBe(1);
+  expect(result.savedItems).toHaveLength(0);
+  expect(result.decisions[0]?.entryId).toBe(record.entryId);
+  expect(await readFile(record.path, "utf8")).toBe(original);
+  const next = await classifyCompaction({
+    ...f.input, branch: f.manager.getBranch(), messages: [], previousSummary: result.text,
+  }, { ...settings, maxTotalArtifactBytes: Buffer.byteLength(original) }, {
+    artifactRoot: f.root, deferReduction: true,
+    classify: async request => answer(request, () => 0),
+  });
+  expect(next.kind).toBe("retained");
+  expect(next.savedItems).toHaveLength(0);
+  expect(next.decisions[0]?.entryId).toBe(record.entryId);
+});
+
+test("recovered evidence leaves the archive budget available for current working text", async () => {
+  const f = await fixture([]);
+  const originals = [0, 1].map(i => "Older approved fact " + i + ": æøå\n" + "x".repeat(1100));
+  const records = await Promise.all(originals.map(text => saveConversationArtifact(f.root, f.manager.getSessionId(), text)));
+  f.manager.appendCustomEntry("context-masking", { items: records });
+  const current = "Current working task: " + "y".repeat(500);
+  const result = await classifyCompaction({
+    ...f.input, branch: f.manager.getBranch(),
+    messages: [{ role: "user", content: current, timestamp: 1 }],
+    previousSummary: EXTRACTIVE_HEADER + "\n\n" + records.map(record =>
+      "[saved conversation; use read or recall]: " + record.path).join("\n\n"),
+  }, { ...settings, maxTotalArtifactBytes: originals.reduce((sum, text) => sum + Buffer.byteLength(text), 100) }, {
+    artifactRoot: f.root, deferReduction: true, classify: omitAll,
+  });
+  expect(result.kind).toBe("retained");
+  expect(result.savedItems?.map(item => item.text)).toEqual(["[user]\n" + current]);
+  for (const [i, record] of records.entries()) expect(await readFile(record.path, "utf8")).toBe(originals[i]);
 });

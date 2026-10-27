@@ -190,7 +190,12 @@ export function registerClassifierCompaction(
     if (result.images?.length) pi.appendEntry(IMAGE_ARCHIVE, { version: 1, images: result.images });
     if (result.savedItems?.length) pi.appendEntry("context-masking", { items: result.savedItems });
     if (result.reason.startsWith("conversation-archive") || result.reason === "conversation-count-limit") {
-      if (ctx.hasUI) ctx.ui.notify("Compaction cancelled: conversation text could not be archived.", "error");
+      const message = result.reason === "conversation-archive-limit"
+        ? "Compaction cancelled: the conversation archive byte limit was exceeded."
+        : result.reason === "conversation-count-limit"
+          ? "Compaction cancelled: the conversation unit limit was exceeded."
+          : "Compaction cancelled: conversation text could not be archived.";
+      if (ctx.hasUI) ctx.ui.notify(message, "error");
       return { cancel: true };
     }
     if (result.reason === "image-archive-failed") {

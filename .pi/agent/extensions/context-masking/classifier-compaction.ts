@@ -264,11 +264,12 @@ async function classifyTextCompaction(
       return item;
     } catch { throw new ArchiveFailure("conversation-archive-failed"); }
   };
-  const prose = async (text: string, role: string, metadata = "") => {
+  const prose = async (text: string, role: string, metadata = "", existing?: MaskedItem) => {
     if (!text) return;
     if (proseCount >= 256) throw new ArchiveFailure("conversation-count-limit");
-    const content = `[${role}]\n${text}`;
-    const item = await archive(content, `conversation:${role}`);
+    const content = existing ? text : `[${role}]\n${text}`;
+    // Expansion already validated recovered originals; do not copy or charge them as new text.
+    const item = existing ?? await archive(content, `conversation:${role}`);
     // Never split a constraint or code block into independently prunable fragments.
     const candidate: Candidate = {
       kind: "conversation", id: `t${proseCount++}`, entryId: item.entryId,
@@ -291,7 +292,7 @@ async function classifyTextCompaction(
         outcome.expandedReferences = expanded.references;
         outcome.artifactBytes += expanded.bytes;
         for (const source of expanded.sources)
-          await prose(source.text, "recovered evidence", source.metadata);
+          await prose(source.text, "recovered evidence", source.metadata, source.archive);
       } else await prose(input.previousSummary, "previous compaction state");
     }
     for (const message of input.messages) {
@@ -358,7 +359,7 @@ async function classifyTextCompaction(
   const parents = [...candidates].sort((a, b) => (sourceOrder.get(a.id) ?? 0) - (sourceOrder.get(b.id) ?? 0));
   const unitsByParent = new Map<string, Candidate[]>();
   for (const parent of parents) {
-    const prefix = parent.tool === "recovered evidence" ? "[recovered evidence]\n" : "";
+    const prefix = parent.tool === "recovered evidence" && parent.content.startsWith("[recovered evidence]\n") ? "[recovered evidence]\n" : "";
     const body = prefix && parent.content.startsWith(prefix) ? parent.content.slice(prefix.length) : parent.content;
     const parsed = !hybrid && settings.includeContent && parent.complete ? coherentEvidence(body) : [];
     const spans = parsed.map((span, index) => ({
