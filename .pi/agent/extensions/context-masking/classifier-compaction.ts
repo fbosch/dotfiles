@@ -113,6 +113,7 @@ export interface CompactionOutcome {
   budgetDemotions?: number;
   archiveWindows?: number;
   expandedReferences?: number;
+  expandedWindows?: number;
 }
 export const byteLength = (text: string) => new TextEncoder().encode(text).length;
 
@@ -307,10 +308,14 @@ async function classifyTextCompaction(
     if (input.previousSummary) {
       let expanded: Awaited<ReturnType<typeof expandCheckpointSources>>;
       try {
-        expanded = await expandCheckpointSources(input.previousSummary, records, dependencies.artifactRoot, settings.maxTotalArtifactBytes, signal);
+        expanded = await expandCheckpointSources(input.previousSummary, records, dependencies.artifactRoot, {
+          windowBytes: settings.maxTotalArtifactBytes,
+          totalBytes: MAX_CONVERSATION_ARCHIVE_BYTES,
+        }, signal);
       } catch { return fallback(signal?.aborted ? "aborted" : "checkpoint-expansion-failed"); }
       if (expanded) {
         outcome.expandedReferences = expanded.references;
+        outcome.expandedWindows = expanded.windows;
         outcome.artifactBytes += expanded.bytes;
         for (const source of expanded.sources)
           await prose(source.text, "recovered evidence", source.metadata, source.archive);

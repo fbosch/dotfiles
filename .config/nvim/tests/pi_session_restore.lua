@@ -40,10 +40,11 @@ package.loaded["config.direnv"] = {
 		return "project environment fixture failure"
 	end,
 }
-package.loaded["plugins.ai.pi.bridge"] = {
-	record_source_context = function()
-		return true
+package.loaded["plugins.ai.pi.broker"] = {
+	open = function(launch)
+		return "/fixture/" .. launch .. ".sock"
 	end,
+	close = function() end,
 }
 
 local notifications = {}
@@ -135,8 +136,8 @@ local function assert_exact_command(command, directory, session_id, message)
 		command
 			== "PI_NVIM_LAUNCH_ID="
 				.. vim.fn.shellescape(launch_id)
-				.. " PI_NVIM_SOCKET="
-				.. vim.fn.shellescape(vim.v.servername)
+				.. " PI_NVIM_BROKER="
+				.. vim.fn.shellescape("/fixture/" .. launch_id .. ".sock")
 				.. " pi --session-dir "
 				.. vim.fn.shellescape(directory)
 				.. " --session "
@@ -152,8 +153,8 @@ local function assert_fresh_command(command, message)
 		command
 			== "PI_NVIM_LAUNCH_ID="
 				.. vim.fn.shellescape(launch_id)
-				.. " PI_NVIM_SOCKET="
-				.. vim.fn.shellescape(vim.v.servername)
+				.. " PI_NVIM_BROKER="
+				.. vim.fn.shellescape("/fixture/" .. launch_id .. ".sock")
 				.. " pi",
 		message .. ": fresh Pi command was not session-neutral"
 	)

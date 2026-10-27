@@ -18,10 +18,10 @@ async function runEntrypoint(
     await writeFile(join(directory, "run.ts"), script);
     const environment: NodeJS.ProcessEnv = {
       ...process.env,
-      PI_NVIM_LAUNCH_ID: "original-launch",
+      PI_NVIM_LAUNCH_ID: "0123456789abcdef0123456789abcdef",
     };
-    if (socketPath === undefined) delete environment.PI_NVIM_SOCKET;
-    else environment.PI_NVIM_SOCKET = socketPath;
+    if (socketPath === undefined) delete environment.PI_NVIM_BROKER;
+    else environment.PI_NVIM_BROKER = socketPath;
     const child = Bun.spawn([process.execPath, "run", join(directory, "run.ts")], {
       env: environment,
       stderr: "pipe",
@@ -40,11 +40,11 @@ async function runEntrypoint(
 
 const registrationProbe = `
 export function initializeNeovim(pi, dependencies) {
-  pi.registerTool(dependencies);
+  pi.on("session_start", () => dependencies);
 }
 `;
 
-test("does not register the Neovim tool without its launch environment variable", async () => {
+test("does not load the Pi Ask transport without its launch environment variable", async () => {
   const result = await runEntrypoint(
     undefined,
     `
@@ -61,10 +61,10 @@ test("connected startup awaits registration and keeps the captured launch identi
     "/tmp/original.sock",
     `
 import initialize from "./index";
-process.env.PI_NVIM_SOCKET = "/tmp/replacement.sock";
+process.env.PI_NVIM_BROKER = "/tmp/replacement.sock";
 process.env.PI_NVIM_LAUNCH_ID = "replacement-launch";
 let registered;
-await initialize({ registerTool(value) { registered = value; } });
+await initialize({ on(_, handler) { registered = handler(); } });
 console.log(JSON.stringify(registered));
 `,
     registrationProbe,
@@ -72,7 +72,7 @@ console.log(JSON.stringify(registered));
   expect(result.exitCode).toBe(0);
   expect(result.stderr).toBe("");
   expect(JSON.parse(result.stdout)).toEqual({
-    launchId: "original-launch",
+    launchId: "0123456789abcdef0123456789abcdef",
     socketPath: "/tmp/original.sock",
   });
 });
@@ -83,8 +83,8 @@ test("explicit socket and launch options retain precedence over the environment"
     `
 import { createNeovimExtension } from "./index";
 let registered;
-await createNeovimExtension({ socketPath: "/tmp/explicit.sock", launchId: "explicit-launch" })({
-  registerTool(value) { registered = value; }
+await createNeovimExtension({ socketPath: "/tmp/explicit.sock", launchId: "abcdef0123456789abcdef0123456789" })({
+  on(_, handler) { registered = handler(); }
 });
 console.log(JSON.stringify(registered));
 `,
@@ -93,7 +93,7 @@ console.log(JSON.stringify(registered));
   expect(result.exitCode).toBe(0);
   expect(result.stderr).toBe("");
   expect(JSON.parse(result.stdout)).toEqual({
-    launchId: "explicit-launch",
+    launchId: "abcdef0123456789abcdef0123456789",
     socketPath: "/tmp/explicit.sock",
   });
 });

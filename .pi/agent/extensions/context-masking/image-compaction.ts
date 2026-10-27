@@ -68,12 +68,12 @@ export async function classifyWithImages(
   if (messages.some(message => message.role === "bashExecution")) return fail("unsupported-content");
   // shortcut: OpenRouter Jev 1.14 rejects five images per request. Keep pixels inline
   // until cross-image decisions can be batched without losing revisions.
-  const classifierAcceptsImages =
-    images.length <= 4 || settings.provider !== "openrouter" || settings.model !== "typesafe/jev-1.14";
+  const exceedsJevImageLimit =
+    images.length > 4 && settings.provider === "openrouter" && settings.model === "typesafe/jev-1.14";
   let normalized: NonNullable<ClassifierRequest["images"]>;
   try {
     normalized = [];
-    if (classifierAcceptsImages) {
+    if (!exceedsJevImageLimit) {
       for (const image of images) normalized.push(await classifierImage(dependencies.artifactRoot, sessionId, image, signal));
     }
   } catch { return fail(signal?.aborted ? "aborted" : "image-normalization-failed"); }
@@ -86,7 +86,7 @@ export async function classifyWithImages(
   const imagePayloadBytes = bytes({ images: normalized }) - bytes({ images: [] });
   const multimodal = (request: ClassifierRequest): ClassifierRequest => ({
     ...request, state: { ...request.state, goal: RETENTION_GOAL, imageContext: context },
-    ...(classifierAcceptsImages ? { images: normalized } : {}),
+    ...(exceedsJevImageLimit ? {} : { images: normalized }),
   });
   let imageRequestLimit: CompactionOutcome["imageRequestLimit"];
   const fitsRequest = (request: ClassifierRequest) => {
@@ -131,9 +131,9 @@ export async function classifyWithImages(
   const request: ClassifierRequest = { state: { ...retentionContext(input), retainedText: result.text, imageContext: context }, images: normalized, questions };
   const textBytes = bytes({ ...request, images: [] });
   const totalBytes = bytes(request);
-  if (!classifierAcceptsImages || textBytes > settings.maxRequestBytes || totalBytes > MAX_IMAGE_REQUEST_BYTES) {
+  if (exceedsJevImageLimit || textBytes > settings.maxRequestBytes || totalBytes > MAX_IMAGE_REQUEST_BYTES) {
     // No image decision fits: retain every verified original inline rather than redo text compaction.
-    if (classifierAcceptsImages) result.imageRequestLimit = { phase: "image-decision", textBytes, totalBytes };
+    if (!exceedsJevImageLimit) result.imageRequestLimit = { phase: "image-decision", textBytes, totalBytes };
     for (const image of images) { image.action = "inline"; image.forced = true; }
   } else {
     const scope = dependencies.cache?.scope({ settings, request, evidence: messages, previousSummary: input.previousSummary });
@@ -154,7 +154,10 @@ export async function classifyWithImages(
       const inline = response.answers[`inline_i${index}`], reference = response.answers[`reference_i${index}`];
       if (inline?.type !== "bool" || reference?.type !== "bool" || ![inline.probability, reference.probability].every(p => Number.isFinite(p) && p >= 0 && p <= 1))
         return fail("invalid-classifier-answer", result);
-      image.action = inline.probability >= settings.threshold ? "inline" : reference.probability >= settings.threshold ? "reference" : inline.probability > 0.1 || reference.probability > 0.1 ? "reference" : "omit";
+      if (inline.probability >= settings.threshold) image.action = "inline";
+      else if (reference.probability >= settings.threshold) image.action = "reference";
+      else if (inline.probability > 0.1 || reference.probability > 0.1) image.action = "reference";
+      else image.action = "omit";
       image.forced = image.action === "reference" && reference.probability < settings.threshold;
     }
     if (!cached && scope && dependencies.cache) dependencies.cache.set(scope, request, response);

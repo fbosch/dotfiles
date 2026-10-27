@@ -2,7 +2,14 @@ local repo_root = assert(vim.env.REPO_ROOT)
 local bridge = require("plugins.ai.pi.bridge")
 local original_input = vim.ui.input
 local original_notify = vim.notify
-local original_rpcnotify = vim.rpcnotify
+local original_broker = package.loaded["plugins.ai.pi.broker"]
+local broker = {
+	open = function(launch)
+		return "/fixture/" .. launch .. ".sock"
+	end,
+	close = function() end,
+}
+package.loaded["plugins.ai.pi.broker"] = broker
 local original_integration = package.loaded["plugins.ai.pi"]
 local original_prompt = package.loaded["plugins.ai.pi.prompt"]
 local original_snacks = package.loaded["snacks"]
@@ -81,11 +88,10 @@ end)
 rawset(vim, "notify", function(message)
 	table.insert(notifications, message)
 end)
-rawset(vim, "rpcnotify", function(_, method, request)
-	assert(method == "pi:nvim-prompt/v1")
+broker.send = function(_, request)
 	table.insert(requests, vim.deepcopy(request))
 	return true
-end)
+end
 vim.cmd.cd(repo_root)
 local source = vim.api.nvim_create_buf(true, false)
 vim.api.nvim_set_current_buf(source)
@@ -94,14 +100,7 @@ vim.api.nvim_buf_set_lines(source, 0, -1, false, { "første", "anden", "tredje",
 local input_buffer = vim.api.nvim_create_buf(false, true)
 local prompt = require("plugins.ai.pi")
 local function bind_terminal()
-	local result = bridge.dispatch({
-		channelId = binding.channelId,
-		operation = "bind_session",
-		payload = {
-			launchId = binding.launchId,
-			sessionId = binding.sessionId,
-		},
-	})
+	local result = prompt.bind_session(binding)
 	assert(type(result) == "table", "context terminal failed to bind")
 	vim.wait(10, function()
 		return false
@@ -113,19 +112,15 @@ focuses = 0
 
 local function accept_last()
 	local request = assert(requests[#requests])
-	assert(bridge.dispatch({
-		channelId = binding.channelId,
-		operation = "prompt_ack",
-		payload = {
-			version = 1,
-			requestId = request.requestId,
-			launchId = request.launchId,
-			sessionId = request.sessionId,
-			ownerId = request.ownerId,
-			outcome = "accepted",
-			state = "idle",
-		},
-	}))
+	assert(prompt.prompt_acknowledge({
+		version = 1,
+		requestId = request.requestId,
+		launchId = request.launchId,
+		sessionId = request.sessionId,
+		ownerId = request.ownerId,
+		outcome = "accepted",
+		state = "idle",
+	}, binding.channelId))
 end
 
 local function select(mode, first, last)
@@ -152,6 +147,12 @@ for _, mode in ipairs({ "v", "V", string.char(22) }) do
 		local selection_modes = { v = "character", V = "line", [string.char(22)] = "block" }
 		assert(
 			vim.deep_equal(request.context, {
+				lines = vim.api.nvim_buf_get_lines(
+					source,
+					math.min(endpoints[1], endpoints[2]) - 1,
+					math.max(endpoints[1], endpoints[2]),
+					false
+				),
 				path = repo_root .. "/pi-ask-selection-fixture.lua",
 				buffer = source,
 				changedtick = vim.api.nvim_buf_get_changedtick(source),
@@ -164,7 +165,6 @@ for _, mode in ipairs({ "v", "V", string.char(22) }) do
 			}),
 			"Pi Ask lost its captured selection reference"
 		)
-		assert(not vim.json.encode(request):find("anden", 1, true), "reference context copied source text")
 		assert(focuses == before, "Pi Ask focused before acknowledgement")
 		accept_last()
 	end
@@ -229,18 +229,12 @@ assert(notifications[#notifications]:find("PI_WORKTREE_MISMATCH", 1, true))
 vim.api.nvim_buf_set_name(source, repo_root .. "/pi-ask-selection-fixture.lua")
 vim.api.nvim_buf_set_lines(source, 0, -1, false, vim.fn["repeat"]({ "large range source text" }, 10000))
 select("V", 1, 10000)
-local original_getregion = vim.fn.getregion
-rawset(vim.fn, "getregion", function()
-	error("reference capture must not read selected text")
-end)
-assert(prompt.ask("") == true, "large reference-only selection could not open Pi Ask")
-rawset(vim.fn, "getregion", original_getregion)
-confirm("question about a large range")
-local large = requests[#requests].context
-assert(large.range.anchor.line == 1 and large.range.cursor.line == 10000)
-assert(#vim.json.encode(large) < 1024, "large selection produced a large prompt context")
-assert(not vim.json.encode(large):find("large range source text", 1, true))
-accept_last()
+assert(prompt.ask("") == false, "oversized selection opened Pi Ask")
+assert(notifications[#notifications]:find("PI_CONTEXT_TOO_LARGE", 1, true))
+vim.cmd("normal! \27")
+vim.api.nvim_buf_set_lines(source, 0, -1, false, { string.rep("x", 16 * 1024 + 1) })
+assert(prompt.ask("") == false, "oversized source line opened Pi Ask")
+assert(notifications[#notifications]:find("PI_CONTEXT_TOO_LARGE", 1, true))
 
 vim.cmd("normal! \27")
 vim.api.nvim_buf_set_lines(source, 0, -1, false, { "æøå🚀", "\ttext" })
@@ -261,29 +255,6 @@ accept_last()
 vim.cmd("normal! \27")
 vim.o.selection = original_selection
 vim.o.virtualedit = original_virtualedit
-
-local function read_reference(context, extra)
-	return bridge.dispatch({
-		channelId = binding.channelId,
-		operation = "read_buffer",
-		payload = vim.tbl_extend("force", {
-			buffer = context.buffer,
-			expectedPath = context.path,
-			expectedChangedtick = context.changedtick,
-			startLine = 1,
-			endLine = 1,
-		}, extra or {}),
-	})
-end
-assert(vim.deep_equal(read_reference(multibyte).lines, { "æøå🚀" }), "guarded read did not return unsaved text")
-assert(read_reference(multibyte, { expectedPath = repo_root .. "/different-file.lua" }).error == "contextStale")
-assert(read_reference(multibyte, { expectedChangedtick = -1 }).error == "invalidRequest")
-assert(read_reference(multibyte, { expectedPath = "relative.lua" }).error == "invalidRequest")
-vim.api.nvim_buf_set_lines(source, 0, 1, false, { "new source" })
-assert(read_reference(multibyte).error == "contextStale", "guarded read accepted a changed source")
-local latest = assert(bridge.capture_prompt_location()).context
-vim.api.nvim_buf_set_name(source, repo_root .. "/pi-ask-renamed-fixture.lua")
-assert(read_reference(latest).error == "contextStale", "guarded read accepted a renamed buffer")
 
 vim.cmd("normal! \27")
 vim.api.nvim_set_current_buf(input_buffer)
@@ -314,7 +285,7 @@ vim.api.nvim_buf_delete(source, { force = true })
 vim.api.nvim_buf_delete(input_buffer, { force = true })
 rawset(vim.ui, "input", original_input)
 rawset(vim, "notify", original_notify)
-rawset(vim, "rpcnotify", original_rpcnotify)
+package.loaded["plugins.ai.pi.broker"] = original_broker
 package.loaded["plugins.ai.pi"] = original_integration
 package.loaded["plugins.ai.pi.prompt"] = original_prompt
 package.loaded["snacks"] = original_snacks

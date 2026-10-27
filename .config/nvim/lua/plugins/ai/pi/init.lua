@@ -1,3 +1,4 @@
+local broker = require("plugins.ai.pi.broker")
 local pi_bridge = require("plugins.ai.pi.bridge")
 local pi_session = require("plugins.ai.pi.session")
 local session = require("utils.session")
@@ -32,13 +33,12 @@ local terminal_options = {
 		width = 100,
 	},
 }
-local max_context_lines = 500
-local max_context_bytes = 32 * 1024
 
 local function clear_terminal_state()
 	local closed_session_id = terminal_session_id
 	local closed_owner = terminal_owner
 	local closed_launch_id = terminal_launch_id
+	broker.close(closed_launch_id)
 	terminal_instance = nil
 	terminal_session_id = nil
 	terminal_owner = nil
@@ -123,58 +123,11 @@ local function configure_terminal(terminal)
 	vim.keymap.set("n", "<C-l>", "<C-w>l", options)
 end
 
-local function source_context()
-	local buffer = vim.api.nvim_get_current_buf()
-	local options = vim.bo[buffer]
-	local name = vim.api.nvim_buf_get_name(buffer)
-	if name == "" or options.buftype ~= "" then
-		return nil
-	end
-
-	local cursor = vim.api.nvim_win_get_cursor(0)
-	local mode = vim.api.nvim_get_mode().mode
-	local selection = vim.NIL
-	if mode == "v" or mode == "V" or mode == string.char(22) then
-		local anchor = vim.fn.getpos("v")
-		local current = vim.fn.getpos(".")
-		local lines = vim.fn.getregion(anchor, current, { type = mode })
-		local bytes = math.max(0, #lines - 1)
-		for _, line in ipairs(lines) do
-			bytes = bytes + #line
-		end
-		if #lines <= max_context_lines and bytes <= max_context_bytes then
-			selection = {
-				mode = mode,
-				anchor = { line = anchor[2], column = anchor[3] },
-				cursor = { line = current[2], column = current[3] },
-				lines = lines,
-			}
-		end
-	end
-
-	return {
-		pid = vim.fn.getpid(),
-		cwd = vim.fn.getcwd(),
-		mode = mode,
-		buffer = {
-			number = buffer,
-			name = name,
-			loaded = vim.api.nvim_buf_is_loaded(buffer),
-			filetype = options.filetype,
-			buftype = options.buftype,
-			modified = options.modified,
-		},
-		cursor = { line = math.max(cursor[1], 1), column = math.max(cursor[2] + 1, 1) },
-		selection = selection,
-	}
-end
-
 local function record_source_context()
-	local context = source_context()
-	if context ~= nil then
+	local buffer = vim.api.nvim_get_current_buf()
+	if vim.api.nvim_buf_get_name(buffer) ~= "" and vim.bo[buffer].buftype == "" then
 		source_window = vim.api.nvim_get_current_win()
-		source_buffer = context.buffer.number
-		pi_bridge.record_source_context(context)
+		source_buffer = buffer
 	end
 end
 
@@ -202,19 +155,18 @@ end
 
 local function prepare_launch(cwd, owner)
 	local expected_cwd = canonical_path(cwd)
-	local socket = vim.v.servername
 	if expected_cwd == nil or canonical_path(vim.fn.getcwd()) ~= expected_cwd then
 		return nil, "worktree"
 	end
-	if vim.v.servername ~= socket or session.get_current(vim.fn.getcwd()) ~= owner then
+	if session.get_current(vim.fn.getcwd()) ~= owner then
 		return nil, "changed"
 	end
-	return socket
+	return expected_cwd
 end
 
 local function launch_command(session_flag, session_id, session_dir, socket, launch_id)
 	if type(socket) ~= "string" or socket == "" then
-		error("pi requires a Neovim RPC socket")
+		error("pi requires a Pi Ask broker socket")
 	end
 	if type(launch_id) ~= "string" or launch_id:match("^[a-f0-9]+$") == nil or #launch_id ~= 32 then
 		error("pi requires a valid Neovim launch ID")
@@ -223,7 +175,7 @@ local function launch_command(session_flag, session_id, session_dir, socket, lau
 	local environment = "PI_NVIM_LAUNCH_ID="
 		.. vim.fn.shellescape(launch_id)
 		.. " "
-		.. "PI_NVIM_SOCKET="
+		.. "PI_NVIM_BROKER="
 		.. vim.fn.shellescape(socket)
 		.. " "
 	if vim.env.HERDR_ENV == "1" then
@@ -261,7 +213,8 @@ local function snacks_terminal()
 	return require("snacks.terminal")
 end
 
-local function open_terminal(session_flag, session_id, session_dir, cwd, socket, owner, launch_options)
+local function open_terminal(session_flag, session_id, session_dir, cwd, expected_cwd, owner, launch_options)
+	assert(canonical_path(cwd) == expected_cwd, "Pi launch worktree changed")
 	launch_options = launch_options or {}
 	local launch_id = next_launch_id()
 	local win_options = vim.deepcopy(terminal_options.win)
@@ -274,8 +227,34 @@ local function open_terminal(session_flag, session_id, session_dir, cwd, socket,
 		-- Snacks auto-close deletes its event group before our cleanup can run.
 		auto_close = false,
 	}
-	local terminal =
-		snacks_terminal().open(launch_command(session_flag, session_id, session_dir, socket, launch_id), options)
+	local broker_socket = broker.open(launch_id, canonical_path(cwd), {
+		bind = function(channel, payload)
+			return M.bind_session({
+				sessionId = payload.sessionId,
+				launchId = launch_id,
+				channelId = channel,
+				cwd = canonical_path(cwd),
+				editorPid = vim.fn.getpid(),
+				replacePending = terminal_prompt_channel == nil and terminal_session_id ~= payload.sessionId,
+			})
+		end,
+		ack = function(payload, channel)
+			return M.prompt_acknowledge(payload, channel)
+		end,
+		disconnect = function(channel)
+			M.prompt_channel_closed(channel)
+		end,
+	})
+	local opened, terminal = pcall(function()
+		return snacks_terminal().open(
+			launch_command(session_flag, session_id, session_dir, broker_socket, launch_id),
+			options
+		)
+	end)
+	if not opened or terminal == nil then
+		broker.close(launch_id)
+		error(terminal or "Pi terminal did not open")
+	end
 	terminal_instance = terminal
 	terminal_session_id = session_id
 	terminal_owner = owner
@@ -330,6 +309,7 @@ local function prepare_editor_exit()
 	-- Snacks wipes the terminal on ExitPre, before MiniSessions saves on VimLeavePre.
 	save_terminal_state()
 	editor_exiting = true
+	broker.close()
 end
 
 local function notify_restore_failure(reason)
@@ -349,12 +329,12 @@ local function notify_launch_preparation_failure(reason)
 	if reason == "worktree" then
 		vim.notify("Pi launch cancelled: the current worktree changed.", vim.log.levels.WARN)
 	else
-		vim.notify("Pi launch cancelled: the Neovim session or RPC socket changed.", vim.log.levels.WARN)
+		vim.notify("Pi launch cancelled: the Neovim session changed.", vim.log.levels.WARN)
 	end
 end
 
-local function open_fresh_session(nvim_session, socket, launch_options)
-	local ok, terminal = pcall(open_terminal, nil, nil, nil, nvim_session.cwd, socket, nvim_session, launch_options)
+local function open_fresh_session(nvim_session, worktree, launch_options)
+	local ok, terminal = pcall(open_terminal, nil, nil, nil, nvim_session.cwd, worktree, nvim_session, launch_options)
 	if not ok then
 		notify_restore_failure("open_failed")
 		return nil
@@ -362,18 +342,18 @@ local function open_fresh_session(nvim_session, socket, launch_options)
 	return terminal
 end
 
-local function resume_saved_session(nvim_session, launch_options, prepared_socket)
+local function resume_saved_session(nvim_session, launch_options, prepared_worktree)
 	local session_id = session.get_metadata(nvim_session).pi_session_id
 	if not session.is_valid_pi_session_id(session_id) then
 		notify_restore_failure("invalid_id")
 		return nil
 	end
 
-	local socket = prepared_socket
-	if socket == nil then
+	local worktree = prepared_worktree
+	if worktree == nil then
 		local reason
-		socket, reason = prepare_launch(nvim_session.cwd, nvim_session)
-		if socket == nil then
+		worktree, reason = prepare_launch(nvim_session.cwd, nvim_session)
+		if worktree == nil then
 			if reason == "worktree" then
 				notify_restore_failure("wrong_worktree")
 			else
@@ -385,7 +365,7 @@ local function resume_saved_session(nvim_session, launch_options, prepared_socke
 	if
 		canonical_path(vim.fn.getcwd()) ~= canonical_path(nvim_session.cwd)
 		or session.get_current(vim.fn.getcwd()) ~= nvim_session
-		or vim.v.servername ~= socket
+		or canonical_path(vim.fn.getcwd()) ~= worktree
 	then
 		notify_restore_failure("wrong_worktree")
 		return nil
@@ -408,20 +388,28 @@ local function resume_saved_session(nvim_session, launch_options, prepared_socke
 		notify_restore_failure(reason)
 		return nil
 	end
-	if session.get_current(vim.fn.getcwd()) ~= nvim_session or vim.v.servername ~= socket then
+	if session.get_current(vim.fn.getcwd()) ~= nvim_session or canonical_path(vim.fn.getcwd()) ~= worktree then
 		notify_restore_failure("wrong_worktree")
 		return nil
 	end
 	if found == nil then
-		local terminal = open_fresh_session(nvim_session, socket, launch_options)
+		local terminal = open_fresh_session(nvim_session, worktree, launch_options)
 		if terminal ~= nil then
 			vim.notify("Saved Pi session is unavailable; started a new Pi session.", vim.log.levels.INFO)
 		end
 		return terminal
 	end
 
-	local ok, terminal =
-		pcall(open_terminal, "--session", session_id, found.directory, found.cwd, socket, nvim_session, launch_options)
+	local ok, terminal = pcall(
+		open_terminal,
+		"--session",
+		session_id,
+		found.directory,
+		found.cwd,
+		worktree,
+		nvim_session,
+		launch_options
+	)
 	if not ok then
 		notify_restore_failure("open_failed")
 		return nil
@@ -584,8 +572,8 @@ local function ensure_started(options)
 		return terminal
 	end
 
-	local socket, reason = prepare_launch(cwd, owner)
-	if socket == nil then
+	local worktree, reason = prepare_launch(cwd, owner)
+	if worktree == nil then
 		notify_launch_preparation_failure(reason)
 		return nil
 	end
@@ -595,10 +583,10 @@ local function ensure_started(options)
 	end
 
 	if owner ~= nil and session.get_metadata(owner).pi_session_id ~= nil then
-		return resume_saved_session(owner, options, socket)
+		return resume_saved_session(owner, options, worktree)
 	end
 	local launch_cwd = owner ~= nil and owner.cwd or cwd
-	return open_terminal(nil, nil, nil, launch_cwd, socket, owner, options)
+	return open_terminal(nil, nil, nil, launch_cwd, worktree, owner, options)
 end
 
 local prompt_messages = {
@@ -725,7 +713,7 @@ local function send_prompt()
 	prompt_next_sequence = sequence + 1
 	pending.sequence, pending.request_id, pending.session_id, pending.sent =
 		sequence, request.requestId, identity.sessionId, true
-	local sent_ok, sent = pcall(vim.rpcnotify, identity.channelId, "pi:nvim-prompt/v1", request)
+	local sent_ok, sent = pcall(broker.send, identity.channelId, request)
 	if not sent_ok or sent == false then
 		if prompt_sequence_launch_id == identity.launchId and prompt_next_sequence == sequence + 1 then
 			prompt_next_sequence = sequence

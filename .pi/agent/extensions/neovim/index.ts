@@ -2,18 +2,20 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { NeovimExtensionDependencies } from "./extension";
 
 export function createNeovimExtension(dependencies: NeovimExtensionDependencies = {}) {
-  const socketPath = dependencies.socketPath ?? process.env.PI_NVIM_SOCKET;
+  const socketPath = dependencies.socketPath ?? process.env.PI_NVIM_BROKER;
   const launchId = dependencies.launchId ?? process.env.PI_NVIM_LAUNCH_ID;
 
   return async function neovimExtension(pi: ExtensionAPI): Promise<void> {
     if (socketPath === undefined || socketPath === "") return;
+    if (launchId === undefined || !/^[a-f0-9]{32}$/.test(launchId))
+      throw new Error("Pi Ask requires a valid launch ID");
 
-    // Keep the bridge and Effect off standalone startup, but finish registration before session_start.
+    // Standalone Pi does not need the editor transport.
     const { initializeNeovim } = await import("./extension");
     initializeNeovim(pi, {
       ...dependencies,
       socketPath,
-      ...(launchId === undefined ? {} : { launchId }),
+      launchId,
     });
   };
 }

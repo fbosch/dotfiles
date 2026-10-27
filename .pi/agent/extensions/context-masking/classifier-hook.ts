@@ -252,6 +252,7 @@ export function registerClassifierCompaction(
       budgetDemotions: result.budgetDemotions ?? 0,
       archiveWindows: result.archiveWindows ?? 0,
       expandedReferences: result.expandedReferences ?? 0,
+      expandedWindows: result.expandedWindows ?? 0,
       classifierMs: result.classifierMs,
       cacheHits: result.cacheHits,
       usageComplete: result.usageComplete,
@@ -266,7 +267,7 @@ export function registerClassifierCompaction(
     };
     // Failed attempts cannot attach usage to Pi's default summary. Preserve their accounting
     // separately without storing classifier packets or tool-output contents in telemetry.
-    if (result.requestBytes.length || result.cacheHits || result.imageRequestLimit) pi.appendEntry(CLASSIFIER_CHECKPOINT, audit);
+    if (result.requestBytes.length || result.cacheHits || result.imageRequestLimit || result.reason === "checkpoint-expansion-failed") pi.appendEntry(CLASSIFIER_CHECKPOINT, audit);
     if (result.reason === "aborted") return { cancel: true };
     if (result.kind === "fallback") {
       if (ctx.hasUI) ctx.ui.notify(`Classifier compaction fell back: ${result.reason}.`, "warning");

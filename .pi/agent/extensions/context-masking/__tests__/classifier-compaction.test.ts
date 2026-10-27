@@ -108,7 +108,7 @@ test("keeps a recovery pointer when an archived bash result is otherwise omitted
   expect(result.text).toContain(path);
   expect(result.decisions.some(decision => decision.path === path && decision.action === "reference" && decision.forced)).toBe(true);
   expect(await readFile(path, "utf8")).toBe(payload);
-  const expanded = await expandCheckpointSources(result.text, savedItems(f.manager.getBranch()), f.root, 10_000);
+  const expanded = await expandCheckpointSources(result.text, savedItems(f.manager.getBranch()), f.root, { windowBytes: 10_000, totalBytes: 10_000 });
   expect(expanded?.sources.some(source => source.archive?.path === path && source.text === payload)).toBe(true);
 });
 
@@ -518,6 +518,29 @@ test("compaction hook uses real session projection and preserves cut boundary, u
     expect(await handler(event, ctx)).toEqual({ cancel: true });
   }
   expect(fallbackCalls).toHaveLength(3);
+
+  fallbackSettings = {
+    compactionModel: { enabled: false, model: "summary-provider/configured-summary-model", thinkingLevel: "xhigh" },
+  };
+  classifierAvailable = true;
+  maxRequestBytes = settings.maxRequestBytes;
+  const recorded = records.length;
+  const classifierCalls = calls;
+  const checkpointFallback = await handler({
+    ...event,
+    preparation: {
+      ...preparation,
+      previousSummary: EXTRACTIVE_HEADER + "\n\n[saved conversation; use read or recall]: /etc/passwd",
+    },
+  }, ctx);
+  expect(checkpointFallback?.compaction?.summary).toBe("Configured fallback");
+  expect(calls).toBe(classifierCalls);
+  expect(records.slice(recorded)).toEqual([
+    expect.objectContaining({
+      type: CLASSIFIER_CHECKPOINT,
+      data: expect.objectContaining({ reason: "checkpoint-expansion-failed", requests: 0 }),
+    }),
+  ]);
 });
 
 test("preserves assistant block order around retained tool calls", async () => {
@@ -807,7 +830,7 @@ test("bounded windows prioritize exact recent working state under the checkpoint
   expect(result.budgetDemotions).toBe(1);
   const manifest = result.savedItems?.find(item => item.toolName === "compaction:references");
   f.manager.appendCustomEntry("context-masking", { items: result.savedItems });
-  const expanded = await expandCheckpointSources(result.text, savedItems(f.manager.getBranch()), f.root, 20_000);
+  const expanded = await expandCheckpointSources(result.text, savedItems(f.manager.getBranch()), f.root, { windowBytes: 20_000, totalBytes: 20_000 });
   expect(expanded?.sources.some(source => source.text.includes("approval one"))).toBe(true);
   expect(manifest ? await readFile(manifest.path, "utf8") : result.text).toContain(f.paths[0] ?? "");
   expect(result.text).toContain("approval three");
@@ -1104,6 +1127,36 @@ test("recovered originals do not consume the new conversation archive budget", a
   expect(next.kind).toBe("retained");
   expect(next.savedItems).toHaveLength(0);
   expect(next.decisions[0]?.entryId).toBe(record.entryId);
+});
+
+test("reassesses saved checkpoint originals beyond one read window", async () => {
+  const f = await fixture([]);
+  const originals = Array.from({ length: 28 }, (_, index) => `Evidence ${index}: ${"x".repeat(10_000)}`);
+  const totalBytes = originals.reduce((bytes, text) => bytes + Buffer.byteLength(text), 0);
+  const records = [];
+  for (const text of originals) records.push(await saveConversationArtifact(f.root, f.manager.getSessionId(), text));
+  f.manager.appendCustomEntry("context-masking", { items: records });
+  const previousSummary = `${EXTRACTIVE_HEADER}\n\n${records.map(record => `[saved conversation; use read or recall]: ${record.path}`).join("\n\n")}`;
+  let calls = 0;
+  const result = await classifyCompaction({
+    ...f.input, branch: f.manager.getBranch(), messages: [], previousSummary,
+  }, settings, {
+    artifactRoot: f.root, deferReduction: true,
+    classify: async request => { calls++; return answer(request, () => 0); },
+  });
+
+  expect({ kind: result.kind, reason: result.reason }).toEqual({ kind: "retained", reason: "accepted" });
+  expect(result.expandedReferences).toBe(originals.length);
+  expect(result.expandedWindows).toBe(2);
+  expect(result.artifactBytes).toBe(totalBytes);
+  const recoveredIds = new Set(records.map(record => record.entryId));
+  expect(result.savedItems?.every(item => !recoveredIds.has(item.entryId))).toBe(true);
+  expect(calls).toBeGreaterThan(0);
+  for (const [index, record] of records.entries()) {
+    const original = originals[index];
+    if (original === undefined) throw Error("Missing archived original");
+    expect(await readFile(record.path, "utf8")).toBe(original);
+  }
 });
 
 test("recovered evidence leaves the archive budget available for current working text", async () => {

@@ -1,7 +1,19 @@
 local repo_root = assert(vim.env.REPO_ROOT)
-local bridge = require("plugins.ai.pi.bridge")
-local module_names =
-	{ "plugins.ai.pi", "plugins.ai.pi.prompt", "utils.session", "config.direnv", "snacks", "snacks.terminal" }
+local broker = {
+	open = function(launch)
+		return "/fixture/" .. launch .. ".sock"
+	end,
+	close = function() end,
+}
+local module_names = {
+	"plugins.ai.pi.broker",
+	"plugins.ai.pi",
+	"plugins.ai.pi.prompt",
+	"utils.session",
+	"config.direnv",
+	"snacks",
+	"snacks.terminal",
+}
 
 local function scenario(name, run)
 	local saved_modules = {}
@@ -10,7 +22,7 @@ local function scenario(name, run)
 		package.loaded[key] = nil
 	end
 	local original_input, original_notify = vim.ui.input, vim.notify
-	local original_rpcnotify, original_defer = vim.rpcnotify, vim.defer_fn
+	local original_defer = vim.defer_fn
 	local original_cwd, original_window = vim.fn.getcwd(), vim.api.nvim_get_current_win()
 	local original_agent_dir, original_session_dir = vim.env.PI_CODING_AGENT_DIR, vim.env.PI_CODING_AGENT_SESSION_DIR
 	local agent_dir = vim.fn.tempname()
@@ -34,6 +46,7 @@ local function scenario(name, run)
 		end,
 	} }
 
+	package.loaded["plugins.ai.pi.broker"] = broker
 	local f =
 		{ requests = {}, notices = {}, timers = {}, terminals = {}, inputs = {}, owner = owner, session = session }
 	f.session_dir = session_dir
@@ -100,14 +113,13 @@ local function scenario(name, run)
 	rawset(vim, "notify", function(message)
 		table.insert(f.notices, message)
 	end)
-	rawset(vim, "rpcnotify", function(channel, method, request)
-		assert(method == "pi:nvim-prompt/v1")
+	broker.send = function(channel, request)
 		if f.fail_send then
 			return false
 		end
 		table.insert(f.requests, { channel = channel, payload = vim.deepcopy(request) })
 		return true
-	end)
+	end
 	rawset(vim, "defer_fn", function(callback, delay)
 		local timer = { callback = callback, delay = delay, closed = false }
 		function timer:is_closing()
@@ -127,14 +139,13 @@ local function scenario(name, run)
 		f.inputs[#f.inputs](text)
 	end
 	function f.bind(channel, session_id, replacement)
-		return bridge.dispatch({
+		return f.pi.bind_session({
 			channelId = channel or 12,
-			operation = "bind_session",
-			payload = {
-				launchId = f.terminal.launch,
-				sessionId = session_id or "pi-owner-session",
-				replacePending = replacement,
-			},
+			launchId = f.terminal.launch,
+			sessionId = session_id or "pi-owner-session",
+			cwd = repo_root,
+			editorPid = vim.fn.getpid(),
+			replacePending = replacement,
 		})
 	end
 	function f.flush()
@@ -153,10 +164,10 @@ local function scenario(name, run)
 			outcome = "accepted",
 			state = "idle",
 		}, overrides or {})
-		return bridge.dispatch({ channelId = channel or request.channel, operation = "prompt_ack", payload = payload })
+		return f.pi.prompt_acknowledge(payload, channel or request.channel)
 	end
 	function f.disconnect(channel)
-		assert(bridge.dispatch({ channelId = channel, operation = "remove_notifications", payload = {} }) == true)
+		f.pi.prompt_channel_closed(channel)
 	end
 	function f.close()
 		vim.api.nvim_exec_autocmds("TermClose", { buffer = f.terminal.buf, data = { status = 0 } })
@@ -192,7 +203,6 @@ local function scenario(name, run)
 	vim.cmd.cd(original_cwd)
 	rawset(vim.ui, "input", original_input)
 	rawset(vim, "notify", original_notify)
-	rawset(vim, "rpcnotify", original_rpcnotify)
 	rawset(vim, "defer_fn", original_defer)
 	for _, key in ipairs(module_names) do
 		package.loaded[key] = saved_modules[key]

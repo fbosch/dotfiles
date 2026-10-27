@@ -20,7 +20,6 @@ assert(vim.env.HERDR_PANE_ID == expected_pane_id, "Herdr restored Neovim in the 
 assert(vim.env.NVIM_SESSION == expected_specifier, "Herdr did not pass the exact Neovim session")
 assert(vim.env.HERDR_MINI_SESSION_RESTORE == "1", "Herdr did not mark the Neovim session restore")
 assert(vim.uv.fs_realpath(vim.fn.getcwd()) == repo_root, "Neovim did not inherit the restored pane cwd")
-assert(vim.v.servername ~= "", "production Neovim startup did not create an RPC socket")
 
 vim.opt.runtimepath:prepend(mini_sessions_path)
 vim.opt.runtimepath:prepend(repo_root .. "/.config/nvim")
@@ -158,6 +157,7 @@ rawset(vim, "system", original_system)
 
 assert(vim.g.pi_production_session_loaded == 1, "Neovim did not source the restored session")
 local launch_id = assert(opened_terminal.command:match("PI_NVIM_LAUNCH_ID='([a-f0-9]+)'"))
+local broker_path = assert(opened_terminal.command:match("PI_NVIM_BROKER='([^']+)'"))
 assert(#launch_id == 32, "production wiring did not assign a bounded Pi launch ID")
 assert(
 	opened_terminal.command
@@ -165,8 +165,8 @@ assert(
 			.. vim.fn.shellescape(expected_pane_id)
 			.. " PI_IMAGE_PROTOCOL=none PI_NVIM_LAUNCH_ID="
 			.. vim.fn.shellescape(launch_id)
-			.. " PI_NVIM_SOCKET="
-			.. vim.fn.shellescape(vim.v.servername)
+			.. " PI_NVIM_BROKER="
+			.. vim.fn.shellescape(broker_path)
 			.. " pi --session-dir "
 			.. vim.fn.shellescape(pi_session_dir)
 			.. " --session "
@@ -184,7 +184,7 @@ assert(
 		"PI_NVIM_HERDR_PANE_ID=" .. expected_pane_id,
 		"PI_IMAGE_PROTOCOL=none",
 		"PI_NVIM_LAUNCH_ID=" .. launch_id,
-		"PI_NVIM_SOCKET=" .. vim.v.servername,
+		"PI_NVIM_BROKER=" .. broker_path,
 		"ARG1=--session-dir",
 		"ARG2=" .. pi_session_dir,
 		"ARG3=--session",

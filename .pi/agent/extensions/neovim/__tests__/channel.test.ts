@@ -1,1113 +1,136 @@
-import { describe, expect, test } from "bun:test";
-import { EventEmitter } from "node:events";
-import { bridgeLua, bridgeOperations, type NvimConnection, PiNeovimChannel } from "../channel";
-import { FOCUS_NOTIFICATION, MAX_METADATA_STRING_BYTES } from "../contracts";
-import { PROMPT_NOTIFICATION, type PromptRequest } from "../prompt-protocol";
+import { afterEach, expect, test } from "bun:test";
+import { once } from "node:events";
+import { mkdtempSync, realpathSync, rmSync } from "node:fs";
+import { createServer, type Socket } from "node:net";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { PiAskChannel } from "../channel";
+import type { PromptAcknowledgement } from "../prompt-protocol";
 
-const focus = {
-  buffer: {
-    buftype: "",
-    filetype: "typescript",
-    loaded: true,
-    modified: true,
-    name: "/project/example.ts",
-    number: 2,
-  },
-  cursor: { column: 4, line: 3 },
-  cwd: "/project",
-  pid: 71,
-  selection: {
-    anchor: { column: 1, line: 3 },
-    cursor: { column: 4, line: 3 },
-    lines: ["test"],
-    mode: "v",
-  },
-};
+const cleanup: (() => Promise<void>)[] = [];
+afterEach(async () => {
+  for (const close of cleanup.splice(0)) await close();
+});
+const launchId = "0123456789abcdef0123456789abcdef";
+const sessionId = "fixture-session";
 
-class FakeConnection extends EventEmitter implements NvimConnection {
-  readonly channelId = Promise.resolve(9);
-  activeResponse: unknown = { ...focus, mode: "n", selection: undefined };
-  annotationArguments: unknown;
-  annotationResponse: unknown = {
-    annotations: [
-      {
-        annotationId: 11,
-        column: 7,
-        inputIndex: 1,
-        kind: "warning",
-        line: 3,
-        placement: "callout",
-        sourceLineBytes: 24,
-        text: "Review this call",
-      },
-    ],
-    batchId: 1,
-    buffer: focus.buffer,
-    cwd: "/project",
-    expiresInMs: 2_000,
-    pid: 71,
-    totalLines: 3,
-  };
-  bindArguments: unknown;
-  bindResponse: unknown = true;
-  bufferResponse: unknown = { buffers: [focus.buffer], cwd: "/project", pid: 71 };
-  closeCalls = 0;
-  deleteAnnotationArguments: unknown;
-  deleteHighlightArguments: unknown;
-  diagnosticArguments: unknown[] = [];
-  diagnosticResponse: unknown = {
-    buffer: focus.buffer,
-    counts: { error: 1, hint: 0, information: 0, total: 1, warning: 0 },
-    cwd: "/project",
-    diagnostics: [
-      {
-        end: { column: 8, line: 3 },
-        message: "unsaved error",
-        severity: "error",
-        source: "neovim-lsp",
-        start: { column: 4, line: 3 },
-      },
-    ],
-    pid: 71,
-    truncated: false,
-  };
-  executeCalls: string[] = [];
-  highlightArguments: unknown;
-  highlightGate: Promise<void> | undefined;
-  highlightResponse: unknown = {
-    buffer: focus.buffer,
-    cwd: "/project",
-    expiresInMs: 2_000,
-    highlightId: 7,
-    pid: 71,
-    start: { column: 1, line: 3 },
-    end: { column: 6, line: 3 },
-  };
-  highlightClearArguments: unknown;
-  highlightClearResponse: unknown = {
-    buffer: focus.buffer,
-    cleared: true,
-    cwd: "/project",
-    highlightId: 7,
-    pid: 71,
-  };
-  identityResponse: unknown = { channelId: 9, cwd: "/project", pid: 71 };
-  openFileArguments: unknown;
-  openFileResponse: unknown = true;
-  promptAckArguments: unknown;
-  quickfixArguments: unknown;
-  quickfixResponse: unknown = {
-    cwd: "/project",
-    items: [
-      {
-        buffer: 2,
-        column: 4,
-        endColumn: 8,
-        endLine: 3,
-        filename: "/project/example.ts",
-        line: 3,
-        text: "quickfix item",
-        type: "E",
-        valid: true,
-      },
-    ],
-    owner: { kind: "quickfix", listId: 4 },
-    pid: 71,
-    title: "quickfix fixture",
-    total: 2,
-    truncated: true,
-  };
-  readArguments: unknown;
-  readResponse: unknown = {
-    buffer: focus.buffer,
-    changedtick: 12,
-    cwd: "/project",
-    endLine: 2,
-    lines: ["const unsaved = true;", "export { unsaved };"],
-    pid: 71,
-    startLine: 1,
-    totalLines: 2,
-  };
-  revealArguments: unknown;
-  revealResponse: unknown = {
-    buffer: focus.buffer,
-    cwd: "/project",
-    focused: false,
-    focusPreserved: true,
-    pid: 71,
-    position: { column: 4, line: 3 },
-    split: "none",
-    splitCreated: false,
-    window: 4,
-  };
-  visibleResponse: unknown = {
-    cwd: "/project",
-    pid: 71,
-    windows: [{ bottomLine: 20, buffer: focus.buffer, number: 4, topLine: 1 }],
-  };
-
-  async close(): Promise<void> {
-    this.closeCalls += 1;
-  }
-
-  async executeLua(code: string, args?: unknown[]): Promise<unknown> {
-    if (code !== bridgeLua.dispatch) throw new Error("unexpected Lua");
-    const request = args?.[0];
-    if (typeof request !== "object" || request === null || Array.isArray(request)) {
-      throw new Error("invalid bridge request");
-    }
-    const operation = (request as Record<string, unknown>).operation;
-    const payload = (request as Record<string, unknown>).payload;
-    if (typeof operation !== "string" || typeof payload !== "object" || payload === null) {
-      throw new Error("invalid bridge request");
-    }
-    this.executeCalls.push(operation);
-    if (operation === bridgeOperations.installNotifications) {
-      this.emit("notification", FOCUS_NOTIFICATION, [focus]);
-      return this.identityResponse;
-    }
-    if (operation === bridgeOperations.bindSession) {
-      this.bindArguments = payload as Record<string, unknown>;
-      return this.bindResponse;
-    }
-    if (operation === bridgeOperations.activeContext) return this.activeResponse;
-    if (operation === bridgeOperations.annotate) {
-      this.annotationArguments = payload as Record<string, unknown>;
-      return this.annotationResponse;
-    }
-    if (operation === bridgeOperations.deleteAnnotations) {
-      this.deleteAnnotationArguments = payload as Record<string, unknown>;
-      return true;
-    }
-    if (
-      operation === bridgeOperations.diagnosticSummary ||
-      operation === bridgeOperations.diagnostics
-    ) {
-      this.diagnosticArguments.push(payload);
-      return this.diagnosticResponse;
-    }
-    if (operation === bridgeOperations.deleteHighlight) {
-      this.deleteHighlightArguments = payload as Record<string, unknown>;
-      return true;
-    }
-    if (operation === bridgeOperations.visibleWindows) return this.visibleResponse;
-    if (operation === bridgeOperations.highlight) {
-      this.highlightArguments = payload as Record<string, unknown>;
-      await this.highlightGate;
-      return this.highlightResponse;
-    }
-    if (operation === bridgeOperations.clearHighlight) {
-      this.highlightClearArguments = payload as Record<string, unknown>;
-      return this.highlightClearResponse;
-    }
-    if (operation === bridgeOperations.listBuffers) return this.bufferResponse;
-    if (operation === bridgeOperations.openFile) {
-      this.openFileArguments = payload as Record<string, unknown>;
-      return this.openFileResponse;
-    }
-    if (operation === bridgeOperations.promptAck) {
-      this.promptAckArguments = payload;
-      return true;
-    }
-    if (operation === bridgeOperations.quickfix) {
-      this.quickfixArguments = payload as Record<string, unknown>;
-      return this.quickfixResponse;
-    }
-    if (operation === bridgeOperations.readBuffer) {
-      this.readArguments = payload as Record<string, unknown>;
-      return this.readResponse;
-    }
-    if (operation === bridgeOperations.reveal) {
-      this.revealArguments = payload as Record<string, unknown>;
-      return this.revealResponse;
-    }
-    if (operation === bridgeOperations.removeNotifications) return true;
-    throw new Error("unexpected bridge operation");
-  }
-
-  setClientInfo(): void {}
+async function fixture(reply: (socket: Socket, binding: object) => void) {
+  const cwd = realpathSync(mkdtempSync(join(tmpdir(), "pi-ask-client-")));
+  const socketPath = join(cwd, "broker.sock");
+  const connections = new Set<Socket>();
+  const server = createServer((socket) => {
+    connections.add(socket);
+    socket.once("close", () => connections.delete(socket));
+    socket.once("data", () =>
+      reply(socket, {
+        channelId: 12,
+        cwd,
+        editorPid: 80,
+        launchId,
+        ownerId: "fixture-owner",
+        sessionId,
+        version: 1,
+      }),
+    );
+  });
+  server.listen(socketPath);
+  await once(server, "listening");
+  cleanup.push(async () => {
+    for (const socket of connections) socket.destroy();
+    await new Promise<void>((resolve) => server.close(() => resolve()));
+    rmSync(cwd, { recursive: true, force: true });
+  });
+  return { cwd, socketPath };
 }
 
-describe("PiNeovimChannel", () => {
-  test("opens one lazy channel and receives focus state over it", async () => {
-    const connection = new FakeConnection();
-    let creations = 0;
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => {
-      creations += 1;
-      return connection;
-    });
-    connection.activeResponse = { ...focus, mode: "v" };
+function handlers() {
+  const seen: string[] = [];
+  let disconnected = 0;
+  return {
+    seen,
+    disconnected: () => disconnected,
+    dispatch: (request: {
+      requestId: string;
+      launchId: string;
+      sessionId: string;
+      ownerId: string;
+      text: string;
+    }): PromptAcknowledgement => {
+      seen.push(request.text);
+      return {
+        version: 1,
+        requestId: request.requestId,
+        launchId: request.launchId,
+        sessionId: request.sessionId,
+        ownerId: request.ownerId,
+        outcome: "accepted",
+        state: "idle",
+      };
+    },
+    reject: (): PromptAcknowledgement => {
+      throw new Error("unexpected rejected request");
+    },
+    disconnect: () => {
+      disconnected++;
+    },
+  };
+}
 
-    expect(creations).toBe(0);
-    expect(await channel.status()).toEqual({
-      ok: true,
-      value: { channelId: 9, cwd: "/project", pid: 71 },
-    });
-    expect(await channel.context()).toEqual({
-      ok: true,
-      value: { ...focus, mode: "v" },
-    });
-    expect(await channel.focusContext()).toEqual({ ok: true, value: focus });
-    expect(await channel.selection()).toEqual({
-      ok: true,
-      value: {
-        ...focus.selection,
-        buffer: focus.buffer,
-        cwd: focus.cwd,
-        pid: focus.pid,
-      },
-    });
-    expect(creations).toBe(1);
+test("client binds a session, buffers fragmented frames and acknowledges a Unicode prompt", async () => {
+  let received: unknown;
+  let acknowledge!: () => void;
+  const acknowledged = new Promise<void>((resolve) => {
+    acknowledge = resolve;
   });
-
-  test("binds Pi-assigned session identity over fixed bridge Lua", async () => {
-    const connection = new FakeConnection();
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-
-    expect(await channel.bindSession("pi-session-one")).toEqual({
-      ok: true,
-      value: { channelId: 9, cwd: "/project", pid: 71 },
+  const { cwd, socketPath } = await fixture((socket, binding) => {
+    socket.once("data", (data) => {
+      received = JSON.parse(data.toString());
+      acknowledge();
     });
-    expect(connection.bindArguments).toEqual({ sessionId: "pi-session-one" });
-    expect(await channel.bindSession("invalid/session")).toMatchObject({
-      error: { code: "NVIM_INVALID_RESPONSE" },
-      ok: false,
-    });
-    expect(connection.bindArguments).toEqual({ sessionId: "pi-session-one" });
-  });
-
-  test("delivers prompt requests and acknowledgements over the bound channel", async () => {
-    const connection = new FakeConnection();
-    const launchId = "0123456789abcdef0123456789abcdef";
-    const binding = {
-      channelId: 9,
-      cwd: "/project",
-      editorPid: 71,
-      launchId,
-      ownerId: "fixture",
-      sessionId: "pi-session-one",
-      version: 1,
-    } as const;
-    connection.bindResponse = binding;
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-    const malformed: string[] = [];
-    const requests: PromptRequest[] = [];
-    channel.setPromptRequestHandler(
-      (request) => {
-        requests.push(request);
-        return {
-          launchId: request.launchId,
-          outcome: "accepted",
-          ownerId: request.ownerId,
-          requestId: request.requestId,
-          sessionId: request.sessionId,
-          state: "idle",
-          version: 1,
-        };
-      },
-      (request, code) => {
-        malformed.push(code);
-        return {
-          code,
-          launchId: request.launchId,
-          outcome: "rejected",
-          ownerId: request.ownerId,
-          requestId: request.requestId,
-          sessionId: request.sessionId,
-          state: "idle",
-          version: 1,
-        };
-      },
+    socket.write(`${JSON.stringify({ type: "bound", binding })}\n`);
+    const frame = Buffer.from(
+      `${JSON.stringify({ type: "prompt", request: { version: 1, requestId: `nvim:${launchId}:1`, sequence: 1, launchId, sessionId, ownerId: "fixture-owner", cwd, editorPid: 80, text: "første æøå", context: null, operation: "submit" } })}\n`,
     );
-
-    expect(await channel.bindSession(binding.sessionId, launchId)).toEqual({
-      ok: true,
-      value: { channelId: 9, cwd: "/project", pid: 71 },
-    });
-    expect(channel.promptBinding()).toEqual(binding);
-    const request = {
-      context: null,
-      cwd: "/project",
-      editorPid: 71,
-      launchId,
-      operation: "submit",
-      ownerId: "fixture",
-      requestId: `nvim:${launchId}:1`,
-      sequence: 1,
-      sessionId: "pi-session-one",
-      text: "literal prompt",
-      version: 1,
-    } as const;
-    connection.emit("notification", PROMPT_NOTIFICATION, [request]);
-    await new Promise((resolve) => setImmediate(resolve));
-
-    expect(requests).toEqual([request]);
-    expect(connection.promptAckArguments).toEqual({
-      launchId,
-      outcome: "accepted",
-      ownerId: "fixture",
-      requestId: request.requestId,
-      sessionId: "pi-session-one",
-      state: "idle",
-      version: 1,
-    });
-    connection.emit("notification", PROMPT_NOTIFICATION, [
-      {
-        ...request,
-        requestId: `nvim:${launchId}:2`,
-        sequence: 2,
-        unexpected: true,
-      },
-    ]);
-    await new Promise((resolve) => setImmediate(resolve));
-    expect(malformed).toEqual(["PI_INVALID_REQUEST"]);
-    expect(connection.promptAckArguments).toMatchObject({
-      code: "PI_INVALID_REQUEST",
-      requestId: `nvim:${launchId}:2`,
-    });
-    connection.emit("disconnect");
-    expect(channel.promptBinding()).toBeUndefined();
-    await channel.close();
+    const split = frame.indexOf(Buffer.from("æ")) + 1;
+    socket.write(frame.subarray(0, split));
+    setImmediate(() => socket.write(frame.subarray(split)));
   });
+  const observed = handlers();
+  const channel = new PiAskChannel(socketPath, cwd, launchId, observed);
+  await channel.open(sessionId);
+  await acknowledged;
+  expect(observed.seen).toEqual(["første æøå"]);
+  expect(received).toMatchObject({ type: "ack", payload: { outcome: "accepted", sessionId } });
+  channel.close();
+  channel.close();
+  expect(observed.disconnected()).toBe(1);
+});
 
-  test("guards direct path reads with only the latest accepted Ask reference", async () => {
-    const connection = new FakeConnection();
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-    const launchId = "0123456789abcdef0123456789abcdef";
-    const reference = {
-      buffer: 2,
-      changedtick: 12,
-      path: focus.buffer.name,
-      range: {
-        anchor: { column: 1, line: 1, offset: 0 },
-        cursor: { column: 1, line: 1, offset: 0 },
-      },
-      selection: "inclusive",
-      selectionMode: "cursor",
-    } as const;
-    const acknowledgement = (
-      request: PromptRequest,
-      outcome: "accepted" | "duplicate" | "rejected",
-    ) => ({
-      launchId: request.launchId,
-      outcome,
-      ownerId: request.ownerId,
-      requestId: request.requestId,
-      sessionId: request.sessionId,
-      state: "idle" as const,
-      version: 1 as const,
+for (const reply of [
+  "not-json\n",
+  `${"x".repeat(64 * 1024 + 1)}\n`,
+  `${JSON.stringify({ type: "bound", binding: { channelId: 12, editorPid: 80, launchId: "wrong" } })}\n`,
+]) {
+  test("client refuses malformed or mismatched broker bindings", async () => {
+    const { cwd, socketPath } = await fixture((socket) => {
+      socket.write(reply);
     });
-    channel.setPromptRequestHandler((request) =>
-      acknowledgement(
-        request,
-        request.sequence === 1 ? "accepted" : request.sequence === 2 ? "duplicate" : "rejected",
-      ),
-    );
-    await channel.status();
-    const request = (
-      sequence: number,
-      context: NonNullable<PromptRequest["context"]> = reference,
-    ) => ({
-      context,
-      cwd: "/project",
-      editorPid: 71,
-      launchId,
-      operation: "submit" as const,
-      ownerId: "fixture",
-      requestId: `nvim:${launchId}:${sequence}`,
-      sequence,
-      sessionId: "pi-session-one",
-      text: "literal prompt",
-      version: 1 as const,
-    });
-
-    connection.emit("notification", PROMPT_NOTIFICATION, [request(1)]);
-    connection.emit("notification", PROMPT_NOTIFICATION, [
-      request(2, { ...reference, buffer: 7, changedtick: 99, path: "/project/other.ts" }),
-    ]);
-    connection.emit("notification", PROMPT_NOTIFICATION, [
-      request(3, { ...reference, buffer: 8, changedtick: 100, path: "/project/rejected.ts" }),
-    ]);
-    await new Promise((resolve) => setImmediate(resolve));
-
-    const beforeRead = connection.executeCalls.length;
-    expect(
-      await channel.readBuffer({ endLine: 2, path: "example.ts", startLine: 1 }),
-    ).toMatchObject({
-      ok: true,
-      value: { changedtick: 12 },
-    });
-    expect(connection.executeCalls.slice(beforeRead)).toEqual([bridgeOperations.readBuffer]);
-    expect(connection.readArguments).toEqual({
-      expectedCwd: "/project",
-      buffer: 2,
-      endLine: 2,
-      expectedChangedtick: 12,
-      expectedPath: focus.buffer.name,
-      startLine: 1,
-    });
-    const beforeStaleGuards = connection.executeCalls.length;
-    for (const guards of [
-      { expectedChangedtick: 11 },
-      { expectedChangedtick: 13 },
-      { expectedPath: "/project/renamed.ts" },
-    ]) {
-      expect(await channel.readBuffer({ ...guards, path: focus.buffer.name })).toMatchObject({
-        ok: false,
-        error: { code: "NVIM_CONTEXT_STALE" },
-      });
-    }
-    expect(connection.executeCalls.length).toBe(beforeStaleGuards);
-
-    expect(await channel.bindSession("pi-session-one")).toMatchObject({ ok: true });
-    await channel.readBuffer({ path: focus.buffer.name });
-    expect(connection.readArguments).toEqual({ expectedCwd: "/project", path: focus.buffer.name });
+    const observed = handlers();
+    const channel = new PiAskChannel(socketPath, cwd, launchId, observed);
+    await expect(channel.open(sessionId)).rejects.toThrow();
+    expect(channel.binding()).toBeUndefined();
+    expect(observed.disconnected()).toBe(1);
   });
+}
 
-  test("opens validated local files over the bound channel", async () => {
-    const connection = new FakeConnection();
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-
-    expect(await channel.openFile("/tmp/outside-project.lua")).toEqual({ ok: true, value: true });
-    expect(connection.openFileArguments).toEqual({
-      expectedCwd: "/project",
-      path: "/tmp/outside-project.lua",
-    });
-    for (const path of [
-      "relative.lua",
-      "/tmp/newline\n.lua",
-      "/tmp/nul\0.lua",
-      "/tmp/\u0080.lua",
-    ]) {
-      expect(await channel.openFile(path)).toMatchObject({
-        error: { code: "NVIM_INVALID_RESPONSE" },
-        ok: false,
-      });
-    }
-    expect(
-      connection.executeCalls.filter((operation) => operation === bridgeOperations.openFile),
-    ).toHaveLength(1);
-    connection.openFileResponse = { error: "invalidBuffer" };
-    expect(await channel.openFile("/tmp/missing.lua")).toMatchObject({
-      error: { code: "NVIM_INVALID_BUFFER" },
-      ok: false,
-    });
-  });
-
-  test("returns source inventory and bounded in-memory reads over the bound channel", async () => {
-    const connection = new FakeConnection();
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-
-    expect(await channel.visibleWindows()).toEqual({
-      ok: true,
-      value: {
-        editor: { channelId: 9, cwd: "/project", pid: 71 },
-        windows: [{ bottomLine: 20, buffer: focus.buffer, number: 4, topLine: 1 }],
-      },
-    });
-    expect(await channel.listBuffers()).toEqual({
-      ok: true,
-      value: {
-        buffers: [focus.buffer],
-        editor: { channelId: 9, cwd: "/project", pid: 71 },
-      },
-    });
-    expect(await channel.readBuffer({ buffer: 2, endLine: 2, startLine: 1 })).toEqual({
-      ok: true,
-      value: {
-        buffer: focus.buffer,
-        changedtick: 12,
-        editor: { channelId: 9, cwd: "/project", pid: 71 },
-        endLine: 2,
-        lines: ["const unsaved = true;", "export { unsaved };"],
-        startLine: 1,
-        totalLines: 2,
-      },
-    });
-    expect(connection.readArguments).toEqual({
-      expectedCwd: "/project",
-      buffer: 2,
-      endLine: 2,
-      startLine: 1,
-    });
-    expect(
-      await channel.readBuffer({
-        buffer: 2,
-        expectedChangedtick: 12,
-        expectedPath: focus.buffer.name,
-        endLine: 2,
-        startLine: 1,
-      }),
-    ).toMatchObject({ ok: true });
-    expect(connection.readArguments).toEqual({
-      expectedCwd: "/project",
-      buffer: 2,
-      endLine: 2,
-      expectedChangedtick: 12,
-      expectedPath: focus.buffer.name,
-      startLine: 1,
-    });
-    expect(connection.executeCalls).toContain(bridgeOperations.visibleWindows);
-    expect(connection.executeCalls).toContain(bridgeOperations.listBuffers);
-    expect(connection.executeCalls).toContain(bridgeOperations.readBuffer);
-  });
-
-  test("returns bounded Neovim diagnostic summaries and complete details", async () => {
-    const connection = new FakeConnection();
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-
-    expect(await channel.diagnosticSummary()).toMatchObject({
-      ok: true,
-      value: {
-        buffer: focus.buffer,
-        counts: { error: 1, total: 1 },
-        diagnostics: [{ message: "unsaved error", severity: "error" }],
-        editor: { channelId: 9, cwd: "/project", pid: 71 },
-        truncated: false,
-      },
-    });
-    expect(await channel.diagnostics(2)).toMatchObject({
-      ok: true,
-      value: {
-        buffer: focus.buffer,
-        diagnostics: [{ message: "unsaved error", severity: "error" }],
-        editor: { channelId: 9, cwd: "/project", pid: 71 },
-        total: 1,
-      },
-    });
-    expect(connection.diagnosticArguments).toEqual([{ maxItems: 20 }, { buffer: 2 }]);
-  });
-
-  test("returns bounded quickfix and explicitly owned location lists", async () => {
-    const connection = new FakeConnection();
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-
-    expect(await channel.quickfix()).toMatchObject({
-      ok: true,
-      value: {
-        items: [{ filename: "/project/example.ts", line: 3, text: "quickfix item" }],
-        owner: { kind: "quickfix", listId: 4 },
-        title: "quickfix fixture",
-        total: 2,
-        truncated: true,
-      },
-    });
-    expect(connection.quickfixArguments).toEqual({ kind: "quickfix", maxItems: 20 });
-
-    connection.quickfixResponse = {
-      cwd: "/project",
-      items: [],
-      owner: { kind: "location", listId: 5, window: 4 },
-      pid: 71,
-      title: "location fixture",
-      total: 0,
-      truncated: false,
-    };
-    expect(await channel.quickfix({ kind: "location", maxItems: 50, window: 4 })).toMatchObject({
-      ok: true,
-      value: { items: [], owner: { kind: "location", listId: 5, window: 4 } },
-    });
-    expect(connection.quickfixArguments).toEqual({ kind: "location", maxItems: 50, window: 4 });
-  });
-
-  test("reveals exact source positions with explicit focus and split options", async () => {
-    const connection = new FakeConnection();
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-
-    expect(await channel.reveal({ buffer: 2, column: 4, line: 3 })).toMatchObject({
-      ok: true,
-      value: {
-        buffer: focus.buffer,
-        focused: false,
-        focusPreserved: true,
-        position: { column: 4, line: 3 },
-        split: "none",
-        splitCreated: false,
-        window: 4,
-      },
-    });
-    expect(connection.revealArguments).toEqual({
-      buffer: 2,
-      column: 4,
-      expectedCwd: "/project",
-      focus: false,
-      line: 3,
-      split: "none",
-    });
-
-    connection.revealResponse = {
-      buffer: focus.buffer,
-      cwd: "/project",
-      focused: true,
-      focusPreserved: false,
-      pid: 71,
-      position: { column: 4, line: 3 },
-      split: "horizontal",
-      splitCreated: true,
-      window: 6,
-    };
-    expect(
-      await channel.reveal({
-        buffer: 2,
-        column: 4,
-        focus: true,
-        line: 3,
-        split: "horizontal",
-      }),
-    ).toMatchObject({ ok: true, value: { focused: true, splitCreated: true, window: 6 } });
-    expect(connection.revealArguments).toEqual({
-      buffer: 2,
-      column: 4,
-      expectedCwd: "/project",
-      focus: true,
-      line: 3,
-      split: "horizontal",
-    });
-    expect(await channel.focusContext()).toMatchObject({
-      ok: true,
-      value: { buffer: focus.buffer, cursor: { column: 4, line: 3 } },
-    });
-
-    expect(await channel.reveal({ buffer: 0, column: 1, line: 1 })).toMatchObject({
-      error: { code: "NVIM_INVALID_BUFFER" },
-      ok: false,
-    });
-    connection.revealResponse = { error: "worktreeMismatch" };
-    expect(await channel.reveal({ buffer: 2, column: 1, line: 1 })).toMatchObject({
-      error: { code: "NVIM_WORKTREE_MISMATCH" },
-      ok: false,
-    });
-    expect((await channel.status()).ok).toBe(true);
-  });
-
-  test("creates atomic anchored annotation batches and rolls back invalid responses", async () => {
-    const connection = new FakeConnection();
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-    const annotations = [
-      { anchor: "target", kind: "warning" as const, line: 3, text: "Review this call" },
-    ];
-
-    expect(await channel.annotate({ annotations, buffer: 2 })).toMatchObject({
-      ok: true,
-      value: {
-        annotations: [
-          {
-            annotationId: 11,
-            column: 7,
-            inputIndex: 1,
-            kind: "warning",
-            line: 3,
-            placement: "callout",
-            text: "Review this call",
-          },
-        ],
-        expiresInMs: 2_000,
-      },
-    });
-    expect(connection.annotationArguments).toEqual({
-      annotations,
-      batchId: 1,
-      buffer: 2,
-      durationMs: 2_000,
-      expectedCwd: "/project",
-    });
-
-    connection.annotationResponse = {
-      error: "staleAnchor",
-      annotationIndex: 1,
-      requestedLine: 3,
-    };
-    expect(await channel.annotate({ annotations, buffer: 2 })).toMatchObject({
-      error: { code: "NVIM_STALE_ANCHOR" },
-      ok: false,
-    });
-    connection.annotationResponse = {
-      annotations: [
-        {
-          annotationId: 12,
-          column: 7,
-          inputIndex: 1,
-          kind: "warning",
-          line: 3,
-          placement: "callout",
-          sourceLineBytes: 24,
-          text: "mismatched",
-        },
-      ],
-      batchId: 3,
-      buffer: focus.buffer,
-      cwd: "/project",
-      expiresInMs: 2_000,
-      pid: 71,
-      totalLines: 3,
-    };
-    expect(await channel.annotate({ annotations, buffer: 2 })).toMatchObject({
-      error: { code: "NVIM_INVALID_RESPONSE" },
-      ok: false,
-    });
-    expect(connection.deleteAnnotationArguments).toEqual({ batchId: 3, buffer: 2 });
-    expect((await channel.status()).ok).toBe(true);
-  });
-
-  test("creates and explicitly removes bounded temporary highlights", async () => {
-    const connection = new FakeConnection();
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-
-    expect(
-      await channel.highlight({ buffer: 2, endColumn: 6, endLine: 3, startLine: 3 }),
-    ).toMatchObject({
-      ok: true,
-      value: {
-        buffer: focus.buffer,
-        expiresInMs: 2_000,
-        highlightId: 7,
-        start: { column: 1, line: 3 },
-        end: { column: 6, line: 3 },
-      },
-    });
-    expect(connection.highlightArguments).toEqual({
-      buffer: 2,
-      durationMs: 2_000,
-      endColumn: 6,
-      endLine: 3,
-      expectedCwd: "/project",
-      startColumn: 1,
-      startLine: 3,
-    });
-
-    expect(await channel.clearHighlight({ buffer: 2, highlightId: 7 })).toMatchObject({
-      ok: true,
-      value: { cleared: true, highlightId: 7 },
-    });
-    expect(connection.highlightClearArguments).toEqual({
-      buffer: 2,
-      expectedCwd: "/project",
-      highlightId: 7,
-    });
-
-    expect(await channel.highlight({ buffer: 2, durationMs: 30_001, startLine: 1 })).toMatchObject({
-      error: { code: "NVIM_LIMIT_EXCEEDED" },
-      ok: false,
-    });
-    connection.highlightResponse = { error: "invalidRange", totalLines: 2 };
-    expect(await channel.highlight({ buffer: 2, startLine: 3 })).toMatchObject({
-      error: { code: "NVIM_INVALID_RANGE" },
-      ok: false,
-    });
-    connection.highlightResponse = {
-      buffer: focus.buffer,
-      cwd: "/project",
-      expiresInMs: 2_000,
-      highlightId: 8,
-      pid: 71,
-      start: { column: 2, line: 3 },
-      end: { column: 6, line: 3 },
-    };
-    expect(
-      await channel.highlight({ buffer: 2, endColumn: 6, endLine: 3, startLine: 3 }),
-    ).toMatchObject({ error: { code: "NVIM_INVALID_RESPONSE" }, ok: false });
-    expect(connection.deleteHighlightArguments).toEqual({ buffer: 2, highlightId: 8 });
-    expect((await channel.status()).ok).toBe(true);
-  });
-
-  test("drains an in-flight highlight before session cleanup", async () => {
-    const connection = new FakeConnection();
-    let releaseHighlight: () => void = () => undefined;
-    connection.highlightGate = new Promise<void>((resolve) => {
-      releaseHighlight = resolve;
-    });
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-
-    const highlight = channel.highlight({ buffer: 2, endColumn: 6, startLine: 3 });
-    while (connection.highlightArguments === undefined) await Promise.resolve();
-    const closing = channel.close();
-    await Promise.resolve();
-    expect(connection.closeCalls).toBe(0);
-    releaseHighlight();
-    expect(await highlight).toMatchObject({ ok: true });
-    await closing;
-    expect(connection.executeCalls.indexOf(bridgeOperations.highlight)).toBeLessThan(
-      connection.executeCalls.indexOf(bridgeOperations.removeNotifications),
-    );
-    expect(connection.closeCalls).toBe(1);
-  });
-
-  test("preserves structured problem-list failures without disabling the channel", async () => {
-    const connection = new FakeConnection();
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-
-    connection.quickfixResponse = { error: "invalidWindow" };
-    expect(await channel.quickfix({ kind: "location", window: 999 })).toMatchObject({
-      error: { code: "NVIM_INVALID_WINDOW" },
-      ok: false,
-    });
-    connection.quickfixResponse = { error: "contentLimit" };
-    expect(await channel.quickfix()).toMatchObject({
-      error: { code: "NVIM_LIMIT_EXCEEDED" },
-      ok: false,
-    });
-    connection.quickfixResponse = { error: "sourceLimit" };
-    expect(await channel.quickfix()).toMatchObject({
-      error: { code: "NVIM_LIMIT_EXCEEDED" },
-      ok: false,
-    });
-    expect(await channel.quickfix({ maxItems: 51 })).toMatchObject({
-      error: { code: "NVIM_LIMIT_EXCEEDED" },
-      ok: false,
-    });
-    expect(
-      await channel.quickfix({ kind: "location", window: Number.MAX_SAFE_INTEGER + 1 }),
-    ).toMatchObject({
-      error: { code: "NVIM_INVALID_WINDOW" },
-      ok: false,
-    });
-    expect((await channel.status()).ok).toBe(true);
-  });
-
-  test("preserves structured diagnostic failures without disabling the channel", async () => {
-    const connection = new FakeConnection();
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-
-    connection.diagnosticResponse = { error: "invalidBuffer" };
-    expect(await channel.diagnostics(999)).toMatchObject({
-      error: { code: "NVIM_INVALID_BUFFER" },
-      ok: false,
-    });
-    connection.diagnosticResponse = { error: "diagnosticLimit" };
-    expect(await channel.diagnostics(2)).toMatchObject({
-      error: { code: "NVIM_LIMIT_EXCEEDED" },
-      ok: false,
-    });
-    connection.diagnosticResponse = { error: "diagnosticSourceLimit" };
-    expect(await channel.diagnosticSummary()).toMatchObject({
-      error: { code: "NVIM_LIMIT_EXCEEDED" },
-      ok: false,
-    });
-    expect((await channel.status()).ok).toBe(true);
-  });
-
-  test("preserves structured buffer and range failures without disabling the channel", async () => {
-    const connection = new FakeConnection();
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-
-    connection.readResponse = { error: "invalidBuffer" };
-    expect(await channel.readBuffer({ buffer: 999 })).toMatchObject({
-      error: { code: "NVIM_INVALID_BUFFER" },
-      ok: false,
-    });
-    connection.readResponse = { error: "invalidRange", totalLines: 2 };
-    expect(await channel.readBuffer({ buffer: 2, startLine: 3 })).toMatchObject({
-      error: { code: "NVIM_INVALID_RANGE" },
-      ok: false,
-    });
-    connection.readResponse = { error: "contextStale" };
-    expect(
-      await channel.readBuffer({
-        buffer: 2,
-        expectedChangedtick: 12,
-        expectedPath: focus.buffer.name,
-      }),
-    ).toEqual({
-      error: {
-        code: "NVIM_CONTEXT_STALE",
-        message: "The Neovim context is stale; refresh context and retry read_buffer",
-      },
-      ok: false,
-    });
-    expect((await channel.status()).ok).toBe(true);
-  });
-
-  test("unknown and malformed notifications cannot replace focus state", async () => {
-    const connection = new FakeConnection();
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-    await channel.status();
-
-    connection.emit("notification", "unknown", [{ ...focus, cursor: { column: 9, line: 9 } }]);
-    connection.emit("notification", FOCUS_NOTIFICATION, [{ invalid: true }]);
-
-    expect(await channel.focusContext()).toEqual({ ok: true, value: focus });
-  });
-
-  test("substitutes source context and selection instead of reporting a marked Pi terminal", async () => {
-    const connection = new FakeConnection();
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-    await channel.status();
-    connection.activeResponse = { ...focus, mode: "v" };
-
-    expect(bridgeLua.dispatch).toBe('\nreturn require("plugins.ai.pi.bridge").dispatch(...)\n');
-    expect(bridgeOperations.activeContext).toBe("active_context");
-    expect(await channel.context()).toEqual({ ok: true, value: { ...focus, mode: "v" } });
-    expect(await channel.focusContext()).toEqual({ ok: true, value: focus });
-    expect(await channel.selection()).toEqual({
-      ok: true,
-      value: {
-        ...focus.selection,
-        buffer: focus.buffer,
-        cwd: focus.cwd,
-        pid: focus.pid,
-      },
-    });
-  });
-
-  test("reports missing source context instead of marked terminal metadata", async () => {
-    const connection = new FakeConnection();
-    connection.activeResponse = null;
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-
-    expect(await channel.context()).toMatchObject({
-      error: { code: "NVIM_NO_FOCUS_CONTEXT" },
-      ok: false,
-    });
-  });
-
-  test("reports absent source selection without reading terminal state", async () => {
-    const connection = new FakeConnection();
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-    await channel.status();
-    connection.activeResponse = { ...focus, mode: "n", selection: undefined };
-
-    expect(await channel.selection()).toMatchObject({
-      error: { code: "NVIM_NO_SELECTION" },
-      ok: false,
-    });
-  });
-
-  test("rejects invalid active context responses", async () => {
-    const connection = new FakeConnection();
-    connection.activeResponse = { arbitrary: "data" };
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-
-    expect(await channel.context()).toMatchObject({
-      error: { code: "NVIM_INVALID_RESPONSE" },
-      ok: false,
-    });
-  });
-
-  test("rejects an identity that does not match the connected RPC channel", async () => {
-    const connection = new FakeConnection();
-    connection.identityResponse = { channelId: 10, cwd: "/project", pid: 71 };
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-
-    expect(await channel.status()).toMatchObject({
-      error: {
-        code: "NVIM_INVALID_RESPONSE",
-        message: "Neovim returned an unexpected channel identity",
-      },
-      ok: false,
-    });
-    expect(connection.closeCalls).toBe(1);
-  });
-
-  test("rejects oversized editor identity metadata", async () => {
-    const connection = new FakeConnection();
-    connection.identityResponse = {
-      channelId: 9,
-      cwd: "x".repeat(MAX_METADATA_STRING_BYTES + 1),
-      pid: 71,
-    };
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-
-    expect(await channel.status()).toMatchObject({
-      error: { code: "NVIM_INVALID_RESPONSE" },
-      ok: false,
-    });
-  });
-
-  test("closes a connection that finishes opening during shutdown", async () => {
-    const connection = new FakeConnection();
-    let resolveConnection: ((connection: NvimConnection) => void) | undefined;
-    const pendingConnection = new Promise<NvimConnection>((resolvePromise) => {
-      resolveConnection = resolvePromise;
-    });
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", () => pendingConnection);
-
-    const status = channel.status();
-    await Bun.sleep(0);
-    const closing = channel.close();
-    resolveConnection?.(connection);
-
-    expect(await status).toMatchObject({ error: { code: "NVIM_UNAVAILABLE" }, ok: false });
-    await closing;
-    expect(connection.executeCalls).toContain(bridgeOperations.removeNotifications);
-    expect(connection.listenerCount("notification")).toBe(0);
-    expect(connection.closeCalls).toBe(1);
-  });
-
-  test("missing sockets fail closed without creating a connection", async () => {
-    let creations = 0;
-    const channel = new PiNeovimChannel(undefined, "/project", async () => {
-      creations += 1;
-      return new FakeConnection();
-    });
-
-    expect(await channel.status()).toMatchObject({
-      error: { code: "NVIM_UNAVAILABLE" },
-      ok: false,
-    });
-    expect(creations).toBe(0);
-  });
-
-  test("stale sockets fail closed and are not retried", async () => {
-    let creations = 0;
-    const channel = new PiNeovimChannel("/tmp/stale.sock", "/project", async () => {
-      creations += 1;
-      throw new Error("connect ENOENT /tmp/stale.sock");
-    });
-
-    expect(await channel.status()).toMatchObject({
-      error: { code: "NVIM_UNAVAILABLE" },
-      ok: false,
-    });
-    expect(await channel.status()).toMatchObject({ ok: false });
-    expect(creations).toBe(1);
-  });
-
-  test("keeps simultaneous channels bound to their respective sockets", async () => {
-    const sockets: string[] = [];
-    const createConnection = async (socket: string) => {
-      sockets.push(socket);
-      return new FakeConnection();
-    };
-    const first = new PiNeovimChannel("/tmp/first.sock", "/project", createConnection);
-    const second = new PiNeovimChannel("/tmp/second.sock", "/project", createConnection);
-
-    expect((await first.status()).ok).toBe(true);
-    expect((await second.status()).ok).toBe(true);
-    expect(sockets).toEqual(["/tmp/first.sock", "/tmp/second.sock"]);
-  });
-
-  test("worktree mismatch is terminal and never falls back", async () => {
-    const connection = new FakeConnection();
-    let creations = 0;
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/other", async () => {
-      creations += 1;
-      return connection;
-    });
-
-    expect(await channel.status()).toMatchObject({
-      error: { code: "NVIM_WORKTREE_MISMATCH" },
-      ok: false,
-    });
-    expect(await channel.status()).toMatchObject({
-      error: { code: "NVIM_WORKTREE_MISMATCH" },
-      ok: false,
-    });
-    expect(creations).toBe(1);
-  });
-
-  test("shutdown removes listeners, bridge state, and the transport", async () => {
-    const connection = new FakeConnection();
-    const channel = new PiNeovimChannel("/tmp/nvim.sock", "/project", async () => connection);
-    await channel.status();
-
-    await channel.close();
-    connection.emit("notification", FOCUS_NOTIFICATION, [focus]);
-
-    expect(connection.closeCalls).toBe(1);
-    expect(connection.listenerCount("notification")).toBe(0);
-    expect(await channel.focusContext()).toMatchObject({
-      error: { code: "NVIM_UNAVAILABLE" },
-      ok: false,
-    });
-  });
+test("connection failure is reported without a raw Neovim RPC fallback", async () => {
+  const observed = handlers();
+  const channel = new PiAskChannel(
+    "/missing/pi-ask-broker.sock",
+    process.cwd(),
+    launchId,
+    observed,
+  );
+  await expect(channel.open(sessionId)).rejects.toThrow();
+  expect(observed.disconnected()).toBe(1);
 });

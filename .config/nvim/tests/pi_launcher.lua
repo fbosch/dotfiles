@@ -26,7 +26,6 @@ package.loaded["plugins.ai.pi.session"] = {
 		return nil, "missing"
 	end,
 }
-local recorded_source_context
 package.loaded["config.direnv"] = {
 	synchronize = function(cwd)
 		return { ok = true, status = "missing", cwd = cwd }
@@ -35,11 +34,11 @@ package.loaded["config.direnv"] = {
 		return "project environment fixture failure"
 	end,
 }
-package.loaded["plugins.ai.pi.bridge"] = {
-	record_source_context = function(context)
-		recorded_source_context = vim.deepcopy(context)
-		return true
+package.loaded["plugins.ai.pi.broker"] = {
+	open = function(launch)
+		return "/fixture/" .. launch .. ".sock"
 	end,
+	close = function() end,
 }
 
 local captured_command
@@ -101,16 +100,9 @@ local first_launch_id = assert(captured_command:match("PI_NVIM_LAUNCH_ID='([a-f0
 assert(#first_launch_id == 32, "Pi launcher did not generate a bounded launch ID")
 local expected_prefix = command_prefix
 	.. vim.fn.shellescape(first_launch_id)
-	.. " PI_NVIM_SOCKET="
-	.. vim.fn.shellescape(vim.v.servername)
+	.. " PI_NVIM_BROKER="
+	.. vim.fn.shellescape("/fixture/" .. first_launch_id .. ".sock")
 assert(captured_command == expected_prefix .. " pi", "fresh Pi launcher did not let Pi assign its session ID")
-assert(
-	recorded_source_context.buffer.name == repo_root .. "/.config/nvim/lua/config/usercmd.lua",
-	"Pi launcher did not capture the source context before opening its terminal"
-)
-assert(recorded_source_context.mode == "v", "Pi launcher did not capture source mode")
-assert(recorded_source_context.selection.mode == "v", "Pi launcher did not capture visual mode")
-assert(recorded_source_context.selection.lines[1] == "loc", "Pi launcher did not capture the bounded pre-Pi selection")
 assert(captured_options.win.position == "left", "Pi terminal was not opened on the left")
 assert(captured_options.win.width == 100, "Pi terminal width changed")
 assert(captured_options.win.enter == nil, "normal Pi start unexpectedly preserved focus")
@@ -140,7 +132,6 @@ assert(pi.toggle() == terminal, "Pi toggle did not reuse its live terminal")
 assert(toggles == 1, "Pi toggle did not toggle the live terminal exactly once")
 assert(terminal_visible == false, "Pi toggle did not hide the terminal window")
 
-local first_context = vim.deepcopy(recorded_source_context)
 local second_source = repo_root .. "/.config/nvim/lua/plugins/ai/pi/init.lua"
 local foreign_target = vim.tbl_extend("force", vim.deepcopy(nvim_session), { specifier = "other" })
 session.set_current(foreign_target)
@@ -148,10 +139,6 @@ vim.cmd("edit " .. vim.fn.fnameescape(second_source))
 assert(pi.start() == nil, "Pi launcher reused a terminal owned by another Neovim session")
 assert(pi.toggle() == nil, "Pi toggle reused a terminal owned by another Neovim session")
 assert(toggles == 1, "Foreign-session Pi toggle reached the existing terminal")
-assert(
-	vim.deep_equal(recorded_source_context, first_context),
-	"Foreign-session context reached the existing Pi terminal"
-)
 session.set_current(nvim_session)
 
 vim.api.nvim_exec_autocmds("User", { pattern = "SessionSavePre" })
@@ -198,10 +185,6 @@ assert(pi.start() == terminal, "Pi launcher did not reuse its live terminal")
 assert(focuses == focuses_before_reuse + 1, "normal Pi start did not focus its live terminal")
 assert(shows >= 1, "normal Pi start did not show its live terminal")
 assert(captured_command == nil, "Pi launcher opened a duplicate terminal")
-assert(
-	recorded_source_context.buffer.name == second_source,
-	"Pi launcher did not refresh source context before reusing its terminal"
-)
 
 callbacks.TermClose()
 saved_metadata = session.get_metadata(nvim_session)
@@ -215,8 +198,8 @@ local restored_launch_id = assert(captured_command:match("PI_NVIM_LAUNCH_ID='([a
 assert(restored_launch_id ~= first_launch_id, "Pi launcher reused a closed terminal launch ID")
 local restored_prefix = command_prefix
 	.. vim.fn.shellescape(restored_launch_id)
-	.. " PI_NVIM_SOCKET="
-	.. vim.fn.shellescape(vim.v.servername)
+	.. " PI_NVIM_BROKER="
+	.. vim.fn.shellescape("/fixture/" .. restored_launch_id .. ".sock")
 assert(
 	captured_command
 		== restored_prefix

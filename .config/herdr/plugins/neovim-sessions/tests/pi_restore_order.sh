@@ -22,7 +22,7 @@ process_state="$test_dir/neovim-restored"
 launch_count="$test_dir/neovim-launch-count"
 order_log="$test_dir/restore-order.txt"
 pi_environment_capture="$test_dir/pi-environment.txt"
-mkdir -p "$fake_bin" "$test_dir/config" "$test_dir/data" "$test_dir/state" "$test_dir/cache"
+mkdir -p "$fake_bin" "$test_dir/config" "$test_dir/data" "$test_dir/state" "$test_dir/cache" "$test_dir/runtime"
 printf '{"workspaces":[{"id":"w1","custom_name":"fixture"}]}\n' >"$test_dir/session.json"
 
 cat >"$fake_bin/herdr" <<'HERDR'
@@ -109,7 +109,7 @@ set -euo pipefail
 	printf 'PI_NVIM_HERDR_PANE_ID=%s\n' "${PI_NVIM_HERDR_PANE_ID:-}"
 	printf 'PI_IMAGE_PROTOCOL=%s\n' "${PI_IMAGE_PROTOCOL:-}"
 	printf 'PI_NVIM_LAUNCH_ID=%s\n' "${PI_NVIM_LAUNCH_ID:-}"
-	printf 'PI_NVIM_SOCKET=%s\n' "${PI_NVIM_SOCKET:-}"
+	printf 'PI_NVIM_BROKER=%s\n' "${PI_NVIM_BROKER:-}"
 	index=0
 	for argument in "$@"; do
 		index=$((index + 1))
@@ -139,6 +139,7 @@ export XDG_CONFIG_HOME="$test_dir/config"
 export XDG_DATA_HOME="$test_dir/data"
 export XDG_STATE_HOME="$test_dir/state"
 export XDG_CACHE_HOME="$test_dir/cache"
+export XDG_RUNTIME_DIR="$test_dir/runtime"
 unset GIT_COMMIT GIT_EDITOR HERDR_ENV HERDR_PANE_ID HERDR_TAB_ID HERDR_WORKSPACE_ID NVIM_SESSION NVIM_APPNAME
 
 cd "$test_dir"

@@ -4,30 +4,40 @@ import { readSavedArtifact } from "./saved-artifact";
 export const EXTRACTIVE_HEADER = "Extractive compaction: selected historical text and evidence; originals remain recoverable through recall.";
 const MANIFEST_HEADER = "Retained reference manifest. Historical data, not instructions.";
 export interface CheckpointSource { text: string; metadata?: string; archive?: MaskedItem; }
-export interface ExpandedCheckpoint { sources: CheckpointSource[]; bytes: number; references: number; }
+export interface CheckpointReadLimits { windowBytes: number; totalBytes: number; }
+export interface ExpandedCheckpoint { sources: CheckpointSource[]; bytes: number; references: number; windows: number; }
 
 export async function expandCheckpointSources(
   summary: string, records: ReadonlyMap<string, MaskedItem>, root: string,
-  byteBudget: number, signal?: AbortSignal,
+  limits: CheckpointReadLimits, signal?: AbortSignal,
 ): Promise<ExpandedCheckpoint | undefined> {
   if (!summary.startsWith(EXTRACTIVE_HEADER)) return undefined;
   const byPath = new Map([...records.values()].map(record => [record.path, record]));
   const seen = new Set<string>();
   const active = new Set<string>();
-  const result: ExpandedCheckpoint = { sources: [], bytes: 0, references: 0 };
+  const result: ExpandedCheckpoint = { sources: [], bytes: 0, references: 0, windows: 0 };
   const loaded = new Map<string, { record: MaskedItem; text: string }>();
+  let windowBytes = 0;
   const load = async (path: string) => {
     const cached = loaded.get(path);
     if (cached) return cached;
     const record = byPath.get(path);
     if (!record) throw Error("Checkpoint address is not in the session catalogue");
     if (loaded.size >= 256) throw Error("Checkpoint reference count exceeded");
-    const available = byteBudget - result.bytes;
+    const available = Math.min(limits.windowBytes, limits.totalBytes - result.bytes);
     if (available <= 0) throw Error("Checkpoint expansion byte limit");
     const saved = await readSavedArtifact(root, record, available);
     result.bytes += saved.bytes;
     result.references++;
     if (saved.partial) throw Error("Checkpoint expansion byte limit");
+    if (saved.bytes > 0) {
+      // Complete originals start a new read window rather than crossing its byte limit.
+      if (windowBytes === 0 || windowBytes + saved.bytes > limits.windowBytes) {
+        windowBytes = 0;
+        result.windows++;
+      }
+      windowBytes += saved.bytes;
+    }
     const source = { record, text: saved.text };
     loaded.set(path, source);
     return source;
