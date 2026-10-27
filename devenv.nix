@@ -382,6 +382,13 @@ in
       bun test benchmarks/__tests__/context-baseline.test.ts benchmarks/__tests__/context-masking-replay.test.ts benchmarks/__tests__/context-masking-recall-probe.test.ts benchmarks/__tests__/context-compaction.test.ts benchmarks/__tests__/context-pruning-recall.test.ts benchmarks/__tests__/context-compaction-tasks.test.ts benchmarks/__tests__/context-classifier-recall.test.ts benchmarks/__tests__/context-classifier-autonomous.test.ts benchmarks/__tests__/context-classifier-isolated.test.ts
       node_modules/.bin/tsc --project benchmarks/tsconfig.context-baseline.json
     '';
+
+    "test:pi-context-masking-cadence".exec = ''
+      set -euo pipefail
+      cd .pi/agent
+      bun test benchmarks/__tests__/context-masking-cadence.test.ts
+      node_modules/.bin/tsc --project benchmarks/tsconfig.context-masking-cadence.json
+    '';
     "test:pi-diff-rendering-extension".exec = ''
       set -euo pipefail
       cd .pi/agent
@@ -575,6 +582,7 @@ in
         "test:pi-extensions"
         "test:pi-diff-rendering"
         "test:pi-context-baseline"
+        "test:pi-context-masking-cadence"
         "test:pi-mcp"
         "test:nvim-dekit-terminal"
         "test:nvim-diffnav-terminal"

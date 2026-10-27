@@ -569,7 +569,10 @@ export function registerRecallPrefetch(
     const visible = new Set<string>();
     for (const message of ctx.sessionManager.buildSessionProjection().messages) {
       if (message.role !== "custom" || message.customType !== "context-masking-recall") continue;
-      for (const line of message.content.split("\n")) {
+      const content = typeof message.content === "string"
+        ? message.content
+        : message.content.filter((block) => block.type === "text").map((block) => block.text).join("\n");
+      for (const line of content.split("\n")) {
         if (/^(?:\d+│)+/u.test(line) && isEvidence(line)) visible.add(evidenceKey(line));
       }
     }

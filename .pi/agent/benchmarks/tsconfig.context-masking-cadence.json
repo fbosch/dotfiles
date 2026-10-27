@@ -1,0 +1,8 @@
+{
+  "extends": "../tsconfig.json",
+  "include": [
+    "context-masking-cadence-policy.ts",
+    "context-masking-cadence.ts",
+    "__tests__/context-masking-cadence.test.ts"
+  ]
+}

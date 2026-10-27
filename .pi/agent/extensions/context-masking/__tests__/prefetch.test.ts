@@ -80,3 +80,19 @@ test("visible passages are not reinjected when the batch changes; sessions remai
   const other = await setup(['Archived audit receipt: visible-314']);
   expect((await other.invoke("What was the archived audit receipt?"))?.message?.content).toContain("visible-314");
 });
+
+for (const withImage of [false, true]) {
+  test(`deduplicates structured recall passages (${withImage ? "text and image" : "text only"})`, async () => {
+    const f = await setup(['Archived audit receipt: visible-314', 'Approved schema version: unseen-7']);
+    const first = await f.invoke("What was the archived audit receipt?");
+    if (!first?.message || typeof first.message.content !== "string") throw Error("Missing text prefetch");
+    f.manager.appendCustomMessageEntry(first.message.customType, [
+      { type: "text", text: first.message.content },
+      ...(withImage ? [{ type: "image" as const, data: "AA==", mimeType: "image/png" }] : []),
+    ], false);
+
+    const next = await f.invoke("What was the archived audit receipt? Which schema version was approved?");
+    expect(next?.message?.content).toContain("unseen-7");
+    expect(next?.message?.content).not.toContain("visible-314");
+  });
+}
