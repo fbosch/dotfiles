@@ -58,6 +58,17 @@ test("recall charges changed snapshots against its scan budget", async () => {
   expect(report.text).not.toContain(changed);
 });
 
+test("reads source-keyed archives using their separate content identity", async () => {
+  const { root, record } = await fixture("Approval: æøå remains exact.");
+  const linked = { entryId: "source-entry", archiveId: record.entryId, path: record.path };
+  expect(await readSavedArtifact(root, linked, 100)).toMatchObject({ text: record.text, partial: false });
+  expect(await readSavedArtifact(root, linked, 9)).toMatchObject({ text: "Approval:", bytes: 9, partial: true });
+  await expect(readSavedArtifact(root, { ...linked, archiveId: "0".repeat(64) }, 100))
+    .rejects.toThrow("Invalid saved-result path");
+  await expect(readSavedArtifact(root, { ...linked, archiveId: "../escape" }, 100))
+    .rejects.toThrow("Invalid saved-result archive ID");
+});
+
 test("rejects a path that does not belong to its archived entry", async () => {
   const { root, record } = await fixture("Archived approval");
   await expect(readSavedArtifact(root, { ...record, path: "/etc/passwd" }, 100)).rejects.toThrow(

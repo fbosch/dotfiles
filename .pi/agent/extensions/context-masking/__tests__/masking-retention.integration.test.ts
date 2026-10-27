@@ -1,10 +1,12 @@
 import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, readFile, rm, stat, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import {
   convertToLlm,
   SessionManager,
+  type BeforeAgentStartEvent,
+  type BeforeAgentStartEventResult,
   type ExtensionAPI,
   type ExtensionContext,
   type SessionBoundaryDraft,
@@ -16,6 +18,10 @@ import { CUSTOM_TYPE, registerContextMasking } from "../index";
 import { buildIndex } from "../artifact-index";
 import { DEFAULT_SETTINGS, MARKER, type MaskingSettings } from "../policy";
 import { ROLLING_LIMITS, type RollingClassifierRequest, type RollingClassifierResponse } from "../masking-retention";
+import { recallSaved, registerRecallPrefetch } from "../recall";
+import { recallableTextArchiveRecords, savedItems } from "../evidence-archive";
+import { CLASSIFIER_DEFAULTS, classifyCompaction } from "../classifier-compaction";
+import { userStartEvent } from "../../shared/__tests__/agent-start-events";
 import { sessionWith } from "./fixtures";
 
 type Dependencies = NonNullable<Parameters<typeof registerContextMasking>[1]>;
@@ -128,8 +134,18 @@ async function harness(options: {
     getContextUsage: () => undefined,
   } as unknown as ExtensionContext;
 
+  function appendDraft(target: SessionManager, entry: SessionBoundaryDraft) {
+    if (entry.type === "context_edit") target.appendContextEdit(entry.targetId, entry.replacement);
+    else if (entry.type === "custom") target.appendCustomEntry(entry.customType, entry.data);
+    else throw Error("Unexpected rolling boundary draft: " + entry.type);
+  }
   async function run(entries: SessionBoundaryDraft[] = []) {
-    const projection = manager.buildSessionProjection();
+    // The SDK projects earlier handlers’ drafts in a temporary session before invoking us.
+    const header = manager.getHeader();
+    if (!header) throw Error("Missing session header");
+    const preview = SessionManager.inMemory("/work", undefined, [header, ...manager.getBranch()]);
+    for (const entry of entries) appendDraft(preview, entry);
+    const projection = preview.buildSessionProjection();
     const assistantEntry = projection.entries.slice().reverse().find(entry =>
       entry.messages.some(message => message.role === "assistant")
     );
@@ -162,13 +178,7 @@ async function harness(options: {
     return (handler as Handler)(event, ctx);
   }
   function commit(result: TurnEndEventResult | undefined) {
-    for (const entry of result?.entries ?? []) {
-      if (entry.type === "context_edit")
-        manager.appendContextEdit(entry.targetId, entry.replacement);
-      else if (entry.type === "custom")
-        manager.appendCustomEntry(entry.customType, entry.data);
-      else throw Error("Unexpected rolling boundary draft: " + entry.type);
-    }
+    for (const entry of result?.entries ?? []) appendDraft(manager, entry);
   }
   async function reload() {
     const handler = handlers.get("session_start");
@@ -226,6 +236,144 @@ test("the 4k boundary archives current projected bytes and preserves metadata an
   expect(message.content[0]?.type === "text" && message.content[0].text.startsWith(MARKER)).toBe(true);
   expect(buildIndex(f.manager.getBranch(), new Set(), () => true)).toContain(item.path);
   expect(f.calls.every(request => Buffer.byteLength(JSON.stringify(request)) <= ROLLING_LIMITS.requestBytes)).toBe(true);
+});
+
+function legacyRollingResult(result: TurnEndEventResult | undefined): TurnEndEventResult {
+  if (!result?.entries) throw Error("Missing rolling result");
+  return {
+    ...result,
+    entries: result.entries.map(entry => {
+      if (entry.type !== "custom" || entry.customType !== CUSTOM_TYPE) return entry;
+      if (!isRecord(entry.data) || !Array.isArray(entry.data.items)) throw Error("Missing catalog");
+      return {
+        ...entry,
+        data: {
+          ...entry.data,
+          items: entry.data.items.map((item: unknown) => {
+            if (!isRecord(item) || typeof item.path !== "string" || typeof item.toolName !== "string")
+              throw Error("Missing archive identity");
+            return { entryId: basename(item.path, ".txt"), toolName: item.toolName, path: item.path };
+          }),
+        },
+      };
+    }),
+  };
+}
+
+async function assertRecovered(f: Awaited<ReturnType<typeof harness>>, marker: string) {
+  const before = JSON.stringify(f.manager.getBranch());
+  const record = recallableTextArchiveRecords(f.manager.getBranch()).find(item => item.entryId === f.resultIds[0]);
+  expect(record).toBeDefined();
+  if (!record) throw Error("Rolling archive lost its source");
+  const original = await readFile(record.path, "utf8");
+  const metadata = await stat(record.path);
+  expect((await recallSaved(f.manager.getBranch(), f.root, "approved audit receipt")).text).toContain(marker);
+  expect([...savedItems(f.manager.getBranch())]).toEqual([...savedItems(f.manager.getBranch())]);
+
+  type Prefetch = (event: BeforeAgentStartEvent, ctx: ExtensionContext) => Promise<BeforeAgentStartEventResult | undefined>;
+  let prefetch: unknown;
+  registerRecallPrefetch({
+    on: (_name: string, callback: unknown) => { prefetch = callback; return () => { prefetch = undefined; }; },
+  } satisfies Pick<ExtensionAPI, "on">, () => f.root);
+  if (typeof prefetch !== "function") throw Error("Missing prefetch registration");
+  const prefetched = await (prefetch as Prefetch)(
+    userStartEvent("What was the approved audit receipt?"),
+    { sessionManager: f.manager } as unknown as ExtensionContext,
+  );
+  expect(prefetched?.message?.content).toContain(marker);
+
+  const input = {
+    sessionId: f.manager.getSessionId(),
+    branch: f.manager.getBranch(),
+    messages: f.manager.buildSessionProjection().messages,
+  };
+  // Exercise default bounded recovery and full-content classification of the 4k-token fixture.
+  for (const { maxRequestBytes, maxArtifactBytes } of [
+    { maxRequestBytes: CLASSIFIER_DEFAULTS.maxRequestBytes, maxArtifactBytes: CLASSIFIER_DEFAULTS.maxArtifactBytes },
+    { maxRequestBytes: 64_000, maxArtifactBytes: 64_000 },
+  ]) {
+    const states: string[] = [];
+    const compacted = await classifyCompaction(input, {
+      ...CLASSIFIER_DEFAULTS, enabled: true, minFreedRatio: 0, maxRequestBytes, maxArtifactBytes,
+    }, {
+      artifactRoot: f.root,
+      deferReduction: true,
+      classify: async request => {
+        states.push(JSON.stringify(request.state));
+        return response(request);
+      },
+    });
+    expect(compacted.kind).toBe("retained");
+    expect(compacted.artifactBytes).toBeGreaterThanOrEqual(Math.min(Buffer.byteLength(original), maxArtifactBytes));
+    expect(compacted.decisions.some(decision => decision.path === record.path)).toBe(true);
+    if (maxArtifactBytes >= Buffer.byteLength(original)) expect(states.some(state => state.includes(marker))).toBe(true);
+  }
+  expect(await readFile(record.path, "utf8")).toBe(original);
+  expect((await stat(record.path)).mtimeMs).toBe(metadata.mtimeMs);
+  expect(JSON.stringify(f.manager.getBranch())).toBe(before);
+}
+
+for (const legacy of [false, true]) {
+  test((legacy ? "existing" : "new") + " rolling archives recover through recall, prefetch, and compaction", async () => {
+    const marker = "approval_æøå=rolling-original";
+    const f = await harness({ bodies: ["Approved audit receipt: " + marker + "\n" + body] });
+    const result = await f.run();
+    f.commit(legacy ? legacyRollingResult(result) : result);
+    await assertRecovered(f, marker);
+  });
+}
+
+for (const legacy of [false, true]) {
+  test((legacy ? "existing" : "new") + " shared archive bytes retain every source identity", async () => {
+    const f = await harness({ bodies: [body, body] });
+    const result = await f.run();
+    f.commit(legacy ? legacyRollingResult(result) : result);
+    const ids = f.resultIds.slice(0, 2);
+    const records = recallableTextArchiveRecords(f.manager.getBranch()).filter(item => ids.includes(item.entryId));
+    expect(records.map(item => item.entryId).sort()).toEqual(ids.sort());
+    expect(new Set(records.map(item => item.path)).size).toBe(1);
+    expect((await recallSaved(f.manager.getBranch(), f.root, "audit-line")).skipped).toBe(0);
+  });
+}
+
+for (const missing of ["audit", "mask", "digest", "tool"] as const) {
+  test("existing rolling recovery requires matching committed " + missing + " evidence", async () => {
+    const f = await harness();
+    const result = legacyRollingResult(await f.run());
+    if (!result.entries) throw Error("Missing drafts");
+    result.entries = result.entries.filter(entry =>
+      !(missing === "audit" && entry.type === "custom" && entry.customType === "context-masking-rolling") &&
+      !(missing === "mask" && entry.type === "context_edit")
+    ).map(entry => {
+      if (entry.type !== "custom" || !isRecord(entry.data)) return entry;
+      if (missing === "digest" && entry.customType === "context-masking-rolling")
+        return { ...entry, data: { ...entry.data, assessments: [{ sourceId: f.resultIds[0], bodyDigest: "0".repeat(64) }] } };
+      if (missing === "tool" && entry.customType === CUSTOM_TYPE && Array.isArray(entry.data.items))
+        return { ...entry, data: { ...entry.data, items: entry.data.items.map((item: unknown) =>
+          isRecord(item) ? { ...item, toolName: "bash" } : item
+        ) } };
+      return entry;
+    });
+    f.commit(result);
+    expect(recallableTextArchiveRecords(f.manager.getBranch())).toEqual([]);
+  });
+}
+
+test("earlier context edits select and archive the preview bytes rather than committed bytes", async () => {
+  const f = await harness();
+  const sourceId = f.resultIds[0];
+  if (!sourceId) throw Error("Missing result");
+  const exact = "Earlier handler approval: æøå\n" + body;
+  const earlier: SessionBoundaryDraft = {
+    type: "context_edit", targetId: sourceId, replacement: { content: [{ type: "text", text: exact }] },
+  };
+  const result = await f.run([earlier]);
+  expect(result?.entries?.[0]).toBe(earlier);
+  expect(f.calls).toHaveLength(1);
+  const item = customData(result, CUSTOM_TYPE).items;
+  if (!Array.isArray(item) || !isRecord(item[0]) || typeof item[0].path !== "string")
+    throw Error("Missing preview archive");
+  expect(await readFile(item[0].path, "utf8")).toBe(exact);
 });
 
 test("kept assessments persist only after a boundary commit and are scoped to the body digest", async () => {

@@ -74,8 +74,9 @@ async function rollingBoundary(
   const sessionId = ctx.sessionManager.getSessionId();
   const leafId = ctx.sessionManager.getLeafId();
   const projection = event.context.contextEntries;
+  // Earlier handlers’ drafts belong to the event preview, not the committed freshness baseline.
   const projectionDigest = digestText(JSON.stringify(
-    projection.map((entry) => [entry.sourceEntry.id, entry.messages]),
+    ctx.sessionManager.buildSessionProjection().entries.map((entry) => [entry.sourceEntry.id, entry.messages]),
   ));
   const isFresh = (signal: AbortSignal) =>
     !signal.aborted &&
@@ -171,7 +172,7 @@ async function rollingBoundary(
       if (!isFresh(signal)) return undefined;
       archived.set(candidate.sourceId, {
         candidate,
-        item: { ...artifact, toolName: candidate.toolName, text: candidate.text },
+        item: { ...artifact, entryId: candidate.sourceId, archiveId: artifact.entryId, toolName: candidate.toolName },
       });
     } catch {
       if (!isFresh(signal)) return undefined;
@@ -221,7 +222,7 @@ async function rollingBoundary(
       type: "custom",
       customType: CUSTOM_TYPE,
       data: {
-        items: catalogItems.map(({ entryId, toolName, path }) => ({ entryId, toolName, path })),
+        items: catalogItems.map(({ entryId, archiveId, toolName, path }) => ({ entryId, archiveId, toolName, path })),
         masked: maskedIds.size,
         savedTokens: estimatedSavedTokens,
       },

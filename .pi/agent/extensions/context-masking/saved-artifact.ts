@@ -14,17 +14,21 @@ export class SavedArtifactSnapshotChanged extends Error {
 /** Reads a correctly named regular file directly within a cache session directory. */
 export async function readSavedArtifact(
   root: string,
-  record: Pick<MaskedItem, "path" | "entryId" | "text">,
+  record: Pick<MaskedItem, "path" | "entryId" | "text" | "archiveId">,
   bytes: number,
 ) {
   const { path, entryId } = record;
+  const archiveId = record.archiveId;
+  if (archiveId !== undefined && (typeof archiveId !== "string" || !/^[a-f0-9]{64}$/u.test(archiveId)))
+    throw new Error("Invalid saved-result archive ID");
+  const fileId = archiveId ?? entryId;
   const rel = relative(resolve(root), resolve(path));
   const parts = rel.split(sep);
   if (
     isAbsolute(rel) ||
     parts.length !== 2 ||
     !/^[A-Za-z0-9_-]+$/u.test(parts[0] ?? "") ||
-    basename(path) !== `${safeName(entryId)}.txt`
+    basename(path) !== `${safeName(fileId)}.txt`
   )
     throw new Error("Invalid saved-result path");
   const canonicalRoot = await realpath(root);
