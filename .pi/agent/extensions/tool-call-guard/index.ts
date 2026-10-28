@@ -66,8 +66,11 @@ export default function toolCallGuard(
       if (reason !== undefined) return { block: true, reason };
     }
     const protectedChange = protection.check(event, ctx);
-    if (protectedChange) return protectedChange;
-    if (!isToolCallEventType("bash", event)) return undefined;
-    return review.check(event, ctx);
+    const reviewCommand = () =>
+      isToolCallEventType("bash", event) ? review.check(event, ctx) : undefined;
+    // Protection resolves paths asynchronously; command review still runs when it passes.
+    return protectedChange
+      ? protectedChange.then((blocked) => blocked ?? reviewCommand())
+      : reviewCommand();
   });
 }

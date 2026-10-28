@@ -8,6 +8,10 @@ interface CommandPresentation {
   cwd: string;
   concern: string;
   allowSelected: boolean;
+  /** Defaults describe a Bash command; other callers name their own action. */
+  title?: string;
+  contentLabel?: string;
+  approveLabel?: string;
 }
 interface Token {
   text: string;
@@ -178,21 +182,21 @@ export function renderCommandPermissionSections(
   const fit = (lines: string[]) => lines.flatMap((line) => wrapTextWithAnsi(line, width));
   return {
     header: fit([
-      theme.fg("warning", " Run this bash command?"),
+      theme.fg("warning", ` ${request.title ?? "Run this bash command?"}`),
       theme.fg("warning", metadata(request.concern)),
       theme.fg("muted", `Working directory: ${metadata(request.cwd)}`),
       "",
     ]),
     body: [
       ...fit([
-        theme.fg("accent", escaped ? "Command (escaped)" : "Command"),
+        theme.fg("accent", `${request.contentLabel ?? "Command"}${escaped ? " (escaped)" : ""}`),
         ...(escaped ? [theme.fg("muted", "Each source line below is a JSON string.")] : []),
       ]),
       ...rows,
     ],
     footer: renderPermissionPromptActions(
       [
-        { label: "Run command", selected: request.allowSelected },
+        { label: request.approveLabel ?? "Run command", selected: request.allowSelected },
         { label: "Cancel", selected: !request.allowSelected },
       ],
       width,

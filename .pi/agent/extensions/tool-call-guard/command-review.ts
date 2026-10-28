@@ -135,28 +135,23 @@ export function createCommandReview(options: CommandReviewOptions) {
       try {
         const before = approvalState();
         if (before) return confirming ? before : undefined;
-        let risks: string[];
-        if (inspection.kind === "unknown") {
-          risks = ["unresolved command behavior"];
-        } else {
-          const result = await options.request(ctx.modelRegistry, inspection.input, {
-            signal: controller.signal,
-            settingsContext: ctx,
-            // The short background budget is split across providers and can cut off the primary.
-            ...(confirming ? { timeoutMs: INTERACTIVE_CLASSIFIER_TIMEOUT_MS } : {}),
-          });
-          const after = approvalState();
-          if (after) return confirming ? after : undefined;
-          if (!result.ok) {
-            // A classifier policy opt-out is intentional, not an unavailable verdict.
-            if (result.reason === "disabled") return undefined;
-            if (result.reason !== "caller-cancellation") warnError(ctx);
-            return confirming
-              ? block("Semantic command guard could not assess this command.")
-              : undefined;
-          }
-          risks = flaggedRisks(result.value.answers);
+        const result = await options.request(ctx.modelRegistry, inspection.input, {
+          signal: controller.signal,
+          settingsContext: ctx,
+          // The short background budget is split across providers and can cut off the primary.
+          ...(confirming ? { timeoutMs: INTERACTIVE_CLASSIFIER_TIMEOUT_MS } : {}),
+        });
+        const after = approvalState();
+        if (after) return confirming ? after : undefined;
+        if (!result.ok) {
+          // A classifier policy opt-out is intentional, not an unavailable verdict.
+          if (result.reason === "disabled") return undefined;
+          if (result.reason !== "caller-cancellation") warnError(ctx);
+          return confirming
+            ? block("Semantic command guard could not assess this command.")
+            : undefined;
         }
+        const risks = flaggedRisks(result.value.answers);
         if (risks.length === 0) return;
         if (!confirming) {
           warn(

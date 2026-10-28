@@ -18,11 +18,13 @@ export const REPLAY_FIXTURES = [
   { id: "find-delete", command: "find ./src -delete", dangerous: true },
   { id: "overwrite", command: "tee existing.txt", dangerous: true },
   { id: "redirect", command: "printf text > existing.txt", dangerous: true },
-  { id: "script", command: "python tools/deploy.py", dangerous: true },
+  // Opaque code without destructive operation names is delegated to the nono grants.
+  { id: "script", command: "python tools/deploy.py", dangerous: true, exempt: true },
   {
     id: "inline-delete",
     command: "python -c 'import os; os.remove(\"important.txt\")'",
     dangerous: true,
+    exempt: true,
   },
   { id: "substitution", command: "echo $(rm -rf src)", dangerous: true },
   { id: "wrapper", command: "/bin/rm -rf src", dangerous: true },

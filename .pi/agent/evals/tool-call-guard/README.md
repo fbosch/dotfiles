@@ -3,7 +3,7 @@
 ## Handler replay
 
 The replay measures the complete `tool_call` path: selection, scope exemptions,
-local uncertainty, hosted verdicts, prompts, and blocks. Fixture commands never
+delegation of opaque code to nono, hosted verdicts, prompts, and blocks. Fixture commands never
 execute. Dialogs always decline so that required approvals count as blocked.
 
 1. From the repository root, run `bun .pi/agent/evals/tool-call-guard/replay.ts`.
@@ -18,7 +18,7 @@ For hosted observations, append `--live` to the replay command. This contacts
 configured providers using only fixed labels and booleans. Results identify the
 actual requested provider/model chain per fixture. Fallback chains are grouped
 separately rather than attributed to a single model. Service failures count
-separately from verdict quality. Local-only decisions make no classifier call.
+separately from verdict quality. Skipped and hard-blocked calls make no classifier call.
 Reports contain fixture IDs and metrics, not raw commands or private paths.
 
 Keep the production thresholds unchanged until representative held-out fixtures

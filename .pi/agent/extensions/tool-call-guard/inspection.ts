@@ -61,18 +61,78 @@ const INDICATORS = {
 export type Inspection =
   | { kind: "skip" }
   | { kind: "oversized" }
-  | { kind: "unknown"; evidence: readonly string[] }
   | { kind: "review"; input: ClassifierContext; evidence: readonly string[] };
+
+interface Part {
+  operation: string;
+  words: readonly ShellWord[];
+}
+
+const WRAPPERS_AND_KEYWORDS = new Set([
+  "sudo",
+  "doas",
+  "env",
+  "exec",
+  "nohup",
+  "nice",
+  "time",
+  "timeout",
+  "xargs",
+  "watch",
+  "if",
+  "then",
+  "elif",
+  "else",
+  "do",
+  "while",
+  "until",
+  "for",
+  "!",
+  "{",
+]);
+const INTERPRETERS = new Set(["eval", "bash", "sh", "zsh", "python", "python3", "node"]);
+// Opaque commands are scanned for these names only. Copies, `tee`, `find`, and `touch`
+// rarely destroy data on their own and would make every script look risky.
+const LEXICAL_OPERATIONS = new Set<string>(
+  OPERATIONS.filter(
+    (name) => !INTERPRETERS.has(name) && !["cp", "tee", "find", "touch"].includes(name),
+  ),
+);
+
+/**
+ * Nono grants decide what opaque code may touch. For syntax or execution the literal
+ * parser cannot resolve, the guard only looks for known destructive or transfer
+ * operation names anywhere in the text and asks the classifier about those; commands
+ * without such names run without review.
+ */
+function lexicalInspection(command: string): Inspection {
+  const tokens: ShellWord[] = [...command.matchAll(/[A-Za-z][A-Za-z0-9._-]*/g)].map((match) => ({
+    value: match[0],
+    start: match.index ?? 0,
+    end: (match.index ?? 0) + match[0].length,
+  }));
+  const tail: ShellWord = { value: "", start: command.length, end: command.length };
+  const parts: Part[] = [];
+  for (const [index, token] of tokens.entries()) {
+    if (token.value === "git") {
+      const action = tokens
+        .slice(index + 1)
+        .find((candidate) => GIT_ACTIONS.some((name) => name === candidate.value));
+      if (action) parts.push({ operation: "git", words: [token, action, tail] });
+    } else if (LEXICAL_OPERATIONS.has(token.value)) {
+      parts.push({ operation: token.value, words: [token, tail] });
+    }
+  }
+  if (!parts.length) return { kind: "skip" };
+  return buildReview(command, parts, false, true);
+}
 
 export function inspectCommand(command: string): Inspection {
   if (command.length > MAX_COMMAND_CHARS) return { kind: "oversized" };
   const parsed = parseShell(command);
-  const unknown = (): Inspection => ({
-    kind: "unknown",
-    evidence: ["The command uses execution or syntax that the local inspector cannot establish."],
-  });
+  const unknown = () => lexicalInspection(command);
   if (parsed.kind === "unknown") return unknown();
-  const selected: { operation: string; words: readonly ShellWord[] }[] = [];
+  const selected: Part[] = [];
   let shellOverwrite = false;
   for (const part of parsed.commands) {
     const words = executableWords(part.words);
@@ -85,6 +145,9 @@ export function inspectCommand(command: string): Inspection {
     if (operation === "rg" && args.some((arg) => /^--(?:pre|hostname-bin)(?:=|$)/.test(arg)))
       return unknown();
     shellOverwrite ||= part.redirects.some((redirect) => redirect.operator === ">");
+    // `sort -o` writes its output file, so it cannot share the read-only skip below.
+    if (operation === "sort" && args.some((arg) => /^-[a-zA-Z]*o|^--output/.test(arg)))
+      return unknown();
     if (
       [
         "cat",
@@ -99,13 +162,30 @@ export function inspectCommand(command: string): Inspection {
         "printf",
         "true",
         "false",
+        "cd",
+        "pushd",
+        "popd",
+        "jq",
+        "cut",
+        "tr",
+        "sort",
+        "stat",
+        "du",
+        "file",
+        "realpath",
+        "basename",
+        "dirname",
+        "which",
       ].includes(operation)
     )
       continue;
     if (operation === "" && part.redirects.length) continue;
-    if (!OPERATIONS.some((name) => name === operation)) return unknown();
-    if (["eval", "bash", "sh", "zsh", "python", "python3", "node"].includes(operation))
-      return unknown();
+    // Wrappers and shell keywords run the following words as a command, so the text is
+    // scanned as a whole rather than skipped as an unknown program.
+    if (WRAPPERS_AND_KEYWORDS.has(operation)) return unknown();
+    // Programs without destructive or transfer semantics are ordinary work within the grants.
+    if (!OPERATIONS.some((name) => name === operation)) continue;
+    if (INTERPRETERS.has(operation)) return unknown();
     if (
       operation === "find" &&
       args.some((arg) => /^-(?:exec|execdir|ok|okdir|fprint|fprintf|fls)/.test(arg))
@@ -117,7 +197,12 @@ export function inspectCommand(command: string): Inspection {
     )
       return unknown();
     if (operation === "git") {
-      const action = args[0];
+      // `-C dir` and `--no-pager` only change where and how Git runs; `-c` can set
+      // executables such as core.pager, so it stays opaque.
+      let index = 0;
+      while (args[index] === "-C" || args[index] === "--no-pager")
+        index += args[index] === "-C" ? 2 : 1;
+      const action = args[index];
       if (!action || action.startsWith("-")) return unknown();
       if (["status", "diff", "log", "show", "rev-parse", "ls-files"].includes(action)) {
         if (
@@ -130,12 +215,28 @@ export function inspectCommand(command: string): Inspection {
           return unknown();
         continue;
       }
-      if (!GIT_ACTIONS.some((name) => name === action)) return unknown();
+      // Other Git commands (commit, add, fetch, checkout, ...) are ordinary repository work.
+      if (!GIT_ACTIONS.some((name) => name === action)) continue;
+      selected.push({
+        operation,
+        words: [words[0] ?? part.words[0], ...words.slice(index + 1)].filter(
+          (word): word is ShellWord => word !== undefined,
+        ),
+      });
+      continue;
     }
     selected.push({ operation, words });
   }
   if (!selected.length && !shellOverwrite) return { kind: "skip" };
+  return buildReview(command, selected, shellOverwrite, false);
+}
 
+function buildReview(
+  command: string,
+  selected: readonly Part[],
+  shellOverwrite: boolean,
+  lexical: boolean,
+): Inspection {
   const evidence: string[] = [];
   const addEvidence = (label: string, match: RegExpMatchArray) => {
     const leading = match[0].length - match[0].trimStart().length;
@@ -208,8 +309,10 @@ export function inspectCommand(command: string): Inspection {
         findDelete,
         teeOverwrite,
         branchDelete,
-        evidenceLimit:
-          "Literal-shell summary only. Names, values, paths, code, and user intent are omitted. This does not establish safety or authorization.",
+        lexicalOnly: lexical,
+        evidenceLimit: lexical
+          ? "Lexical summary of a command the local parser could not resolve: operation names may appear in data or code rather than run. Names, values, paths, code, and user intent are omitted. This does not establish safety or authorization."
+          : "Literal-shell summary only. Names, values, paths, code, and user intent are omitted. This does not establish safety or authorization.",
       },
       questions: {
         destructive: {

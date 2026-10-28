@@ -6,17 +6,23 @@ describe("actual command guard handler replay", () => {
     const rows = await replayGuard();
     const summary = summarizeReplay(rows);
     expect(summary.dangerousAllowed).toEqual([]);
-    expect(summary.scopeExemptions).toBe(1);
+    // The granted-path delete plus the two opaque scripts delegated to nono.
+    expect(summary.scopeExemptions).toBe(3);
     expect(summary.unnecessaryPrompts).toBe(0);
     expect(summary.failures).toBe(0);
-    for (const id of ["script", "inline-delete", "substitution"]) {
+    for (const id of ["script", "inline-delete"]) {
       expect(rows.find((row) => row.fixture === id)).toMatchObject({
-        route: "unknown",
+        route: "skip",
         requests: 0,
-        prompts: 1,
-        blocked: true,
+        prompts: 0,
+        blocked: false,
       });
     }
+    expect(rows.find((row) => row.fixture === "substitution")).toMatchObject({
+      route: "review",
+      requests: 1,
+      blocked: true,
+    });
     expect(rows.find((row) => row.fixture === "hard-block")).toMatchObject({
       requests: 0,
       prompts: 0,

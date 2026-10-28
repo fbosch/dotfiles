@@ -8,6 +8,11 @@ interface CommandPermission {
   cwd: string;
   risks: readonly string[];
   signal: AbortSignal;
+  /** Replaces the "Flagged: possible …" line built from `risks`. */
+  concern?: string;
+  title?: string;
+  contentLabel?: string;
+  approveLabel?: string;
 }
 
 export async function confirmCommandPermission(
@@ -17,14 +22,20 @@ export async function confirmCommandPermission(
 ): Promise<boolean> {
   const { command, cwd, risks, signal } = request;
   if (!ctx.hasUI || signal.aborted) return false;
-  const concern = `Flagged: possible ${risks.map((risk) => risk.replace(/^a /, "")).join(" and ")}.`;
+  const concern =
+    request.concern ??
+    `Flagged: possible ${risks.map((risk) => risk.replace(/^a /, "")).join(" and ")}.`;
+  const title = request.title ?? "Run this bash command?";
+  const contentLabel = request.contentLabel ?? "Command";
+  const approveLabel = request.approveLabel ?? "Run command";
+  const labels = { title, contentLabel, approveLabel };
   const commandText = JSON.stringify(command);
   const directoryText = JSON.stringify(cwd);
   // RPC supports standard dialogs, but not custom terminal components.
   if (ctx.mode !== "tui")
     return ctx.ui.confirm(
-      "Run this bash command?",
-      `${concern}\n\nWorking directory: ${directoryText}\n\nCommand: ${commandText}`,
+      title,
+      `${concern}\n\nWorking directory: ${directoryText}\n\n${contentLabel}: ${commandText}`,
       { signal },
     );
 
@@ -48,7 +59,7 @@ export async function confirmCommandPermission(
           };
           const choices = new SelectList(
             [
-              { value: "allow", label: "Run command" },
+              { value: "allow", label: approveLabel },
               { value: "reject", label: "Cancel" },
             ],
             2,
@@ -68,7 +79,7 @@ export async function confirmCommandPermission(
               const allowSelected = choices.getSelectedItem()?.value === "allow";
               if (!cached || cachedWidth !== width || cachedSelection !== allowSelected) {
                 cached = renderCommandPermissionSections(
-                  { command, cwd, concern, allowSelected },
+                  { command, cwd, concern, allowSelected, ...labels },
                   width,
                   theme,
                 );
@@ -79,7 +90,7 @@ export async function confirmCommandPermission(
               const fit = (text: string) => wrapTextWithAnsi(theme.fg("muted", text), width);
               const help = [
                 ...fit("PgUp/PgDn scroll · Home/End first/last"),
-                ...fit(copyStatus || "Ctrl+Y copy command"),
+                ...fit(copyStatus || `Ctrl+Y copy ${contentLabel.toLowerCase()}`),
               ];
               const rangeRows = fit(
                 `Review rows ${body.length}–${body.length} of ${body.length}`,
@@ -118,13 +129,13 @@ export async function confirmCommandPermission(
                   () => {
                     copying = false;
                     if (finished) return;
-                    copyStatus = "Command copied";
+                    copyStatus = `${contentLabel} copied`;
                     tui.requestRender();
                   },
                   () => {
                     copying = false;
                     if (finished) return;
-                    copyStatus = "Unable to copy command.";
+                    copyStatus = `Unable to copy ${contentLabel.toLowerCase()}.`;
                     tui.requestRender();
                   },
                 );

@@ -1,19 +1,20 @@
 import { homedir } from "node:os";
-import { isAbsolute, join, relative, sep } from "node:path";
-import { pathToFileURL } from "node:url";
+import { dirname, isAbsolute, join, relative, sep } from "node:path";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import {
   type ExtensionContext,
   getAgentDir,
   type ToolCallEvent,
 } from "@earendil-works/pi-coding-agent";
 import { canonicalPath } from "../../lib/nono-access";
+import { confirmCommandPermission } from "../prompt-ui/command-permission";
 import { isRecord } from "../shared/is-record";
 import { catastrophicCommandReason } from "./catastrophic-commands";
-import { executableWords, parseShell } from "./shell";
+import { bashMutationTargets, type MutationTarget } from "./mutation-targets";
 
 type BlockedCall = { block: true; reason: string };
 const block = (reason: string): BlockedCall => ({ block: true, reason });
-const MUTATIONS = new Set([
+const FILE_MUTATIONS = new Set([
   "write",
   "edit",
   "replace",
@@ -23,34 +24,26 @@ const MUTATIONS = new Set([
   "move",
   "undo_last_change",
 ]);
-const READ_ONLY = new Set([
-  "cat",
-  "ls",
-  "pwd",
-  "rg",
-  "grep",
-  "head",
-  "tail",
-  "wc",
-  "echo",
-  "printf",
-  "true",
-  "false",
-]);
 const within = (root: string, path: string) => {
   const suffix = relative(root, path);
   return suffix !== ".." && !suffix.startsWith(`..${sep}`) && !isAbsolute(suffix);
 };
+const expandHome = (path: string) =>
+  path === "~" ? homedir() : path.startsWith("~/") ? join(homedir(), path.slice(2)) : path;
 
 export function protectedGuardPaths(cwd: string): readonly string[] {
   return [
     // The extension directory includes the catastrophic-command hard blocks.
-    import.meta.dir,
+    dirname(fileURLToPath(import.meta.url)),
     join(getAgentDir(), "settings.json"),
     join(cwd, ".pi", "settings.json"),
   ];
 }
 
+/**
+ * Returns the files that own a copy/move call's anchors. Anchors the registry does not
+ * know are skipped: the hashline tool rejects them itself, so they cannot reach a file.
+ */
 async function anchorPaths(event: ToolCallEvent, ctx: ExtensionContext): Promise<string[]> {
   // Use the same session-scoped registry as the installed hashline tools. The
   // declared path alone does not identify a cross-file copy/move destination.
@@ -64,25 +57,22 @@ async function anchorPaths(event: ToolCallEvent, ctx: ExtensionContext): Promise
     typeof registry.withAnchorSession !== "function" ||
     typeof registry.ownerOf !== "function"
   )
-    throw new Error("Hashline ownership unavailable");
+    throw new Error("Hashline anchor registry unavailable");
   const withSession = registry.withAnchorSession;
   const ownerOf = registry.ownerOf;
   const paths: unknown = await withSession(ctx, () => {
     const input: unknown = event.input;
-    if (!isRecord(input)) throw new Error("Invalid tool input");
     const owners: string[] = [];
+    if (!isRecord(input)) return owners;
     for (const key of ["source_from", "source_to", "anchor"]) {
       const anchor = input[key];
-      if (typeof anchor !== "string") throw new Error("Missing hashline anchor");
-      const owner: unknown = ownerOf(anchor);
-      if (!isRecord(owner) || typeof owner.path !== "string")
-        throw new Error("Unknown hashline anchor");
-      owners.push(owner.path);
+      const owner: unknown = typeof anchor === "string" ? ownerOf(anchor) : undefined;
+      if (isRecord(owner) && typeof owner.path === "string") owners.push(owner.path);
     }
     return owners;
   });
   if (!Array.isArray(paths) || !paths.every((path): path is string => typeof path === "string"))
-    throw new Error("Invalid hashline ownership");
+    throw new Error("Hashline anchor registry returned invalid ownership");
   return paths;
 }
 
@@ -90,6 +80,12 @@ interface ProtectionOptions {
   enqueue: (task: () => Promise<BlockedCall | undefined>) => Promise<BlockedCall | undefined>;
   paths?: readonly string[];
   resolveAnchors?: typeof anchorPaths;
+}
+
+/** What a call may change: resolved protected paths and targets that could not be resolved. */
+interface Assessment {
+  protectedPaths: string[];
+  unresolved: boolean;
 }
 
 export function createGuardProtection(options: ProtectionOptions) {
@@ -100,48 +96,91 @@ export function createGuardProtection(options: ProtectionOptions) {
     for (const controller of pending) controller.abort();
     pending.clear();
   };
-  const targets = (event: ToolCallEvent): string[] | undefined => {
-    if (MUTATIONS.has(event.toolName)) {
-      const input: unknown = event.input;
-      return isRecord(input) && typeof input.path === "string" ? [input.path] : [];
+
+  // Bash targets come only from commands whose semantics name mutation operands.
+  // Opaque commands (substitutions, scripts, inline code) yield `undefined`; their
+  // execution is command review's responsibility, not this gate's.
+  const directTargets = (event: ToolCallEvent, cwd: string): MutationTarget[] | undefined => {
+    const input: unknown = event.input;
+    if (FILE_MUTATIONS.has(event.toolName)) {
+      return isRecord(input) && typeof input.path === "string"
+        ? [{ path: input.path, cwds: [cwd] }]
+        : [];
     }
-    if (event.toolName !== "bash" || typeof event.input.command !== "string") return undefined;
-    const parsed = parseShell(event.input.command);
-    if (parsed.kind === "unknown") {
-      // shortcut: opaque code cannot yield exact mutation targets. Its execution
-      // remains the configured command guard's responsibility, not a sandbox guarantee.
+    if (event.toolName !== "bash" || !isRecord(input) || typeof input.command !== "string")
       return undefined;
-    }
-    const paths: string[] = [];
-    for (const command of parsed.commands) {
-      paths.push(
-        ...command.redirects
-          .filter((redir) => redir.operator !== "<")
-          .map((redir) => redir.target.value),
-      );
-      const words = executableWords(command.words) ?? command.words;
-      const executable = words[0]?.value.split("/").at(-1) ?? "";
-      if (READ_ONLY.has(executable)) continue;
-      paths.push(...words.slice(1).map((word) => word.value.replace(/^[^=]+=/, "")));
-    }
-    return paths;
+    return bashMutationTargets(input.command, cwd);
   };
-  const resolveTargets = (paths: readonly string[], cwd: string) =>
-    paths.map((path) => {
-      const expanded =
-        path === "~" ? homedir() : path.startsWith("~/") ? join(homedir(), path.slice(2)) : path;
-      const canonical = canonicalPath(cwd, expanded);
-      if (!canonical) throw new Error("Unresolved mutation path");
-      return canonical;
-    });
-  const relevant = (paths: readonly string[], cwd: string) => {
-    const roots = resolveTargets(options.paths ?? protectedGuardPaths(cwd), cwd);
-    return paths.filter((path) => roots.some((root) => within(root, path) || within(path, root)));
+
+  const assess = async (
+    event: ToolCallEvent,
+    ctx: ExtensionContext,
+    cwd: string,
+    roots: readonly string[],
+  ): Promise<Assessment | undefined> => {
+    const targets = directTargets(event, cwd);
+    if (targets === undefined) return undefined;
+    let unresolved = false;
+    if (event.toolName === "copy" || event.toolName === "move") {
+      try {
+        const owners = await (options.resolveAnchors ?? anchorPaths)(event, ctx);
+        targets.push(...owners.map((path) => ({ path, cwds: [cwd] })));
+      } catch {
+        unresolved = true;
+      }
+    }
+    const protectedPaths = new Set<string>();
+    for (const target of targets) {
+      const candidates = target.cwds.flatMap((base) => {
+        const path = expandHome(target.path);
+        if (!isAbsolute(path) && base === undefined) return [undefined];
+        // Absolute inputs avoid realpath on a `cd` destination that may not exist yet.
+        const resolved = canonicalPath("/", isAbsolute(path) ? path : join(base ?? "/", path));
+        return [
+          resolved,
+          ...(resolved
+            ? (target.intoDirectory ?? []).map((name) => canonicalPath("/", join(resolved, name)))
+            : []),
+        ];
+      });
+      for (const candidate of candidates) {
+        if (candidate === undefined) {
+          unresolved = true;
+          continue;
+        }
+        // Removing or replacing an ancestor also removes the protected files below it.
+        if (roots.some((root) => within(root, candidate) || within(candidate, root)))
+          protectedPaths.add(candidate);
+      }
+    }
+    return { protectedPaths: [...protectedPaths], unresolved };
   };
+
+  const describe = (event: ToolCallEvent, assessment: Assessment) => {
+    const lines = assessment.protectedPaths.length
+      ? [`Changes protected guard files: ${assessment.protectedPaths.join(", ")}.`]
+      : [];
+    if (assessment.unresolved)
+      lines.push("Some mutation targets could not be resolved and may be protected guard files.");
+    const input: unknown = event.input;
+    const isBash =
+      event.toolName === "bash" && isRecord(input) && typeof input.command === "string";
+    return {
+      concern: lines.join(" "),
+      command: isBash ? String(input.command) : JSON.stringify(event.input, null, 2),
+      title: isBash
+        ? "Change command guard files?"
+        : `Allow ${event.toolName} to change command guard files?`,
+      contentLabel: isBash ? "Command" : "Tool input",
+      approveLabel: isBash ? "Run command" : "Allow change",
+    };
+  };
+
   const review = async (
     event: ToolCallEvent,
     ctx: ExtensionContext,
-    initial: string[],
+    roots: readonly string[],
+    initial: Assessment,
   ): Promise<BlockedCall | undefined> => {
     const cwd = ctx.cwd;
     const currentGeneration = generation;
@@ -155,50 +194,48 @@ export function createGuardProtection(options: ProtectionOptions) {
         return block("Command guard file approval was cancelled.");
       if (cwd !== ctx.cwd || snapshot !== JSON.stringify(event.input))
         return block("Tool input changed during command guard file approval.");
-      if (event.toolName === "bash" && typeof event.input.command === "string") {
-        const reason = catastrophicCommandReason(event.input.command);
+      const input: unknown = event.input;
+      if (event.toolName === "bash" && isRecord(input) && typeof input.command === "string") {
+        const reason = catastrophicCommandReason(input.command);
         if (reason) return block(reason);
       }
       return undefined;
     };
-    const currentPaths = async () =>
-      resolveTargets(
-        [
-          ...initial,
-          ...(event.toolName === "copy" || event.toolName === "move"
-            ? await (options.resolveAnchors ?? anchorPaths)(event, ctx)
-            : []),
-        ],
-        cwd,
-      );
     try {
-      const before = state();
-      if (before) return before;
-      const paths = await currentPaths();
-      const protectedPaths = relevant(paths, cwd);
-      if (!protectedPaths.length) return;
-      if (!ctx.hasUI) return block("Changing command guard files requires interactive approval.");
+      if (!ctx.hasUI)
+        return block(
+          initial.protectedPaths.length
+            ? "Changing command guard files requires interactive approval."
+            : "Unresolved mutation targets may change command guard files; interactive approval is required.",
+        );
       return await options.enqueue(async () => {
         const beforePrompt = state();
         if (beforePrompt) return beforePrompt;
-        const approved = await ctx.ui.confirm(
-          "Change command guard files?",
-          `Tool: ${JSON.stringify(event.toolName)}\nProtected paths:\n${protectedPaths.map((path) => JSON.stringify(path)).join("\n")}\nInput: ${snapshot}\nApproval applies only to this tool call.`,
-          { signal: controller.signal },
-        );
+        const approved = await confirmCommandPermission(ctx, {
+          ...describe(event, initial),
+          cwd,
+          risks: [],
+          signal: controller.signal,
+        });
         const after = state();
         if (after) return after;
-        if (JSON.stringify(paths) !== JSON.stringify(await currentPaths()))
+        // A symlink retargeted while the dialog was open changes what approval covers.
+        const current = await assess(event, ctx, cwd, roots);
+        if (JSON.stringify(current) !== JSON.stringify(initial))
           return block("Mutation targets changed during command guard file approval.");
         return approved ? undefined : block("Command guard file change was not approved.");
       });
-    } catch {
-      return block("Command guard mutation targets could not be verified.");
+    } catch (error) {
+      const detail = error instanceof Error ? `: ${error.message}` : "";
+      return block(
+        `Tool-call guard internal error while reviewing a protected-file change${detail}.`,
+      );
     } finally {
       ctx.signal?.removeEventListener("abort", onAbort);
       pending.delete(controller);
     }
   };
+
   return {
     cancel,
     check(
@@ -206,16 +243,47 @@ export function createGuardProtection(options: ProtectionOptions) {
       ctx: ExtensionContext,
     ): Promise<BlockedCall | undefined> | undefined {
       if (options.paths?.length === 0) return undefined;
-      const paths = targets(event);
-      if (paths === undefined) return undefined;
-      if (event.toolName === "copy" || event.toolName === "move") return review(event, ctx, paths);
-      try {
-        const resolved = resolveTargets(paths, ctx.cwd);
-        if (!relevant(resolved, ctx.cwd).length) return undefined;
-      } catch {
-        return Promise.resolve(block("Command guard mutation targets could not be verified."));
-      }
-      return review(event, ctx, paths);
+      if (!FILE_MUTATIONS.has(event.toolName) && event.toolName !== "bash") return undefined;
+      const cwd = ctx.cwd;
+      const run = async (): Promise<BlockedCall | undefined> => {
+        const roots = (options.paths ?? protectedGuardPaths(cwd)).map((root) =>
+          canonicalPath(cwd, expandHome(root)),
+        );
+        let assessment: Assessment | undefined;
+        try {
+          assessment = await assess(
+            event,
+            ctx,
+            cwd,
+            roots.filter((root) => root !== undefined),
+          );
+        } catch (error) {
+          const detail = error instanceof Error ? `: ${error.message}` : "";
+          return block(`Tool-call guard internal error while resolving mutation targets${detail}.`);
+        }
+        if (!assessment) return undefined;
+        if (roots.some((root) => root === undefined)) {
+          // Without its own paths the gate cannot tell which mutations matter; it
+          // reports that instead of implying the call lacks permission.
+          const mutates = assessment.unresolved || (directTargets(event, cwd)?.length ?? 0) > 0;
+          return mutates
+            ? block("Tool-call guard internal error: could not resolve its protected paths.")
+            : undefined;
+        }
+        if (!assessment.protectedPaths.length && !assessment.unresolved) return undefined;
+        return review(
+          event,
+          ctx,
+          roots.filter((root) => root !== undefined),
+          assessment,
+        );
+      };
+      // Synchronous fast path keeps ordinary tool calls free of an extra await.
+      const targets = directTargets(event, cwd);
+      if (targets === undefined) return undefined;
+      if (targets.length === 0 && event.toolName !== "copy" && event.toolName !== "move")
+        return undefined;
+      return run();
     },
   };
 }

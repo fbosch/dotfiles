@@ -29,13 +29,12 @@ Configure command review in `~/.pi/agent/settings.json`:
 
 Set `enabled` to `false` to disable semantic command checks without disabling
 other classifier features. Set `mode` to `"confirm"` to require approval for
-flagged or unresolved bash calls.
+flagged bash calls.
 
 The default mode is `shadow`. If `commandGuard` is absent, semantic checks
 default to off. Invalid settings disable semantic checks and produce one warning
 per session. The global `classifier.enabled: false` switch also disables them.
-Trusted-project classifier opt-outs prevent hosted classification; they do not
-disable local approval for unresolved execution when command checks are enabled.
+Trusted-project classifier opt-outs prevent hosted classification.
 Protected-file approval is independent of all classifier settings.
 
 Run `/reload` once after installing the extension or updating its code. Settings
@@ -49,9 +48,9 @@ before reporting a verdict or accepting approval.
   one check runs at a time; selected calls arriving while busy are skipped.
   Classification failures produce one warning per session, not a safe verdict.
 - `confirm` waits for every selected call. Supported commands with unflagged
-  classifier verdicts proceed without a prompt. Flagged commands and unresolved
-  execution require interactive approval; declining, dismissing, or lacking a UI
-  blocks execution. Unresolved commands never reach the classifier. Parallel
+  classifier verdicts proceed without a prompt. Flagged commands require
+  interactive approval; declining, dismissing, or lacking a UI blocks
+  execution. Parallel
   calls get separate approvals, with dialogs shown one at a time. Classification
   failures and cancellations block selected calls. Explicit classifier policy
   opt-outs bypass hosted checks rather than count as failures.
@@ -62,8 +61,8 @@ TUI approvals use the orange inline permission prompt in `prompt-ui`, with
 `Run command` and `Cancel`. RPC keeps its standard confirmation dialog because
 it does not support custom terminal components.
 
-The warning identifies possible destructive changes, a local data upload, or
-unresolved command behavior. A fixed-label summary does not establish actual
+The warning identifies possible destructive changes or a local data upload.
+A fixed-label summary does not establish actual
 targets, effects, or authorization.
 
 The TUI keeps the risk category and decision controls outside a bounded review
@@ -95,17 +94,23 @@ Semantic inspection handles bash calls, including calls nested inside codemode.
 The codemode script itself is not classified. A bounded literal-shell parser
 separates executable words, quoted data, comments, pipelines, and literal
 redirection targets. It recognizes absolute executables only under `/bin` and
-`/usr/bin`; other executable paths remain unresolved.
+`/usr/bin`.
 
-Supported deletion, overwriting, Git operations, and transfers produce fixed
-labels for classification. This includes `find -delete`, `tee`, and output
-truncation with `>`. Quoted code printed as data does not become an operation.
-Simple reads and ordinary Git inspection skip classification.
+Nono grants define what commands may touch. Command review adds checks only for
+destructive and transfer operations. Supported deletion, overwriting,
+history-rewriting Git operations (`push`, `reset`, `clean`, `rebase`, `branch`),
+and transfers produce fixed labels for classification. This includes
+`find -delete`, `tee`, and output truncation with `>`. Quoted code printed as
+data does not become an operation. Other programs, `cd`, reads, and ordinary Git
+work such as `status`, `log`, `commit`, or `checkout` run without review.
 
-Unsupported syntax, substitutions, expansions, wrappers, inline code, and script
-execution produce an explicit unresolved result. Confirm mode requires local
-approval; shadow mode reports uncertainty without blocking. The parser is not a
-complete shell AST and does not inspect script contents or resolve aliases.
+Syntax the parser cannot resolve (substitutions, heredocs, expansions, control
+flow), wrappers such as `sudo` or `xargs`, and interpreters are scanned as text.
+Text naming a destructive or transfer operation, such as `rm`, `dd`, or
+`git push`, goes to the classifier with `lexicalOnly: true`. Other opaque code,
+including scripts and inline Python or Node, runs without review: nono grants
+bound what it can reach. The parser is not a complete shell AST and does not
+inspect script contents or resolve aliases.
 
 File operations skip semantic review only when every resolved access matches
 the runtime filesystem grants in `NONO_CAP_FILE`, parsed by `lib/nono-capabilities.ts`. Reads require `read` or
@@ -177,11 +182,27 @@ A deterministic gate requires approval for direct mutations of this extension
 `.pi/settings.json`. It runs even when semantic checks are disabled, invalid, or
 in shadow mode. Headless changes fail closed.
 
-The gate covers `write`, `edit`, hashline mutation tools, and literal Bash
-mutation targets. It resolves symlinks and detects ancestor mutations.
+The gate covers `write`, `edit`, hashline mutation tools, and Bash commands
+whose semantics name mutation targets: `>`/`>>` redirects; every operand of
+`rm`, `rmdir`, `unlink`, `shred`, `truncate`, `touch`, `tee`, `mkdir`, `chmod`,
+`chown`, and `chgrp`; `mv` sources and destination; `cp`, `ln`, and `install`
+destinations, including files placed inside a destination directory; `dd of=`;
+and `sed -i` files. Arguments of other commands, including `cd`, Git, and
+readers, are not treated as paths. Relative targets after `cd` are checked
+against both the previous and the new directory. The gate resolves symlinks and
+detects ancestor mutations.
+
 Cross-file `copy` and `move` resolve source and destination anchors through the
-installed hashline package's active session registry. Unavailable ownership
-blocks the call.
+installed hashline package's active session registry. Anchors the registry does
+not know pass through, because the tool rejects them itself. An unavailable
+registry or an unresolvable target opens the approval prompt with that reason
+instead of blocking outright. If the guard cannot resolve its own protected
+paths, it blocks mutations with an internal-error message and lets other calls
+run.
+
+The prompt uses the same inline permission component as command review, titled
+`Change command guard files?` for Bash and `Allow <tool> to change command guard
+files?` for file tools, which show their input instead of a command.
 
 Approval applies only to the exact tool input and resolved paths. Session
 changes, cancellation, working-directory changes, changed input, and retargeted
@@ -190,8 +211,9 @@ Protected-file dialogs share the command-approval queue and expose input only
 locally.
 
 This gate is not a sandbox: opaque scripts and dynamically constructed paths
-cannot yield verified mutation targets. Their execution remains subject to the
-configured command checks and runtime confinement. Disabling command checks
+cannot yield verified mutation targets, so the gate does not inspect them.
+Their execution remains subject to the configured command checks and runtime
+confinement. Disabling command checks
 does not make arbitrary script execution safe.
 
 ## Evaluation

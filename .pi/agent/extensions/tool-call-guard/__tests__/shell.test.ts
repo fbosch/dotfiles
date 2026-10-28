@@ -43,43 +43,50 @@ describe("literal shell inspection", () => {
   test.each([
     "echo $(rm file)",
     "echo `rm file`",
-    "cat <<EOF\ntext\nEOF",
     "rm $TARGET",
     "rm *.txt",
     "(rm file)",
     "if true; then rm file; fi",
-    'echo "unterminated',
-    "echo text >",
-    "echo text >&2",
-    "echo text 2>file",
-    "echo text &",
-    "echo text\r\n",
-    "rm file\\",
-  ])("does not establish safety for unsupported input: %s", (command) => {
-    expect(inspectCommand(command).kind).toBe("unknown");
+    "bash -c 'rm file'",
+    "sudo rm file",
+    "env rm file",
+    "find src -exec rm '{}' ';'",
+    "git -c alias.x=x push --force",
+  ])("asks the classifier about opaque commands naming destructive operations: %s", (command) => {
+    const inspection = inspectCommand(command);
+    expect(inspection.kind).toBe("review");
+    if (inspection.kind === "review")
+      expect(inspection.input.state).toMatchObject({ lexicalOnly: true });
   });
 
+  // Nono grants decide what opaque code may touch; the guard does not interrupt it.
   test.each([
+    "cat <<EOF\ntext\nEOF",
+    'echo "unterminated',
+    "echo text >&2",
+    "echo text 2>file",
     "python tools/deploy.py",
     "python -c 'print(1)'",
     "python -c 'import os; os.remove(\"x\")'",
     "node script.js",
-    "bash -c 'rm file'",
-    "sudo rm file",
-    "env rm file",
     "./ls",
-    "/tmp/ls",
     "PATH=/tmp ls",
-    "find src -exec rm '{}' ';'",
-    "curl --config settings",
     "git -c alias.x=x status",
-    "git checkout main",
     "rg --pre=script pattern",
     "printf -v 'a[0]' text",
-  ])("routes opaque execution to local approval: %s", (command) => {
-    const inspection = inspectCommand(command);
-    expect(inspection.kind).toBe("unknown");
-    expect(inspection).not.toHaveProperty("input");
+  ])("runs opaque commands without destructive operation names: %s", (command) => {
+    expect(inspectCommand(command).kind).toBe("skip");
+  });
+
+  test.each([
+    "sed -n 1,40p file.ts",
+    "bun test extensions 2>&1 | tail -4",
+    "git -C ~/dotfiles status --short",
+    "git checkout main",
+    'git commit -m "rm x"',
+    "cd ~/dotfiles && grep -n x file.ts | head; wc -l file.ts",
+  ])("ordinary parsed commands skip review: %s", (command) => {
+    expect(inspectCommand(command).kind).toBe("skip");
   });
 
   test.each([
