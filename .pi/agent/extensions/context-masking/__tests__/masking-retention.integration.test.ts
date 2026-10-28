@@ -74,6 +74,7 @@ function edits(result: TurnEndEventResult | undefined) {
 
 async function harness(options: {
   bodies?: string[];
+  args?: Array<Record<string, string> | undefined>;
   settings?: Partial<MaskingSettings>;
   classify?: Classifier;
   missingModel?: boolean;
@@ -88,7 +89,10 @@ async function harness(options: {
     : root;
   if (options.archiveFailure) await writeFile(artifactRoot, "owned fixture");
   const bodies = options.bodies ?? [body];
-  const fixture = sessionWith([...bodies.map(() => ({ resultChars: 1 })), { resultChars: 5 }]);
+  const fixture = sessionWith([...bodies.map((_, index) => {
+    const args = options.args?.[index];
+    return args ? { resultChars: 1, args } : { resultChars: 1 };
+  }), { resultChars: 5 }]);
   for (const [index, text] of bodies.entries()) {
     const id = fixture.resultIds[index];
     if (!id) throw Error("Missing source fixture");
@@ -236,6 +240,30 @@ test("the 4k boundary archives current projected bytes and preserves metadata an
   expect(message.content[0]?.type === "text" && message.content[0].text.startsWith(MARKER)).toBe(true);
   expect(buildIndex(f.manager.getBranch(), new Set(), () => true)).toContain(item.path);
   expect(f.calls.every(request => Buffer.byteLength(JSON.stringify(request)) <= ROLLING_LIMITS.requestBytes)).toBe(true);
+});
+
+test("superseded and old oversized results are masked without classifier calls", async () => {
+  const repeated = await harness({
+    bodies: ["first listing ".repeat(600), "second listing ".repeat(600)],
+    args: [{ command: "ls" }, { command: "ls" }],
+    classify: async (_ctx, request) => response(request, 1),
+  });
+  const superseded = await repeated.run();
+  expect(customData(superseded)).toMatchObject({ supersededMaskedCount: 1, maskedCount: 1 });
+  expect(repeated.calls.every(request => !(String(repeated.resultIds[0]) in request.questions))).toBe(true);
+
+  const oversizedBody = "oversized log line\n".repeat(ROLLING_LIMITS.requestBytes / 10);
+  const turns = ROLLING_LIMITS.oversizedMaskAfterTurns;
+  // Each fixture body adds one assistant turn, and the harness appends one final turn.
+  const old = await harness({ bodies: [oversizedBody, ...Array.from({ length: turns - 1 }, () => "short")] });
+  const masked = await old.run();
+  expect(customData(masked)).toMatchObject({ oversizedMaskedCount: 1, maskedCount: 1 });
+  expect(old.calls).toEqual([]);
+
+  const young = await harness({ bodies: [oversizedBody, ...Array.from({ length: turns - 2 }, () => "short")] });
+  const kept = await young.run();
+  expect(edits(kept)).toEqual([]);
+  expect(young.calls).toEqual([]);
 });
 
 function legacyRollingResult(result: TurnEndEventResult | undefined): TurnEndEventResult {

@@ -24,11 +24,11 @@ export async function expandCheckpointSources(
     if (cached) return cached;
     if (loaded.size >= MAX_CLASSIFIER_SOURCES) throw Error("Checkpoint reference count exceeded");
     const available = Math.min(limits.windowBytes, limits.totalBytes - result.bytes);
-    if (available <= 0) throw Error("Checkpoint expansion byte limit");
+    if (available <= 0) throw Error(`Checkpoint expansion exceeded its byte limit (${limits.totalBytes} bytes total)`);
     const saved = await readTextArchiveReference(root, records, path, available);
     result.bytes += saved.bytes;
     result.references++;
-    if (saved.partial) throw Error("Checkpoint expansion byte limit");
+    if (saved.partial) throw Error(`Checkpoint expansion exceeded its byte limit (${available} bytes available for the next artifact; ${limits.totalBytes} bytes total)`);
     if (saved.bytes > 0) {
       // Complete originals start a new read window rather than crossing its byte limit.
       if (windowBytes === 0 || windowBytes + saved.bytes > limits.windowBytes) {

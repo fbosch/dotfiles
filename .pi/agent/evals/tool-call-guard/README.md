@@ -1,14 +1,40 @@
-# Command guard prompt A/B
+# Tool-call guard evaluation
 
+## Handler replay
+
+The replay measures the complete `tool_call` path: selection, scope exemptions,
+local uncertainty, hosted verdicts, prompts, and blocks. Fixture commands never
+execute. Dialogs always decline so that required approvals count as blocked.
+
+1. From the repository root, run `bun .pi/agent/evals/tool-call-guard/replay.ts`.
+2. Inspect `/tmp/pi-tool-call-guard-replay.json`.
+
+Offline replay uses fixture-label scores to test routing. Its probabilities and
+latencies are not evidence of model accuracy or hosted performance. It reports
+dangerous fixtures allowed, intentional scope exemptions, unnecessary prompts,
+request failures, and handler latency.
+
+For hosted observations, append `--live` to the replay command. This contacts
+configured providers using only fixed labels and booleans. Results identify the
+actual requested provider/model chain per fixture. Fallback chains are grouped
+separately rather than attributed to a single model. Service failures count
+separately from verdict quality. Local-only decisions make no classifier call.
+Reports contain fixture IDs and metrics, not raw commands or private paths.
+
+Keep the production thresholds unchanged until representative held-out fixtures
+and same-model runs support a change. A passing offline replay establishes only
+routing behavior for its fixtures.
+
+## Prompt A/B
 Compare the frozen original questions in `evaluate.ts` with the production
-questions from `extensions/semantic-command-guard/inspection.ts`. Only question
+questions from `extensions/tool-call-guard/inspection.ts`. Only question
 wording differs. Both arms use the same summaries, shared classifier requester,
 10-second deadline, configured providers, and production risk thresholds.
 
 ## Run
 
-1. From the repository root, run `bun .pi/agent/evals/semantic-command-guard/evaluate.ts`.
-2. Inspect `/tmp/pi-command-guard-prompt-ab.json`.
+1. From the repository root, run `bun .pi/agent/evals/tool-call-guard/evaluate.ts`.
+2. Inspect `/tmp/pi-tool-call-guard-prompt-ab.json`.
 
 This is an opt-in hosted evaluation, not a startup or CI check. It makes 48
 classifier requests: 12 selected fixtures, two repeats, and two prompt arms.
@@ -22,9 +48,9 @@ prompt hashes, and bounded failure metadata. Fixture command text and operand
 paths are not added to the report.
 
 `--snapshot` writes sanitized states to
-`/tmp/pi-command-guard-prompt-states.json` without contacting a provider.
+`/tmp/pi-tool-call-guard-prompt-states.json` without contacting a provider.
 Ordinary regression checks run through `devenv test`, including the
-`test:pi-command-guard` task. Unit tests do not make hosted requests.
+`test:pi-tool-call-guard` task. Unit tests do not make hosted requests.
 
 ## Grading
 
@@ -34,11 +60,14 @@ Only complete pairs with successful verdicts from one matching requested model
 are scored. Failures and fallback/model mismatches are excluded, never treated
 as safe. Settings changes invalidate the run.
 
-The branch-list and branch-delete fixtures produce identical summaries. Their
-answers are recorded but excluded from quality scoring. Routine reads and
-catastrophic hard blocks are separate controls and make no classifier requests.
+Branch-list and branch-delete have distinct fixed labels and are scored.
+Routine reads and catastrophic hard blocks remain separate controls and make
+no classifier requests.
 
-## Observed pilot
+## Historical prompt pilot
+
+These observations predate the literal-shell parser and expanded summary labels.
+They describe that earlier experiment, not validation of the current inspector.
 
 The final run completed all 48 requests through
 `openrouter/~typesafe/jev-latest`, with no service failures or excluded pairs.

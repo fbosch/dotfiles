@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import catastrophicCommandGuard, { catastrophicCommandReason } from "../catastrophic-command-guard";
+import { catastrophicCommandReason } from "../catastrophic-commands";
+import toolCallGuard from "../index";
 
 const FORMATTER_REASON = "Blocked filesystem formatter command on block device.";
 const WIPEFS_REASON = "Blocked destructive wipefs operation on block device.";
@@ -103,37 +104,55 @@ describe("catastrophic command detection", () => {
   });
 });
 
-test("the extension blocks only matching bash tool calls", () => {
-  let handler: ((event: unknown) => unknown) | undefined;
+test("the extension hard-blocks only catastrophic bash calls, even with command review disabled", () => {
+  let handler: ((event: unknown, ctx: unknown) => unknown) | undefined;
+  // SAFETY: the guard registers session and tool_call handlers only; this fixture records tool_call.
   const pi = {
-    on(event: string, candidate: (event: unknown) => unknown) {
+    on(event: string, candidate: (event: unknown, ctx: unknown) => unknown) {
       if (event === "tool_call") handler = candidate;
     },
   } as unknown as ExtensionAPI;
-  catastrophicCommandGuard(pi);
+  toolCallGuard(pi, {
+    loadSettings: () => ({}),
+    loadSandbox: () => undefined,
+    protectedPaths: [],
+    request: async () => {
+      throw new Error("Hard blocks must not use a classifier");
+    },
+  });
+  const ctx = { cwd: "/", hasUI: false };
 
   expect(
-    handler?.({
-      type: "tool_call",
-      toolName: "bash",
-      toolCallId: "dangerous",
-      input: { command: "sudo rm --recursive --force -- /" },
-    }),
+    handler?.(
+      {
+        type: "tool_call",
+        toolName: "bash",
+        toolCallId: "dangerous",
+        input: { command: "sudo rm --recursive --force -- /" },
+      },
+      ctx,
+    ),
   ).toEqual({ block: true, reason: ROOT_DELETE_REASON });
   expect(
-    handler?.({
-      type: "tool_call",
-      toolName: "bash",
-      toolCallId: "ordinary",
-      input: { command: "rm -rf dist" },
-    }),
+    handler?.(
+      {
+        type: "tool_call",
+        toolName: "bash",
+        toolCallId: "ordinary",
+        input: { command: "rm -rf dist" },
+      },
+      ctx,
+    ),
   ).toBeUndefined();
   expect(
-    handler?.({
-      type: "tool_call",
-      toolName: "read",
-      toolCallId: "not-bash",
-      input: { path: "mkfs.ext4" },
-    }),
+    handler?.(
+      {
+        type: "tool_call",
+        toolName: "read",
+        toolCallId: "not-bash",
+        input: { path: "mkfs.ext4" },
+      },
+      ctx,
+    ),
   ).toBeUndefined();
 });

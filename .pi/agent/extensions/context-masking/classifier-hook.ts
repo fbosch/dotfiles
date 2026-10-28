@@ -239,6 +239,7 @@ export function registerClassifierCompaction(
       model: `${settings.provider}/${settings.model}`,
       outcome: result.kind,
       reason: result.reason,
+      ...(result.failureDetail ? { failureDetail: result.failureDetail } : {}),
       requests: result.requestBytes.length,
       requestBytes: result.requestBytes,
       imageRequestLimit: result.imageRequestLimit,
@@ -274,7 +275,7 @@ export function registerClassifierCompaction(
     if (result.requestBytes.length || result.cacheHits || result.imageRequestLimit || result.reason === "checkpoint-expansion-failed") pi.appendEntry(CLASSIFIER_CHECKPOINT, audit);
     if (result.reason === "aborted") return { cancel: true };
     if (result.kind === "fallback") {
-      if (ctx.hasUI) ctx.ui.notify(`Classifier compaction fell back: ${result.reason}.`, "warning");
+      if (ctx.hasUI) ctx.ui.notify(`Classifier compaction fell back: ${result.failureDetail ?? result.reason}.`, "warning");
       return imageFallback();
     }
     if (settings.mode === "hybrid" && selectedPreparation) {

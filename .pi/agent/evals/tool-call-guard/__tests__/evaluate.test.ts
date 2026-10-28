@@ -1,8 +1,5 @@
 import { describe, expect, test } from "bun:test";
-import {
-  flaggedRisks,
-  inspectCommand,
-} from "../../../extensions/semantic-command-guard/inspection";
+import { flaggedRisks, inspectCommand } from "../../../extensions/tool-call-guard/inspection";
 import type { ClassifierRequestResult } from "../../../lib/classifier";
 import {
   BASELINE_QUESTIONS,
@@ -97,13 +94,14 @@ describe("command guard prompt evaluation", () => {
     ).toBe(1);
   });
 
-  test("indistinguishable summaries remain explicitly unscorable", () => {
+  test("distinguishes branch deletion and excludes explicitly ambiguous scores", () => {
     const list = inspectCommand("git branch --list");
     const remove = inspectCommand("git branch -D topic");
     expect(list.kind).toBe("review");
     expect(remove.kind).toBe("review");
     if (list.kind !== "review" || remove.kind !== "review") throw new Error("Unexpected selection");
-    expect(list.input.state).toEqual(remove.input.state);
+    expect(list.input.state).toMatchObject({ branchDelete: false });
+    expect(remove.input.state).toMatchObject({ branchDelete: true });
     const result = summarize([row("baseline", clear, null), row("candidate", flagged, null)]);
     expect(result.ambiguousPairs).toBe(1);
     expect(result.candidate.samples).toBe(0);

@@ -23,7 +23,7 @@ import {
 } from "../classifier-hook";
 import { placeholder } from "../policy";
 import { recallSaved } from "../recall";
-import { savedItems } from "../evidence-archive";
+import { MAX_TEXT_ARCHIVE_BYTES, savedItems } from "../evidence-archive";
 import { ClassifierDecisionCache } from "../classifier-cache";
 import { saveConversationArtifact } from "../evidence-archive";
 import { EXTRACTIVE_HEADER, expandCheckpointSources } from "../checkpoint-sources";
@@ -563,11 +563,15 @@ test("compaction hook uses real session projection and preserves cut boundary, u
     },
   }, ctx);
   expect(checkpointFallback?.compaction?.summary).toBe("Configured fallback");
+  expect(notices.at(-1)).toBe("Classifier compaction fell back: Checkpoint address is not in the session catalogue.");
   expect(calls).toBe(classifierCalls);
   expect(records.slice(recorded)).toEqual([
     expect.objectContaining({
       type: CLASSIFIER_CHECKPOINT,
-      data: expect.objectContaining({ reason: "checkpoint-expansion-failed", requests: 0 }),
+      data: expect.objectContaining({
+        reason: "checkpoint-expansion-failed", requests: 0,
+        failureDetail: "Checkpoint address is not in the session catalogue",
+      }),
     }),
   ]);
 });
@@ -923,6 +927,58 @@ test("rejects an incomplete bounded-reconciliation response", async () => {
   expect(result.kind).toBe("fallback");
 });
 
+test("replays an archived source larger than the classifier window without enlarging requests", async () => {
+  const f = await fixture([]);
+  const original = "[user] Approved target: æøå\n" + "archive background ".repeat(15_000);
+  expect(Buffer.byteLength(original)).toBeGreaterThan(settings.maxTotalArtifactBytes);
+  const record = { ...await saveConversationArtifact(f.root, f.manager.getSessionId(), original), text: original };
+  f.manager.appendCustomEntry("context-masking", { items: [record] });
+  const requests: ClassifierRequest[] = [];
+  const result = await classifyCompaction({
+    ...f.input, branch: f.manager.getBranch(),
+    messages: [{ role: "user", content: "Keep the current task running.", timestamp: 1 }],
+    previousSummary: EXTRACTIVE_HEADER + "\n\n[saved conversation; use read or recall]: " + record.path,
+  }, settings, {
+    artifactRoot: f.root, deferReduction: true,
+    classify: async request => { requests.push(request); return answer(request, () => 0); },
+  });
+
+  expect({ kind: result.kind, reason: result.reason }).toEqual({ kind: "retained", reason: "accepted" });
+  expect(result.expandedReferences).toBe(1);
+  expect(result.decisions.find(decision => decision.path === record.path)?.action).toBe("reference");
+  expect(result.text).toContain("Keep the current task running.");
+  expect(requests.length).toBeGreaterThan(0);
+  expect(result.requestBytes.every(bytes => bytes <= settings.maxRequestBytes)).toBe(true);
+  expect(settings.maxTotalArtifactBytes).toBe(256_000);
+  expect(await readFile(record.path, "utf8")).toBe(original);
+
+  await writeFile(record.path, "Changed");
+  const changed = await classifyCompaction({
+    ...f.input, branch: f.manager.getBranch(), messages: [],
+    previousSummary: EXTRACTIVE_HEADER + "\n\n[saved conversation; use read or recall]: " + record.path,
+  }, settings, { artifactRoot: f.root, classify: omitAll });
+  expect(changed.reason).toBe("checkpoint-expansion-failed");
+  expect(changed.failureDetail).toContain("changed");
+  expect(changed.requestBytes).toEqual([]);
+});
+
+test("retains the absolute replay byte limit when several valid archives exceed it together", async () => {
+  const f = await fixture([]);
+  const size = Math.floor(MAX_TEXT_ARCHIVE_BYTES / 2) + 1;
+  const originals = ["a".repeat(size), "b".repeat(size)];
+  const records = await Promise.all(originals.map(text => saveConversationArtifact(f.root, f.manager.getSessionId(), text)));
+  f.manager.appendCustomEntry("context-masking", { items: records });
+  const result = await classifyCompaction({
+    ...f.input, branch: f.manager.getBranch(), messages: [],
+    previousSummary: EXTRACTIVE_HEADER + "\n\n" + records.map(record =>
+      "[saved conversation; use read or recall]: " + record.path).join("\n\n"),
+  }, settings, { artifactRoot: f.root, classify: omitAll });
+
+  expect(result.reason).toBe("checkpoint-expansion-failed");
+  expect(result.failureDetail).toContain("byte limit");
+  expect(result.failureDetail).toContain(String(MAX_TEXT_ARCHIVE_BYTES));
+  expect(result.requestBytes).toEqual([]);
+});
 test("retains inline evidence when even two selected sources cannot share a bounded reconciliation packet", async () => {
   const f = await fixture(["Approval A " + "a".repeat(3100), "Approval B " + "b".repeat(3100)]);
   const requests: ClassifierRequest[] = [];
@@ -1165,7 +1221,7 @@ test("recovered originals do not consume the new conversation archive budget", a
   expect(next.decisions[0]?.entryId).toBe(record.entryId);
 });
 
-test("replays more than 256 saved checkpoint references across read windows", async () => {
+test("replays more than 256 saved checkpoint references within the replay budget", async () => {
   const f = await fixture([]);
   const originals = Array.from({ length: 289 }, (_, index) => `Evidence ${index}: ${"x".repeat(10_000)}`);
   const totalBytes = originals.reduce((bytes, text) => bytes + Buffer.byteLength(text), 0);
@@ -1182,7 +1238,7 @@ test("replays more than 256 saved checkpoint references across read windows", as
 
   expect({ kind: result.kind, reason: result.reason }).toEqual({ kind: "retained", reason: "accepted" });
   expect(result.expandedReferences).toBe(originals.length);
-  expect(result.expandedWindows).toBe(12);
+  expect(result.expandedWindows).toBe(1);
   expect(result.artifactBytes).toBe(totalBytes);
   const recoveredIds = new Set(records.map(record => record.entryId));
   expect(result.savedItems?.every(item => !recoveredIds.has(item.entryId))).toBe(true);

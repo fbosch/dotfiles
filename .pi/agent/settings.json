@@ -17,7 +17,7 @@
     }
   },
   "extensions": [
-    "+extensions/catastrophic-command-guard.ts"
+    "+extensions/tool-call-guard/index.ts"
   ],
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-6-luna-fast",

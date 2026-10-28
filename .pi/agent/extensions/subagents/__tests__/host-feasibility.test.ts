@@ -222,7 +222,7 @@ test("explicit hashline, provider hooks, codemode, and command guard load withou
   const agentDir = resolve(import.meta.dir, "../../..");
   const paths = [
     resolve(agentDir, "npm/node_modules/pi-hashline-edit-pro/index.ts"),
-    resolve(agentDir, "extensions/catastrophic-command-guard.ts"),
+    resolve(agentDir, "extensions/tool-call-guard/index.ts"),
     resolve(agentDir, "extensions/model-presets.ts"),
     resolve(agentDir, "extensions/openai-capabilities.ts"),
   ];

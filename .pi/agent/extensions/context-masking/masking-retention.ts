@@ -18,6 +18,8 @@ export const ROLLING_LIMITS = {
   deadlineMs: 60_000,
   minSavedTokens: 100,
   keepProbabilityCutoff: 0.35,
+  // Results too large for one classifier request are masked by rule once this many turns old.
+  oversizedMaskAfterTurns: 6,
 } as const;
 
 export async function awaitWithAbort<T>(
@@ -52,6 +54,10 @@ export interface RollingCandidate {
   toolName: string;
   text: string;
   estimatedTokens: number;
+  /** Assistant turns completed after this result. */
+  turnsSince: number;
+  /** A later successful call with equivalent arguments replaced this result. */
+  superseded: boolean;
 }
 
 export interface RollingContext {
@@ -130,6 +136,26 @@ interface ToolResult {
   sourceIndex: number;
   message: Extract<ProjectedSessionEntry["messages"][number], { role: "toolResult" }>;
   call: ToolCall;
+}
+
+function readPath(call: ToolCall): { path: string; whole: boolean } | undefined {
+  if (call.toolName !== "read") return undefined;
+  try {
+    const args: unknown = JSON.parse(call.argumentsKey);
+    if (!isRecord(args) || typeof args.path !== "string") return undefined;
+    return { path: args.path, whole: args.offset === undefined && args.limit === undefined };
+  } catch {
+    return undefined;
+  }
+}
+
+// A repeated call returns the same view of newer state; a later whole-file read covers any earlier read of that path.
+function supersedes(later: ToolCall, earlier: ToolCall): boolean {
+  if (later.toolName !== earlier.toolName) return false;
+  if (later.argumentsKey === earlier.argumentsKey) return true;
+  const laterRead = readPath(later);
+  const earlierRead = readPath(earlier);
+  return laterRead !== undefined && laterRead.whole && laterRead.path === earlierRead?.path;
 }
 
 export function collectRollingCandidates(
@@ -211,6 +237,9 @@ export function collectRollingCandidates(
 
   return completeResults.flatMap((result) => {
     if (result.sourceIndex >= recentBoundary) return [];
+    const superseded = completeResults.some((later) =>
+      later.sourceIndex > result.sourceIndex && !later.message.isError && supersedes(later.call, result.call)
+    );
     const text = resultText(result.message);
     if (text === undefined || text.length < settings.minResultChars) return [];
     if (
@@ -231,6 +260,8 @@ export function collectRollingCandidates(
       toolName: result.message.toolName,
       text,
       estimatedTokens: estimatedUtf8Tokens(text),
+      turnsSince: assistantIndexes.filter((index) => index > result.sourceIndex).length,
+      superseded,
     }];
   });
 }
@@ -386,15 +417,16 @@ function requestFor(context: RollingContext, candidates: readonly RollingCandida
 export function packRollingRequests(
   context: RollingContext | undefined,
   candidates: readonly RollingCandidate[],
-): { batches: RollingRequestBatch[]; deferred: RollingCandidate[] } {
-  if (!context) return { batches: [], deferred: [...candidates] };
+): { batches: RollingRequestBatch[]; deferred: RollingCandidate[]; oversized: RollingCandidate[] } {
+  if (!context) return { batches: [], deferred: [...candidates], oversized: [] };
   const batches: RollingRequestBatch[] = [];
   const deferred: RollingCandidate[] = [];
+  const oversized: RollingCandidate[] = [];
   let group: RollingCandidate[] = [];
   for (const candidate of candidates) {
     const single = requestFor(context, [candidate]);
     if (Buffer.byteLength(JSON.stringify(single), "utf8") > ROLLING_LIMITS.requestBytes) {
-      deferred.push(candidate);
+      oversized.push(candidate);
       continue;
     }
     const nextGroup = [...group, candidate];
@@ -414,7 +446,7 @@ export function packRollingRequests(
   }
   const allowed = batches.slice(0, ROLLING_LIMITS.maxRequests);
   for (const excess of batches.slice(ROLLING_LIMITS.maxRequests)) deferred.push(...excess.candidates);
-  return { batches: allowed, deferred };
+  return { batches: allowed, deferred, oversized };
 }
 
 export function validateRollingDecisions(

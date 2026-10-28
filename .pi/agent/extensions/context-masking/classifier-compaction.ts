@@ -95,6 +95,7 @@ export interface EvidenceArtifact {
 export interface CompactionOutcome {
   kind: "retained" | "fallback";
   reason: string;
+  failureDetail?: string;
   text: string;
   decisions: RetentionDecision[];
   requestBytes: number[];
@@ -355,10 +356,15 @@ async function classifyTextCompaction(
       let expanded: Awaited<ReturnType<typeof expandCheckpointSources>>;
       try {
         expanded = await expandCheckpointSources(input.previousSummary, records, dependencies.artifactRoot, {
-          windowBytes: settings.maxTotalArtifactBytes,
+          // Replay validates whole archives, independently of the smaller classifier read window.
+          windowBytes: MAX_CONVERSATION_ARCHIVE_BYTES,
           totalBytes: MAX_CONVERSATION_ARCHIVE_BYTES,
         }, signal);
-      } catch { return fallback(signal?.aborted ? "aborted" : "checkpoint-expansion-failed"); }
+      } catch (error) {
+        if (signal?.aborted) return fallback("aborted");
+        outcome.failureDetail = error instanceof Error ? error.message : "Checkpoint expansion failed";
+        return fallback("checkpoint-expansion-failed");
+      }
       if (expanded) {
         outcome.expandedReferences = expanded.references;
         outcome.expandedWindows = expanded.windows;

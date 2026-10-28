@@ -25,7 +25,7 @@ export function sessionWith(
     const toolName = turn.tool ?? "read";
     manager.appendMessage({
       role: "assistant",
-      content: [{ type: "toolCall", id: `call${i}`, name: toolName, arguments: turn.args ?? {} }],
+      content: [{ type: "toolCall", id: `call${i}`, name: toolName, arguments: turn.args ?? { path: `file${i}` } }],
       api: "openai-responses",
       provider: "openai",
       model: "m",

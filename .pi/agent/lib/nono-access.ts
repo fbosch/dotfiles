@@ -26,7 +26,7 @@ function within(root: string, candidate: string): boolean {
 }
 
 /** Resolves symlinks (including dangling ones) before applying "..", then returns an absolute path. */
-function canonicalPath(cwd: string, target: string): string | undefined {
+export function canonicalPath(cwd: string, target: string): string | undefined {
   const absolute = isAbsolute(target) ? target : `${realpathSync(cwd)}${sep}${target}`;
   const walk = (path: string, depth: number): string | undefined => {
     if (depth > 40) return undefined;

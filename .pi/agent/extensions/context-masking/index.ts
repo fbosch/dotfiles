@@ -101,9 +101,17 @@ async function rollingBoundary(
   if (ctx.signal) signals.push(ctx.signal);
   const signal = AbortSignal.any(signals);
   const context = buildRollingContext(projection);
-  const packed = packRollingRequests(context, candidates);
-  const deferredIds = new Set(packed.deferred.map((candidate) => candidate.sourceId));
+  // Rule-based masks need no classifier: superseded results, and old results too large to assess.
+  const superseded = candidates.filter((candidate) => candidate.superseded);
+  const packed = packRollingRequests(context, candidates.filter((candidate) => !candidate.superseded));
+  const oversizedOld = packed.oversized.filter((candidate) =>
+    candidate.turnsSince >= ROLLING_LIMITS.oversizedMaskAfterTurns
+  );
+  const deferredIds = new Set([...packed.deferred, ...packed.oversized]
+    .filter((candidate) => !oversizedOld.includes(candidate))
+    .map((candidate) => candidate.sourceId));
   const decisions = new Map<string, boolean>();
+  for (const candidate of [...superseded, ...oversizedOld]) decisions.set(candidate.sourceId, false);
   const usageRecords: NonNullable<RollingClassifierResponse["usage"]>[] = [];
   let usageUnavailable = false;
   let requestCount = 0;
@@ -238,6 +246,8 @@ async function rollingBoundary(
       assessedCount: assessments.length,
       keptCount: keptCandidates.length,
       maskedCount: maskedIds.size,
+      supersededMaskedCount: superseded.filter((candidate) => maskedIds.has(candidate.sourceId)).length,
+      oversizedMaskedCount: oversizedOld.filter((candidate) => maskedIds.has(candidate.sourceId)).length,
       deferredCount: deferredCandidates.length,
       estimatedSavedTokens: applyMasks ? estimatedSavedTokens : 0,
       classifierDurationMs,

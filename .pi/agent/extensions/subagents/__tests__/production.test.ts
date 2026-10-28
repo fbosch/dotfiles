@@ -20,8 +20,7 @@ const baselineFiles = [
   "extensions/model-presets.ts",
   "extensions/openai-capabilities.ts",
   "extensions/classifier-policy/index.ts",
-  "extensions/catastrophic-command-guard.ts",
-  "extensions/semantic-command-guard/index.ts",
+  "extensions/tool-call-guard/index.ts",
   "extensions/instruction-fragments.ts",
 ] as const;
 const hashline = "npm/node_modules/pi-hashline-edit-pro/index.ts";

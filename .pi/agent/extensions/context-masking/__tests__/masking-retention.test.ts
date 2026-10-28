@@ -164,6 +164,34 @@ describe("rolling masking policy", () => {
     )).toBe(false);
   });
 
+  test("marks results superseded by a later equivalent call or whole-file read", () => {
+    const f = session();
+    f.cycle("first", "first listing", { tool: "bash", args: { command: "ls" } });
+    f.cycle("partial", "partial read", { args: { path: "a.ts", offset: "10" } });
+    f.cycle("other", "other file read", { args: { path: "b.ts" } });
+    f.cycle("again", "second listing", { tool: "bash", args: { command: "ls" } });
+    f.cycle("whole", "whole read", { args: { path: "a.ts" } });
+    f.cycle("recent", "short");
+    const flags = Object.fromEntries(
+      collectRollingCandidates(f.projection(), policy, new Set()).map((candidate) => [candidate.text, candidate.superseded]),
+    );
+    expect(flags).toEqual({
+      "first listing": true,
+      "partial read": true,
+      "other file read": false,
+      "second listing": false,
+      "whole read": false,
+    });
+  });
+
+  test("counts assistant turns since each result", () => {
+    const f = session();
+    f.cycle("old", "old output", { args: { path: "x" } });
+    f.cycle("mid", "mid output", { args: { path: "y" } });
+    f.cycle("recent", "short");
+    const turns = collectRollingCandidates(f.projection(), policy, new Set()).map((candidate) => candidate.turnsSince);
+    expect(turns).toEqual([2, 1]);
+  });
   test("protects recent, image, non-text, empty, and already-masked outputs", () => {
     const f = session();
     f.cycle("image", "large image output", { image: true });
@@ -226,6 +254,8 @@ describe("rolling masking policy", () => {
         toolName: "read",
         text,
         estimatedTokens: estimatedUtf8Tokens(text),
+        turnsSince: 0,
+        superseded: false,
       };
     });
     const packed = packRollingRequests(context, candidates);
@@ -241,10 +271,13 @@ describe("rolling masking policy", () => {
       toolName: "read",
       text: oversizedText,
       estimatedTokens: estimatedUtf8Tokens(oversizedText),
+      turnsSince: 0,
+      superseded: false,
     };
     const rejected = packRollingRequests(context, [tooLarge]);
     expect(rejected.batches).toEqual([]);
-    expect(rejected.deferred[0]?.text).toBe(oversizedText);
+    expect(rejected.deferred).toEqual([]);
+    expect(rejected.oversized[0]?.text).toBe(oversizedText);
   });
 
   test("accepts only complete finite bool verdicts and preserves assessments only in branch records", () => {
@@ -255,6 +288,8 @@ describe("rolling masking policy", () => {
       toolName: "read",
       text,
       estimatedTokens: 3,
+      turnsSince: 0,
+      superseded: false,
     };
     const valid = { stopReason: "stop", answers: { "entry-1": { type: "bool", probability: 0.35 } } };
     expect(validateRollingDecisions(valid, [candidate])?.get(candidate.sourceId)).toBe(true);

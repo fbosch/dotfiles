@@ -1,14 +1,5 @@
-import { join } from "node:path";
-import {
-  type ExtensionAPI,
-  type ExtensionContext,
-  getAgentDir,
-  isToolCallEventType,
-} from "@earendil-works/pi-coding-agent";
-import { INTERACTIVE_CLASSIFIER_TIMEOUT_MS, requestClassifier } from "../../lib/classifier";
-import { cachedJsonConfigReader } from "../../lib/extension-config";
-import { readNonoCapabilities } from "../../lib/nono-capabilities";
-import { catastrophicCommandReason } from "../catastrophic-command-guard";
+import type { ExtensionContext, ToolCallEvent } from "@earendil-works/pi-coding-agent";
+import { INTERACTIVE_CLASSIFIER_TIMEOUT_MS, type requestClassifier } from "../../lib/classifier";
 import { confirmCommandPermission } from "../prompt-ui/command-permission";
 import { isRecord } from "../shared/is-record";
 import { flaggedRisks, inspectCommand } from "./inspection";
@@ -40,30 +31,22 @@ export function resolveCommandGuardSettings(settings: unknown): CommandGuardSett
   return { enabled: guard.enabled, mode };
 }
 
-interface Dependencies {
+export type BlockedCall = { block: true; reason: string };
+const block = (reason: string): BlockedCall => ({ block: true, reason });
+
+export interface CommandReviewOptions {
   loadSettings: () => unknown;
   request: typeof requestClassifier;
   loadSandbox: () => SandboxGrants | undefined;
+  enqueue: (task: () => Promise<BlockedCall | undefined>) => Promise<BlockedCall | undefined>;
 }
 
-type BlockedCall = { block: true; reason: string };
-const block = (reason: string): BlockedCall => ({ block: true, reason });
-
-export default function semanticCommandGuard(
-  pi: ExtensionAPI,
-  dependencies: Dependencies = {
-    // Read on every Bash call; reparse only when settings.json changes.
-    loadSettings: cachedJsonConfigReader(() => join(getAgentDir(), "settings.json")),
-    request: requestClassifier,
-    loadSandbox: () => readNonoCapabilities(),
-  },
-): void {
+export function createCommandReview(options: CommandReviewOptions) {
   let shadowPending: AbortController | undefined;
   const pending = new Set<AbortController>();
   let generation = 0;
   let errorNotified = false;
   let oversizedNotified = false;
-  let confirmations = Promise.resolve();
 
   const cancel = () => {
     generation += 1;
@@ -76,10 +59,6 @@ export default function semanticCommandGuard(
     errorNotified = false;
     oversizedNotified = false;
   };
-  pi.on("session_start", reset);
-  pi.on("session_before_switch", reset);
-  pi.on("session_shutdown", cancel);
-
   const warn = (ctx: ExtensionContext, message: string) => {
     if (ctx.hasUI) ctx.ui.notify(message, "warning");
     else console.warn(message);
@@ -91,15 +70,18 @@ export default function semanticCommandGuard(
   };
   const settings = (ctx: ExtensionContext) => {
     try {
-      return resolveCommandGuardSettings(dependencies.loadSettings());
+      return resolveCommandGuardSettings(options.loadSettings());
     } catch {
       warnError(ctx);
       return undefined;
     }
   };
 
-  pi.on("tool_call", (event, ctx) => {
-    if (!isToolCallEventType("bash", event)) return;
+  // The caller has already rejected catastrophic commands, which are never approvable.
+  const check = (
+    event: ToolCallEvent & { input: { command: string } },
+    ctx: ExtensionContext,
+  ): Promise<BlockedCall | undefined> | BlockedCall | undefined => {
     const config = settings(ctx);
     if (!config?.enabled) {
       cancel();
@@ -124,11 +106,7 @@ export default function semanticCommandGuard(
       }
       return;
     }
-    if (confirming || inspection.kind !== "skip") {
-      const hardReason = catastrophicCommandReason(command);
-      if (hardReason) return confirming ? block(hardReason) : undefined;
-    }
-    if (inspection.kind === "skip" || commandFitsSandbox(command, cwd, dependencies.loadSandbox()))
+    if (inspection.kind === "skip" || commandFitsSandbox(command, cwd, options.loadSandbox()))
       return;
     // shortcut: shadow mode samples one in-flight command to bound background cost.
     // Confirm mode must assess every selected call; it never uses this skip.
@@ -150,31 +128,35 @@ export default function semanticCommandGuard(
         return block("Working directory changed during semantic command guard review.");
       if (event.input.command !== command)
         return block("Bash command changed during semantic command guard review.");
-      const reason = catastrophicCommandReason(command);
-      return reason ? block(reason) : undefined;
+      return undefined;
     };
 
     const review = async (): Promise<BlockedCall | undefined> => {
       try {
         const before = approvalState();
         if (before) return confirming ? before : undefined;
-        const result = await dependencies.request(ctx.modelRegistry, inspection.input, {
-          signal: controller.signal,
-          settingsContext: ctx,
-          // The short background budget is split across providers and can cut off the primary.
-          ...(confirming ? { timeoutMs: INTERACTIVE_CLASSIFIER_TIMEOUT_MS } : {}),
-        });
-        const after = approvalState();
-        if (after) return confirming ? after : undefined;
-        if (!result.ok) {
-          // A classifier policy opt-out is intentional, not an unavailable verdict.
-          if (result.reason === "disabled") return undefined;
-          if (result.reason !== "caller-cancellation") warnError(ctx);
-          return confirming
-            ? block("Semantic command guard could not assess this command.")
-            : undefined;
+        let risks: string[];
+        if (inspection.kind === "unknown") {
+          risks = ["unresolved command behavior"];
+        } else {
+          const result = await options.request(ctx.modelRegistry, inspection.input, {
+            signal: controller.signal,
+            settingsContext: ctx,
+            // The short background budget is split across providers and can cut off the primary.
+            ...(confirming ? { timeoutMs: INTERACTIVE_CLASSIFIER_TIMEOUT_MS } : {}),
+          });
+          const after = approvalState();
+          if (after) return confirming ? after : undefined;
+          if (!result.ok) {
+            // A classifier policy opt-out is intentional, not an unavailable verdict.
+            if (result.reason === "disabled") return undefined;
+            if (result.reason !== "caller-cancellation") warnError(ctx);
+            return confirming
+              ? block("Semantic command guard could not assess this command.")
+              : undefined;
+          }
+          risks = flaggedRisks(result.value.answers);
         }
-        const risks = flaggedRisks(result.value.answers);
         if (risks.length === 0) return;
         if (!confirming) {
           warn(
@@ -189,7 +171,7 @@ export default function semanticCommandGuard(
           );
 
         // Serialize dialogs from parallel/nested bash calls without sharing approvals.
-        const decision = confirmations.then(async () => {
+        return await options.enqueue(async () => {
           const beforePrompt = approvalState();
           if (beforePrompt) return beforePrompt;
           const approved = await confirmCommandPermission(ctx, {
@@ -203,11 +185,6 @@ export default function semanticCommandGuard(
           if (afterPrompt) return afterPrompt;
           return approved ? undefined : block("Bash command was not approved.");
         });
-        confirmations = decision.then(
-          () => undefined,
-          () => undefined,
-        );
-        return await decision;
       } catch {
         if (!controller.signal.aborted && generation === currentGeneration) warnError(ctx);
         return confirming
@@ -223,5 +200,8 @@ export default function semanticCommandGuard(
     if (confirming) return review();
     // Shadow mode returns void; only confirm mode awaits the classifier and user.
     void Promise.resolve().then(review);
-  });
+    return undefined;
+  };
+
+  return { cancel, reset, check };
 }

@@ -1,5 +1,3 @@
-import { isToolCallEventType, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
-
 const RAW_BLOCK_DEVICE =
   /^\/dev\/(?:(?:sd|nvme|vd|xvd|mmcblk|rdisk|dm-|md|disk)[^/\s]*|mapper\/[^/\s]+|disk\/by-id\/[^/\s]+)$/;
 const FORMAT_BLOCK_DEVICE =
@@ -617,13 +615,4 @@ function inspectCommand(command: string, depth: number): string | undefined {
 
 export function catastrophicCommandReason(command: string): string | undefined {
   return inspectCommand(command, 0);
-}
-
-export default function catastrophicCommandGuard(pi: ExtensionAPI): void {
-  pi.on("tool_call", (event) => {
-    if (!isToolCallEventType("bash", event)) return undefined;
-
-    const reason = catastrophicCommandReason(event.input.command);
-    return reason === undefined ? undefined : { block: true, reason };
-  });
 }

@@ -15,13 +15,12 @@ describe("local command warning evidence", () => {
     });
   });
 
-  test("uses the same lexical indicators for quoted code and local explanation", () => {
-    const inspection = inspectCommand("cd src && printf '%s' 'rm(directory)' > test.ts");
+  test("describes redirection without treating printed code as an operation", () => {
+    const inspection = inspectCommand("printf '%s' 'rm(directory)' > test.ts");
     if (inspection.kind !== "review") throw new Error("Expected review");
-    expect(inspection.evidence).toContain('Operation name: "rm" (line 1, column 24)');
     expect(inspection.input.state).toMatchObject({
-      operations: ["rm"],
-      outputRedirection: true,
+      operations: [],
+      shellOverwrite: true,
     });
   });
 
