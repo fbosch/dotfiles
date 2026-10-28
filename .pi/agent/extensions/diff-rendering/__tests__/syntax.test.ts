@@ -78,7 +78,6 @@ describe("createSyntaxHighlighter", () => {
 
     const unknown = await highlighter.highlight("blå tekst\n", "sample.unknown");
     expect(sourceFromResult(unknown)).toBe("blå tekst\n");
-    expect(unknown.warning).toContain("unknown language");
     expect(unknown.lines[0]?.[0]).toEqual({ content: "blå tekst" });
 
     const oversized = "x".repeat(64 * 1024 + 1);

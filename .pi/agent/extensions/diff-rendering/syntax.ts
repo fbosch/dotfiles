@@ -36,8 +36,6 @@ const MAX_CACHE_ENTRIES = 128;
 const MAX_CACHE_CONTENT_BYTES = 2 * 1024 * 1024;
 const RESOURCE_LIMIT_WARNING =
   "Syntax highlighting skipped: input exceeds resource limits (64 KiB or 4,000 lines); showing plain text.";
-const UNKNOWN_LANGUAGE_WARNING =
-  "Syntax highlighting skipped: unknown language; showing plain text.";
 
 const languageByName = new Map<string, string>();
 for (const info of bundledLanguagesInfo) {
@@ -77,7 +75,7 @@ function freezeResult(
   return warning === undefined ? { lines: frozenLines } : { lines: frozenLines, warning };
 }
 
-function plainTextResult(code: string, warning: string): HighlightResult {
+function plainTextResult(code: string, warning?: string): HighlightResult {
   return freezeResult(
     code.split("\n").map((content) => (content === "" ? [] : [{ content }])),
     warning,
@@ -295,7 +293,7 @@ export function createSyntaxHighlighter(themeName = DEFAULT_SYNTAX_THEME): {
       }
 
       if (language === undefined) {
-        const result = plainTextResult(code, UNKNOWN_LANGUAGE_WARNING);
+        const result = plainTextResult(code);
         if (key !== undefined) remember(key, result);
         return result;
       }
