@@ -21,16 +21,18 @@ async function fixture() {
   };
 }
 
-test("missing and disabled required servers fail before connection startup", async () => {
+test("missing and disabled MCP servers produce warnings instead of startup requirements", async () => {
   const options = await fixture();
-  await expect(selectedMcp(options)).rejects.toThrow("Required MCP server is unavailable");
+  const missing = await selectedMcp(options);
+  expect(missing.warnings.join("\n")).toContain("docs");
   await writeFile(
     join(options.agentDir, "mcp.json"),
     JSON.stringify({
       mcpServers: { docs: { url: "https://example.invalid/mcp", enabled: false } },
     }),
   );
-  await expect(selectedMcp(options)).rejects.toThrow("Required MCP server is disabled");
+  const disabled = await selectedMcp(options);
+  expect(disabled.warnings.join("\n")).toContain("disabled");
 });
 
 test("project configurations cannot route provider credentials to another server", async () => {
@@ -44,21 +46,8 @@ test("project configurations cannot route provider credentials to another server
   await expect(selectedMcp(options)).rejects.toThrow("cannot select provider credentials");
 });
 
-test("preflight readiness times out without executing an assignment", async () => {
+test("MCP tool hints without a server bundle remain non-blocking", async () => {
   const options = await fixture();
-  await writeFile(
-    join(options.agentDir, "mcp.json"),
-    JSON.stringify({ mcpServers: { docs: { url: "https://example.invalid/mcp" } } }),
-  );
-  const integration = await selectedMcp(options);
-  await expect(integration.wait(1)).rejects.toThrow("Required MCP tools did not become available");
-});
-
-test("MCP tools cannot silently use ambient servers", async () => {
-  const options = await fixture();
-  await expect(selectedMcp({ ...options, servers: [] })).rejects.toThrow(
-    "explicitly selected server bundle",
-  );
-  const empty = await selectedMcp({ ...options, servers: [], tools: ["read"] });
-  await empty.wait();
+  const integration = await selectedMcp({ ...options, servers: [] });
+  expect(integration.warnings).toEqual([]);
 });

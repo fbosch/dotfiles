@@ -241,6 +241,34 @@ test("skipped skill warning is retained in parent transcript without altering re
   });
   expect(f.handles[0]!.session.systemPrompt).toContain("Skipped unavailable skills: absent");
 });
+test("unavailable tool hints and a missing MCP server do not prevent assignment completion", async () => {
+  const f = await fixture(() => answer("Useful report without MCP"));
+  const result = await f.driver.start(
+    {
+      ...f.input,
+      config: {
+        ...f.input.config,
+        tools: ["read", "missing_tool", "mcp__offline__*"],
+        mcpServers: ["offline"],
+        excludeTools: ["subagent"],
+      },
+    },
+    f.callbacks,
+  );
+  expect(result).toMatchObject({
+    kind: "completed",
+    turnsUsed: 1,
+    report: "Useful report without MCP",
+  });
+  expect(
+    f.transcript.some((entry) => entry.role === "system" && entry.text.includes("missing_tool")),
+  ).toBe(true);
+  expect(f.transcript).toContainEqual({
+    role: "system",
+    text: "Skipped unavailable or disabled MCP server: offline",
+  });
+});
+
 test("virtual model metadata uses the runtime route rather than the alias thinking level", () => {
   const selected = { ...model, provider: "presets", id: "routine", api: "pi-virtual" };
   expect(

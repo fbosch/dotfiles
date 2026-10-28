@@ -144,15 +144,6 @@ export async function resolveSpecialist(
     throw new Error("maxTurns exceeds assignment hardMaxTurns");
   }
   const configuredTools = list(fields.tools, "tools");
-  if (
-    configuredTools.some(
-      (tool) => PARENT_TOOLS.includes(tool) || tool === "*" || /^[+-]/.test(tool),
-    )
-  ) {
-    throw new Error(
-      "Child tools must be an explicit allowlist without parent delegation tools or modifiers",
-    );
-  }
   const tools = [...new Set([...configuredTools, ...SHARED_TOOLS])];
   const bundles = list(fields.bundles, "bundles").map((bundle) => {
     const resolved = catalog.bundles.get(bundle);
@@ -201,10 +192,7 @@ export async function resolveSpecialist(
       throw new Error(`Required capability file is unavailable: ${path}`, { cause });
     }
   }
-  // Pi otherwise leaves MCP registrations callable through codemode despite a non-MCP allowlist.
-  const excludeTools = tools.some((tool) => tool.startsWith("mcp__"))
-    ? [...PARENT_TOOLS]
-    : [...PARENT_TOOLS, "mcp__*"];
+  const excludeTools = [...PARENT_TOOLS];
   return Object.freeze({
     name,
     description,
@@ -226,7 +214,7 @@ export async function resolveSpecialist(
   });
 }
 
-function matches(pattern: string, name: string): boolean {
+export function matchesToolPattern(pattern: string, name: string): boolean {
   const escaped = pattern
     .split("*")
     .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
@@ -234,22 +222,14 @@ function matches(pattern: string, name: string): boolean {
   return new RegExp(`^${escaped}$`).test(name);
 }
 
-/** Check the loaded child's actual callable tools before it can execute an assignment. */
+/** Tool hints never restrict availability; explicit safety exclusions remain enforced. */
 export function verifyChildCapabilities(
   config: ResolvedSpecialist,
   callableNames: readonly string[],
 ): void {
-  for (const pattern of config.tools) {
-    if (!callableNames.some((name) => matches(pattern, name))) {
-      throw new Error(`Required child tool is unavailable: ${pattern}`);
-    }
-  }
   for (const name of callableNames) {
-    if (
-      config.excludeTools.some((pattern) => matches(pattern, name)) ||
-      !config.tools.some((pattern) => matches(pattern, name))
-    ) {
-      throw new Error(`Unexpected callable child tool: ${name}`);
+    if (config.excludeTools.some((pattern) => matchesToolPattern(pattern, name))) {
+      throw new Error(`Excluded callable child tool: ${name}`);
     }
   }
 }

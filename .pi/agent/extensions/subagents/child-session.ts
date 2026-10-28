@@ -1,7 +1,7 @@
 import { join } from "node:path";
 import * as Pi from "@earendil-works/pi-coding-agent";
 import { selectedMcp } from "./mcp";
-import { type ResolvedSpecialist, verifyChildCapabilities } from "./specialist";
+import { matchesToolPattern, type ResolvedSpecialist, verifyChildCapabilities } from "./specialist";
 
 export const CHILD_PROTOCOL_TOOLS = ["worker_question", "worker_update"] as const;
 
@@ -74,6 +74,15 @@ export async function createChildSession(options: ChildSessionOptions) {
     tools: config.tools,
     create: sdk.createMcpExtension,
   });
+  warnings.push(...mcp.warnings);
+  const toolHintWarning = (activeNames: readonly string[]) => {
+    const pending = config.tools.filter(
+      (pattern) => !activeNames.some((name) => matchesToolPattern(pattern, name)),
+    );
+    return pending.length
+      ? `Tools not prewarmed (unavailable or still connecting): ${pending.join(", ")}`
+      : undefined;
+  };
   const loader = new sdk.DefaultResourceLoader({
     cwd,
     agentDir,
@@ -88,6 +97,12 @@ export async function createChildSession(options: ChildSessionOptions) {
       sdk.createToolSearchExtension(),
       options.protocol,
       mcp.factory,
+      (pi) => {
+        pi.on("before_agent_start", (event) => {
+          const warning = toolHintWarning(pi.getActiveTools());
+          if (warning) return { systemPrompt: `${event.systemPrompt}\n\n${warning}` };
+        });
+      },
     ],
     skillsOverride: () => selectedSkills,
     appendSystemPrompt: [
@@ -123,7 +138,6 @@ export async function createChildSession(options: ChildSessionOptions) {
       modelsStorePath: join(agentDir, "models-store.json"),
       allowModelNetwork: false,
     });
-    const selected = { ...config, tools: [...config.tools, ...CHILD_PROTOCOL_TOOLS] };
     const created = await sdk.createAgentSession({
       cwd,
       agentDir,
@@ -133,21 +147,36 @@ export async function createChildSession(options: ChildSessionOptions) {
       sessionManager: sdk.SessionManager.inMemory(cwd),
       model: options.model,
       ...(config.thinking === undefined ? {} : { thinkingLevel: config.thinking }),
-      tools: selected.tools,
+      // Add discovery entry points without turning the hints into an SDK allowlist.
+      tools: ["+codemode", "+tool_search"],
       excludeTools: [...config.excludeTools],
     });
     session = created.session;
-    const requiredActiveTools = session.getActiveToolNames();
     await session.bindExtensions({
       onError: (error) => {
         errors.push(`${error.event}: ${error.error}`);
       },
     });
-    await mcp.wait();
-    // Extension lazy-loading defaults must not deactivate explicitly selected child tools.
+    // Bundles may lazily deactivate tools at session_start; restore only hinted definitions.
+    const prewarmed = session
+      .getAllTools()
+      .filter(
+        (tool) =>
+          tool.exposure !== "hidden" &&
+          config.tools.some((pattern) => matchesToolPattern(pattern, tool.name)),
+      )
+      .map((tool) => tool.name);
     session.setActiveToolsByName([
-      ...new Set([...requiredActiveTools, ...session.getActiveToolNames()]),
+      ...new Set([
+        ...session.getActiveToolNames(),
+        ...prewarmed,
+        ...CHILD_PROTOCOL_TOOLS,
+        "codemode",
+        "tool_search",
+      ]),
     ]);
+    const warning = toolHintWarning(session.getActiveToolNames());
+    if (warning) warnings.push(warning);
     if (errors.length) throw new Error(`Child integration failed: ${errors.join("; ")}`);
     if (
       created.modelFallbackMessage ||
@@ -155,7 +184,7 @@ export async function createChildSession(options: ChildSessionOptions) {
     ) {
       throw new Error(`Child did not retain required model: ${config.model}`);
     }
-    verifyChildCapabilities(selected, [
+    verifyChildCapabilities(config, [
       ...new Set([...session.getActiveToolNames(), ...session.getCallableToolNames()]),
     ]);
     return { session, close, errors, warnings };

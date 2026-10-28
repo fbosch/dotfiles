@@ -9,7 +9,7 @@ import {
   type SpecialistCatalog,
 } from "./specialist";
 
-/** Central capabilities select backing code; only the specialist allowlist grants tools. */
+/** Trusted bundles select backing code; specialist tools are prewarming hints. */
 export function capabilityCatalog(
   agentDir: string,
   skills: ReadonlyMap<string, string>,

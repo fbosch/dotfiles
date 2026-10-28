@@ -14,14 +14,9 @@
       "exposure": "deferred"
     },
     "context7": {
-      "command": "npx",
-      "args": [
-        "--yes",
-        "@upstash/context7-mcp@4.2.0"
-      ],
-      "env": {
-        "MCP_TRANSPORT": "stdio",
-        "npm_config_cache": "${HOME}/.cache/pi/npm"
+      "url": "https://mcp.context7.com/mcp",
+      "headers": {
+        "Authorization": "Bearer ${CONTEXT7_API_KEY}"
       },
       "timeout": 30,
       "exposure": "deferred"

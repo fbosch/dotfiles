@@ -5,6 +5,7 @@ import {
   type ExtensionFactory,
   type McpServerConfig,
 } from "@earendil-works/pi-coding-agent";
+import { matchesToolPattern } from "./specialist";
 
 function record(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -29,25 +30,15 @@ async function serverMap(path: string): Promise<Record<string, unknown>> {
   return parsed.mcpServers;
 }
 
-function transportConfig(name: string, raw: unknown): McpServerConfig {
-  if (!record(raw)) throw new Error(`Required MCP server is unavailable: ${name}`);
-  if (raw.enabled === false) throw new Error(`Required MCP server is disabled: ${name}`);
-  // registerMcpServer performs the host's full schema validation, including the optional fields.
+function transportConfig(raw: unknown): McpServerConfig | undefined {
+  if (!record(raw) || raw.enabled === false) return undefined;
+  // registerMcpServer performs the host's full schema validation, including optional fields.
   if (typeof raw.command === "string") return { ...raw, command: raw.command };
   if (typeof raw.url === "string") return { ...raw, url: raw.url };
-  throw new Error(`Required MCP server has no transport: ${name}`);
+  return undefined;
 }
 
-function matches(pattern: string, name: string): boolean {
-  return new RegExp(
-    `^${pattern
-      .split("*")
-      .map((part) => part.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))
-      .join(".*")}$`,
-  ).test(name);
-}
-
-/** Native MCP owns connections; the wrapper observes public registrations for preflight readiness. */
+/** Native MCP owns background connections; tool hints activate definitions as they arrive. */
 export async function selectedMcp(options: {
   agentDir: string;
   cwd: string;
@@ -61,7 +52,9 @@ export async function selectedMcp(options: {
     options.projectTrusted && options.servers.length
       ? await serverMap(join(options.cwd, ".pi/mcp.json"))
       : {};
-  const selected = options.servers.map((name) => {
+  const warnings: string[] = [];
+  const selected: Array<{ name: string; config: McpServerConfig }> = [];
+  for (const name of options.servers) {
     let config = global[name];
     const override = project[name];
     if (override !== undefined) {
@@ -85,18 +78,17 @@ export async function selectedMcp(options: {
         config = { ...(record(config) ? config : {}), ...override };
       }
     }
-    return { name, config: transportConfig(name, config) };
-  });
-  const required = options.tools.filter((tool) => tool.startsWith("mcp__"));
-  if (required.length && !selected.length)
-    throw new Error("MCP tools require an explicitly selected server bundle");
-  const registered = new Set<string>();
-  const listeners = new Set<() => void>();
-  const ready = () =>
-    required.every((pattern) => [...registered].some((name) => matches(pattern, name)));
+    const transport = transportConfig(config);
+    if (transport) selected.push({ name, config: transport });
+    else warnings.push(`Skipped unavailable or disabled MCP server: ${name}`);
+  }
   const factory: ExtensionFactory = async (pi) => {
     if (!selected.length) return;
     for (const server of selected) pi.registerMcpServer(server.name, server.config);
+    let started = false;
+    pi.on("session_start", () => {
+      started = true;
+    });
     const native = (options.create ?? createMcpExtension)({
       loadConfig: () => ({ servers: [], errors: [], autoEnableCodemode: false }),
     });
@@ -104,31 +96,16 @@ export async function selectedMcp(options: {
       ...pi,
       registerTool(tool) {
         pi.registerTool(tool);
-        registered.add(tool.name);
-        for (const listener of listeners) listener();
+        // Connections may finish after child startup. Never wait for them to launch the worker.
+        if (
+          started &&
+          tool.exposure !== "hidden" &&
+          options.tools.some((pattern) => matchesToolPattern(pattern, tool.name))
+        ) {
+          pi.setActiveTools([...new Set([...pi.getActiveTools(), tool.name])]);
+        }
       },
     });
   };
-  const wait = (timeoutMs = 30_000): Promise<void> => {
-    if (ready()) return Promise.resolve();
-    return new Promise((resolve, reject) => {
-      const finish = () => {
-        if (!ready()) return;
-        clearTimeout(timer);
-        listeners.delete(finish);
-        resolve();
-      };
-      const timer = setTimeout(() => {
-        listeners.delete(finish);
-        reject(
-          new Error(
-            `Required MCP tools did not become available: ${required.filter((pattern) => ![...registered].some((name) => matches(pattern, name))).join(", ")}`,
-          ),
-        );
-      }, timeoutMs);
-      listeners.add(finish);
-      finish();
-    });
-  };
-  return { factory, wait };
+  return { factory, warnings };
 }

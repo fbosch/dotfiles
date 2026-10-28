@@ -51,7 +51,7 @@ test("resolves only named capabilities while retaining the mandatory baseline", 
     ...available.bundles.get("reading")!.extensions,
   ]);
   expect(resolved.skills).toEqual([{ name: "analysis", path: available.skills.get("analysis")! }]);
-  expect(resolved.excludeTools).toContain("mcp__*");
+
   expect(resolved.excludeTools).toContain("subagent");
   expect(resolved.prompt).toBe("Inspect the supplied files without edits.");
 });
@@ -186,7 +186,7 @@ test("missing skill files are skipped while extension files remain required", as
   expect(missingFile.skippedSkills).toEqual(["analysis"]);
 });
 
-test("rejects unsupported permission maps, invalid budgets, and implicit tool expansion", async () => {
+test("rejects unsupported permission maps and invalid budgets", async () => {
   const available = await catalog();
   await expect(
     resolveSpecialist("explore", definition({ permission: { "*": "deny" } }), available),
@@ -195,11 +195,6 @@ test("rejects unsupported permission maps, invalid budgets, and implicit tool ex
     await expect(
       resolveSpecialist("explore", definition({ max_turns }), available),
     ).rejects.toThrow("positive safe integer");
-  }
-  for (const tools of [["*"], ["+read"], ["subagent"]]) {
-    await expect(resolveSpecialist("explore", definition({ tools }), available)).rejects.toThrow(
-      "explicit allowlist",
-    );
   }
 });
 
@@ -220,24 +215,28 @@ test("empty skill and bundle selections are explicit; invalid names never fall b
   ).rejects.toThrow("explicit list");
 });
 
-test("actual child loadout must satisfy required patterns without additional callable tools", async () => {
-  const available = await catalog();
+test("tool hints do not restrict additional callable tools; explicit exclusions still apply", async () => {
   const resolved = await resolveSpecialist(
     "explore",
-    definition({ tools: ["read", "mcp__docs__*"] }),
-    available,
+    definition({ tools: ["missing_tool", "mcp__docs__*"] }),
+    await catalog(),
   );
-  expect(resolved.excludeTools).not.toContain("mcp__*");
   expect(() =>
-    verifyChildCapabilities(resolved, ["read", "codemode", "mcp__docs__lookup"]),
+    verifyChildCapabilities(resolved, ["read", "bash", "mcp__other__lookup"]),
   ).not.toThrow();
-  expect(() => verifyChildCapabilities(resolved, ["read"])).toThrow("Required child tool");
-  expect(() =>
-    verifyChildCapabilities(resolved, ["read", "codemode", "mcp__docs__lookup", "bash"]),
-  ).toThrow("Unexpected callable child tool");
-  expect(() =>
-    verifyChildCapabilities(resolved, ["read", "codemode", "mcp__docs__lookup", "subagent"]),
-  ).toThrow("Unexpected callable child tool");
+  expect(() => verifyChildCapabilities(resolved, ["subagent"])).toThrow(
+    "Excluded callable child tool",
+  );
+});
+
+test("tool hints accept patterns and do not grant parent delegation", async () => {
+  const resolved = await resolveSpecialist(
+    "explore",
+    definition({ tools: ["*", "subagent"] }),
+    await catalog(),
+  );
+  expect(resolved.tools).toContain("*");
+  expect(resolved.excludeTools).toContain("subagent");
 });
 
 test("codemode is shared with specialists and deduplicated when explicitly listed", async () => {

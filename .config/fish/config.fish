@@ -42,6 +42,9 @@ if test -f ~/.config/fish/profile.fish
     source ~/.config/fish/profile.fish
 end
 
+if test -f ~/.config/fish/ssh_agent.fish
+    source ~/.config/fish/ssh_agent.fish
+end
 if status is-interactive
     for file in aliases scripts colors fzf
         if test -f ~/.config/fish/$file.fish

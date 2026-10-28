@@ -10,7 +10,7 @@ The extension directory is `subagents`. Existing `minimal-subagents` history, no
 
 | Files | Responsibility |
 | --- | --- |
-| `specialist.ts`, `catalog.ts`, `mcp.ts` | Resolve explicit capabilities and reject incomplete configurations |
+| `specialist.ts`, `catalog.ts`, `mcp.ts` | Resolve trusted bundles and prewarm tool definitions |
 | `child-session.ts`, `driver.ts` | Create isolated Pi sessions, run assignments, and confirm shutdown |
 | `owner.ts`, `health.ts` | Own worker identities, queue capacity, budgets, and cleanup uncertainty |
 | `budget*.ts` | Own budget policy, optional advice, structural outcomes, and budget evidence |
@@ -38,11 +38,13 @@ skills: []
 Inspect the assigned evidence and report what you checked.
 ```
 
-Production definitions must name an available model and the bundles backing their requested tools. Model and thinking overrides require separate permission in `allow_overrides: [model, thinking]`. A launch may supply a positive safe-integer `maxTurns`; otherwise it uses the specialist's required `max_turns`. Only `general` permits model and thinking overrides.
+Production definitions must name an available model and select trusted bundles to load extensions or MCP servers. Model and thinking overrides require separate permission in `allow_overrides: [model, thinking]`. A launch may supply a positive safe-integer `maxTurns`; otherwise it uses the specialist's required `max_turns`. Only `general` permits model and thinking overrides.
 
-`catalog.ts` defines the available bundles: `files`, `file-search`, `structural`, `git-read`, `web`, `browser`, `classifier`, `commands`, `charts`, `docs-mcp`, `github-mcp`, `chrome-mcp`, and `firefox-mcp`. Bundles select backing extensions and MCP servers; the `tools` list grants callable capabilities. `codemode` is shared by every specialist; include `tool_search` explicitly only when the role needs discovery.
+`catalog.ts` defines the available bundles: `files`, `file-search`, `structural`, `git-read`, `web`, `browser`, `classifier`, `commands`, `charts`, `docs-mcp`, `github-mcp`, `chrome-mcp`, and `firefox-mcp`. Bundles select backing extensions and MCP servers. The `tools` list contains prewarming hints, not permissions or launch requirements. Matching available tool definitions enter the model's initial context. Other registered tools remain available through their configured exposure and discovery. Every specialist starts with `codemode` and `tool_search`.
 
-Every child retains the central authentication, model, classifier, command-policy, and instruction baseline. Skills load only from the names and paths explicitly selected for that specialist. Missing skills are skipped, with their names recorded in the child system prompt and full assignment transcript; no substitute or ambient skills are loaded. Missing models, bundles, extension files, MCP servers, or required callable tools still fail preflight. Unexpected callable tools also fail preflight.
+Every child retains the central authentication, model, classifier, command-policy, and instruction baseline. Skills load only from the names and paths explicitly selected for that specialist. Missing skills are skipped, with their names recorded in the child system prompt and full assignment transcript; no substitute or ambient skills are loaded. Missing models, bundles, and extension files still fail preflight. Explicit tool exclusions and command policies remain enforced.
+
+Unavailable tool hints produce startup warnings without blocking the assignment. Missing or disabled selected MCP servers are skipped with a warning. MCP connections run in the background without a readiness deadline for child launch. Matching tool definitions are activated when they arrive, including late registrations. Unavailable tools cannot be used, but their absence does not prevent the specialist from working with other tools.
 
 `permission` maps are rejected because this runner does not enforce that format. Extensions share the Pi process and are not an OS sandbox. Children cannot delegate. The parent owns workspace coordination; there are no automatic worktrees or runtime workspace locks.
 

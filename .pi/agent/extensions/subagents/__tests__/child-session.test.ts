@@ -51,16 +51,17 @@ async function fixture() {
     extensions: [join(cwd, "policy.ts")],
     skills: [{ name: "selected-skill", path: join(skillDir, "SKILL.md") }],
   };
-  const calls = { allowed: 0, forbidden: 0, parent: 0 };
+  const calls = { allowed: 0, unlisted: 0, parent: 0 };
   const protocol: Pi.ExtensionFactory = (pi) => {
-    for (const name of [...CHILD_PROTOCOL_TOOLS, "forbidden", "subagent"])
+    for (const name of [...CHILD_PROTOCOL_TOOLS, "unlisted", "subagent"])
       pi.registerTool({
         name,
         label: name,
         description: name,
+        exposure: name === "unlisted" ? "deferred" : "direct",
         parameters: Type.Object({}),
         async execute() {
-          if (name === "forbidden") calls.forbidden++;
+          if (name === "unlisted") calls.unlisted++;
           if (name === "subagent") calls.parent++;
           return { content: [{ type: "text", text: "FIXTURE_TOOL_RESULT" }], details: undefined };
         },
@@ -110,7 +111,7 @@ test("explicit child tools remain callable when an extension lazily deactivates 
   });
   cleanups.push(child.close);
   expect(child.session.getCallableToolNames()).toContain(toolName);
-  expect(child.session.getCallableToolNames()).not.toContain("forbidden");
+  expect(child.session.getCallableToolNames()).toContain("unlisted");
   expect(child.session.getCallableToolNames()).not.toContain("subagent");
   const tool = child.session.agent.state.tools.find((candidate) => candidate.name === toolName);
   expect(tool).toBeDefined();
@@ -145,7 +146,6 @@ test.skipIf(!process.env.PI_SUBAGENT_TEST_SDK)(
     });
     cleanups.push(child.close);
     for (const name of structural) expect(child.session.getCallableToolNames()).toContain(name);
-    expect(child.session.getCallableToolNames()).not.toContain("ast_grep_replace");
     expect(uncertain).toEqual([]);
   },
   15_000,
@@ -169,11 +169,11 @@ test("real child keeps project and role instructions with scoped skill metadata 
   expect(child.session.systemPrompt).toContain("Selected catalog entry");
   expect(child.session.systemPrompt).not.toContain("SKILL_BODY_NOT_PRELOADED");
   expect(child.session.getCallableToolNames()).not.toContain("subagent");
-  expect(child.session.getCallableToolNames()).not.toContain("forbidden");
+  expect(child.session.getCallableToolNames()).toContain("unlisted");
   expect(uncertain).toEqual([]);
 });
 
-test("missing SDK skill loads do not block child startup or broaden tools", async () => {
+test("missing SDK skill loads do not block child startup", async () => {
   const f = await fixture();
   const missing = { name: "missing", path: join(f.cwd, "missing/SKILL.md") };
   const child = await createChildSession({
@@ -194,7 +194,7 @@ test("missing SDK skill loads do not block child startup or broaden tools", asyn
   expect(child.session.systemPrompt).toContain("catalog-missing");
   expect(child.session.systemPrompt).toContain("missing");
   expect(child.warnings).toEqual(["Skipped unavailable skills: catalog-missing, missing"]);
-  expect(child.session.getCallableToolNames()).not.toContain("forbidden");
+  expect(child.session.getCallableToolNames()).toContain("unlisted");
   expect(child.session.getCallableToolNames()).not.toContain("subagent");
 });
 
@@ -234,20 +234,23 @@ test.each([false, true])(
   },
 );
 
-test("missing loaded tool fails preflight and confirms cleanup without executing a prompt", async () => {
+test("unavailable tool hints warn without blocking startup or other tools", async () => {
   const f = await fixture();
   const uncertain: Error[] = [];
-  await expect(
-    createChildSession({
-      ...f,
-      config: { ...f.config, tools: ["missing_tool"] },
-      agentDir: f.cwd,
-      sdk,
-      onUncertainStartup: (error) => {
-        uncertain.push(error);
-      },
-    }),
-  ).rejects.toThrow("Required child tool is unavailable");
+  const child = await createChildSession({
+    ...f,
+    config: { ...f.config, tools: ["missing_tool", "mcp__offline__*", "allowed_probe"] },
+    agentDir: f.cwd,
+    sdk,
+    onUncertainStartup: (error) => uncertain.push(error),
+  });
+  cleanups.push(child.close);
+  expect(child.session.getActiveToolNames()).toContain("allowed_probe");
+  expect(child.session.getActiveToolNames()).toContain("worker_question");
+  expect(child.session.getActiveToolNames()).toContain("codemode");
+  expect(child.session.getActiveToolNames()).toContain("tool_search");
+  expect(child.warnings.join("\n")).toContain("missing_tool");
+  expect(child.warnings.join("\n")).toContain("mcp__offline__*");
   expect(uncertain).toEqual([]);
 });
 
@@ -272,7 +275,59 @@ test("partial startup without a returned session records cleanup uncertainty and
   expect(resources[0]?.[0]).toBeDefined();
 });
 
-test("native MCP connects only the selected server and registers required tools before returning", async () => {
+test("late MCP hints are prewarmed without delaying startup; unlisted MCP tools stay discoverable", async () => {
+  const f = await fixture();
+  await writeFile(
+    join(f.cwd, "mcp.json"),
+    JSON.stringify({ mcpServers: { fixture: { url: "https://fixture.invalid/mcp" } } }),
+  );
+  let registerLate: (() => void) | undefined;
+  const child = await createChildSession({
+    ...f,
+    config: {
+      ...f.config,
+      mcpServers: ["fixture"],
+      tools: [...f.config.tools, "mcp__fixture__lookup"],
+      excludeTools: ["subagent"],
+    },
+    agentDir: f.cwd,
+    sdk: {
+      ...sdk,
+      createMcpExtension: () => (pi) => {
+        pi.on("mcp_servers_change", () => {});
+        pi.on("session_start", () => {
+          registerLate = () => {
+            for (const name of ["lookup", "other"]) {
+              pi.registerTool({
+                name: `mcp__fixture__${name}`,
+                label: name,
+                description: name,
+                exposure: "deferred",
+                parameters: Type.Object({}),
+                async execute() {
+                  return { content: [{ type: "text", text: name }], details: undefined };
+                },
+              });
+            }
+          };
+        });
+      },
+    },
+    onUncertainStartup: () => {
+      throw new Error("unexpected cleanup uncertainty");
+    },
+  });
+  cleanups.push(child.close);
+  expect(child.warnings.join("\n")).toContain("mcp__fixture__lookup");
+  expect(registerLate).toBeDefined();
+  if (!registerLate) throw new Error("Late registration fixture was not initialized");
+  registerLate();
+  expect(child.session.getActiveToolNames()).toContain("mcp__fixture__lookup");
+  expect(child.session.getCallableToolNames()).toContain("mcp__fixture__other");
+  expect(child.session.getActiveToolNames()).not.toContain("mcp__fixture__other");
+});
+
+test("native MCP connects selected servers in the background and prewarms their definitions", async () => {
   const f = await fixture();
   await writeFile(
     join(f.cwd, "mcp.json"),
@@ -286,7 +341,10 @@ test("native MCP connects only the selected server and registers required tools 
       },
     }),
   );
-  const failures: Error[] = [];
+  let registered!: () => void;
+  const registration = new Promise<void>((resolve) => {
+    registered = resolve;
+  });
   const child = await createChildSession({
     ...f,
     config: {
@@ -296,20 +354,31 @@ test("native MCP connects only the selected server and registers required tools 
       excludeTools: ["subagent"],
     },
     agentDir: f.cwd,
-    sdk,
-    onUncertainStartup: (error) => {
-      failures.push(error);
+    sdk: {
+      ...sdk,
+      createMcpExtension: (options) => async (pi) => {
+        await sdk.createMcpExtension(options)({
+          ...pi,
+          registerTool(tool) {
+            pi.registerTool(tool);
+            if (tool.name === "mcp__fixture__lookup") registered();
+          },
+        });
+      },
+    },
+    onUncertainStartup: () => {
+      throw new Error("unexpected cleanup uncertainty");
     },
   });
   cleanups.push(child.close);
-  expect(child.session.getCallableToolNames()).toContain("mcp__fixture__lookup");
-  expect(
-    child.session.getCallableToolNames().some((name) => name.startsWith("mcp__ambient__")),
-  ).toBe(false);
-  expect(failures).toEqual([]);
+  await registration;
+  expect(child.session.getActiveToolNames()).toContain("mcp__fixture__lookup");
+  expect(child.session.getAllTools().some((tool) => tool.name.startsWith("mcp__ambient__"))).toBe(
+    false,
+  );
 }, 15_000);
 
-test("codemode executes permitted tools only and discovery respects the child loadout", async () => {
+test("unlisted tools remain discoverable and callable without enabling parent delegation", async () => {
   const f = await fixture();
   await writeFile(
     join(f.cwd, "mcp.json"),
@@ -330,12 +399,12 @@ test("codemode executes permitted tools only and discovery respects the child lo
 
   const discovery = child.session.agent.state.tools.find((tool) => tool.name === "tool_search");
   expect(discovery).toBeDefined();
-  const discoveryResult = await discovery!.execute("discover-forbidden", {
-    query: "forbidden",
+  const discoveryResult = await discovery!.execute("discover-unlisted", {
+    query: "unlisted",
     limit: 5,
   });
-  expect(discoveryResult.details).toMatchObject({ loaded: [] });
-  expect(child.session.getActiveToolNames()).not.toContain("forbidden");
+  expect(discoveryResult.details).toMatchObject({ loaded: ["unlisted"] });
+  expect(child.session.getActiveToolNames()).toContain("unlisted");
 
   child.session.agent.state.messages = [
     {
@@ -365,9 +434,9 @@ test("codemode executes permitted tools only and discovery respects the child lo
   const input = {
     code: [
       "text(await tools.allowed_probe({}));",
-      'text(ALL_TOOLS.some((tool) => tool.name === "forbidden") ? "FORBIDDEN_DISCOVERED" : "FORBIDDEN_HIDDEN");',
-      'text((await searchTools("forbidden")).some((tool) => tool.name === "forbidden") ? "FORBIDDEN_SEARCHED" : "FORBIDDEN_UNSEARCHABLE");',
-      'try { await tools.forbidden({}); text("FORBIDDEN_EXECUTED"); } catch { text("FORBIDDEN_BLOCKED"); }',
+      'text(ALL_TOOLS.some((tool) => tool.name === "unlisted") ? "UNLISTED_DISCOVERED" : "UNLISTED_HIDDEN");',
+      'text((await searchTools("unlisted")).some((tool) => tool.name === "unlisted") ? "UNLISTED_SEARCHED" : "UNLISTED_UNSEARCHABLE");',
+      'try { await tools.unlisted({}); text("UNLISTED_EXECUTED"); } catch { text("UNLISTED_BLOCKED"); }',
       'try { await tools.subagent({}); text("PARENT_EXECUTED"); } catch { text("PARENT_BLOCKED"); }',
       'try { await tools.mcp__ambient__lookup({}); text("MCP_EXECUTED"); } catch { text("MCP_BLOCKED"); }',
       "text(typeof models);",
@@ -384,11 +453,54 @@ test("codemode executes permitted tools only and discovery respects the child lo
   );
   const output = result.content.map((part) => (part.type === "text" ? part.text : "")).join("\n");
   expect(output).toContain("ALLOWED_PROBE_OK");
-  expect(output).toContain("FORBIDDEN_HIDDEN");
-  expect(output).toContain("FORBIDDEN_UNSEARCHABLE");
-  expect(output).toContain("FORBIDDEN_BLOCKED");
+  expect(output).toContain("UNLISTED_DISCOVERED");
+  expect(output).toContain("UNLISTED_SEARCHED");
+  expect(output).toContain("UNLISTED_EXECUTED");
   expect(output).toContain("PARENT_BLOCKED");
   expect(output).toContain("MCP_BLOCKED");
   expect(output).toContain("undefined");
-  expect(f.calls).toEqual({ allowed: 1, forbidden: 0, parent: 0 });
+  expect(f.calls).toEqual({ allowed: 1, unlisted: 1, parent: 0 });
+});
+
+test("prewarming preserves policy denial for nested calls to otherwise available tools", async () => {
+  const f = await fixture();
+  const child = await createChildSession({
+    ...f,
+    protocol: (pi) => {
+      f.protocol(pi);
+      pi.on("tool_call", (event) => {
+        if (event.toolName === "unlisted") return { block: true, reason: "fixture policy denied" };
+      });
+    },
+    agentDir: f.cwd,
+    sdk,
+    onUncertainStartup: () => {
+      throw new Error("unexpected cleanup uncertainty");
+    },
+  });
+  cleanups.push(child.close);
+  child.session.agent.state.messages = [
+    {
+      role: "assistant",
+      content: [{ type: "toolCall", id: "policy-probe", name: "codemode", arguments: {} }],
+      api: "openai-completions",
+      provider: "fixture",
+      model: "fixture",
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+      stopReason: "toolUse",
+      timestamp: Date.now(),
+    },
+  ];
+  const context = child.session.extensionRunner.createToolContext("policy-probe", undefined);
+  const result = await context.executeTool("unlisted", {});
+  expect(result.isError).toBe(true);
+  expect(JSON.stringify(result.result)).toContain("fixture policy denied");
+  expect(f.calls.unlisted).toBe(0);
 });

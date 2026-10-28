@@ -28,6 +28,7 @@ const mcpServers = JSON.parse(readFileSync(join(agentRoot, "mcp.json"), "utf8"))
       args?: string[];
       command?: string;
       env?: Record<string, string>;
+      headers?: Record<string, string>;
       exposure?: string;
       timeout?: number;
       timeoutMs?: number;
@@ -60,10 +61,10 @@ describe("native MCP configuration", () => {
 
     expect(
       Object.values(mcpServers.mcpServers).filter(({ command }) => command !== undefined),
-    ).toHaveLength(6);
+    ).toHaveLength(5);
     expect(
       Object.values(mcpServers.mcpServers).filter(({ url }) => url !== undefined),
-    ).toHaveLength(2);
+    ).toHaveLength(3);
   });
 
   test("launches pinned native servers without a snapshot workspace", () => {
@@ -102,9 +103,11 @@ describe("native MCP configuration", () => {
     expect(mcpServers.mcpServers.serena?.args).toContain("--project-from-cwd");
     expect(mcpServers.mcpServers.serena?.env?.SERENA_HOME).toBe(`${piCache}/serena`);
     expect(mcpServers.mcpServers.serena?.env?.UV_TOOL_DIR).toBe(`${piCache}/uv-tools`);
-    expect(mcpServers.mcpServers.context7).toMatchObject({
-      command: "npx",
-      args: ["--yes", "@upstash/context7-mcp@4.2.0"],
+    expect(mcpServers.mcpServers.context7).toEqual({
+      url: "https://mcp.context7.com/mcp",
+      headers: { Authorization: `Bearer \${CONTEXT7_API_KEY}` },
+      timeout: 30,
+      exposure: "deferred",
     });
     for (const server of Object.values(mcpServers.mcpServers)) {
       expect(server.command).not.toBe("podman");
