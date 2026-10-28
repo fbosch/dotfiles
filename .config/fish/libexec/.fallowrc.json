@@ -1,10 +1,12 @@
 {
-  "$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
-  "entry": [
-    "comfort_sound_helper.ts",
-    "azure/*.ts",
-    "codex/*.ts",
-    "nix/*.ts",
-    "opencode/*.ts"
-  ]
+	"$schema": "https://raw.githubusercontent.com/fallow-rs/fallow/main/schema.json",
+	"entry": [
+		"comfort_sound_helper.ts",
+		"ssh_agent.ts",
+		"__tests__/*.test.js",
+		"azure/*.ts",
+		"codex/*.ts",
+		"nix/*.ts",
+		"opencode/*.ts"
+	]
 }

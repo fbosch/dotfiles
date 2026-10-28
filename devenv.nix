@@ -248,6 +248,8 @@ in
 
     "test:fish-greeting".exec = "fish --no-config tests/fish_greeting.fish";
 
+    "test:fish-ssh-agent".exec = "bun test ./.config/fish/libexec/__tests__/ssh_agent.test.js";
+
     "test:fish-starship-cache".exec = ''
       set -euo pipefail
       test_dir="$(mktemp -d)"
@@ -583,6 +585,7 @@ in
         "test:fish"
         "test:git-pull-system-repos"
         "test:fish-greeting"
+        "test:fish-ssh-agent"
         "test:fish-starship-cache"
         "test:herdr-neovim-sessions"
         "test:lua-quality"

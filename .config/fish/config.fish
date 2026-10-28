@@ -42,13 +42,15 @@ if test -f ~/.config/fish/profile.fish
     source ~/.config/fish/profile.fish
 end
 
-if test -f ~/.config/fish/ssh_agent.fish
-    source ~/.config/fish/ssh_agent.fish
+set -l ssh_agent_init (path dirname (path resolve (status filename)))/ssh_agent.fish
+if test -f "$ssh_agent_init"
+    source "$ssh_agent_init"
 end
 if status is-interactive
     for file in aliases scripts colors fzf
-        if test -f ~/.config/fish/$file.fish
-            source ~/.config/fish/$file.fish
+        set -l startup_file "$HOME/.config/fish/$file.fish"
+        if test -f "$startup_file"
+            source "$startup_file"
         end
     end
 end
@@ -311,8 +313,9 @@ if test $OS_TYPE = Darwin
 end
 
 # --- Inshellisense ---
-if status is-interactive; and test -f ~/.inshellisense/key-bindings.fish
-    source ~/.inshellisense/key-bindings.fish
+set -l inshellisense_bindings "$HOME/.inshellisense/key-bindings.fish"
+if status is-interactive; and test -f "$inshellisense_bindings"
+    source "$inshellisense_bindings"
 end
 
 fish_add_path --path --append $HOME/.local/bin
