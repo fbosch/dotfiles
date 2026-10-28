@@ -596,37 +596,14 @@ test("preserves assistant block order around retained tool calls", async () => {
   expect(result.text.indexOf("source-0.txt")).toBeLessThan(result.text.indexOf("After the call."));
 });
 
-test("retains previous summary verbatim and rejects malformed images before a classifier call", async () => {
+test("retains previous summary verbatim", async () => {
   const f = await fixture();
   const previousSummary = "Persistent constraint: preserve æ, ø, å.";
-  let result = await classifyCompaction({ ...f.input, previousSummary }, settings, {
+  const result = await classifyCompaction({ ...f.input, previousSummary }, settings, {
     artifactRoot: f.root,
     classify: omitAll,
   });
   expect(result.text).toContain(previousSummary);
-  result = await classifyCompaction(
-    {
-      ...f.input,
-      sessionId: "malformed_image_session",
-      messages: [
-        ...f.input.messages,
-        {
-          role: "user",
-          content: [{ type: "image", data: "AA==", mimeType: "image/png" }],
-          timestamp: 1,
-        },
-      ],
-    },
-    settings,
-    {
-      artifactRoot: f.root,
-      classify: async () => {
-        throw new Error("Classifier must not run");
-      },
-    },
-  );
-  expect(result.reason).toBe("image-archive-failed");
-  expect(result.requestBytes).toHaveLength(0);
 });
 
 test("cancellation after a paid response preserves usage and returns no proposed checkpoint", async () => {

@@ -15,7 +15,7 @@ export interface ContextSnapshot {
 export function readContextSnapshot(
   ctx: Pick<ExtensionContext, "getContextUsage" | "sessionManager">,
 ): ContextSnapshot {
-  const usage = ctx.getContextUsage();
+  let usage = ctx.getContextUsage();
   const branch = ctx.sessionManager.getBranch();
   const projection = ctx.sessionManager.buildSessionProjection();
   const saved = savedItems(branch);
@@ -55,6 +55,20 @@ export function readContextSnapshot(
     estimated = branch
       .slice(index + 1)
       .some((entry) => entry.type === "context_edit" || entry.type === "compaction");
+  }
+  if (usage?.tokens === null && usage.contextWindow > 0) {
+    // Kept assistant usage still includes discarded context. Estimate active message sizes
+    // instead, counting only the latest system snapshot that the provider will receive.
+    let countedSystem = false;
+    const tokens = projection.messages.reduceRight((total, message) => {
+      if (message.role === "system") {
+        if (countedSystem) return total;
+        countedSystem = true;
+      }
+      return total + estimateTokens(message);
+    }, 0);
+    usage = { ...usage, tokens, percent: (tokens / usage.contextWindow) * 100 };
+    estimated = true;
   }
   return { usage, estimated, freedTokens: Math.max(0, freedTokens) };
 }

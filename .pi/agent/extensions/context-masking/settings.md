@@ -247,7 +247,11 @@ Decisions follow archive order. Once any image is kept `inline`, each later imag
 
 Image references state their chronological position, such as `2 of 3`, and mark the newest archived image. Positions count omitted images, so no listed reference claims to be newest when the newest image was omitted. References do not copy the image's caption text, because that could reintroduce prose that text pruning omitted.
 
-Uncertain image decisions keep a reference. Classifier errors use native fallback and conservatively keep archived images inline. If originals cannot be archived or verified, the hook cancels compaction instead of discarding them. If a kept image later becomes unavailable, context includes an explicit missing-pixels notice. Nothing deletes an image automatically.
+Uncertain image decisions keep a reference. Classifier errors use native fallback and conservatively keep archived images inline.
+
+Archival failures skip only the affected images, including unavailable previous originals and images that exceed the archive limits. Text and successfully archived images still use classifier compaction; if every image fails, text classification continues without an image-decision request. The hook warns with a count and up to eight source entry/block identifiers, and the checkpoint records `skippedImageCount`. Skipped images receive no retention decisions or new recovery references; their pixels may leave active context, but the original session content is unchanged.
+
+Final verification of successfully archived images still cancels compaction if an image is unavailable. If a kept image later becomes unavailable, context includes an explicit missing-pixels notice. Nothing deletes an image automatically.
 
 The deferred `recall_images` tool finds references by source label, identifier or path, including pruned images. It searches the latest 80 image archive records on the current branch, returns at most eight references and validates at most 16 MB per call. It does not search visual contents or call a model. Use `read` on a returned path to view its pixels. Older originals remain on disk and in session records even when outside this bounded lookup.
 
@@ -255,7 +259,7 @@ The image path allows at most 32 originals and 16 MB per attempt, with a 4 MB an
 
 The configured OpenRouter Jev route rejects five images in one classifier request, even when the images and total packet fit their byte limits. With more than four archived images, text classification uses image metadata without pixels; every original remains forced inline, and image-pruning decisions are skipped. This preserves visual evidence until cross-image decisions can be batched without losing revisions.
 
-Valid decision reuse requires identical image evidence, text, focus, model and settings. Normalization failure or packet limits use native fallback. Invalid or unsupported originals cancel compaction. The image processor currently requires `/run/current-system/sw/bin/magick`; this path is NixOS-specific. Descriptor-pinned directory operations reduce path-swap risk on Linux. Other platforms use canonical paths without equivalent concurrent-swap protection.
+Valid decision reuse requires identical image evidence, text, focus, model and settings. Normalization failure or packet limits use native fallback. Invalid or unsupported originals are skipped individually. The image processor currently requires `/run/current-system/sw/bin/magick`; this path is NixOS-specific. Descriptor-pinned directory operations reduce path-swap risk on Linux. Other platforms use canonical paths without equivalent concurrent-swap protection.
 
 Unified text and image retention has offline tests with synthetic data and stub classifiers, including the live hook, pruned-prose recall, and text-only prefixes. The multi-source hosted cohort exercised Jev image transport and accepted three extractive checkpoints; it does not establish live multimodal reliability. The earlier four-way benchmark measured the saved-tool-output selector, not unified prose pruning or image retention.
 

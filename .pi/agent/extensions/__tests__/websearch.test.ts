@@ -8,6 +8,57 @@ import webSearchExtension, {
 } from "../websearch";
 
 describe("websearch", () => {
+  const previousMcpBaseUrl = process.env.EXA_MCP_BASE_URL;
+
+  beforeEach(() => {
+    delete process.env.EXA_MCP_BASE_URL;
+  });
+
+  afterEach(() => {
+    if (previousMcpBaseUrl === undefined) delete process.env.EXA_MCP_BASE_URL;
+    else process.env.EXA_MCP_BASE_URL = previousMcpBaseUrl;
+  });
+
+  test.each(["http://127.0.0.1:12345/exa_mcp", "http://127.0.0.1:12345/exa_mcp/"])(
+    "routes Exa MCP through %s with a placeholder header",
+    async (baseUrl) => {
+      const previousKey = process.env.EXA_API_KEY;
+      const previousRestUrl = process.env.EXA_BASE_URL;
+      process.env.EXA_MCP_BASE_URL = baseUrl;
+      process.env.EXA_BASE_URL = "http://127.0.0.1:12345/exa";
+      process.env.EXA_API_KEY = "synthetic-broker-placeholder";
+      try {
+        const fetchFn = async (input: string | URL | Request, init?: RequestInit) => {
+          expect(String(input)).toBe("http://127.0.0.1:12345/exa_mcp/mcp");
+          expect(new Headers(init?.headers).get("x-api-key")).toBe("synthetic-broker-placeholder");
+          expect(init?.redirect).toBe("manual");
+          return new Response(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              id: 1,
+              result: { content: [{ type: "text", text: "brokered result" }] },
+            }),
+            { headers: { "Content-Type": "application/json" } },
+          );
+        };
+        await expect(
+          searchWeb(
+            { query: "topic" },
+            {
+              provider: "exa",
+              sessionId: "session",
+              fetchFn,
+            },
+          ),
+        ).resolves.toBe("brokered result");
+      } finally {
+        if (previousKey === undefined) delete process.env.EXA_API_KEY;
+        else process.env.EXA_API_KEY = previousKey;
+        if (previousRestUrl === undefined) delete process.env.EXA_BASE_URL;
+        else process.env.EXA_BASE_URL = previousRestUrl;
+      }
+    },
+  );
   test("registers web search with native deferred exposure", () => {
     let tool: ToolDefinition | undefined;
     webSearchExtension({

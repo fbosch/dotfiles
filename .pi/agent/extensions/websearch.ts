@@ -204,7 +204,12 @@ function requestSignal(signal?: AbortSignal): AbortSignal {
 export async function searchWeb(params: WebSearchParams, options: SearchOptions): Promise<string> {
   const fetchFn = options.fetchFn ?? fetch;
   const isParallel = options.provider === "parallel";
-  const url = isParallel ? PARALLEL_URL : EXA_URL;
+  // The REST client uses EXA_BASE_URL; this client needs the separate MCP route.
+  const exaUrl =
+    process.env.EXA_MCP_BASE_URL === undefined
+      ? EXA_URL
+      : `${process.env.EXA_MCP_BASE_URL.replace(/\/+$/, "")}/mcp`;
+  const url = isParallel ? PARALLEL_URL : exaUrl;
   const toolName = isParallel ? "web_search" : "web_search_exa";
   const args = isParallel
     ? {

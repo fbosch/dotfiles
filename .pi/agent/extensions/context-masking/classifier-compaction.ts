@@ -107,6 +107,7 @@ export interface CompactionOutcome {
   usage: Usage | undefined;
   usageComplete: boolean;
   images?: ImageRetention[];
+  skippedImages?: Pick<ImageRetention, "entryId" | "blockIndex">[];
   imageMessages?: Message[];
   imageSummary?: string;
   savedItems?: MaskedItem[];

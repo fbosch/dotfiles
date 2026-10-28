@@ -67,6 +67,33 @@ test("images and text share the goal and evidence; keep/reference/prune never de
   expect(result.usage?.input).toBe(20);
 });
 
+test("a malformed image between valid originals does not prevent later image decisions", async () => {
+  const f = await fixture(3, false);
+  const messages = f.input.messages.map(message => {
+    if (message.role !== "user" || typeof message.content === "string") return message;
+    return { ...message, content: [...message.content.slice(0, 2),
+      { type: "image" as const, data: "AA==", mimeType: "image/png" },
+      ...message.content.slice(2)] };
+  });
+  const requests: ClassifierRequest[] = [];
+  const result = await classifyCompaction({ ...f.input, messages }, settings, { artifactRoot: f.root, classify: async request => {
+    requests.push(request);
+    return answer(request, name => name === "inline_i1" || name === "reference_i0" ? 1 : 0);
+  } });
+  expect(result.kind).toBe("retained");
+  const first = result.images?.[0];
+  if (!first) throw Error("Missing retained image");
+  expect(result.skippedImages).toEqual([{ entryId: first.entryId, blockIndex: 2 }]);
+  expect(result.images?.map(image => image.blockIndex)).toEqual([1, 3, 4]);
+  expect(result.images?.map(image => image.action)).toEqual(["reference", "inline", "omit"]);
+  expect(requests.every(request => request.images?.length === 3)).toBe(true);
+  for (const [index, image] of (result.images ?? []).entries()) {
+    const original = f.originals[index];
+    if (!original) throw Error("Missing original pixels");
+    expect((await readFile(image.path)).toString("base64")).toBe(original);
+  }
+});
+
 test("more than four images stay inline while text compaction avoids unsupported image input", async () => {
   const f = await fixture(5);
   const requests: ClassifierRequest[] = [];
@@ -280,7 +307,7 @@ test("pruned images remain discoverable by source labels through bounded local r
   expect(guarded.text).not.toContain("/etc/passwd"); expect(guarded.skipped).toBe(1);
 });
 
-async function runHook(mode: "extractive" | "hybrid", failClassifier = false, malformed = false) {
+async function runHook(mode: "extractive" | "hybrid", failClassifier = false) {
   const f = await fixture(1, false);
   type Handler = (event: SessionBeforeCompactEvent, ctx: ExtensionContext) => Promise<SessionBeforeCompactResult | undefined>;
   let handler: Handler | undefined;
@@ -290,20 +317,18 @@ async function runHook(mode: "extractive" | "hybrid", failClassifier = false, ma
     nativeCalls++; nativeInputHadImages = JSON.stringify(preparation).includes('"type":"image"');
     return { summary: "Native working summary", firstKeptEntryId: f.keptId, tokensBefore: 20_000, ...(mode === "hybrid" ? { details: { readFiles: [], modifiedFiles: [] } } : {}) };
   } });
-  const messages = malformed ? f.input.messages.map(message => message.role === "user" && Array.isArray(message.content) ? { ...message, content: message.content.map(block => block.type === "image" ? { ...block, data: "AA==" } : block) } : message) : f.input.messages;
+  const messages = f.input.messages;
   const event = { type: "session_before_compact", signal: new AbortController().signal, branchEntries: f.manager.getBranch(), customInstructions: "Keep visual evidence.", preparation: { firstKeptEntryId: f.keptId, messagesToSummarize: messages, turnPrefixMessages: [], isSplitTurn: false, tokensBefore: 20_000, previousSummary: "Prior constraints", fileOps: { read: new Set<string>(), written: new Set<string>(), edited: new Set<string>() } } } as unknown as SessionBeforeCompactEvent;
   const ctx = { hasUI: false, sessionManager: f.manager, modelRegistry: { find: () => ({ id: "summary" }), getModelOfType: () => ({ id: "classifier" }), classify: async (_model: unknown, request: ClassifierRequest) => { if (failClassifier) throw Error("Synthetic failure"); return answer(request, () => 0); } } } as unknown as ExtensionContext;
   if (!handler) throw Error("Missing compaction hook");
   return { ...f, result: await handler(event, ctx), nativeInputHadImages, nativeCalls };
 }
 
-test("native fallback keeps all archived images; archive failure cancels instead of dropping pixels", async () => {
+test("native fallback keeps all archived images", async () => {
   const fallback = await runHook("extractive", true);
   expect(fallback.nativeCalls).toBe(1);
   expect(fallback.result?.compaction?.summary).toContain("kept in active image context");
   expect(fallback.result?.compaction?.details).toMatchObject({ images: [{ action: "inline", forced: true }] });
-  const rejected = await runHook("extractive", false, true);
-  expect(rejected.result?.cancel).toBe(true); expect(rejected.nativeCalls).toBe(0);
 });
 
 test("hybrid native summary excludes image payloads and respects image pruning decisions", async () => {

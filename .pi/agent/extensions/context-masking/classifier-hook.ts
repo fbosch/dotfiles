@@ -199,9 +199,10 @@ export function registerClassifierCompaction(
       if (ctx.hasUI) ctx.ui.notify(message, "error");
       return { cancel: true };
     }
-    if (result.reason === "image-archive-failed") {
-      if (ctx.hasUI) ctx.ui.notify("Compaction cancelled: image originals could not be safely archived.", "error");
-      return { cancel: true };
+    if (!event.signal.aborted && result.skippedImages?.length && ctx.hasUI) {
+      const count = result.skippedImages.length;
+      const sources = result.skippedImages.slice(0, 8).map(image => `${JSON.stringify(image.entryId)}:${image.blockIndex}`).join(", ");
+      ctx.ui.notify(`Skipped ${count} image${count === 1 ? "" : "s"} that could not be archived (entry:block: ${sources}${count > 8 ? ", …" : ""}).`, "warning");
     }
     if (result.images?.length) {
       try {
@@ -241,6 +242,7 @@ export function registerClassifierCompaction(
       requests: result.requestBytes.length,
       requestBytes: result.requestBytes,
       imageRequestLimit: result.imageRequestLimit,
+      skippedImageCount: result.skippedImages?.length ?? 0,
       artifactBytes: result.artifactBytes,
       artifactsRead: result.artifactsRead,
       checkpointBytes: result.checkpointBytes,

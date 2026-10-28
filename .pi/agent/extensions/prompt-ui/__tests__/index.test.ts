@@ -136,7 +136,7 @@ test("uses MCP extension status in the footer and refreshes the editor after com
     getAvailableProviderCount: () => 0,
     onBranchChange: () => () => {},
   };
-  let usage: { tokens: number; percent: number; contextWindow: number } | undefined = {
+  let usage: ReturnType<ExtensionContext["getContextUsage"]> = {
     tokens: 80_000,
     percent: 40,
     contextWindow: 200_000,
@@ -222,11 +222,12 @@ test("uses MCP extension status in the footer and refreshes the editor after com
   expect(before).toContain("80K (40%)");
   const requestsBeforeCompaction = renderRequests;
 
-  usage = { tokens: 20_000, percent: 10, contextWindow: 200_000 };
+  ctx.sessionManager.appendCompaction("s".repeat(80_000), null, 80_000);
+  usage = { tokens: null, percent: null, contextWindow: 200_000 };
   handlers.get("session_compact")?.({}, ctx);
 
   expect(renderRequests).toBe(requestsBeforeCompaction + 1);
-  expect(editor?.render(100).join("\n")).toContain("20K (10%)");
+  expect(editor?.render(100).join("\n")).toContain("~20K (10%)");
 
   usage = { tokens: 5_000, percent: 2.5, contextWindow: 200_000 };
   const requestsBeforeSettled = renderRequests;
