@@ -212,5 +212,11 @@
   "diffRendering": {
     "editPreviews": true,
     "syntaxTheme": "zenwritten_dark"
+  },
+  "extensionChangelogVersions": {
+    "{\"source\":\"npm:pi-mono-figma@0.2.2\",\"scope\":\"project\"}": "0.2.2",
+    "{\"source\":\"npm:pi-codex-goal@latest\",\"scope\":\"user\"}": "0.6.1",
+    "{\"source\":\"npm:pi-web-access@0.45.0\",\"scope\":\"user\"}": "0.45.0",
+    "{\"source\":\"npm:pi-lens@4.4.6\",\"scope\":\"user\"}": "4.4.6"
   }
 }
