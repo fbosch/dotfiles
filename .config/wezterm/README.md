@@ -12,7 +12,7 @@ Lua configuration for WezTerm. The entrypoint stays thin and delegates settings 
 
 ## Behavior
 
-- Status text includes date, week number, and work-hour state from the `first_login` user variable.
+- Work-hour status reads today's `first_login` cache every 10 seconds. Missing records trigger background macOS start-time detection; yesterday's start is never reused.
 - Agent tab state can come from the WezTerm agent deck plugin or pane-text fallback detection.
 - Keybinds use raw key codes where layout independence matters.
 - The tab bar is bottom-aligned and styled from the shared theme palette.
@@ -23,6 +23,7 @@ Run the focused specs after changing related logic:
 
 ```bash
 lua .config/wezterm/tests/right_status_spec.lua
+lua .config/wezterm/tests/workhours_spec.lua
 lua .config/wezterm/tests/agent_deck_detection_spec.lua
 lua .config/wezterm/tests/herdr_tab_title_spec.lua
 ```

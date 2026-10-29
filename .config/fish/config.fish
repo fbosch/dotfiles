@@ -59,21 +59,6 @@ end
 # Old scripts archived to ~/.config/fish/scripts.old/
 
 function fish_greeting
-    # skip in neovim terminal buffer
-    if set -q IN_NEOVIM
-        return
-    end
-
-    set day_of_week (date +%u)
-    # skip if weekend
-    if test $day_of_week -eq 6 -o $day_of_week -eq 7
-        return
-    end
-
-    if test (uname) = Darwin
-        # Run in completely detached process to avoid any shell startup delay
-        fish -c "first_login_of_the_day --silent" &
-    end
 end
 
 # --- sudo !! Replacement ---

@@ -189,6 +189,18 @@ assert_eq(type(user_var_changed), "function", "user variable callback registered
 local captured_status
 local set_right_status_calls = 0
 local original_os_date = os.date
+local original_io_open = io.open
+io.open = function(path, mode)
+	if path:find("/first_login/", 1, true) then
+		return {
+			read = function()
+				return "09:00:00"
+			end,
+			close = function() end,
+		}
+	end
+	return original_io_open(path, mode)
+end
 
 os.date = function(format)
 	if format == "%V" then

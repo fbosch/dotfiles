@@ -70,7 +70,7 @@ local function update_right_status(window, active_pane)
 	local date = wezterm.strftime("(%Y-%m-%d) %a %b %-d ")
 	local time = wezterm.strftime("%H:%M")
 	local week_number = os.date("%V")
-	local workhours_icon, workhours_text, workhours_color = workhours.get_display(window)
+	local workhours_icon, workhours_text, workhours_color = workhours.get_display()
 
 	status = {
 		{ Foreground = color_waiting },

@@ -109,6 +109,7 @@ run_domain() {
   wezterm)
     run_luals_check .config/wezterm
     run_tool lua lua5_2 .config/wezterm/tests/right_status_spec.lua
+    run_tool lua lua5_2 .config/wezterm/tests/workhours_spec.lua
     run_tool lua lua5_2 .config/wezterm/tests/agent_deck_detection_spec.lua
     ;;
   keybinds)
