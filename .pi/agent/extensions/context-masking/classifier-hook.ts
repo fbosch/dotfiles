@@ -19,8 +19,75 @@ import { ClassifierDecisionCache } from "./classifier-cache";
 import { HYBRID_CHECKPOINT, prepareHybridSummary, restoreCheckpointFiles } from "./hybrid-summary";
 import { sumUsage } from "./classifier-compaction";
 import { imageReferences } from "./image-retention";
-import { checkpointImages, IMAGE_ARCHIVE, readImageArtifact } from "./evidence-archive";
+import {
+  checkpointImages,
+  IMAGE_ARCHIVE,
+  type MaskedItem,
+  readImageArtifact,
+  saveConversationArtifact,
+} from "./evidence-archive";
+import { assessmentKey, digestText, readPendingMasks } from "./masking-retention";
+import { placeholder } from "./policy";
 export const CLASSIFIER_CHECKPOINT = "context-masking-classifier-compaction";
+
+type Preparation = SessionBeforeCompactEvent["preparation"];
+
+/**
+ * Replaces held rolling masks in the messages a native summary will read, as if they had been
+ * committed. Only the summarized span changes; held masks in the kept tail stay pending.
+ */
+export async function applyHeldMasks(
+  preparation: Preparation,
+  branch: SessionBeforeCompactEvent["branchEntries"],
+  artifactRoot: string,
+  sessionId: string,
+): Promise<{ preparation: Preparation; items: MaskedItem[] }> {
+  const held = readPendingMasks(branch);
+  if (!held.size) return { preparation, items: [] };
+  // A repeated tool-call ID cannot identify its source entry, so those results stay as they are.
+  const entryByCall = new Map<string, string | undefined>();
+  for (const entry of branch) {
+    if (entry.type !== "message" || entry.message.role !== "toolResult") continue;
+    const callId = entry.message.toolCallId;
+    entryByCall.set(callId, entryByCall.has(callId) ? undefined : entry.id);
+  }
+  const items: MaskedItem[] = [];
+  const mask = async (messages: Preparation["messagesToSummarize"]) => {
+    const masked: Preparation["messagesToSummarize"] = [];
+    for (const message of messages) {
+      if (message.role !== "toolResult" || !message.content.every((block) => block.type === "text")) {
+        masked.push(message);
+        continue;
+      }
+      const entryId = entryByCall.get(message.toolCallId);
+      const text = message.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
+      if (!entryId || !held.has(assessmentKey(entryId, digestText(text)))) {
+        masked.push(message);
+        continue;
+      }
+      try {
+        const artifact = await saveConversationArtifact(artifactRoot, sessionId, text);
+        items.push({ entryId, archiveId: artifact.entryId, toolName: message.toolName, path: artifact.path });
+        masked.push({
+          ...message,
+          content: [{ type: "text", text: placeholder({ entryId, toolName: message.toolName, text }, artifact.path) }],
+        });
+      } catch {
+        // An unarchived original stays visible rather than becoming unrecoverable.
+        masked.push(message);
+      }
+    }
+    return masked;
+  };
+  return {
+    preparation: {
+      ...preparation,
+      messagesToSummarize: await mask(preparation.messagesToSummarize),
+      turnPrefixMessages: await mask(preparation.turnPrefixMessages),
+    },
+    items,
+  };
+}
 
 export function isClassifierCheckpoint(details: unknown): boolean {
   return isMatching(
@@ -120,8 +187,15 @@ export function registerClassifierCompaction(
       );
       if (!model) throw new Error(`Compaction model unavailable: ${modelId}`);
       // enabled controls the standalone compactor; fallback still uses its model and thinking level.
+      const held = await applyHeldMasks(
+        preparation,
+        event.branchEntries,
+        dependencies.artifactRoot(),
+        ctx.sessionManager.getSessionId(),
+      );
+      if (held.items.length) pi.appendEntry("context-masking", { items: held.items, masked: held.items.length });
       const compaction = await (dependencies.compact ?? compact)(
-        restoreCheckpointFiles(preparation, event.branchEntries),
+        restoreCheckpointFiles(held.preparation, event.branchEntries),
         model,
         undefined,
         undefined,

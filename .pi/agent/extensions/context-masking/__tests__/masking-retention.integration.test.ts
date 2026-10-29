@@ -203,13 +203,20 @@ async function harness(options: {
   };
 }
 
-test("default-off and sub-4k boundaries do not invoke the rolling classifier", async () => {
+test("default-off and sub-4k boundaries without a context estimate do not invoke the rolling classifier", async () => {
   const disabled = await harness({ settings: { rollingEnabled: false } });
   expect(await disabled.run()).toBeUndefined();
   expect(disabled.calls).toEqual([]);
-  const below = await harness({ bodies: ["æ".repeat(7_998)] });
+  const below = await harness({ bodies: ["æ".repeat(7_998)], usage: { tokens: null, contextWindow: 100_000, percent: null } });
   expect(await below.run()).toBeUndefined();
   expect(below.calls).toEqual([]);
+});
+
+test("a due backlog below 4k is classified when the context estimate is known", async () => {
+  const f = await harness({ bodies: ["æ".repeat(7_998)] });
+  const result = await f.run();
+  expect(f.calls).toHaveLength(1);
+  expect(edits(result)).toHaveLength(1);
 });
 
 test("the 4k boundary archives current projected bytes and preserves metadata and earlier drafts", async () => {
@@ -504,8 +511,19 @@ test("minimum savings uses signed net growth across the full proposed batch", as
   expect(customData(result).estimatedSavedTokens).toBe(0);
 });
 
+test("well below the commit point, classification waits for the backlog's lead time", async () => {
+  const f = await harness({ usage: { tokens: 10_000, contextWindow: 100_000, percent: 10 } });
+  expect(await f.run()).toBeUndefined();
+  expect(f.calls).toEqual([]);
+  f.setUsage({ tokens: 46_000, contextWindow: 100_000, percent: 46 });
+  const classified = await f.run();
+  expect(f.calls).toHaveLength(1);
+  expect(customData(classified)).toMatchObject({ pendingMaskCount: 1 });
+});
+
+// 46% leaves 4k headroom: at the 2k minimum growth that is within twice one turn of classification.
 test("below half the window, decided masks stay pending until 90% context commits them without reclassifying", async () => {
-  const f = await harness({ usage: { tokens: 40_000, contextWindow: 100_000, percent: 40 } });
+  const f = await harness({ usage: { tokens: 46_000, contextWindow: 100_000, percent: 46 } });
   const decided = await f.run();
   expect(f.calls).toHaveLength(1);
   expect(edits(decided)).toEqual([]);
@@ -535,7 +553,7 @@ test("from half the window, pending masks commit only once they free a tenth of 
 });
 
 test("a pending mask lapses when its result body changes", async () => {
-  const f = await harness({ usage: { tokens: 40_000, contextWindow: 100_000, percent: 40 } });
+  const f = await harness({ usage: { tokens: 46_000, contextWindow: 100_000, percent: 46 } });
   f.commit(await f.run());
   const id = f.resultIds[0];
   if (!id) throw Error("Missing result");
@@ -545,4 +563,20 @@ test("a pending mask lapses when its result body changes", async () => {
   expect(f.calls).toHaveLength(2);
   expect(edits(result)).toHaveLength(1);
   expect(customData(result)).toMatchObject({ maskedCount: 1, pendingMaskCount: 0 });
+});
+
+test("a pressure commit waits until output beyond the request cap is classified", async () => {
+  // Each body fills its own request, so twelve bodies need three turns at four requests per turn.
+  const bodies = Array.from({ length: 12 }, (_, index) => `capped body ${index}\n` + "audit-line æøå\n".repeat(550));
+  const f = await harness({ bodies, usage: { tokens: 60_000, contextWindow: 100_000, percent: 60 } });
+  for (const turn of [1, 2]) {
+    const held = await f.run();
+    expect(f.calls).toHaveLength(turn * ROLLING_LIMITS.maxRequests);
+    expect(edits(held)).toEqual([]);
+    expect(customData(held).deferredCount).toBeGreaterThan(0);
+    f.commit(held);
+  }
+  const committed = await f.run();
+  expect(edits(committed)).toHaveLength(bodies.length);
+  expect(customData(committed)).toMatchObject({ pendingMaskCount: 0, deferredCount: 0 });
 });

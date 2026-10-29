@@ -5,11 +5,13 @@ import {
   awaitWithAbort,
   buildRollingContext,
   collectRollingCandidates,
+  classificationDue,
   commitReady,
   digestText,
   estimatedUtf8Tokens,
   packRollingRequests,
   readPendingMasks,
+  recentGrowthPerTurn,
   readRollingAssessments,
   ROLLING_LIMITS,
   validateRollingDecisions,
@@ -327,6 +329,8 @@ describe("rolling masking policy", () => {
     expect(commitReady(at(95_000), 0)).toBe(false);
     expect(commitReady(at(null), window)).toBe(false);
     expect(commitReady(undefined, window)).toBe(false);
+    expect(commitReady(at(60_000), window, true)).toBe(false);
+    expect(commitReady(at(92_000), 1, true)).toBe(true);
   });
 
   test("reads pending masks from the latest audit record only", () => {
@@ -341,6 +345,37 @@ describe("rolling masking policy", () => {
     expect(readPendingMasks(f.manager.getBranch())).toEqual(new Set([assessmentKey("entry-1", digest)]));
     f.manager.appendCustomEntry("context-masking-rolling", { version: 1, assessments: [], pendingMasks: [] });
     expect(readPendingMasks(f.manager.getBranch())).toEqual(new Set());
+  });
+
+  test("measures prompt growth per request from recent assistant usage", () => {
+    const manager = SessionManager.inMemory("/work");
+    const reply = (cacheRead: number) => manager.appendMessage({
+      role: "assistant",
+      content: [{ type: "text", text: "ok" }],
+      api: "openai-responses",
+      provider: "openai",
+      model: "m",
+      usage: { ...usage, input: 1_000, cacheRead },
+      stopReason: "stop",
+      timestamp: 0,
+    });
+    reply(9_000);
+    expect(recentGrowthPerTurn(manager.getBranch())).toBeUndefined();
+    reply(13_000);
+    reply(19_000);
+    expect(recentGrowthPerTurn(manager.getBranch())).toBe(5_000);
+  });
+
+  test("starts classifying once the backlog needs about half the turns left before the commit point", () => {
+    const at = (tokens: number | null) => ({ tokens, contextWindow: 272_000 });
+    // 136k commit point: 16k headroom at 5k growth is 3.2 turns; one turn of backlog allows 2.
+    expect(classificationDue(at(120_000), 10_000, 5_000)).toBe(false);
+    expect(classificationDue(at(120_000), 30_000, 5_000)).toBe(true);
+    expect(classificationDue(at(126_000), 10_000, 5_000)).toBe(true);
+    // Slow or shrinking growth falls back to the minimum, so a small session waits.
+    expect(classificationDue(at(40_000), 10_000, -3_000)).toBe(false);
+    expect(classificationDue(at(140_000), 4_000, undefined)).toBe(true);
+    expect(classificationDue(at(null), 4_000, 5_000)).toBe(true);
   });
 
   test("an adapter that ignores abort cannot hold the rolling hook open", async () => {

@@ -25,12 +25,14 @@ import {
   assessmentKey,
   awaitWithAbort,
   buildRollingContext,
+  classificationDue,
   collectRollingCandidates,
   commitReady,
   digestText,
   estimatedUtf8Tokens,
   packRollingRequests,
   readPendingMasks,
+  recentGrowthPerTurn,
   readRollingAssessments,
   ROLLING_LIMITS,
   validateRollingDecisions,
@@ -102,8 +104,11 @@ async function rollingBoundary(
   const pendingCandidates = collectRollingCandidates(projection, settings, assessed)
     .filter((candidate) => pendingKeys.has(assessmentKey(candidate.sourceId, candidate.bodyDigest)));
   const eligibleTokens = candidates.reduce((total, candidate) => total + candidate.estimatedTokens, 0);
-  const assess = eligibleTokens >= ROLLING_LIMITS.triggerTokens;
   const usage = ctx.getContextUsage();
+  // With a context estimate, a due backlog of any size is classified so decisions are complete at commit.
+  const minimumBacklog = usage && usage.tokens !== null ? 1 : ROLLING_LIMITS.triggerTokens;
+  const assess = eligibleTokens >= minimumBacklog &&
+    classificationDue(usage, eligibleTokens, recentGrowthPerTurn(branch));
   const estimatedSavings = (items: readonly RollingCandidate[]) => items.reduce((total, candidate) =>
     total + candidate.estimatedTokens - estimatedUtf8Tokens(placeholder(
       { entryId: candidate.sourceId, toolName: candidate.toolName, text: candidate.text },
@@ -182,7 +187,8 @@ async function rollingBoundary(
   const keptCandidates = candidates.filter((candidate) => decisions.get(candidate.sourceId) === true);
   const maskCandidates = candidates.filter((candidate) => decisions.get(candidate.sourceId) === false);
   const decidedMasks = [...pendingCandidates, ...maskCandidates];
-  const commit = commitReady(usage, estimatedSavings(decidedMasks));
+  // Candidates beyond this turn's request cap are still queued for classification.
+  const commit = commitReady(usage, estimatedSavings(decidedMasks), packed.deferred.length > 0);
   const archived = new Map<string, { candidate: RollingCandidate; item: MaskedItem }>();
   for (const candidate of commit ? decidedMasks : []) {
     if (!isFresh(signal)) return undefined;

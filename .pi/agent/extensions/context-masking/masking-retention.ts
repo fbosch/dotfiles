@@ -26,16 +26,60 @@ export const ROLLING_LIMITS = {
   commitPressureRatio: 0.5,
   commitBatchRatio: 0.1,
   forceCommitRatio: 0.9,
+  // Classify only as the commit point approaches: earlier decisions wait unused and are never revisited.
+  growthSamples: 8,
+  minGrowthTokens: 2_000,
+  classifyLeadFactor: 2,
 } as const;
 
-/** Whether decided masks freeing `savedTokens` should be committed now rather than kept pending. */
+/** Estimated tokens one turn can classify, at the per-turn request cap and bytes/4 tokens. */
+const CLASSIFIED_TOKENS_PER_TURN = (ROLLING_LIMITS.maxRequests * ROLLING_LIMITS.requestBytes) / 4;
+
+/** Average prompt growth per request since the latest compaction, or undefined without two measurements. */
+export function recentGrowthPerTurn(branch: readonly SessionEntry[]): number | undefined {
+  const prompts: number[] = [];
+  for (let index = branch.length - 1; index >= 0 && prompts.length < ROLLING_LIMITS.growthSamples; index--) {
+    const entry = branch[index];
+    if (entry?.type === "compaction") break;
+    if (entry?.type !== "message" || entry.message.role !== "assistant") continue;
+    const { input, cacheRead, cacheWrite } = entry.message.usage;
+    const prompt = input + cacheRead + cacheWrite;
+    if (prompt > 0) prompts.push(prompt);
+  }
+  const newest = prompts[0];
+  const oldest = prompts[prompts.length - 1];
+  if (newest === undefined || oldest === undefined || prompts.length < 2) return undefined;
+  return (newest - oldest) / (prompts.length - 1);
+}
+
+/** Whether to classify the unassessed backlog now so decisions are ready when the commit point arrives. */
+export function classificationDue(
+  usage: Pick<ContextUsage, "tokens" | "contextWindow"> | undefined,
+  backlogTokens: number,
+  growthPerTurn: number | undefined,
+): boolean {
+  // Without a context estimate the lead time is unknown; classify rather than risk a late backlog.
+  if (!usage || usage.tokens === null || usage.contextWindow <= 0) return true;
+  const headroom = ROLLING_LIMITS.commitPressureRatio * usage.contextWindow - usage.tokens;
+  if (headroom <= 0) return true;
+  const turnsLeft = headroom / Math.max(growthPerTurn ?? 0, ROLLING_LIMITS.minGrowthTokens);
+  const turnsNeeded = Math.ceil(backlogTokens / CLASSIFIED_TOKENS_PER_TURN);
+  return turnsLeft <= ROLLING_LIMITS.classifyLeadFactor * turnsNeeded;
+}
+
+/**
+ * Whether decided masks freeing `savedTokens` should be committed now rather than kept pending.
+ * A pressure commit waits while classifiable output is still queued, so one commit carries it all.
+ */
 export function commitReady(
   usage: Pick<ContextUsage, "tokens" | "contextWindow"> | undefined,
   savedTokens: number,
+  backlogQueued = false,
 ): boolean {
   if (!usage || usage.tokens === null || usage.contextWindow <= 0 || savedTokens <= 0) return false;
   const ratio = usage.tokens / usage.contextWindow;
   if (ratio >= ROLLING_LIMITS.forceCommitRatio) return true;
+  if (backlogQueued) return false;
   return ratio >= ROLLING_LIMITS.commitPressureRatio &&
     savedTokens >= ROLLING_LIMITS.commitBatchRatio * usage.contextWindow;
 }
