@@ -22,12 +22,15 @@ import {
   selectMasks,
 } from "./policy";
 import {
+  assessmentKey,
   awaitWithAbort,
   buildRollingContext,
   collectRollingCandidates,
+  commitReady,
   digestText,
   estimatedUtf8Tokens,
   packRollingRequests,
+  readPendingMasks,
   readRollingAssessments,
   ROLLING_LIMITS,
   validateRollingDecisions,
@@ -91,10 +94,23 @@ async function rollingBoundary(
     )) === projectionDigest;
 
   if (!isFresh(lifecycleSignal)) return undefined;
-  const assessed = readRollingAssessments(ctx.sessionManager.getBranch());
-  const candidates = collectRollingCandidates(projection, settings, assessed);
+  const branch = ctx.sessionManager.getBranch();
+  const assessed = readRollingAssessments(branch);
+  const pendingKeys = readPendingMasks(branch);
+  const candidates = collectRollingCandidates(projection, settings, new Set([...assessed, ...pendingKeys]));
+  // Pending decisions still apply only while their result keeps the same body and stays outside the protected window.
+  const pendingCandidates = collectRollingCandidates(projection, settings, assessed)
+    .filter((candidate) => pendingKeys.has(assessmentKey(candidate.sourceId, candidate.bodyDigest)));
   const eligibleTokens = candidates.reduce((total, candidate) => total + candidate.estimatedTokens, 0);
-  if (eligibleTokens < ROLLING_LIMITS.triggerTokens) return undefined;
+  const assess = eligibleTokens >= ROLLING_LIMITS.triggerTokens;
+  const usage = ctx.getContextUsage();
+  const estimatedSavings = (items: readonly RollingCandidate[]) => items.reduce((total, candidate) =>
+    total + candidate.estimatedTokens - estimatedUtf8Tokens(placeholder(
+      { entryId: candidate.sourceId, toolName: candidate.toolName, text: candidate.text },
+      join(dependencies.artifactRoot(), sessionId, `${candidate.bodyDigest}.txt`),
+    )), 0);
+  if (!assess && !commitReady(usage, estimatedSavings(pendingCandidates))) return undefined;
+  const classifiable = assess ? candidates : [];
 
   const timeout = AbortSignal.timeout(dependencies.deadlineMs ?? ROLLING_LIMITS.deadlineMs);
   const signals = [lifecycleSignal, timeout];
@@ -102,8 +118,8 @@ async function rollingBoundary(
   const signal = AbortSignal.any(signals);
   const context = buildRollingContext(projection);
   // Rule-based masks need no classifier: superseded results, and old results too large to assess.
-  const superseded = candidates.filter((candidate) => candidate.superseded);
-  const packed = packRollingRequests(context, candidates.filter((candidate) => !candidate.superseded));
+  const superseded = classifiable.filter((candidate) => candidate.superseded);
+  const packed = packRollingRequests(context, classifiable.filter((candidate) => !candidate.superseded));
   const oversizedOld = packed.oversized.filter((candidate) =>
     candidate.turnsSince >= ROLLING_LIMITS.oversizedMaskAfterTurns
   );
@@ -165,8 +181,10 @@ async function rollingBoundary(
 
   const keptCandidates = candidates.filter((candidate) => decisions.get(candidate.sourceId) === true);
   const maskCandidates = candidates.filter((candidate) => decisions.get(candidate.sourceId) === false);
+  const decidedMasks = [...pendingCandidates, ...maskCandidates];
+  const commit = commitReady(usage, estimatedSavings(decidedMasks));
   const archived = new Map<string, { candidate: RollingCandidate; item: MaskedItem }>();
-  for (const candidate of maskCandidates) {
+  for (const candidate of commit ? decidedMasks : []) {
     if (!isFresh(signal)) return undefined;
     try {
       const artifact = await awaitWithAbort(
@@ -197,9 +215,7 @@ async function rollingBoundary(
     return { candidate, item, replacement, savedTokens };
   });
   const estimatedSavedTokens = plannedMasks.reduce((total, item) => total + item.savedTokens, 0);
-  const applyMasks = estimatedSavedTokens >= ROLLING_LIMITS.minSavedTokens;
-  if (!applyMasks)
-    for (const item of plannedMasks) deferredIds.add(item.candidate.sourceId);
+  const applyMasks = commit && estimatedSavedTokens >= ROLLING_LIMITS.minSavedTokens;
 
   const edits: SessionBoundaryDraft[] = applyMasks
     ? plannedMasks.map(({ candidate, replacement }) => ({
@@ -216,13 +232,17 @@ async function rollingBoundary(
     : new Set<string>();
   const assessments = [
     ...keptCandidates,
-    ...maskCandidates.filter((candidate) => maskedIds.has(candidate.sourceId)),
+    ...decidedMasks.filter((candidate) => maskedIds.has(candidate.sourceId)),
   ].map(({ sourceId, bodyDigest }) => ({ sourceId, bodyDigest }));
-  const deferredCandidates = candidates.filter((candidate) =>
+  const pendingMasks = decidedMasks.filter((candidate) =>
+    !maskedIds.has(candidate.sourceId) && !deferredIds.has(candidate.sourceId)
+  );
+  const pendingIds = new Set(pendingMasks.map((candidate) => candidate.sourceId));
+  const deferredCandidates = candidates.filter((candidate) => !pendingIds.has(candidate.sourceId) && (
     deferredIds.has(candidate.sourceId) || !assessments.some((item) =>
       item.sourceId === candidate.sourceId && item.bodyDigest === candidate.bodyDigest
-    ),
-  );
+    )
+  ));
   const pendingTokens = deferredCandidates.reduce((total, candidate) => total + candidate.estimatedTokens, 0);
   const drafts: SessionBoundaryDraft[] = [...edits];
   if (catalogItems.length)
@@ -250,6 +270,9 @@ async function rollingBoundary(
       oversizedMaskedCount: oversizedOld.filter((candidate) => maskedIds.has(candidate.sourceId)).length,
       deferredCount: deferredCandidates.length,
       estimatedSavedTokens: applyMasks ? estimatedSavedTokens : 0,
+      pendingMaskCount: pendingMasks.length,
+      pendingMaskTokens: estimatedSavings(pendingMasks),
+      pendingMasks: pendingMasks.map(({ sourceId, bodyDigest }) => ({ sourceId, bodyDigest })),
       classifierDurationMs,
       requestCount,
       requestBytes,

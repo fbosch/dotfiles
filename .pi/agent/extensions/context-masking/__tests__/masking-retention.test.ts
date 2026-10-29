@@ -5,9 +5,11 @@ import {
   awaitWithAbort,
   buildRollingContext,
   collectRollingCandidates,
+  commitReady,
   digestText,
   estimatedUtf8Tokens,
   packRollingRequests,
+  readPendingMasks,
   readRollingAssessments,
   ROLLING_LIMITS,
   validateRollingDecisions,
@@ -313,6 +315,32 @@ describe("rolling masking policy", () => {
     expect(readRollingAssessments(f.manager.getBranch())).toEqual(
       new Set([assessmentKey(candidate.sourceId, candidate.bodyDigest)]),
     );
+  });
+
+  test("commits under context pressure only for a large batch, or for any saving at 90%", () => {
+    const window = 100_000;
+    const at = (tokens: number | null) => ({ tokens, contextWindow: window });
+    expect(commitReady(at(49_999), window)).toBe(false);
+    expect(commitReady(at(50_000), 9_999)).toBe(false);
+    expect(commitReady(at(50_000), 10_000)).toBe(true);
+    expect(commitReady(at(90_000), 1)).toBe(true);
+    expect(commitReady(at(95_000), 0)).toBe(false);
+    expect(commitReady(at(null), window)).toBe(false);
+    expect(commitReady(undefined, window)).toBe(false);
+  });
+
+  test("reads pending masks from the latest audit record only", () => {
+    const f = session();
+    const digest = digestText("body");
+    expect(readPendingMasks(f.manager.getBranch())).toEqual(new Set());
+    f.manager.appendCustomEntry("context-masking-rolling", {
+      version: 1,
+      assessments: [],
+      pendingMasks: [{ sourceId: "entry-1", bodyDigest: digest }],
+    });
+    expect(readPendingMasks(f.manager.getBranch())).toEqual(new Set([assessmentKey("entry-1", digest)]));
+    f.manager.appendCustomEntry("context-masking-rolling", { version: 1, assessments: [], pendingMasks: [] });
+    expect(readPendingMasks(f.manager.getBranch())).toEqual(new Set());
   });
 
   test("an adapter that ignores abort cannot hold the rolling hook open", async () => {

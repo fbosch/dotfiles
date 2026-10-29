@@ -72,7 +72,9 @@ This experimental mode sends complete eligible tool text and bounded conversatio
 
 Rolling masking starts when unassessed eligible text reaches 4,000 estimated tokens, measured as UTF-8 bytes divided by four. It uses `protectRecentTurns` and `minResultChars`, not `triggerRatio` or `minFreedRatio`. Recent results, incomplete tool cycles, images, and unresolved tool errors stay verbatim. A later success resolves an error only when both the tool name and arguments match.
 
-Each classifier request contains complete candidate bodies. History is bounded to 12,000 bytes and each request to 24,000 bytes. A turn allows at most four requests within one 60-second deadline, without retries. Oversized or ambiguous input stays visible. Invalid verdicts, missing models, failures, aborts, and stale session results do not authorize masking. Only a valid keep probability below `0.35` can select a result, and a batch must save at least 100 estimated tokens.
+Each classifier request contains complete candidate bodies. History is bounded to 12,000 bytes and each request to 24,000 bytes. A turn allows at most four requests within one 60-second deadline, without retries. Oversized or ambiguous input stays visible. Invalid verdicts, missing models, failures, aborts, and stale session results do not authorize masking. Only a valid keep probability below `0.35` can select a result.
+
+Selected results are not hidden immediately. Each hidden result changes history, and the provider then has to rebuild its cached prompt from the earliest changed result onward, so selections wait as pending masks. Pending masks are committed together when Pi's context estimate reaches 50% of the context window and they would free at least 10% of the window. From 90% they are committed regardless of size. A committed batch must also save at least 100 estimated tokens. Pending masks are not reclassified. A pending mask is dropped when its result's text changes; the changed text is assessed again like any new result.
 
 Exact originals are saved before edits and remain available through the existing catalog, `recall`, and `read`. Kept assessments follow the current branch history and body digest rather than being repeated each turn. This avoids repeated classification, but a task change alone does not reconsider old retained text. Deferred text remains visible and counts toward the pending backlog.
 
@@ -81,11 +83,12 @@ Exact originals are saved before edits and remain available through the existing
 Rolling metadata lives in `context-masking-rolling` custom session entries:
 
 - `eligibleTokens` and `pendingTokens` estimate the unassessed backlog before and after the batch. Visible text that was already assessed and kept is not pending backlog.
-- `assessedCount`, `keptCount`, `maskedCount`, `deferredCount`, and `estimatedSavedTokens` describe the batch outcome.
+- `assessedCount`, `keptCount`, `maskedCount`, `deferredCount`, and `estimatedSavedTokens` describe the batch outcome. `maskedCount` and `estimatedSavedTokens` count committed masks only.
+- `pendingMasks`, `pendingMaskCount`, and `pendingMaskTokens` describe selected masks still waiting for context pressure. The latest record holds the complete pending set.
 - `requestCount` and `requestBytes` record classifier calls and their total serialized input size, not full network traffic. `classifierDurationMs` measures classification, not the whole turn.
 - `usage.status` distinguishes reported classifier usage from unavailable usage. Main-model cache behavior comes from normal model usage, not this audit.
 
-These records describe committed batches. Aborted or stale attempts may leave no rolling audit record; include their elapsed time in user-visible latency measurements.
+These records describe batches that were classified or committed. A boundary that neither classifies nor commits leaves no record. Aborted or stale attempts may also leave no rolling audit record; include their elapsed time in user-visible latency measurements.
 
 Use fresh sessions with the same chat model, workload, protected window, and compaction settings. Disabling `rollingEnabled` stops future rolling batches; it does not undo committed placeholders. Existing originals remain recoverable.
 

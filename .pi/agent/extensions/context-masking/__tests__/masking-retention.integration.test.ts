@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 import {
   convertToLlm,
+  type ContextUsage,
   SessionManager,
   type BeforeAgentStartEvent,
   type BeforeAgentStartEventResult,
@@ -81,6 +82,7 @@ async function harness(options: {
   deadlineMs?: number;
   longRoot?: boolean;
   archiveFailure?: boolean;
+  usage?: ContextUsage;
 } = {}) {
   const root = await mkdtemp(join(tmpdir(), "rolling-mask-integration-"));
   roots.push(root);
@@ -100,6 +102,8 @@ async function harness(options: {
   }
   let manager = fixture.manager;
   const controller = new AbortController();
+  // Default to forced-commit pressure so selection and archiving tests commit immediately.
+  let usage: ContextUsage = options.usage ?? { tokens: 95_000, contextWindow: 100_000, percent: 95 };
   const calls: RollingClassifierRequest[] = [];
   const handlers = new Map<string, unknown>();
   const pi = {
@@ -135,7 +139,7 @@ async function harness(options: {
     signal: controller.signal,
     get sessionManager() { return manager; },
     modelRegistry: { getModelOfType: () => undefined },
-    getContextUsage: () => undefined,
+    getContextUsage: () => usage,
   } as unknown as ExtensionContext;
 
   function appendDraft(target: SessionManager, entry: SessionBoundaryDraft) {
@@ -195,6 +199,7 @@ async function harness(options: {
     get manager() { return manager; },
     resultIds: fixture.resultIds,
     switchSession() { manager = SessionManager.inMemory("/other"); },
+    setUsage(next: ContextUsage) { usage = next; },
   };
 }
 
@@ -497,4 +502,47 @@ test("minimum savings uses signed net growth across the full proposed batch", as
   expect(f.calls.length).toBeLessThanOrEqual(ROLLING_LIMITS.maxRequests);
   expect(edits(result)).toEqual([]);
   expect(customData(result).estimatedSavedTokens).toBe(0);
+});
+
+test("below half the window, decided masks stay pending until 90% context commits them without reclassifying", async () => {
+  const f = await harness({ usage: { tokens: 40_000, contextWindow: 100_000, percent: 40 } });
+  const decided = await f.run();
+  expect(f.calls).toHaveLength(1);
+  expect(edits(decided)).toEqual([]);
+  expect(customData(decided)).toMatchObject({ maskedCount: 0, pendingMaskCount: 1, deferredCount: 0 });
+  f.commit(decided);
+
+  expect(await f.run()).toBeUndefined();
+  f.setUsage({ tokens: 92_000, contextWindow: 100_000, percent: 92 });
+  const forced = await f.run();
+  expect(f.calls).toHaveLength(1);
+  expect(edits(forced)).toHaveLength(1);
+  expect(customData(forced)).toMatchObject({ maskedCount: 1, pendingMaskCount: 0, requestCount: 0 });
+  f.commit(forced);
+  expect(await f.run()).toBeUndefined();
+});
+
+test("from half the window, pending masks commit only once they free a tenth of it", async () => {
+  const small = await harness({ usage: { tokens: 60_000, contextWindow: 100_000, percent: 60 } });
+  const held = await small.run();
+  expect(edits(held)).toEqual([]);
+  expect(customData(held)).toMatchObject({ pendingMaskCount: 1 });
+
+  const large = await harness({ usage: { tokens: 15_000, contextWindow: 30_000, percent: 50 } });
+  const committed = await large.run();
+  expect(edits(committed)).toHaveLength(1);
+  expect(customData(committed)).toMatchObject({ maskedCount: 1, pendingMaskCount: 0 });
+});
+
+test("a pending mask lapses when its result body changes", async () => {
+  const f = await harness({ usage: { tokens: 40_000, contextWindow: 100_000, percent: 40 } });
+  f.commit(await f.run());
+  const id = f.resultIds[0];
+  if (!id) throw Error("Missing result");
+  f.manager.appendContextEdit(id, { content: [{ type: "text", text: body + "changed\n" }] });
+  f.setUsage({ tokens: 92_000, contextWindow: 100_000, percent: 92 });
+  const result = await f.run();
+  expect(f.calls).toHaveLength(2);
+  expect(edits(result)).toHaveLength(1);
+  expect(customData(result)).toMatchObject({ maskedCount: 1, pendingMaskCount: 0 });
 });

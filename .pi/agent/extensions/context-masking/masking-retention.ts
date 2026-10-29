@@ -1,6 +1,7 @@
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import type {
+  ContextUsage,
   ModelRuntime,
   ProjectedSessionEntry,
   SessionEntry,
@@ -20,7 +21,24 @@ export const ROLLING_LIMITS = {
   keepProbabilityCutoff: 0.35,
   // Results too large for one classifier request are masked by rule once this many turns old.
   oversizedMaskAfterTurns: 6,
+  // Committing a mask rewrites history, so the provider rebuilds its cached prompt after the
+  // earliest edit. Replays of logged sessions favoured few large commits under context pressure.
+  commitPressureRatio: 0.5,
+  commitBatchRatio: 0.1,
+  forceCommitRatio: 0.9,
 } as const;
+
+/** Whether decided masks freeing `savedTokens` should be committed now rather than kept pending. */
+export function commitReady(
+  usage: Pick<ContextUsage, "tokens" | "contextWindow"> | undefined,
+  savedTokens: number,
+): boolean {
+  if (!usage || usage.tokens === null || usage.contextWindow <= 0 || savedTokens <= 0) return false;
+  const ratio = usage.tokens / usage.contextWindow;
+  if (ratio >= ROLLING_LIMITS.forceCommitRatio) return true;
+  return ratio >= ROLLING_LIMITS.commitPressureRatio &&
+    savedTokens >= ROLLING_LIMITS.commitBatchRatio * usage.contextWindow;
+}
 
 export async function awaitWithAbort<T>(
   operation: Promise<T>,
@@ -489,4 +507,25 @@ export function readRollingAssessments(branch: readonly SessionEntry[]): Set<str
       assessed.add(assessmentKey(item.sourceId, item.bodyDigest));
   }
   return assessed;
+}
+
+const PendingPattern = {
+  version: 1,
+  pendingMasks: P.array(AssessmentPattern),
+};
+
+/** Mask decisions not yet committed. Each committed audit entry snapshots the full pending set. */
+export function readPendingMasks(branch: readonly SessionEntry[]): Set<string> {
+  for (let index = branch.length - 1; index >= 0; index--) {
+    const entry = branch[index];
+    if (
+      entry?.type !== "custom" ||
+      entry.customType !== "context-masking-rolling" ||
+      !isMatching(AuditPattern, entry.data)
+    )
+      continue;
+    if (!isMatching(PendingPattern, entry.data)) return new Set();
+    return new Set(entry.data.pendingMasks.map((item) => assessmentKey(item.sourceId, item.bodyDigest)));
+  }
+  return new Set();
 }
