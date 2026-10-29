@@ -170,7 +170,7 @@
     "npm:pi-context-view@0.8.1",
     "npm:@ff-labs/pi-fff@0.11.0",
     "npm:pi-web-access@0.46.0",
-    "npm:pi-lens@4.4.6",
+    "npm:pi-lens@4.4.7",
     "npm:pi-compaction-model@0.1.0",
     "npm:pi-codemode-compact@0.5.0",
     "npm:pi-claude-bridge@0.9.3"
@@ -218,6 +218,7 @@
     "{\"source\":\"npm:pi-codex-goal@latest\",\"scope\":\"user\"}": "0.6.1",
     "{\"source\":\"npm:pi-web-access@0.45.0\",\"scope\":\"user\"}": "0.45.0",
     "{\"source\":\"npm:pi-lens@4.4.6\",\"scope\":\"user\"}": "4.4.6",
-    "{\"source\":\"npm:pi-web-access@0.46.0\",\"scope\":\"user\"}": "0.46.0"
+    "{\"source\":\"npm:pi-web-access@0.46.0\",\"scope\":\"user\"}": "0.46.0",
+    "{\"source\":\"npm:pi-lens@4.4.7\",\"scope\":\"user\"}": "4.4.7"
   }
 }
