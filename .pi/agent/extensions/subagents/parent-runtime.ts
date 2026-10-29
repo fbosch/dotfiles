@@ -13,7 +13,7 @@ export interface ParentLaunch extends AssignmentOverrides {
 export type ParentInspection =
   | { mode: "status"; workerId?: string }
   | { mode: "report"; workerId: string; assignmentId?: string }
-  | { mode: "transcript"; workerId: string; assignmentId?: string; offset?: number; limit?: number }
+  | { mode: "transcript"; workerId: string; assignmentId?: string; offset?: number; limit?: number; textOffset?: number }
   | { mode: "wait"; workerId: string; assignmentId: string; timeoutMs?: number };
 
 export type ParentControl =
@@ -81,11 +81,12 @@ export class ParentRuntime {
       .with({ mode: "report" }, ({ workerId, assignmentId }) =>
         this.delivery.report(workerId, assignmentId),
       )
-      .with({ mode: "transcript" }, ({ workerId, assignmentId, offset, limit }) =>
+      .with({ mode: "transcript" }, ({ workerId, assignmentId, offset, limit, textOffset }) =>
         this.delivery.transcript(workerId, {
           ...(assignmentId === undefined ? {} : { assignmentId }),
           ...(offset === undefined ? {} : { offset }),
           ...(limit === undefined ? {} : { limit }),
+          ...(textOffset === undefined ? {} : { textOffset }),
         }),
       )
       .with({ mode: "wait" }, ({ workerId, assignmentId, timeoutMs }) =>

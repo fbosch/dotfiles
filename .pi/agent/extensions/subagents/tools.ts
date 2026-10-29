@@ -42,6 +42,10 @@ const inspection = Type.Union([
     workerId: id,
     assignmentId: Type.Optional(id),
     offset: Type.Optional(Type.Integer({ minimum: 0 })),
+    textOffset: Type.Optional(Type.Integer({
+      minimum: 0,
+      description: "UTF-16 text offset within the entry at offset; use the previous page nextTextOffset.",
+    })),
     limit: Type.Optional(Type.Integer({ minimum: 1, maximum: 500 })),
   }),
   Type.Object({
@@ -201,7 +205,7 @@ export function registerParentTools(
     name: "subagent_result",
     label: "Inspect specialist",
     description:
-      "Inspect parent-owned worker status, retrieve a complete report, or read a bounded transcript page. Background workers send completion notifications; normally return control instead of waiting. Use wait only for explicitly synchronous workflows: it blocks the parent turn and delays handling queued user messages. Interrupting or timing out a wait does not cancel the worker.",
+      "Inspect parent-owned worker status, retrieve a complete report, or read a transcript page capped at 48,000 JSON bytes. To continue, pass nextOffset as offset and nextTextOffset as textOffset. Background workers send completion notifications; normally return control instead of waiting. Use wait only for explicitly synchronous workflows: it blocks the parent turn and delays handling queued user messages. Interrupting or timing out a wait does not cancel the worker.",
     parameters: Type.Object({ request: inspection }),
     renderShell: "self",
     renderCall: (args, theme, context) => {

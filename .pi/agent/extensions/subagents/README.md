@@ -79,7 +79,9 @@ Inspect with `subagent_result`:
 {"request":{"mode":"transcript","workerId":"<worker-id>","offset":0,"limit":100}}
 ```
 
-Omit `workerId` only for the status list. Status excludes report text, configuration prompts, and investigation transcripts. Report retrieval returns the complete report without a summarizer or arbitrary character cap. Transcript pages accept 1–500 entries and return `nextOffset` when more entries remain.
+Omit `workerId` only for the status list. Status excludes report text, configuration prompts, and investigation transcripts. Report retrieval returns the complete report without a summarizer or arbitrary character cap.
+
+Transcript pages accept 1–500 entries and cap the serialized JSON response at 48,000 bytes. Oversized entries span pages without changing the stored transcript. To continue, pass `nextOffset` as `offset` and `nextTextOffset` as `textOffset`, defaulting an absent `nextTextOffset` to zero. `textOffset` counts UTF-16 code units within the entry at `offset`; returned boundaries never split a surrogate pair. Stop when `nextOffset` is absent.
 
 Background completion sends a structural receipt, not the report body. A foreground result or explicit wait returns available full evidence and consumes the concurrent completion notice. A timeout or interrupted background wait leaves its worker alive and preserves later notice delivery. A report is worker evidence, not a verified conclusion.
 

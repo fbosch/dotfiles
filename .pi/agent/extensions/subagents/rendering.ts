@@ -135,7 +135,7 @@ function structuredLines(
       preview(entries || "No transcript entries", expanded, theme) +
       (data.nextOffset === undefined
         ? ""
-        : theme.fg("dim", `\n  More transcript entries at offset ${data.nextOffset}`))
+        : theme.fg("dim", `\n  Continue transcript at offset ${data.nextOffset}${data.nextTextOffset === undefined ? "" : `, textOffset ${data.nextTextOffset}`}`))
     );
   }
   const interpretation = interpretProjectedResult(data);

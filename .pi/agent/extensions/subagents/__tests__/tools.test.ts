@@ -46,12 +46,14 @@ test("inspection schema distinguishes lightweight status, report retrieval, and 
   expect(Value.Check(schema, { request: { mode: "report", workerId: "worker" } })).toBe(true);
   expect(
     Value.Check(schema, {
-      request: { mode: "transcript", workerId: "worker", offset: 2, limit: 500 },
+      request: { mode: "transcript", workerId: "worker", offset: 2, limit: 500, textOffset: 123 },
     }),
   ).toBe(true);
   expect(
     Value.Check(schema, { request: { mode: "transcript", workerId: "worker", limit: 501 } }),
   ).toBe(false);
+  for (const textOffset of [-1, 0.5])
+    expect(Value.Check(schema, { request: { mode: "transcript", workerId: "worker", textOffset } })).toBe(false);
   expect(Value.Check(schema, { request: { mode: "wait", workerId: "worker" } })).toBe(false);
 });
 

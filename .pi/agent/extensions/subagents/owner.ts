@@ -25,6 +25,7 @@ import {
   type WorkerStatus,
 } from "./lifecycle";
 import type { ResolvedSpecialist } from "./specialist";
+import { transcriptPage } from "./transcript-page";
 
 export type { AssignmentOutcome, LiveSessionAvailability, WorkerStatus } from "./lifecycle";
 
@@ -259,6 +260,8 @@ export interface TranscriptPage {
   readonly entries: readonly TranscriptEntry[];
   readonly offset: number;
   readonly nextOffset?: number;
+  readonly textOffset?: number;
+  readonly nextTextOffset?: number;
 }
 
 export interface WorkerOwnerOptions {
@@ -321,7 +324,6 @@ interface ActiveSegment {
 }
 
 const DEFAULT_CAPACITY = 6;
-const MAX_TRANSCRIPT_PAGE = 500;
 
 function positiveSafeInteger(value: number, label: string): void {
   if (!Number.isSafeInteger(value) || value < 1)
@@ -483,6 +485,7 @@ export class WorkerOwner {
       readonly assignmentId?: AssignmentId;
       readonly offset?: number;
       readonly limit?: number;
+      readonly textOffset?: number;
     } = {},
   ): TranscriptPage {
     const worker = this.requireWorker(workerId);
@@ -490,23 +493,7 @@ export class WorkerOwner {
       worker,
       options.assignmentId ?? worker.currentAssignmentId,
     );
-    const offset = options.offset ?? 0;
-    const limit = options.limit ?? 100;
-    if (!Number.isSafeInteger(offset) || offset < 0)
-      throw new Error("transcript offset must be a non-negative safe integer");
-    if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_TRANSCRIPT_PAGE) {
-      throw new Error(`transcript limit must be between 1 and ${MAX_TRANSCRIPT_PAGE}`);
-    }
-    const entries = assignment.transcript
-      .slice(offset, offset + limit)
-      .map((entry) => Object.freeze({ ...entry }));
-    return Object.freeze({
-      entries: Object.freeze(entries),
-      offset,
-      ...(offset + entries.length < assignment.transcript.length
-        ? { nextOffset: offset + entries.length }
-        : {}),
-    });
+    return transcriptPage(assignment.transcript, options.offset, options.limit, options.textOffset);
   }
 
   wait(

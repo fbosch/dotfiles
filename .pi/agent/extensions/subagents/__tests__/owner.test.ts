@@ -137,6 +137,42 @@ function completed(turnsUsed: number, report = "done"): ChildExecutionOutcome {
   return { kind: "completed", turnsUsed, report };
 }
 
+test("transcript pages bound serialized bytes and recover oversized entries without changing evidence", async () => {
+  const { owner, driver, persistence } = setup();
+  const original = [
+    "small entry",
+    ('æøå 😀 "\\\\\\n\\u0000').repeat(35_000),
+    "last entry",
+  ];
+  driver.startBehavior = (_input, callbacks) => {
+    for (const text of original) callbacks.onTranscript({ role: "tool", text });
+    return Promise.resolve({ kind: "completed", turnsUsed: 1, report: "done" });
+  };
+  const launched = await owner.launch({ config: config(), prompt: "Investigate" });
+  await owner.wait(launched.workerId, launched.assignmentId);
+  const recovered = original.map(() => "");
+  let cursor = { offset: 0, textOffset: 0 };
+  let pages = 0;
+  while (true) {
+    const page = owner.transcript(launched.workerId, { ...cursor, limit: 80 });
+    expect(Buffer.byteLength(JSON.stringify(page))).toBeLessThanOrEqual(48_000);
+    expect(page.entries.length).toBeGreaterThan(0);
+    page.entries.forEach((entry, index) => {
+      expect(Buffer.from(entry.text).toString("utf8")).toBe(entry.text);
+      recovered[page.offset + index] += entry.text;
+    });
+    pages++;
+    expect(pages).toBeLessThan(200);
+    if (page.nextOffset === undefined) break;
+    cursor = { offset: page.nextOffset, textOffset: page.nextTextOffset ?? 0 };
+  }
+  expect(pages).toBeGreaterThan(2);
+  expect(recovered).toEqual(original);
+  expect(owner.inspect(launched.workerId).assignments[0]?.transcript.map(entry => entry.text)).toEqual(original);
+  expect(persistence.evidence.at(-1)?.transcript.map(entry => entry.text)).toEqual(original);
+  await owner.shutdown();
+});
+
 test("queues the seventh launch behind the shared six-slot FIFO capacity", async () => {
   const { owner, driver } = setup();
   const active = Array.from({ length: 7 }, () => deferred<ChildExecutionOutcome>());

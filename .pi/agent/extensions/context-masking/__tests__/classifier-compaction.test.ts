@@ -500,11 +500,16 @@ test("compaction hook uses real session projection and preserves cut boundary, u
   expect(records).toContainEqual(expect.objectContaining({ type: "context-masking" }));
   expect(records).toContainEqual(expect.objectContaining({ type: CLASSIFIER_CHECKPOINT }));
   expect(fallbackCalls).toHaveLength(0);
-  // Archive failure must cancel; request-budget failure must preserve the native fallback boundary.
   maxTotalArtifactBytes = 1;
-  expect(await handler(event, ctx)).toEqual({ cancel: true });
-  expect(fallbackCalls).toHaveLength(0);
-  expect(notices.at(-1)).toBe("Compaction cancelled: the conversation archive byte limit was exceeded.");
+  const archiveFallback = await handler(event, ctx);
+  expect(archiveFallback?.compaction?.summary).toBe("Configured fallback");
+  expect(fallbackCalls).toHaveLength(1);
+  expect(fallbackCalls[0]?.[0]).toBe(preparation);
+  expect(fallbackCalls[0]?.[1]).toBe(fallbackModel);
+  expect(fallbackCalls[0]?.[5]).toBe(event.signal);
+  expect(fallbackCalls[0]?.[6]).toBe("xhigh");
+  expect(notices.at(-1)).toBe("Classifier compaction fell back: conversation-archive-limit.");
+  fallbackCalls.length = 0;
   maxTotalArtifactBytes = settings.maxTotalArtifactBytes;
   expect(await handler({
     ...event,

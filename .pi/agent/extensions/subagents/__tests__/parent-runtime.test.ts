@@ -101,6 +101,33 @@ function launched(result: Awaited<ReturnType<ParentRuntime["launch"]>>) {
   return result;
 }
 
+test("transcript inspection forwards the within-entry continuation cursor", async () => {
+  const f = await fixture();
+  const receipt = launched(await f.runtime.launch({ specialist: "fixture", prompt: "Inspect" }));
+  const run = f.runs.get(receipt.workerId);
+  if (!run) throw new Error("Expected running worker");
+  const original = "æøå😀".repeat(60_000);
+  run.callbacks.onTranscript({ role: "tool", text: original });
+  run.finish(done);
+  await f.owner.wait(receipt.workerId, receipt.assignmentId);
+  const first = await f.runtime.inspect({ mode: "transcript", workerId: receipt.workerId, limit: 1 });
+  if (typeof first !== "object" || first === null || Array.isArray(first) || !("entries" in first))
+    throw new Error("Expected transcript page");
+  expect(first.nextOffset).toBe(0);
+  expect(first.nextTextOffset).toBeGreaterThan(0);
+  if (first.nextOffset === undefined || first.nextTextOffset === undefined)
+    throw new Error("Expected within-entry continuation cursor");
+  const second = await f.runtime.inspect({
+    mode: "transcript", workerId: receipt.workerId, assignmentId: receipt.assignmentId,
+    offset: first.nextOffset, textOffset: first.nextTextOffset, limit: 1,
+  });
+  if (typeof second !== "object" || second === null || Array.isArray(second) || !("entries" in second))
+    throw new Error("Expected continuation page");
+  expect(second.textOffset).toBe(first.nextTextOffset);
+  expect(second.entries[0]?.text).toBe(original.slice(second.textOffset, second.nextTextOffset));
+  expect(Buffer.byteLength(JSON.stringify(second))).toBeLessThanOrEqual(48_000);
+});
+
 test("reading settled partial evidence acknowledges only that assignment and refreshes presentation", async () => {
   const f = await fixture();
   const first = launched(await f.runtime.launch({ specialist: "fixture", prompt: "First" }));

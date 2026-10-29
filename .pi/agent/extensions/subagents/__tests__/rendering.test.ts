@@ -63,6 +63,15 @@ const worker = {
   assignments: [assignment],
 };
 
+test("transcript cards show both continuation coordinates for a partial entry", () => {
+  const card = result({
+    entries: [{ role: "tool", text: "æøå evidence", timestamp: 0 }],
+    offset: 2, nextOffset: 2, nextTextOffset: 47000,
+  }, true);
+  expect(plain(card)).toContain("æøå evidence");
+  expect(plain(card)).toContain("Continue transcript at offset 2, textOffset 47000");
+});
+
 test("tool call cards use the specialist name and compact task, not argument JSON", () => {
   const appearance = new Map([
     [
