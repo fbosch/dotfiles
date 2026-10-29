@@ -33,6 +33,16 @@ describe("matched rolling-mask schedules", () => {
     expect(shouldAssess("token-budget", 19, at19)).toBe(true);
     expect(shouldAssess("ten-turn", 20, at19)).toBe(true);
     expect(shouldAssess("token-budget", 20, [])).toBe(false);
+    // The pressure arm waits until the 50% commit point is close, then classifies any backlog.
+    const half = CADENCE_SETTINGS.contextWindow / 2;
+    expect(shouldAssess("pressure", 19, at19, { contextTokens: half - 10_000, growthPerTurn: 500 })).toBe(false);
+    expect(shouldAssess("pressure", 19, at19, { contextTokens: half - 3_000, growthPerTurn: 500 })).toBe(true);
+    // Past the commit point, a small backlog waits until held masks could complete a batch.
+    expect(shouldAssess("pressure", 19, at19.slice(0, 1), { contextTokens: half, growthPerTurn: undefined })).toBe(false);
+    expect(shouldAssess("pressure", 19, at19.slice(0, 1), {
+      contextTokens: half, growthPerTurn: undefined, heldSavedTokens: CADENCE_SETTINGS.contextWindow / 10,
+    })).toBe(true);
+    expect(() => shouldAssess("pressure", 19, at19)).toThrow("context estimate");
   });
 
   test("protects pins and unresolved errors; only an exact successful retry releases failure", () => {
@@ -89,7 +99,7 @@ describe("matched rolling-mask schedules", () => {
 
   test("offline paired replay preserves originals and does not fabricate live measurements", async () => {
     const result = await runCadenceComparison(await temporary());
-    expect(result.rows).toHaveLength(6);
+    expect(result.rows).toHaveLength(9);
     for (const row of result.rows) {
       expect(row.complete && row.originalsPreserved).toBe(true);
       expect(row.calls).toEqual([]);
@@ -106,6 +116,16 @@ describe("matched rolling-mask schedules", () => {
     const tokens = result.rows.find(row => row.seed === "cadence-2" && row.arm === "token-budget");
     expect(fixed?.batches.map(batch => batch.turn)).toEqual([20, 30]);
     expect(tokens?.batches.some(batch => batch.turn < 20)).toBe(true);
+    // Pressure masks are decided before they are committed, and committed only once half the window is used.
+    const small = result.rows.find(row => row.seed === "cadence-1" && row.arm === "pressure");
+    expect(small?.commits).toEqual([]);
+    expect(small?.heldMasks).toBeGreaterThan(0);
+    const pressure = result.rows.find(row => row.seed === "cadence-2" && row.arm === "pressure");
+    if (!pressure) throw Error("Missing pressure row");
+    expect(pressure.commits.length).toBeGreaterThan(0);
+    for (const record of pressure.commits)
+      for (const id of record.masked)
+        expect(pressure.batches.some(batch => batch.turn <= record.turn && batch.masked.includes(id))).toBe(true);
     expect(result.summary.every(summary => summary.usage === null && summary.total === 0)).toBe(true);
   });
 

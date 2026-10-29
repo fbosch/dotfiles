@@ -4,6 +4,7 @@ import { join } from "node:path";
 import type { AssistantMessage, Context, Usage } from "@earendil-works/pi-ai";
 import { convertToLlm, getAgentDir, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { commitReady } from "../extensions/context-masking/masking-retention";
 import { placeholder } from "../extensions/context-masking/policy";
 import {
   CADENCE_ARMS, CADENCE_SETTINGS, eligibleObservations, hash, historySnapshot,
@@ -11,7 +12,8 @@ import {
   type CadenceArm, type CadenceFixture, type Observation,
 } from "./context-masking-cadence-policy";
 
-export const CADENCE_LIMITS = { campaignMs: 900_000, requestMs: 60_000, classifierCalls: 80, modelCalls: 54, recallsPerProbe: 2 };
+// Sized for three arms: each arm may use the per-arm budget of the earlier two-arm protocol.
+export const CADENCE_LIMITS = { campaignMs: 1_350_000, requestMs: 60_000, classifierCalls: 120, modelCalls: 81, recallsPerProbe: 2 };
 // Disable hidden SDK retries so one recorded invocation cannot expand into unrecorded retry attempts.
 export const CADENCE_PROVIDER_OPTIONS = { maxRetries: 0 } as const;
 export function cacheSessionId(context: Context): string {
@@ -30,11 +32,13 @@ export interface CadenceAdapters {
 }
 interface RecordedCall { kind: "classifier" | "model"; ms: number; requestBytes: number; usage?: Usage; error?: string }
 interface MaskBatch { turn: number; snapshotHash: string; candidates: string[]; kept: string[]; masked: string[]; deferred: string[]; estimatedSavedTokens: number }
+/** Masks written into history. The pressure arm decides masks in batches but commits them later, together. */
+interface CommitRecord { turn: number; masked: string[]; estimatedSavedTokens: number }
 interface ProbeRow { turn: number; estimatedContextTokens: number; calls: number; recalls: number; recallsServed: number; ms?: number; score?: ReturnType<typeof scoreProbe>; failure?: string }
 export interface CadenceRow {
   seed: string; workload: string; arm: CadenceArm; fixtureHash: string; complete: boolean;
-  batches: MaskBatch[]; probes: ProbeRow[]; calls: RecordedCall[];
-  originalsPreserved: boolean; pendingEligibleTokens: number; maskedOutputs: number;
+  batches: MaskBatch[]; commits: CommitRecord[]; probes: ProbeRow[]; calls: RecordedCall[];
+  originalsPreserved: boolean; pendingEligibleTokens: number; maskedOutputs: number; heldMasks: number;
 }
 interface Archive { path: string; digest: string; observation: Observation; entryId: string }
 const historyAssistant = (id: string, tool: string, args: Record<string, string>): AssistantMessage => ({
@@ -136,7 +140,18 @@ export async function runCadenceRow(root: string, seedIndex: number, arm: Cadenc
   await mkdir(directory, { recursive: true, mode: 0o700 });
   const manager = SessionManager.inMemory(directory), seen: Observation[] = [], assessed = new Set<string>(), masked = new Set<string>(), archives = new Map<string, Archive>();
   const row: CadenceRow = { seed: fixture.seed, workload: fixture.workload, arm, fixtureHash: hash(JSON.stringify(fixture)), complete: false,
-    batches: [], probes: [], calls: [], originalsPreserved: false, pendingEligibleTokens: 0, maskedOutputs: 0 };
+    batches: [], commits: [], probes: [], calls: [], originalsPreserved: false, pendingEligibleTokens: 0, maskedOutputs: 0, heldMasks: 0 };
+  type Replacement = { observation: Observation; archive: Archive; text: string; saved: number };
+  const held: Replacement[] = [], contexts: number[] = [];
+  const commit = (replacements: readonly Replacement[], turn: number) => {
+    const record: CommitRecord = { turn, masked: [], estimatedSavedTokens: 0 };
+    for (const replacement of replacements) {
+      manager.appendContextEdit(replacement.archive.entryId, { content: [{ type: "text", text: replacement.text }] });
+      masked.add(replacement.observation.id); record.masked.push(replacement.observation.id); record.estimatedSavedTokens += replacement.saved;
+    }
+    row.commits.push(record);
+    return record;
+  };
   manager.appendMessage({ role: "user", content: fixture.goal, timestamp: 0 });
   try {
     for (const step of fixture.turns) {
@@ -151,7 +166,14 @@ export async function runCadenceRow(root: string, seedIndex: number, arm: Cadenc
       await writeFile(path, observation.text, { flag: "wx", mode: 0o600 });
       archives.set(observation.id, { path, digest: hash(observation.text), observation, entryId });
       const candidates = eligibleObservations(seen, step.number, assessed);
-      if (shouldAssess(arm, step.number, candidates)) {
+      const contextTokens = textTokens(JSON.stringify(manager.buildSessionProjection().entries.flatMap(entry => entry.messages)));
+      contexts.push(contextTokens);
+      const recent = contexts.slice(-CADENCE_SETTINGS.growthSamples);
+      const oldest = recent[0], newest = recent[recent.length - 1];
+      const growthPerTurn = recent.length >= 2 && oldest !== undefined && newest !== undefined
+        ? (newest - oldest) / (recent.length - 1) : undefined;
+      const heldSavedTokens = held.reduce((sum, replacement) => sum + replacement.saved, 0);
+      if (shouldAssess(arm, step.number, candidates, { contextTokens, growthPerTurn, heldSavedTokens })) {
         const snapshot = historySnapshot(fixture, step.number), { groups, deferred } = packAssessments(snapshot, candidates);
         const batch: MaskBatch = { turn: step.number, snapshotHash: hash(JSON.stringify(snapshot)), candidates: candidates.map(candidate => candidate.id), kept: [], masked: [], deferred, estimatedSavedTokens: 0 };
         row.batches.push(batch);
@@ -167,23 +189,32 @@ export async function runCadenceRow(root: string, seedIndex: number, arm: Cadenc
             if (decisions.get(candidate.id)) batch.kept.push(candidate.id); else masks.push(candidate);
           }
         }
-        const replacements = masks.map(observation => {
+        const replacements = masks.map((observation): Replacement => {
           const archive = archives.get(observation.id);
           if (!archive) throw Error("Candidate archive missing");
           const text = placeholder({ entryId: observation.id, toolName: observation.tool, text: observation.text }, archive.path);
           return { observation, archive, text, saved: textTokens(observation.text) - textTokens(text) };
         });
-        const savings = replacements.reduce((sum, replacement) => sum + replacement.saved, 0);
-        if (savings >= CADENCE_SETTINGS.minBatchSavedTokens) for (const replacement of replacements) {
-          manager.appendContextEdit(replacement.archive.entryId, { content: [{ type: "text", text: replacement.text }] });
-          masked.add(replacement.observation.id); batch.masked.push(replacement.observation.id); batch.estimatedSavedTokens += replacement.saved;
+        if (arm === "pressure") held.push(...replacements);
+        else {
+          const savings = replacements.reduce((sum, replacement) => sum + replacement.saved, 0);
+          if (savings >= CADENCE_SETTINGS.minBatchSavedTokens) {
+            const record = commit(replacements, step.number);
+            batch.masked.push(...record.masked); batch.estimatedSavedTokens += record.estimatedSavedTokens;
+          }
         }
+        if (arm === "pressure") batch.masked.push(...replacements.map(replacement => replacement.observation.id));
         for (const candidate of candidates) assessed.add(candidate.id);
       }
+      const heldSaved = held.reduce((sum, replacement) => sum + replacement.saved, 0);
+      if (held.length && heldSaved >= CADENCE_SETTINGS.minBatchSavedTokens &&
+        commitReady({ tokens: contextTokens, contextWindow: CADENCE_SETTINGS.contextWindow }, heldSaved))
+        commit(held.splice(0), step.number);
       await runProbe(fixture, step.number, manager, archives, masked, row, adapters, signal);
     }
     row.pendingEligibleTokens = eligibleObservations(seen, CADENCE_SETTINGS.turns, assessed).reduce((sum, observation) => sum + textTokens(observation.text), 0);
     row.maskedOutputs = masked.size;
+    row.heldMasks = held.length;
     row.originalsPreserved = true;
     for (const archive of archives.values()) if ((await lstat(archive.path)).isSymbolicLink() || hash(await readFile(archive.path, "utf8")) !== archive.digest) row.originalsPreserved = false;
     if (!row.originalsPreserved) throw Error("Replay altered an original observation");
@@ -205,7 +236,8 @@ export function summarizeCadence(rows: readonly CadenceRow[]) {
       probeMs: probes.reduce((sum, probe) => sum + (probe.ms ?? 0), 0), recalls: probes.reduce((sum, probe) => sum + probe.recalls, 0),
       recallsServed: probes.reduce((sum, probe) => sum + probe.recallsServed, 0), failedProbes: probes.filter(probe => probe.failure !== undefined).length,
       batches: selected.reduce((sum, row) => sum + row.batches.length, 0), maskedOutputs: selected.reduce((sum, row) => sum + row.maskedOutputs, 0),
-      estimatedSavedTokens: selected.flatMap(row => row.batches).reduce((sum, batch) => sum + batch.estimatedSavedTokens, 0),
+      commits: selected.reduce((sum, row) => sum + row.commits.length, 0), heldMasks: selected.reduce((sum, row) => sum + row.heldMasks, 0),
+      estimatedSavedTokens: selected.flatMap(row => row.commits).reduce((sum, record) => sum + record.estimatedSavedTokens, 0),
       estimatedProbeContextTokens: probes.reduce((sum, probe) => sum + probe.estimatedContextTokens, 0),
       usage: calls.length ? usageFor() : null,
       modelUsage: calls.some(call => call.kind === "model") ? usageFor("model") : null,
@@ -217,7 +249,7 @@ export async function runCadenceComparison(root: string, adapters?: CadenceAdapt
   await mkdir(root, { recursive: true, mode: 0o700 });
   const rows: CadenceRow[] = [];
   for (let seed = 0; seed < 3; seed++) {
-    const arms = seed % 2 === 0 ? CADENCE_ARMS : [...CADENCE_ARMS].reverse();
+    const arms = CADENCE_ARMS.map((_, index) => CADENCE_ARMS[(index + seed) % CADENCE_ARMS.length] ?? CADENCE_ARMS[0]);
     for (const arm of arms) {
       rows.push(await runCadenceRow(root, seed, arm, adapters, signal));
       await writeFile(join(root, "partial.json"), JSON.stringify({ rows, summary: summarizeCadence(rows) }, null, 2));
@@ -256,15 +288,16 @@ async function main() {
   catch (error) { failure = error instanceof Error ? error.message : String(error); }
   const liveSettingsUnchanged = settingsBefore === hash(await readFile(settingsPath, "utf8"));
   if (!liveSettingsUnchanged) failure ??= "Live settings changed during experiment";
-  const report = { protocolVersion: 3, status: failure ? "failed" : "complete", failure, root, models: { answer: ANSWER_MODEL, classifier: CLASSIFIER_MODEL },
+  const report = { protocolVersion: 4, status: failure ? "failed" : "complete", failure, root, models: { answer: ANSWER_MODEL, classifier: CLASSIFIER_MODEL },
     controls: { ...CADENCE_SETTINGS, limits: CADENCE_LIMITS, liveSettingsUnchanged,
       providerOptions: { ...CADENCE_PROVIDER_OPTIONS, mainTransport: "sse" },
       probeHistory: "Disposable per-probe messages; answers and retrieved originals never enter later replay history",
       turnDefinition: "One scripted assistant/tool-result pair; probes and recall follow-ups do not advance the scheduling clock",
       classifierPolicy: "Whole observation: retain inline at keep probability >=0.35; otherwise exact archive reference. Each eligible observation assessed once. No excerpt generation.",
       protections: "Same recent-ten-turn window, explicit schema pin until turn26, structured failure until exact successful retry",
-      compaction: "Disabled in both arms", cache: "Unique stable system-prefix namespace and SDK sessionId per cohort/seed/arm, alternating arm order; provider cache uncontrolled; no imposed warmup or sleep",
-      recall: "Same bounded exact-ID archive tool in both arms; production lexical recall/prefetch is not under test" },
+      pressurePolicy: "Production lead-time classification and pressure commit: decisions are held until the context estimate reaches 50% of a " + CADENCE_SETTINGS.contextWindow + "-token synthetic window with a batch of at least 10% of it, or 90%",
+      compaction: "Disabled in every arm", cache: "Unique stable system-prefix namespace and SDK sessionId per cohort/seed/arm, rotating arm order; provider cache uncontrolled; no imposed warmup or sleep",
+      recall: "Same bounded exact-ID archive tool in every arm; production lexical recall/prefetch is not under test" },
     limitations: "Three workload shapes with one seed each; scripted histories and fact probes, not autonomous task completion. Estimates are UTF-8 bytes/4, not provider token counts. SDK catalog pricing is not actual Codex subscription billing. No winner is asserted by this runner.",
     classifierCalls, modelCalls, ...comparison };
   await writeFile(join(root, "report.json"), JSON.stringify(report, null, 2));

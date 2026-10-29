@@ -1,12 +1,17 @@
 import { createHash } from "node:crypto";
+import { classificationDue } from "../extensions/context-masking/masking-retention";
 
-export const CADENCE_ARMS = ["ten-turn", "token-budget"] as const;
+export const CADENCE_ARMS = ["ten-turn", "token-budget", "pressure"] as const;
 export type CadenceArm = typeof CADENCE_ARMS[number];
 export const CADENCE_SETTINGS = {
   turns: 30, intervalTurns: 10, protectRecentTurns: 10, tokenBatch: 4_000,
   minResultChars: 800, historyBytes: 12_000, maxRequestBytes: 24_000,
   minBatchSavedTokens: 100, probeTurns: [20, 25, 30] as readonly number[],
+  // The pressure arm needs a window; this scale puts the fixtures' final contexts at 33–72% of it.
+  contextWindow: 30_000, growthSamples: 8,
 };
+/** Context the pressure arm sees at a turn boundary: Pi's estimate and recent growth per turn. */
+export interface ContextPressure { contextTokens: number; growthPerTurn: number | undefined; heldSavedTokens?: number }
 export interface Observation {
   id: string;
   turn: number;
@@ -45,17 +50,25 @@ export function eligibleObservations(
       argumentKey(later) === argumentKey(observation));
   });
 }
-export function shouldAssess(arm: CadenceArm, turn: number, candidates: readonly Observation[]): boolean {
+export function shouldAssess(
+  arm: CadenceArm, turn: number, candidates: readonly Observation[], pressure?: ContextPressure,
+): boolean {
   if (!candidates.length) return false;
-  return arm === "ten-turn" ? turn % CADENCE_SETTINGS.intervalTurns === 0
-    : candidates.reduce((total, candidate) => total + textTokens(candidate.text), 0) >= CADENCE_SETTINGS.tokenBatch;
+  const backlog = candidates.reduce((total, candidate) => total + textTokens(candidate.text), 0);
+  if (arm === "ten-turn") return turn % CADENCE_SETTINGS.intervalTurns === 0;
+  if (arm === "token-budget") return backlog >= CADENCE_SETTINGS.tokenBatch;
+  if (!pressure) throw Error("The pressure arm needs the current context estimate");
+  // Production lead-time rule: any backlog once the 50% commit point is close enough.
+  return classificationDue(
+    { tokens: pressure.contextTokens, contextWindow: CADENCE_SETTINGS.contextWindow }, backlog, pressure.growthPerTurn, pressure.heldSavedTokens,
+  );
 }
 export type HistorySnapshot = {
   goal: string;
   latestUserDirection: string;
   recentTurns: Array<{ number: number; direction?: string; tool: string; args: Record<string, string>; text: string; isError: boolean }>;
   omittedRecentTurns: number;
-  compaction: "disabled in both arms";
+  compaction: "disabled in every arm";
 };
 export function historySnapshot(fixture: CadenceFixture, turn: number): HistorySnapshot {
   const seen = fixture.turns.filter(item => item.number <= turn);
@@ -72,7 +85,7 @@ export function historySnapshot(fixture: CadenceFixture, turn: number): HistoryS
   return {
     goal: fixture.goal,
     latestUserDirection: [...seen].reverse().find(item => item.direction)?.direction ?? fixture.goal,
-    recentTurns: selected, omittedRecentTurns: recent.length - selected.length, compaction: "disabled in both arms",
+    recentTurns: selected, omittedRecentTurns: recent.length - selected.length, compaction: "disabled in every arm",
   };
 }
 export function makeFixture(seedIndex: number): CadenceFixture {

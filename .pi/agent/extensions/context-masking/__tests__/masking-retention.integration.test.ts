@@ -540,16 +540,17 @@ test("below half the window, decided masks stay pending until 90% context commit
   expect(await f.run()).toBeUndefined();
 });
 
-test("from half the window, pending masks commit only once they free a tenth of it", async () => {
+test("past half the window, classification waits until the backlog could fill a commit batch", async () => {
   const small = await harness({ usage: { tokens: 60_000, contextWindow: 100_000, percent: 60 } });
-  const held = await small.run();
-  expect(edits(held)).toEqual([]);
-  expect(customData(held)).toMatchObject({ pendingMaskCount: 1 });
+  expect(await small.run()).toBeUndefined();
+  expect(small.calls).toEqual([]);
 
-  const large = await harness({ usage: { tokens: 15_000, contextWindow: 30_000, percent: 50 } });
+  // Three 4.5k-token results could free well over a tenth of a 30k window, so they are classified and committed.
+  const large = await harness({ bodies: [body, body, body], usage: { tokens: 15_000, contextWindow: 30_000, percent: 50 } });
   const committed = await large.run();
-  expect(edits(committed)).toHaveLength(1);
-  expect(customData(committed)).toMatchObject({ maskedCount: 1, pendingMaskCount: 0 });
+  expect(large.calls.length).toBeGreaterThan(0);
+  expect(edits(committed)).toHaveLength(3);
+  expect(customData(committed)).toMatchObject({ maskedCount: 3, pendingMaskCount: 0 });
 });
 
 test("a pending mask lapses when its result body changes", async () => {

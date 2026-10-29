@@ -30,6 +30,8 @@ export const ROLLING_LIMITS = {
   growthSamples: 8,
   minGrowthTokens: 2_000,
   classifyLeadFactor: 2,
+  // Share of classified text that logged sessions went on to mask; estimates what a backlog would free.
+  expectedMaskShare: 0.56,
 } as const;
 
 /** Estimated tokens one turn can classify, at the per-turn request cap and bytes/4 tokens. */
@@ -52,19 +54,38 @@ export function recentGrowthPerTurn(branch: readonly SessionEntry[]): number | u
   return (newest - oldest) / (prompts.length - 1);
 }
 
-/** Whether to classify the unassessed backlog now so decisions are ready when the commit point arrives. */
-export function classificationDue(
-  usage: Pick<ContextUsage, "tokens" | "contextWindow"> | undefined,
+function leadTimeReached(
+  usage: Pick<ContextUsage, "contextWindow"> & { tokens: number },
+  ratio: number,
   backlogTokens: number,
   growthPerTurn: number | undefined,
 ): boolean {
-  // Without a context estimate the lead time is unknown; classify rather than risk a late backlog.
-  if (!usage || usage.tokens === null || usage.contextWindow <= 0) return true;
-  const headroom = ROLLING_LIMITS.commitPressureRatio * usage.contextWindow - usage.tokens;
+  const headroom = ratio * usage.contextWindow - usage.tokens;
   if (headroom <= 0) return true;
   const turnsLeft = headroom / Math.max(growthPerTurn ?? 0, ROLLING_LIMITS.minGrowthTokens);
   const turnsNeeded = Math.ceil(backlogTokens / CLASSIFIED_TOKENS_PER_TURN);
   return turnsLeft <= ROLLING_LIMITS.classifyLeadFactor * turnsNeeded;
+}
+
+/**
+ * Whether to classify the unassessed backlog now so decisions are ready when the next commit can happen.
+ * Below 50% that is the first pressure commit. Past it, a commit needs a full batch of held masks or 90%
+ * context, so classification waits until the backlog could complete a batch or the forced commit is near.
+ */
+export function classificationDue(
+  usage: Pick<ContextUsage, "tokens" | "contextWindow"> | undefined,
+  backlogTokens: number,
+  growthPerTurn: number | undefined,
+  heldSavedTokens = 0,
+): boolean {
+  // Without a context estimate the lead time is unknown; classify rather than risk a late backlog.
+  if (!usage || usage.tokens === null || usage.contextWindow <= 0) return true;
+  const known = { tokens: usage.tokens, contextWindow: usage.contextWindow };
+  if (usage.tokens < ROLLING_LIMITS.commitPressureRatio * usage.contextWindow)
+    return leadTimeReached(known, ROLLING_LIMITS.commitPressureRatio, backlogTokens, growthPerTurn);
+  const reachableBatch = heldSavedTokens + backlogTokens * ROLLING_LIMITS.expectedMaskShare;
+  if (reachableBatch >= ROLLING_LIMITS.commitBatchRatio * usage.contextWindow) return true;
+  return leadTimeReached(known, ROLLING_LIMITS.forceCommitRatio, backlogTokens, growthPerTurn);
 }
 
 /**

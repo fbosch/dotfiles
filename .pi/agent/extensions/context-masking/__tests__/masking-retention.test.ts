@@ -374,8 +374,18 @@ describe("rolling masking policy", () => {
     expect(classificationDue(at(126_000), 10_000, 5_000)).toBe(true);
     // Slow or shrinking growth falls back to the minimum, so a small session waits.
     expect(classificationDue(at(40_000), 10_000, -3_000)).toBe(false);
-    expect(classificationDue(at(140_000), 4_000, undefined)).toBe(true);
     expect(classificationDue(at(null), 4_000, 5_000)).toBe(true);
+  });
+
+  test("past half the window, classifies only for a reachable batch or near the forced commit", () => {
+    const at = (tokens: number) => ({ tokens, contextWindow: 272_000 });
+    // The next pressure commit needs 27.2k of held savings; 4k of backlog adds about 2.2k.
+    expect(classificationDue(at(140_000), 4_000, 5_000)).toBe(false);
+    expect(classificationDue(at(140_000), 4_000, 5_000, 26_000)).toBe(true);
+    expect(classificationDue(at(140_000), 50_000, 5_000)).toBe(true);
+    // 244.8k forced commit: 4.8k headroom at 5k growth is within twice one turn of classification.
+    expect(classificationDue(at(240_000), 4_000, 5_000)).toBe(true);
+    expect(classificationDue(at(250_000), 4_000, undefined)).toBe(true);
   });
 
   test("an adapter that ignores abort cannot hold the rolling hook open", async () => {

@@ -107,13 +107,13 @@ async function rollingBoundary(
   const usage = ctx.getContextUsage();
   // With a context estimate, a due backlog of any size is classified so decisions are complete at commit.
   const minimumBacklog = usage && usage.tokens !== null ? 1 : ROLLING_LIMITS.triggerTokens;
-  const assess = eligibleTokens >= minimumBacklog &&
-    classificationDue(usage, eligibleTokens, recentGrowthPerTurn(branch));
   const estimatedSavings = (items: readonly RollingCandidate[]) => items.reduce((total, candidate) =>
     total + candidate.estimatedTokens - estimatedUtf8Tokens(placeholder(
       { entryId: candidate.sourceId, toolName: candidate.toolName, text: candidate.text },
       join(dependencies.artifactRoot(), sessionId, `${candidate.bodyDigest}.txt`),
     )), 0);
+  const assess = eligibleTokens >= minimumBacklog &&
+    classificationDue(usage, eligibleTokens, recentGrowthPerTurn(branch), estimatedSavings(pendingCandidates));
   if (!assess && !commitReady(usage, estimatedSavings(pendingCandidates))) return undefined;
   const classifiable = assess ? candidates : [];
 

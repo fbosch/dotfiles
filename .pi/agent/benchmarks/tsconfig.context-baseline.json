@@ -3,8 +3,10 @@
   "include": [
     "context-baseline.ts",
     "context-masking-replay.ts",
+    "context-masking-live-report.ts",
     "__tests__/context-baseline.test.ts",
     "__tests__/context-masking-replay.test.ts",
+    "__tests__/context-masking-live-report.test.ts",
     "context-masking-recall-probe.ts",
     "__tests__/context-masking-recall-probe.test.ts",
     "context-compaction-eval.ts",
