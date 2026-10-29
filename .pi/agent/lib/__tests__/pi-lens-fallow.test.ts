@@ -45,16 +45,17 @@ function catalog(
       },
     ]),
   );
-  return runInNewContext(code, {
+  const fallowDefinition = section("    FallowServer = {", "\n    LSP_SERVERS = [");
+  return runInNewContext(`(() => { let FallowServer; ${fallowDefinition} return ${code}; })()`, {
     ...servers,
-    path58: path,
+    path61: path,
     NearestRoot: (markers: string[]) => markers,
     resolveAndLaunch,
   }) as { id: string; role: string; root: string[]; spawn(root: string): Promise<unknown> }[];
 }
 
 function profile() {
-  const code = `${section("    AUXILIARY_LSP_PROFILES = [", '\n      {\n        serverId: "opengrep"').replace("    AUXILIARY_LSP_PROFILES = [", "[")}]`;
+  const code = `[${section('      {\n        serverId: "fallow"', "\n    ];")}]`;
   const profiles = runInNewContext(code) as {
     serverId: string;
     sourceMatch: RegExp;
@@ -224,7 +225,7 @@ interface FallowFixtureDiagnostic {
 
 function workspaceFindings() {
   const code = `${section("var fallowWorkspaceDiagnostics = ", "\nfunction setupIncomingHandlers(")}\n({ recordFallowPublication, takeNewFallowFindings })`;
-  return runInNewContext(code, { normalizeMapKey: (value: string) => value, path109: path }) as {
+  return runInNewContext(code, { normalizeMapKey: (value: string) => value, path61: path }) as {
     recordFallowPublication(
       root: string,
       filePath: string,

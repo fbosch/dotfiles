@@ -46,7 +46,7 @@ test("pi-lens locates its packaged grammars from the bundled runtime", () => {
         expect(asset).toBe("grammars");
         return grammarDirectory;
       },
-      fs69: { existsSync: (path: string) => path === grammarDirectory },
+      fs72: { existsSync: (path: string) => path === grammarDirectory },
     },
   );
   expect(client.bundledGrammarsDir()).toBe(grammarDirectory);

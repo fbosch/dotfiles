@@ -1,7 +1,7 @@
 diff --git a/node_modules/pi-lens/dist/index.js b/node_modules/pi-lens/dist/index.js
 --- a/node_modules/pi-lens/dist/index.js
 +++ b/node_modules/pi-lens/dist/index.js
-@@ -26964,6 +26964,8 @@
+@@ -30601,6 +30601,8 @@
    if (!sessionLive || entry.deferAutofix === false)
      return;
    for (const kind of ["autofix", "format"]) {
@@ -10,52 +10,81 @@ diff --git a/node_modules/pi-lens/dist/index.js b/node_modules/pi-lens/dist/inde
      const landed = runtime2.deferMutation?.(
        filePath,
        dispatchCwd,
-@@ -39713,7 +39715,24 @@
-       OpengrepServer,
-       AstGrepServer,
+@@ -44420,21 +44422,19 @@
+     };
+     FallowServer = {
+       id: "fallow",
+-      idleEviction: "unmeasured",
++      name: "Fallow",
+       role: "auxiliary",
+-      name: "fallow TS/JS Code Health",
+-      extensions: JS_TS_LSP_EXTENSIONS,
+-      root: RootWithFallback(NearestRoot([".git"])),
+-      looseFileRoot: "decline",
++      idleEviction: "unmeasured",
++      extensions: [".js", ".jsx", ".ts", ".tsx"],
++      root: NearestRoot(["pnpm-workspace.yaml", ".fallowrc.json", ".fallowrc.jsonc", "fallow.toml", ".fallow.toml", ".git"]),
+       availabilityKey: "fallow-lsp",
+-      spawn(root, options) {
+-        return resolveAndLaunchTreeBinary({
+-          candidates: ["fallow-lsp"],
+-          bundleToolId: "fallow-lsp",
+-          binRelPath: "fallow-lsp",
+-          cwd: root,
+-          args: []
+-        }, options?.allowInstall);
++      async spawn(root) {
++        // Match Neovim: PATH first, then the project installation; never install from an edit hook.
++        return resolveAndLaunch({
++          candidates: ["fallow-lsp", path61.join(root, "node_modules", ".bin", "fallow-lsp")],
++          args: [],
++          cwd: root
++        }, false);
+       }
+     };
+     LSP_SERVERS = [
+@@ -44494,7 +44494,6 @@
        ZizmorServer,
--      TyposServer
-+      TyposServer,
-+      {
-+        id: "fallow",
-+        name: "Fallow",
-+        role: "auxiliary",
-+        idleEviction: "unmeasured",
-+        extensions: [".js", ".jsx", ".ts", ".tsx"],
-+        root: NearestRoot(["pnpm-workspace.yaml", ".fallowrc.json", ".fallowrc.jsonc", "fallow.toml", ".fallow.toml", ".git"]),
-+        availabilityKey: "fallow-lsp",
-+        async spawn(root) {
-+          // Match the Neovim client: PATH first, then the project's installation; never install from an edit hook.
-+          return resolveAndLaunch({
-+            candidates: ["fallow-lsp", path58.join(root, "node_modules", ".bin", "fallow-lsp")],
-+            args: [],
-+            cwd: root
-+          }, false);
-+        }
-+      }
+       TyposServer,
+       FallowServer
+-      // opt-in (--lens-fallow), JS/TS only
      ];
    }
  });
-@@ -69246,6 +69265,16 @@
-     blockOnErrorWhenAllowed = (d, { blockingAllowed }) => blockingAllowed && d.severity === 1 ? "blocking" : "warning";
-     AUXILIARY_LSP_PROFILES = [
+@@ -74357,25 +74356,12 @@
        {
-+        serverId: "fallow",
-+        tool: "fallow",
+         serverId: "fallow",
+         tool: "fallow",
+-        // fallow-lsp tags its LSP diagnostics `source: "fallow"`.
+-        sourceMatch: /fallow/i,
+-        // #4929: opt-in. Off unless `--lens-fallow` / `fallow.enabled=true` is set;
+-        // it overlaps knip, jscpd and madge, which keep running either way.
+-        enabledByDefault: false,
+-        optInFlag: "lens-fallow",
+-        // Advisory in this cut: no `allowBlocking`, so even an ERROR-severity
+-        // finding stays a warning. fallow publishes unused-code findings as LSP
+-        // HINT (severity 4, the editor's greyed-out tag), which the generic
+-        // conversion would render as no semantic at all.
 +        sourceMatch: /^fallow$/i,
 +        enabledByDefault: true,
 +        // Dead-code and complexity findings remain advisory, even at LSP error severity.
 +        allowBlocking: () => false,
-+        semantic: () => "warning",
+         semantic: () => "warning",
+-        defectClass: (d) => {
+-          const code = String(d.code ?? "");
+-          if (code.startsWith("unused-"))
+-            return "unused-value";
+-          if (/^(security-|tainted-sink|dangerous-html|client-server-leak)/.test(code))
+-            return "safety";
+-          return void 0;
+-        }
 +        defectClass: () => "style"
-+      },
-+      {
-         serverId: "opengrep",
-         tool: "opengrep",
-         // Opengrep is a Semgrep fork and tags LSP diagnostics `source: "Semgrep"`.
-@@ -76851,10 +76880,67 @@
+       }
+     ];
+     profileForSourceCache = /* @__PURE__ */ new Map();
+@@ -81926,10 +81912,67 @@
    }
-   return cur;
+   return retracted;
  }
 +var fallowWorkspaceDiagnostics = /* @__PURE__ */ new Map();
 +var fallowDeliveredFindings = /* @__PURE__ */ new Map();
@@ -102,11 +131,11 @@ diff --git a/node_modules/pi-lens/dist/index.js b/node_modules/pi-lens/dist/inde
 +    if (listed.length === 0 && counted.size === 0)
 +      continue;
 +    listed.sort((a, b) => a.severity - b.severity || a.filePath.localeCompare(b.filePath) || a.line - b.line);
-+    const lines = listed.slice(0, FALLOW_LISTED_FINDINGS).map((item) => `- ${item.severity === 1 ? "error" : "warning"} ${item.code}: ${path109.relative(root, item.filePath)}:${item.line} ${item.message}`);
++    const lines = listed.slice(0, FALLOW_LISTED_FINDINGS).map((item) => `- ${item.severity === 1 ? "error" : "warning"} ${item.code}: ${path61.relative(root, item.filePath)}:${item.line} ${item.message}`);
 +    if (listed.length > FALLOW_LISTED_FINDINGS)
 +      lines.push(`- ... ${listed.length - FALLOW_LISTED_FINDINGS} more`);
 +    if (counted.size > 0)
-+      lines.push(`- hints: ${[...counted].map(([code, count]) => `${code} \xD7${count}`).join(", ")}`);
++      lines.push(`- hints: ${[...counted].map(([code, count]) => `${code} ×${count}`).join(", ")}`);
 +    sections.push(`--- Fallow: new findings in ${root} ---
 +${lines.join("\n")}`);
 +  }
@@ -121,7 +150,7 @@ diff --git a/node_modules/pi-lens/dist/index.js b/node_modules/pi-lens/dist/inde
      const normalizedPath = normalizeMapKey(filePath);
      const docVersion = params.version;
      if (docVersion === void 0 && getStrategy(state9.serverId, state9.launchVariant).publishesOnClose) {
-@@ -133948,10 +134034,11 @@
+@@ -138500,10 +138543,11 @@
    const immediateFormat = !!getFlag("immediate-format");
    const formatDeferred = allowAutonomousWriters && !autoformatDisabled && !immediateFormat && !!fileContent;
    if (allowAutonomousWriters && !autoformatDisabled && immediateFormat && fileContent) {
@@ -134,15 +163,15 @@ diff --git a/node_modules/pi-lens/dist/index.js b/node_modules/pi-lens/dist/inde
      formattersUsed = formatResult.formattersUsed;
      formatFailures = formatResult.formatFailures;
      fileContent = formatResult.fileContent;
-@@ -134315,6 +134402,7 @@
+@@ -138869,6 +138913,7 @@
      cascadePromise,
      isError: false,
      fileModified,
 +    formatChanged,
+     checkedClean,
      postWriteStateHash,
      writeIndex: ctx.telemetry?.writeIndex,
-     orderTurn: ctx.telemetry?.orderTurn,
-@@ -137706,6 +137794,20 @@
+@@ -142868,6 +142913,20 @@
              dbg2(`tool_result: pipeline analysis crashed for the observed mutation on ${observedPath}; the recorded edit stands, analysis did not run this turn`);
              return observedDispatchOutcome.response;
            }
@@ -160,19 +189,19 @@ diff --git a/node_modules/pi-lens/dist/index.js b/node_modules/pi-lens/dist/inde
 +          const fallowText = takeNewFallowFindings();
 +          if (fallowText)
 +            syntheticWriteContent.push({ type: "text", text: fallowText });
-         }
-         dbg2(`tool_result: the observational settle already recorded ${observedReplayed} mutation(s) for "${event.toolName}"; kept the applied-edit records, mutation receipt, cachedExports refresh, and ran the pipeline dispatch (#2464); skipped the bridge-covered staleness stamp / turn-state ranges / change-log receipt / deferred autofix+format`);
-       } else {
-@@ -138022,7 +138124,7 @@
+           if (observedDispatchOutcome) {
+             publishInlineVerdict({
+               runtime: runtime2,
+@@ -143202,7 +143261,7 @@
      dbg2(`tool_result: queued deferred autofix for ${filePath}`);
    }
    let formatQueued = false;
--  if (resultLive && !result.isError && bashAuthorshipConfirmed && !getFlag("no-autoformat", filePath) && (autofixMode === "deferred" || !getFlag("immediate-format")) && nodeFs12.existsSync(filePath)) {
-+  if (resultLive && !result.isError && bashAuthorshipConfirmed && !getFlag("no-autoformat", filePath) && !getFlag("immediate-format") && nodeFs12.existsSync(filePath)) {
+-  if (resultLive && !result.isError && bashAuthorshipConfirmed && mayDefer && !getFlag("no-autoformat", filePath) && (autofixMode === "deferred" || !getFlag("immediate-format")) && nodeFs13.existsSync(filePath)) {
++  if (resultLive && !result.isError && bashAuthorshipConfirmed && mayDefer && !getFlag("no-autoformat", filePath) && !getFlag("immediate-format") && nodeFs13.existsSync(filePath)) {
      const isNewlyQueued = runtime2.deferFormat(filePath, dispatchCwd, event.toolName, turnStateCwd, deps.sessionId, resolutionBasis, analysisRootMode);
      formatQueued = true;
      dbg2(`tool_result: queued deferred format for ${filePath}`);
-@@ -138172,6 +138274,20 @@
+@@ -143339,6 +143398,20 @@
      };
    }
    let output = result.output;
@@ -193,7 +222,61 @@ diff --git a/node_modules/pi-lens/dist/index.js b/node_modules/pi-lens/dist/inde
    if (behaviorWarnings.length > 0 && !result.hasBlockers) {
      output += `
  
-@@ -148625,6 +148741,9 @@
+@@ -153134,7 +153207,11 @@
+     divergedAtInjection: atInjection
+   };
+ }
++// Local policy: disable cache diagnostics to avoid hashing the transcript before every request.
++var CACHE_TELEMETRY_ENABLED = false;
+ function observeCacheContext(args) {
++  if (!CACHE_TELEMETRY_ENABLED)
++    return;
+   try {
+     const existingMessages = args.existingMessages ?? [];
+     const resultMessages = args.resultMessages ?? existingMessages;
+@@ -153245,6 +153322,8 @@
+   }
+ }
+ function logCacheUsage(message, dbg2, context) {
++  if (!CACHE_TELEMETRY_ENABLED)
++    return;
+   try {
+     if (!message || typeof message !== "object")
+       return;
+@@ -153521,6 +153600,8 @@
+     cell.prefixHash = hash;
+ }
+ function observeCachePrefix(messages, turnIndex, sessionId, sessionRole, dbg2) {
++  if (!CACHE_TELEMETRY_ENABLED)
++    return "empty";
+   try {
+     if (!messages || messages.length === 0)
+       return "empty";
+@@ -153599,10 +153680,14 @@
+   cell.attribution = void 0;
+ }
+ function recordTurnEndAdvisoryBytes(sessionId, bytes, sessionRole = "primary") {
++  if (!CACHE_TELEMETRY_ENABLED)
++    return;
+   const state9 = attributionFor(sessionLookupKey(sessionId, sessionRole));
+   state9.turnEndAdvisoryBytes = Math.min(MAX_INJECTED_BYTES, state9.turnEndAdvisoryBytes + Math.max(0, bytes));
+ }
+ function recordToolResultDelivery(args) {
++  if (!CACHE_TELEMETRY_ENABLED)
++    return;
+   const state9 = attributionFor(sessionLookupKey(args.sessionId, args.sessionRole));
+   const bytes = Number.isFinite(args.bytes) ? Math.max(0, Math.floor(args.bytes)) : 0;
+   state9.toolResultBytes = Math.min(MAX_ATTRIBUTION_BYTES, state9.toolResultBytes + bytes);
+@@ -153610,6 +153695,8 @@
+     state9.toolResultsTruncated += 1;
+ }
+ function emitCacheUsageSummaryAtSessionEnd(sessionId, sessionRole) {
++  if (!CACHE_TELEMETRY_ENABLED)
++    return;
+   const key4 = sessionLookupKey(sessionId, sessionRole);
+   const cell = cacheCellOf(key4, false);
+   const state9 = cell?.attribution;
+@@ -154586,6 +154673,9 @@
      shouldStampReadGuard() {
        return !getBridgeFlag(_bridgeGetFlag, "mutation");
      },
@@ -203,7 +286,7 @@ diff --git a/node_modules/pi-lens/dist/index.js b/node_modules/pi-lens/dist/inde
      dbg
    };
    const ioBridgeDeps = {
-@@ -149534,6 +149653,39 @@
+@@ -155548,6 +155638,39 @@
        sessionId: getStableSessionId(ctx)
      });
    });
@@ -243,11 +326,20 @@ diff --git a/node_modules/pi-lens/dist/index.js b/node_modules/pi-lens/dist/inde
    const onToolResult = async (event, ctx) => {
      rememberOwnEventCtx(ctx);
      if (!lensEnabled)
-@@ -149578,6 +149730,7 @@
-         readGuard: runtime.readGuard,
+@@ -155593,6 +155716,7 @@
+         readGuard: runtime.readGuardFor(getStableSessionId(ctx)),
          agentBehaviorRecord: (toolName, filePath) => (resident?.agentBehaviorClient ?? getAgentBehaviorClient()).recordToolCall(toolName, filePath),
          formatBehaviorWarnings: (warnings) => (resident?.agentBehaviorClient ?? getAgentBehaviorClient()).formatWarnings(warnings),
 +        hashlineRefresh: (filePath) => refreshHashlineAnchors(filePath, ctx),
          // #791: tags any deferred-format record queued from this tool_result
          // with the STABLE session id of the ctx that produced it, so a
          // later agent_end can tell its own queued work apart from a
+@@ -156204,7 +156328,7 @@
+   });
+   try {
+     pi.on?.("message_end", (event, ctx) => {
+-      if (!lensEnabled)
++      if (!lensEnabled || !CACHE_TELEMETRY_ENABLED)
+         return;
+       try {
+         const sessionId = getStableSessionId(ctx);
