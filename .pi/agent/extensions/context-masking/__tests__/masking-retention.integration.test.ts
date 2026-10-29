@@ -479,7 +479,7 @@ test("the overall deadline settles a classifier that ignores its signal", async 
   expect(await f.run()).toBeUndefined();
 });
 
-for (const mutation of ["leaf", "session", "reload", "abort"] as const) {
+for (const mutation of ["leaf", "session", "reload", "abort", "projection"] as const) {
   test("late results cannot apply after " + mutation, async () => {
     const started = deferred<RollingClassifierRequest>();
     const completed = deferred<RollingClassifierResponse>();
@@ -493,6 +493,12 @@ for (const mutation of ["leaf", "session", "reload", "abort"] as const) {
     if (mutation === "session") f.switchSession();
     if (mutation === "reload") await f.reload();
     if (mutation === "abort") f.controller.abort();
+    if (mutation === "projection") {
+      // Same session and leaf: only the projection digest can notice an entry changed in place.
+      const edit = f.manager.getBranch().find(entry => entry.type === "context_edit" && entry.targetId === f.resultIds[0]);
+      if (edit?.type !== "context_edit") throw Error("Missing context edit fixture");
+      edit.replacement = { content: [{ type: "text", text: body + "changed\n" }] };
+    }
     completed.resolve(response(request));
     expect(await pending).toBeUndefined();
   });

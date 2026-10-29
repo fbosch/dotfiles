@@ -80,29 +80,33 @@ async function rollingBoundary(
   const leafId = ctx.sessionManager.getLeafId();
   const projection = event.context.contextEntries;
   // Earlier handlers’ drafts belong to the event preview, not the committed freshness baseline.
-  const projectionDigest = digestText(JSON.stringify(
+  const committedDigest = () => digestText(JSON.stringify(
     ctx.sessionManager.buildSessionProjection().entries.map((entry) => [entry.sourceEntry.id, entry.messages]),
   ));
+  // The projection can only change across an await, so the baseline is taken just before the first one;
+  // most boundaries return without awaiting and never pay for serializing the whole session.
+  let projectionDigest: string | undefined;
+  const beforeAwait = () => {
+    projectionDigest ??= committedDigest();
+  };
   const isFresh = (signal: AbortSignal) =>
     !signal.aborted &&
     generationIsCurrent() &&
     ctx.sessionManager.getSessionId() === sessionId &&
     ctx.sessionManager.getLeafId() === leafId &&
-    digestText(JSON.stringify(
-      ctx.sessionManager.buildSessionProjection().entries.map((entry) => [
-        entry.sourceEntry.id,
-        entry.messages,
-      ]),
-    )) === projectionDigest;
+    (projectionDigest === undefined || committedDigest() === projectionDigest);
 
   if (!isFresh(lifecycleSignal)) return undefined;
   const branch = ctx.sessionManager.getBranch();
   const assessed = readRollingAssessments(branch);
   const pendingKeys = readPendingMasks(branch);
-  const candidates = collectRollingCandidates(projection, settings, new Set([...assessed, ...pendingKeys]));
+  // Assessed keys only filter the final list, so one pass serves both the backlog and pending decisions.
+  const unassessed = collectRollingCandidates(projection, settings, assessed);
+  const isPending = (candidate: RollingCandidate) =>
+    pendingKeys.has(assessmentKey(candidate.sourceId, candidate.bodyDigest));
+  const candidates = unassessed.filter((candidate) => !isPending(candidate));
   // Pending decisions still apply only while their result keeps the same body and stays outside the protected window.
-  const pendingCandidates = collectRollingCandidates(projection, settings, assessed)
-    .filter((candidate) => pendingKeys.has(assessmentKey(candidate.sourceId, candidate.bodyDigest)));
+  const pendingCandidates = unassessed.filter(isPending);
   const eligibleTokens = candidates.reduce((total, candidate) => total + candidate.estimatedTokens, 0);
   const usage = ctx.getContextUsage();
   // With a context estimate, a due backlog of any size is classified so decisions are complete at commit.
@@ -161,6 +165,7 @@ async function rollingBoundary(
       if (!isFresh(signal)) return undefined;
       requestCount++;
       requestBytes += batch.bytes;
+      beforeAwait();
       const started = performance.now();
       try {
         const result = await awaitWithAbort(classify(batch.request, signal), signal);
@@ -192,6 +197,7 @@ async function rollingBoundary(
   const archived = new Map<string, { candidate: RollingCandidate; item: MaskedItem }>();
   for (const candidate of commit ? decidedMasks : []) {
     if (!isFresh(signal)) return undefined;
+    beforeAwait();
     try {
       const artifact = await awaitWithAbort(
         saveConversationArtifact(
