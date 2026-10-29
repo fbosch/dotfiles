@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, watch } from "node:fs";
 import { readdir, readFile, stat } from "node:fs/promises";
-import { basename, dirname, join, resolve } from "node:path";
+import { basename, dirname, join, resolve, sep } from "node:path";
 import {
   CONFIG_DIR_NAME,
   type ExtensionAPI,
@@ -109,7 +109,7 @@ export interface AgentMentionCacheFileSystem {
   isDirectory(path: string): Promise<boolean>;
   pathIdentity(path: string): Promise<string | undefined>;
   pathIsFile(path: string): Promise<boolean>;
-  watchDirectory(path: string, onChange: () => void): () => void;
+  watchDirectory(path: string, onChange: (filename?: string) => void): () => void;
 }
 
 const DEFAULT_AGENT_MENTION_FILESYSTEM: AgentMentionCacheFileSystem = {
@@ -138,8 +138,10 @@ const DEFAULT_AGENT_MENTION_FILESYSTEM: AgentMentionCacheFileSystem = {
     }
   },
   watchDirectory: (path, onChange) => {
-    const watcher = watch(path, onChange);
-    watcher.on("error", onChange);
+    const watcher = watch(path, { encoding: "utf8" }, (_event, filename) => {
+      onChange(filename ?? undefined);
+    });
+    watcher.on("error", () => onChange());
     return () => watcher.close();
   },
 };
@@ -246,9 +248,8 @@ export class AgentMentionCache {
   private async refreshMetadata(): Promise<void> {
     await this.updateWatchers();
     const mentions = new Map<string, AgentMention>();
-    await this.loadDirectory(join(this.globalAgentDirectory, "agents"), mentions);
-    if (this.includeProjectAgents) {
-      await this.loadDirectory(join(this.cwd, CONFIG_DIR_NAME, "agents"), mentions);
+    for (const directory of this.agentDirectories()) {
+      await this.loadDirectory(directory, mentions);
     }
 
     const shadowedPaths = new Set<string>();
@@ -328,11 +329,41 @@ export class AgentMentionCache {
     }
   }
 
+  private agentDirectories(): string[] {
+    return [
+      join(this.globalAgentDirectory, "agents"),
+      ...(this.includeProjectAgents ? [join(this.cwd, CONFIG_DIR_NAME, "agents")] : []),
+    ];
+  }
+
+  private isRelevantChange(directory: string, filename: string | undefined): boolean {
+    if (!filename || filename.toLowerCase() === basename(directory).toLowerCase()) return true;
+
+    // Match conservatively across filesystem casing rules without adding I/O to watcher callbacks.
+    const changedPath = resolve(directory, filename).toLowerCase();
+    const changedPrefix = changedPath.endsWith(sep) ? changedPath : `${changedPath}${sep}`;
+    const agentDirectories = this.agentDirectories().map((path) => resolve(path).toLowerCase());
+    const targets = [this.cwd, ...agentDirectories, ...this.referencePaths.keys()];
+    if (
+      targets.some((path) => {
+        const target = resolve(path).toLowerCase();
+        return target === changedPath || target.startsWith(changedPrefix);
+      })
+    )
+      return true;
+
+    const parent = dirname(changedPath);
+    if (agentDirectories.includes(parent) && changedPath.endsWith(".md")) return true;
+    return (
+      parent === resolve(this.cwd).toLowerCase() &&
+      this.mentions.some((mention) => mention.name.toLowerCase() === basename(changedPath))
+    );
+  }
+
   private async updateWatchers(): Promise<void> {
     const targets = [
       this.cwd,
-      join(this.globalAgentDirectory, "agents"),
-      ...(this.includeProjectAgents ? [join(this.cwd, CONFIG_DIR_NAME, "agents")] : []),
+      ...this.agentDirectories(),
       ...[...this.referencePaths.keys()].map((path) => dirname(path)),
     ];
     const desired = new Set(
@@ -356,7 +387,9 @@ export class AgentMentionCache {
       try {
         this.watchers.set(
           directory,
-          this.fileSystem.watchDirectory(directory, () => {
+          this.fileSystem.watchDirectory(directory, (filename) => {
+            // Parent watches also see unrelated settings lockfiles and cache writes.
+            if (!this.isRelevantChange(directory, filename)) return;
             // Directory watches follow inodes; re-arm after renames or atomic replacements.
             for (const close of this.watchers.values()) close();
             this.watchers.clear();

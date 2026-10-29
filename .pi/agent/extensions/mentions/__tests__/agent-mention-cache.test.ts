@@ -7,7 +7,7 @@ import { AgentMentionCache, type AgentMentionCacheFileSystem } from "../agent-me
 function createFakeFileSystem(caseInsensitive = false) {
   const directories = new Set<string>();
   const entries = new Map<string, Map<string, string>>();
-  const watchers = new Map<string, Set<() => void>>();
+  const watchers = new Map<string, Set<(filename?: string) => void>>();
   const calls = { reads: 0, closed: 0 };
 
   const addDirectory = (path: string) => {
@@ -66,8 +66,8 @@ function createFakeFileSystem(caseInsensitive = false) {
     removeFile(path: string) {
       entries.get(dirname(path))?.delete(basename(path));
     },
-    emit(path: string) {
-      for (const listener of watchers.get(path) ?? []) listener();
+    emit(path: string, filename?: string) {
+      for (const listener of watchers.get(path) ?? []) listener(filename);
     },
     get watcherCount() {
       return [...watchers.values()].reduce((count, listeners) => count + listeners.size, 0);
@@ -193,6 +193,148 @@ describe("agent mention cache", () => {
     for (const cache of caches.splice(0)) cache.dispose();
   });
 
+  async function watchFixture(includeProjectAgents = false, caseInsensitive = false) {
+    const fs = createFakeFileSystem(caseInsensitive);
+    const cwd = "/virtual/project";
+    const agentDirectory = "/virtual/agent";
+    const globalAgents = join(agentDirectory, "agents");
+    for (const directory of ["/virtual", cwd, agentDirectory, globalAgents]) {
+      fs.addDirectory(directory);
+    }
+    fs.writeFile(join(globalAgents, "review.md"), "---\ndescription: Global\n---\n");
+    const cache = new AgentMentionCache(cwd, agentDirectory, includeProjectAgents, fs.fileSystem);
+    caches.push(cache);
+    await cache.start();
+    return { fs, cache, cwd, agentDirectory, globalAgents };
+  }
+
+  test("unrelated named events do not read metadata or re-arm watchers", async () => {
+    const { fs, cache, cwd, agentDirectory, globalAgents } = await watchFixture();
+    cache.referencePathState("assets/screenshot.png");
+    await cache.refresh();
+    const calls = { ...fs.calls };
+    const version = cache.version;
+    for (const name of [
+      "settings.json.lock",
+      "settings.json",
+      "models-store.json",
+      "cache",
+      "agents-other",
+    ]) {
+      fs.emit(agentDirectory, name);
+    }
+    fs.emit(cwd, "README.md");
+    fs.emit(cwd, "assets-other");
+    fs.emit("/virtual", "project-other");
+    fs.emit(globalAgents, "review.md.swp");
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(fs.calls).toEqual(calls);
+    expect(cache.version).toBe(version);
+    expect(cache.getMentions().map((mention) => mention.name)).toEqual(["review"]);
+  });
+
+  test("named agent-file events refresh additions, edits, and deletions", async () => {
+    const { fs, cache, globalAgents } = await watchFixture();
+    let changed = waitForChange(cache);
+    fs.writeFile(join(globalAgents, "explore.md"), "---\ndescription: Explore\n---\n");
+    fs.emit(globalAgents, "explore.md");
+    await changed;
+    expect(cache.getMentions().map((mention) => mention.name)).toEqual(["explore", "review"]);
+
+    changed = waitForChange(cache);
+    fs.writeFile(join(globalAgents, "review.md"), "---\ndescription: Updated\n---\n");
+    fs.emit(globalAgents, "review.md");
+    await changed;
+    expect(cache.getMentions().find((mention) => mention.name === "review")?.description).toBe(
+      "Updated",
+    );
+
+    changed = waitForChange(cache);
+    fs.removeFile(join(globalAgents, "explore.md"));
+    fs.emit(globalAgents, "explore.md");
+    await changed;
+    expect(cache.getMentions().map((mention) => mention.name)).toEqual(["review"]);
+  });
+
+  test.each([undefined, ""])(
+    "events without a usable filename still refresh (%s)",
+    async (filename) => {
+      const { fs, cache, globalAgents } = await watchFixture();
+      const changed = waitForChange(cache);
+      fs.writeFile(join(globalAgents, "review.md"), "---\ndescription: Updated\n---\n");
+      fs.emit(globalAgents, filename);
+      await changed;
+      expect(cache.getMentions()[0]?.description).toBe("Updated");
+    },
+  );
+
+  test.each([false, true])(
+    "named shadowing events preserve filesystem casing (%s)",
+    async (caseInsensitive) => {
+      const { fs, cache, cwd } = await watchFixture(false, caseInsensitive);
+      let changed = waitForChange(cache);
+      fs.writeFile(join(cwd, "Review"), "");
+      fs.emit(cwd, "Review");
+      await changed;
+      expect(cache.isPathShadowed("Review")).toBe(true);
+      expect(cache.isPathShadowed("review")).toBe(caseInsensitive);
+
+      changed = waitForChange(cache);
+      fs.removeFile(join(cwd, "Review"));
+      fs.emit(cwd, "Review");
+      await changed;
+      expect(cache.isPathShadowed("Review")).toBe(false);
+    },
+  );
+
+  test("reference paths refresh when a missing ancestor appears or a file disappears", async () => {
+    const { fs, cache, cwd } = await watchFixture();
+    cache.referencePathState("assets/screenshot.png");
+    await cache.refresh();
+    expect(cache.referencePathState("assets/screenshot.png")).toEqual({
+      exists: false,
+      isFile: false,
+    });
+
+    let changed = waitForChange(cache);
+    const assets = join(cwd, "assets");
+    fs.addDirectory(assets);
+    fs.writeFile(join(assets, "screenshot.png"), "image");
+    fs.emit(cwd, "assets");
+    await changed;
+    expect(cache.referencePathState("assets/screenshot.png")).toEqual({
+      exists: true,
+      isFile: true,
+    });
+
+    changed = waitForChange(cache);
+    fs.removeFile(join(assets, "screenshot.png"));
+    fs.emit(assets, "screenshot.png");
+    await changed;
+    expect(cache.referencePathState("assets/screenshot.png")).toEqual({
+      exists: false,
+      isFile: false,
+    });
+  });
+
+  test.each([false, true])(
+    "project-agent invalidation respects project trust (%s)",
+    async (includeProjectAgents) => {
+      const { fs, cache, cwd } = await watchFixture(includeProjectAgents);
+      const projectAgents = join(cwd, ".pi", "agents");
+      const calls = { ...fs.calls };
+      fs.addDirectory(join(cwd, ".pi"));
+      fs.addDirectory(projectAgents);
+      fs.writeFile(join(projectAgents, "review.md"), "---\ndescription: Project\n---\n");
+      const changed = includeProjectAgents ? waitForChange(cache) : undefined;
+      fs.emit(cwd, ".pi");
+      await changed;
+      await new Promise<void>((resolve) => setImmediate(resolve));
+      expect(cache.getMentions()[0]?.description).toBe(includeProjectAgents ? "Project" : "Global");
+      if (!includeProjectAgents) expect(fs.calls).toEqual(calls);
+    },
+  );
+
   test("watches missing directories, preserves overrides and path shadowing, and disposes", async () => {
     const fs = createFakeFileSystem();
     const root = "/virtual";
@@ -216,7 +358,7 @@ describe("agent mention cache", () => {
 
     let changed = waitForChange(cache);
     fs.writeFile(join(cwd, "review"), "");
-    fs.emit(cwd);
+    fs.emit(cwd, "review");
     await changed;
     expect(cache.isPathShadowed("review")).toBe(true);
 
@@ -224,13 +366,13 @@ describe("agent mention cache", () => {
     fs.addDirectory(projectAgents);
     fs.writeFile(join(projectAgents, "review.md"), "---\nenabled: false\n---\n");
     changed = waitForChange(cache);
-    fs.emit(cwd);
+    fs.emit(cwd, ".pi");
     await changed;
     expect(cache.getMentions().some((mention) => mention.name === "review")).toBe(false);
 
     changed = waitForChange(cache);
     fs.writeFile(join(projectAgents, "review.md"), "---\ndescription: Project\n---\n");
-    fs.emit(projectAgents);
+    fs.emit(projectAgents, "review.md");
     await changed;
     expect(cache.getMentions().find((mention) => mention.name === "review")?.description).toBe(
       "Project",
@@ -238,7 +380,7 @@ describe("agent mention cache", () => {
 
     changed = waitForChange(cache);
     fs.removeFile(join(projectAgents, "review.md"));
-    fs.emit(projectAgents);
+    fs.emit(projectAgents, "review.md");
     await changed;
     expect(cache.getMentions().find((mention) => mention.name === "review")?.description).toBe(
       "Global",
