@@ -70,6 +70,9 @@ return {
 	{
 		name = "nvim-scrollbar",
 		src = "https://github.com/petertriho/nvim-scrollbar.git",
+		init = function()
+			vim.g.scrollbar_v2_notice = false
+		end,
 		module = "scrollbar",
 		opts = {
 			exclude = {
