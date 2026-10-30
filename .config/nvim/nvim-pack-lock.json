@@ -236,7 +236,7 @@
       "src": "https://github.com/Wansmer/treesj.git"
     },
     "treewalker.nvim": {
-      "rev": "976eb9921c2f26a9a4314b5a0f4842d447a49592",
+      "rev": "0f755216b260351d2d95387260bc77660db5214b",
       "src": "https://github.com/aaronik/treewalker.nvim.git"
     },
     "trouble.nvim": {

@@ -73,17 +73,27 @@ return {
 		init = function()
 			vim.g.scrollbar_v2_notice = false
 		end,
-		module = "scrollbar",
-		opts = {
-			exclude = {
-				buftypes = { "terminal", "prompt" },
-			},
-			scrollbar = {
-				thumb = {
-					highlight = { bg = "#222222" },
+		setup = function()
+			require("scrollbar").setup({
+				excluded_buftypes = { "terminal", "prompt" },
+				handle = {
+					text = "▕",
+					color = "#222222",
+					blend = 0,
 				},
-			},
-		},
+			})
+
+			-- The plugin styles the handle background; a thin glyph needs a foreground instead.
+			local function style_handle()
+				vim.api.nvim_set_hl(0, "ScrollbarHandle", { fg = "#404040", bg = "NONE" })
+			end
+
+			style_handle()
+			vim.api.nvim_create_autocmd("ColorScheme", {
+				group = vim.api.nvim_create_augroup("ScrollbarStyle", { clear = true }),
+				callback = style_handle,
+			})
+		end,
 	},
 	{
 		name = "indent-blankline.nvim",
