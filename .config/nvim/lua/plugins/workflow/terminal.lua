@@ -20,7 +20,7 @@ return {
 			term_keymaps({
 				{ "<A-t>", "FTermToggle", "toggle floating terminal" },
 				{ "<A-m>", "FTermDekit", "toggle dekit console" },
-				{ "<A-g>", "FTermLazyGit", "toggle floating terminal with gitui" },
+				{ "<A-g>", "FTermLazyGit", "toggle floating terminal with LazyGit" },
 				{ "<A-d>", "FTermDiffnav", "toggle floating terminal with diffnav" },
 				{ "<A-b>", "FTermBtop", "toggle floating terminal with btop" },
 				{ "<A-c>", "FTermCheckmate", "toggle floating terminal with checkmate in neovim instance" },
@@ -112,7 +112,7 @@ return {
 			usrcmd("FTermLazyGit", function()
 				if not lazygit_instance then
 					lazygit_instance = fterm:new({
-						ft = "fterm_gitui",
+						ft = "fterm_lazygit",
 						env = env,
 						shell = "dash",
 						cmd = "lazygit",

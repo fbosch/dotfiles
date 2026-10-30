@@ -13,7 +13,7 @@ Fish shell configuration for interactive work, dotfiles maintenance, and local w
 - Agent workflows: `ai_commit.fish` and `codex-reset.fish`.
 - Azure DevOps helpers: `ado_test_case.fish`, `workitems_on_date.fish`, `workitems_week.fish`, `workitems_cache_clear.fish`.
 - Herdr: `herdr_link_plugins.fish` links the tracked local Herdr plugins after `stow .`.
-- Worktree and branch helpers: `wt.fish`, `worktree_add.fish`, `worktree_clone.fish`, `latest_worktree.fish`, `wtfzf.fish`.
+- Worktree and branch helpers: `wt.fish`, `worktree_clone.fish`, `latest_worktree.fish`, `wtfzf.fish`.
 - Nix helpers: `flake_update_interactive.fish`, `flake_updates_daemon.fish`, `flake_restore.fish`, `nxrb.fish`.
 - Navigation and utilities: `cdlc.fish`, `cdlm.fish`, `fzfcd.fish`, `mntnas.fish`, `open.fish`, `killport.fish`, `gamescope_kill.fish`, `disk_space.fish`.
 - Time and workday helpers: `first_login_of_the_day.fish`, `set_workday_start.fish`, `remaining_work_hours.fish`, `workday_end.fish`, date parsing helpers.

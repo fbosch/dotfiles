@@ -46,6 +46,8 @@ __pycache__
 ^/\.config/hypr/lua/rules/window-state\.lua$
 ^/\.config/hypr/rules/window-state\.lua$
 ^/\.config/lazygit/state\.yml$
+^/\.config/worktrunk/approvals\.toml(\.lock)?$
+^/\.config/herdr/\.plugins\.lock$
 ^/\.config/nvim/(\.sessions|\.undo|nvim)$
 ^/\.config/vicinae/extensions/[^/]+/dist$
 ^/\.config/waybar/scripts/update-checker$

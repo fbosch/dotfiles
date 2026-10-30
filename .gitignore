@@ -12,6 +12,10 @@ storybook-static
 .direnv
 .caliper
 
+# Machine-local hook approvals and runtime locks
+/.config/worktrunk/approvals.toml
+/.config/worktrunk/approvals.toml.lock
+/.config/herdr/.plugins.lock
 # Cursor keeps this state outside the managed configuration tree.
 .cursor/.agent-tools
 
