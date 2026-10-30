@@ -1,5 +1,6 @@
 import type { ProjectedSessionEntry } from "@earendil-works/pi-coding-agent";
 import { isMatching, P } from "ts-pattern";
+import { codemodeCallSummary } from "./codemode-calls";
 
 export const MARKER = "[context-masking]";
 
@@ -62,6 +63,8 @@ export interface MaskCandidate {
   entryId: string;
   toolName: string;
   text: string;
+  /** Codemode inner-call summary for the placeholder. */
+  calls?: string | undefined;
 }
 
 function maskableText(message: ProjectedSessionEntry["messages"][number]): string | undefined {
@@ -101,14 +104,16 @@ export function selectMasks(
       message.role !== "toolResult"
     )
       return [];
-    return [{ entryId: entry.sourceEntry.id, toolName: message.toolName, text }];
+    return [{ entryId: entry.sourceEntry.id, toolName: message.toolName, text, calls: codemodeCallSummary(message) }];
   });
 }
 
 export function placeholder(candidate: MaskCandidate, artifactPath: string): string {
   const lines = candidate.text.split("\n").length;
+  const calls = candidate.calls;
   return (
     `${MARKER} Older ${candidate.toolName} result hidden to save context (${lines} lines, ${candidate.text.length} chars). ` +
+    (calls ? `Calls: ${calls}. ` : "") +
     `Full text: ${artifactPath} — use read with offset and limit if you need it again.`
   );
 }

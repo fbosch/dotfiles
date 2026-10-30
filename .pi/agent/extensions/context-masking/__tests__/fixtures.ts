@@ -1,4 +1,4 @@
-import type { ClassifierAnswer } from "@earendil-works/pi-ai";
+import type { ClassifierAnswer, JsonValue, NestedToolCalls } from "@earendil-works/pi-ai";
 import { type ProjectedSessionEntry, SessionManager } from "@earendil-works/pi-coding-agent";
 import type { RecallClassifier } from "../recall";
 
@@ -36,6 +36,8 @@ export function sessionWith(
     resultChars: number;
     tool?: string;
     image?: boolean;
+    details?: JsonValue;
+    nestedCalls?: NestedToolCalls;
     args?: Record<string, string>;
   }[],
 ) {
@@ -66,6 +68,8 @@ export function sessionWith(
             ]
           : [{ type: "text", text: "x".repeat(turn.resultChars) }],
         isError: false,
+        ...(turn.details === undefined ? {} : { details: turn.details }),
+        ...(turn.nestedCalls === undefined ? {} : { nestedCalls: turn.nestedCalls }),
         timestamp: 0,
       }),
     );

@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { Usage } from "@earendil-works/pi-ai";
+import type { NestedToolCalls, Usage } from "@earendil-works/pi-ai";
 import {
   type BeforeAgentStartEvent,
   type BeforeAgentStartEventResult,
@@ -31,6 +31,8 @@ export interface RecallArchive {
   tool: string;
   args: Record<string, string>;
   text: string;
+  /** Pi's record of the tools a codemode script called. */
+  nestedCalls?: NestedToolCalls;
 }
 
 export type RecallProbeCategory =
@@ -43,7 +45,9 @@ export type RecallProbeCategory =
   | "danish"
   | "distractor"
   /** Shares vocabulary with saved output, passes the lexical gate, but has no answer. */
-  | "near-miss";
+  | "near-miss"
+  /** The query names a path that only the codemode script's inner calls mention. */
+  | "codemode";
 
 export interface RecallProbe {
   id: string;
@@ -242,6 +246,46 @@ export function recallArchives(): RecallArchive[] {
       args: { command: "bun test extensions/prompt-ui" },
       text: filler("(pass) prompt-ui case", 40),
     },
+    {
+      tool: "codemode",
+      args: {
+        code: "const [doc, check] = await Promise.all([tools.read({ path: p }), tools.bash({ command: c })]);",
+      },
+      nestedCalls: {
+        calls: [
+          { id: "cm/1", name: "read", arguments: { path: "docs/agents/pi-sdk.md" }, status: "ok" },
+          { id: "cm/2", name: "bash", arguments: { command: "just stow-check" }, status: "ok" },
+        ],
+        complete: true,
+      },
+      text: scriptOutput(
+        {
+          name: "doc",
+          result: "Compile and test against the installed runtime, not stale npm declarations.",
+        },
+        { name: "check", result: { output: "All links up to date.\n", exit_code: 0 } },
+      ),
+    },
+    {
+      // Same wording, a different file, saved later: without the call record it wins on recency.
+      tool: "codemode",
+      args: { code: "const doc = await tools.read({ path: p });" },
+      nestedCalls: {
+        calls: [
+          {
+            id: "cm/3",
+            name: "read",
+            arguments: { path: "docs/agents/operations.md" },
+            status: "ok",
+          },
+        ],
+        complete: true,
+      },
+      text: scriptOutput({
+        name: "doc",
+        result: "Compile and test against the bundled toolchain before running the release check.",
+      }),
+    },
   ];
 }
 
@@ -419,6 +463,14 @@ export function recallProbes(): RecallProbe[] {
       expected: null,
       prefetch: true,
     },
+    {
+      id: "codemode-inner-path",
+      category: "codemode",
+      question: "What does docs/agents/pi-sdk.md say to compile against?",
+      expected: "installed runtime",
+      // Prefetch scores saved text only, so a path known from the call record cannot help it.
+      prefetch: false,
+    },
   ];
 }
 
@@ -457,6 +509,7 @@ export async function recallSession(archives: readonly RecallArchive[]) {
       toolName: archive.tool,
       content: [{ type: "text", text: "[masked]" }],
       isError: false,
+      ...(archive.nestedCalls === undefined ? {} : { nestedCalls: archive.nestedCalls }),
       timestamp: 0,
     });
     const path = join(dir, `${entryId}.txt`);

@@ -1,12 +1,24 @@
 import { chmodSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { DatabaseSync } from "node:sqlite";
-import type { ChunkRole, ParsedChunk } from "./parse";
+import { identifierLexemes } from "../../lib/lexical";
+import { ftsExpression, type MatchMode } from "./fts-query";
 import { loadSqlite } from "./sqlite";
 
-/** Bump when parsing or schema changes; a mismatch rebuilds the index from the session files. */
-export const INDEX_FORMAT_VERSION = "1";
+export type { MatchMode };
+
+/** Bump when parsing, chunking, or schema changes; a mismatch rebuilds the index. */
+export const INDEX_FORMAT_VERSION = "3";
 const BUSY_TIMEOUT_MS = 5_000;
+
+export type ChunkRole = "user" | "assistant" | "tool" | "summary";
+
+export interface ParsedChunk {
+  readonly messageId: string;
+  readonly role: ChunkRole;
+  readonly timestamp: string;
+  readonly text: string;
+}
 
 export interface SessionRow {
   readonly id: string;
@@ -22,16 +34,21 @@ export interface SessionRow {
   readonly nextOrd: number;
 }
 
-export interface ChunkRow {
+export interface ChunkRow extends ParsedChunk {
   readonly rowid: number;
   readonly sessionId: string;
   readonly ord: number;
-  readonly messageId: string;
-  readonly role: ChunkRole;
-  readonly timestamp: string;
-  readonly text: string;
 }
 
+export interface ChunkHit {
+  readonly rowid: number;
+  readonly sessionId: string;
+  readonly messageId: string;
+  /** BM25 score; lower is better. */
+  readonly score: number;
+}
+
+/** Lines parsed from one session file since the stored offset. */
 export interface FileProgress {
   readonly header?: { readonly id: string; readonly cwd: string; readonly timestamp: string };
   readonly title?: string;
@@ -41,6 +58,15 @@ export interface FileProgress {
   readonly size: number;
   readonly mtimeMs: number;
   readonly offset: number;
+}
+
+export interface FindChunksOptions {
+  readonly mode: MatchMode;
+  readonly limit: number;
+  /** Restrict to one session. */
+  readonly sessionId?: string;
+  /** Exclude one session, such as the calling session. */
+  readonly excludeSessionId?: string;
 }
 
 const SCHEMA = `
@@ -65,18 +91,19 @@ CREATE TABLE IF NOT EXISTS chunks(
   message_id TEXT NOT NULL,
   role TEXT NOT NULL,
   ts TEXT NOT NULL,
-  text TEXT NOT NULL
+  text TEXT NOT NULL,
+  terms TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS chunks_session_ord ON chunks(session_id, ord);
 CREATE INDEX IF NOT EXISTS chunks_session_message ON chunks(session_id, message_id);
 CREATE VIRTUAL TABLE IF NOT EXISTS chunks_fts USING fts5(
-  text, content='chunks', content_rowid='rowid', tokenize='porter unicode61'
+  text, terms, content='chunks', content_rowid='rowid', tokenize='porter unicode61'
 );
 CREATE TRIGGER IF NOT EXISTS chunks_ai AFTER INSERT ON chunks BEGIN
-  INSERT INTO chunks_fts(rowid, text) VALUES (new.rowid, new.text);
+  INSERT INTO chunks_fts(rowid, text, terms) VALUES (new.rowid, new.text, new.terms);
 END;
 CREATE TRIGGER IF NOT EXISTS chunks_ad AFTER DELETE ON chunks BEGIN
-  INSERT INTO chunks_fts(chunks_fts, rowid, text) VALUES ('delete', old.rowid, old.text);
+  INSERT INTO chunks_fts(chunks_fts, rowid, text, terms) VALUES ('delete', old.rowid, old.text, old.terms);
 END;
 `;
 
@@ -88,6 +115,14 @@ DROP TABLE IF EXISTS chunks;
 DROP TABLE IF EXISTS sessions;
 DROP TABLE IF EXISTS meta;
 `;
+
+// Ranking weights both FTS5 columns: whole tokens in `text` outrank split identifier parts in
+// `terms` (weight 0.4), as recall's whole-identifier bonus does.
+const FIND_CHUNKS = `
+  SELECT c.rowid AS rowid, c.session_id AS session_id, c.message_id AS message_id,
+    bm25(chunks_fts, 1.0, 0.4) AS score
+  FROM chunks_fts JOIN chunks c ON c.rowid = chunks_fts.rowid
+  WHERE chunks_fts MATCH ?`;
 
 type Row = Record<string, unknown>;
 
@@ -126,7 +161,7 @@ function isRole(value: string): value is ChunkRole {
   return value === "user" || value === "assistant" || value === "tool" || value === "summary";
 }
 
-export function toChunk(row: Row): ChunkRow {
+function toChunk(row: Row): ChunkRow {
   const role = text(row, "role");
   return {
     rowid: num(row, "rowid"),
@@ -139,8 +174,19 @@ export function toChunk(row: Row): ChunkRow {
   };
 }
 
+/**
+ * The FTS5 tokenizer keeps `createBrowserRouter` as one token, so each multi-part identifier's
+ * parts are indexed separately, one identifier per line, for searches on a single part.
+ */
+function identifierTerms(value: string): string {
+  return identifierLexemes(value)
+    .flatMap((lexeme) => (lexeme.compound === undefined ? [] : [lexeme.parts.join(" ")]))
+    .join("\n");
+}
+
+/** The history index: schema, full-text queries, and transactional writes behind one interface. */
 export class HistoryStore {
-  private constructor(readonly db: DatabaseSync) {}
+  private constructor(private readonly db: DatabaseSync) {}
 
   static async open(directory: string): Promise<HistoryStore> {
     const { DatabaseSync } = await loadSqlite();
@@ -173,7 +219,7 @@ export class HistoryStore {
   }
 
   /** BEGIN IMMEDIATE serializes writers across Pi processes that share the index. */
-  transaction<T>(work: () => T): T {
+  private transaction<T>(work: () => T): T {
     this.db.exec("BEGIN IMMEDIATE");
     try {
       const result = work();
@@ -185,13 +231,15 @@ export class HistoryStore {
     }
   }
 
-  sessionByPath(path: string): SessionRow | undefined {
-    const row = this.db.prepare("SELECT * FROM sessions WHERE path = ?").get(path);
-    return row ? toSession(row) : undefined;
-  }
+  // Sessions
 
   session(id: string): SessionRow | undefined {
     const row = this.db.prepare("SELECT * FROM sessions WHERE id = ?").get(id);
+    return row ? toSession(row) : undefined;
+  }
+
+  sessionByPath(path: string): SessionRow | undefined {
+    const row = this.db.prepare("SELECT * FROM sessions WHERE path = ?").get(path);
     return row ? toSession(row) : undefined;
   }
 
@@ -210,11 +258,92 @@ export class HistoryStore {
       .map((row) => text(row, "path"));
   }
 
-  removeSessionByPath(path: string): void {
-    const session = this.sessionByPath(path);
-    if (!session) return;
-    this.db.prepare("DELETE FROM chunks WHERE session_id = ?").run(session.id);
-    this.db.prepare("DELETE FROM sessions WHERE id = ?").run(session.id);
+  // Full-text queries
+
+  /**
+   * Ranks chunks matching free-text `query`, best first. Returns undefined when the query has no
+   * searchable terms.
+   */
+  findChunks(query: string, options: FindChunksOptions): ChunkHit[] | undefined {
+    const expression = ftsExpression(query, options.mode);
+    if (!expression) return undefined;
+    const filter =
+      options.sessionId !== undefined
+        ? { sql: " AND c.session_id = ?", value: options.sessionId }
+        : options.excludeSessionId !== undefined
+          ? { sql: " AND c.session_id != ?", value: options.excludeSessionId }
+          : undefined;
+    const statement = this.db.prepare(`${FIND_CHUNKS}${filter?.sql ?? ""} ORDER BY score LIMIT ?`);
+    const rows = filter
+      ? statement.all(expression, filter.value, options.limit)
+      : statement.all(expression, options.limit);
+    return rows.map((row) => ({
+      rowid: num(row, "rowid"),
+      sessionId: text(row, "session_id"),
+      messageId: text(row, "message_id"),
+      score: num(row, "score"),
+    }));
+  }
+
+  /** Highlighted excerpt of one matched chunk; computed per result because snippet() is costly. */
+  snippet(query: string, mode: MatchMode, rowid: number): string {
+    const expression = ftsExpression(query, mode);
+    if (!expression) return "";
+    const row = this.db
+      .prepare(
+        "SELECT snippet(chunks_fts, 0, '«', '»', '…', 24) AS snippet FROM chunks_fts WHERE chunks_fts MATCH ? AND rowid = ?",
+      )
+      .get(expression, rowid);
+    return row ? text(row, "snippet") : "";
+  }
+
+  /** Chunks for the given rowids, in the given order. */
+  chunks(rowids: readonly number[]): ChunkRow[] {
+    const statement = this.db.prepare("SELECT * FROM chunks WHERE rowid = ?");
+    return rowids.flatMap((rowid) => {
+      const row = statement.get(rowid);
+      return row ? [toChunk(row)] : [];
+    });
+  }
+
+  /** The first chunks of a session in order. */
+  sessionStart(sessionId: string, limit: number): ChunkRow[] {
+    return this.db
+      .prepare("SELECT * FROM chunks WHERE session_id = ? ORDER BY ord LIMIT ?")
+      .all(sessionId, limit)
+      .map(toChunk);
+  }
+
+  /**
+   * Chunks of the `size` messages before and after `messageId`, in order. Returns undefined when
+   * the message is not indexed in that session.
+   */
+  messageWindow(sessionId: string, messageId: string, size: number): ChunkRow[] | undefined {
+    const messages = this.db
+      .prepare(
+        "SELECT message_id, MIN(ord) AS first, MAX(ord) AS last FROM chunks WHERE session_id = ? GROUP BY message_id ORDER BY first",
+      )
+      .all(sessionId);
+    const index = messages.findIndex((row) => text(row, "message_id") === messageId);
+    if (index === -1) return undefined;
+    const first = messages[Math.max(0, index - size)];
+    const last = messages[Math.min(messages.length - 1, index + size)];
+    if (!first || !last) return [];
+    return this.db
+      .prepare("SELECT * FROM chunks WHERE session_id = ? AND ord BETWEEN ? AND ? ORDER BY ord")
+      .all(sessionId, num(first, "first"), num(last, "last"))
+      .map(toChunk);
+  }
+
+  // Writes
+
+  removeSession(path: string): void {
+    this.transaction(() => {
+      const session = this.sessionByPath(path);
+      if (!session) return;
+      this.db.prepare("DELETE FROM chunks WHERE session_id = ?").run(session.id);
+      this.db.prepare("DELETE FROM sessions WHERE id = ?").run(session.id);
+    });
   }
 
   /**
@@ -232,10 +361,18 @@ export class HistoryStore {
       let ord = existing?.nextOrd ?? 0;
       if (!existing) this.db.prepare("DELETE FROM chunks WHERE session_id = ?").run(id);
       const insert = this.db.prepare(
-        "INSERT INTO chunks(session_id, ord, message_id, role, ts, text) VALUES (?, ?, ?, ?, ?, ?)",
+        "INSERT INTO chunks(session_id, ord, message_id, role, ts, text, terms) VALUES (?, ?, ?, ?, ?, ?, ?)",
       );
       for (const chunk of progress.chunks)
-        insert.run(id, ord++, chunk.messageId, chunk.role, chunk.timestamp, chunk.text);
+        insert.run(
+          id,
+          ord++,
+          chunk.messageId,
+          chunk.role,
+          chunk.timestamp,
+          chunk.text,
+          identifierTerms(chunk.text),
+        );
       this.db
         .prepare(`
         INSERT INTO sessions(id, path, cwd, title, first_user, started_at, updated_at, size, mtime_ms, offset, next_ord)

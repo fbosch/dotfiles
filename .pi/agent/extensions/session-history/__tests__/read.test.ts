@@ -2,8 +2,8 @@ import { afterEach, describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
 import type { ClassifierContext } from "@earendil-works/pi-ai";
 import type { ClassifierRequestResult } from "../../../lib/classifier";
+import { reconcile } from "../indexer";
 import {
-  buildRequest,
   type HistoryClassifier,
   HistoryReadError,
   READ_LIMITS,
@@ -13,7 +13,6 @@ import {
   resolveSession,
 } from "../read";
 import { HistoryStore } from "../store";
-import { reconcile } from "../sync";
 import { assistant, header, tempDir, user, writeSession } from "./fixtures";
 
 const cleanup: string[] = [];
@@ -166,25 +165,25 @@ describe("readQuestion", () => {
   });
 });
 
-describe("buildRequest", () => {
+describe("classifier request", () => {
   test("drops trailing candidates to stay under the request byte cap", async () => {
-    const { row } = await session(2);
-    const big = {
-      rowid: 1,
-      sessionId: row.id,
-      ord: 0,
-      messageId: "m",
-      role: "user" as const,
-      timestamp: "",
-      text: "x".repeat(2_000),
-    };
-    const request = buildRequest(
-      "q",
-      Array.from({ length: 80 }, () => big),
-    );
-    expect(Buffer.byteLength(JSON.stringify(request.input))).toBeLessThanOrEqual(
+    const root = tempDir("history-sessions-");
+    const indexDir = tempDir("history-index-");
+    cleanup.push(root, indexDir);
+    const wide = "€".repeat(480);
+    const entries = [header("01a0bbbb-cccc", "/work")];
+    for (let index = 0; index < 60; index++) entries.push(user(`deployment ${wide}`, `m${index}`));
+    writeSession(root, "--work--", "s", entries);
+    store = await HistoryStore.open(indexDir);
+    await reconcile(store, root);
+    const { classifier, calls } = classifierReturning({ ok: true, value: { answers: {} } });
+    await readQuestion(store, resolveSession(store, "01a0bbbb-cccc"), "deployment", classifier);
+    const input = calls[0];
+    if (!input) throw new Error("classifier was not called");
+    expect(Buffer.byteLength(JSON.stringify(input))).toBeLessThanOrEqual(
       READ_LIMITS.classifierRequestBytes,
     );
-    expect(request.ids.length).toBeLessThan(80);
+    const state = input.state as { excerpts: unknown[] };
+    expect(state.excerpts.length).toBeLessThan(READ_LIMITS.candidates);
   });
 });

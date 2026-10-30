@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
-import { ftsQuery, isRelatedProject, SEARCH_LIMITS, searchSessions } from "../search";
+import { reconcile } from "../indexer";
+import { SEARCH_LIMITS, searchSessions } from "../search";
 import { HistoryStore } from "../store";
-import { reconcile } from "../sync";
 import { header, tempDir, title, user, writeSession } from "./fixtures";
 
 const cleanup: string[] = [];
@@ -32,22 +32,38 @@ async function indexed(
   return store;
 }
 
-describe("ftsQuery", () => {
-  test("quotes every term so input cannot inject FTS5 syntax", () => {
-    expect(ftsQuery('webhook NOT retry) "exact phrase" src/app.ts', "all")).toBe(
-      '"exact phrase" "webhook" "NOT" "retry" "src/app.ts"',
-    );
-    expect(ftsQuery("a b", "any")).toBe('"a" OR "b"');
-    expect(ftsQuery("  ()*  ", "all")).toBeUndefined();
-  });
-});
+describe("query handling", () => {
+  const search = (db: HistoryStore, query: string) =>
+    searchSessions(db, { query, cwd: "/w", excludeSessionId: "" }).results.map((r) => r.sessionId);
 
-describe("isRelatedProject", () => {
-  test("matches the same directory, ancestors, and descendants only", () => {
-    expect(isRelatedProject("/work/app", "/work/app")).toBe(true);
-    expect(isRelatedProject("/work/app/sub", "/work/app")).toBe(true);
-    expect(isRelatedProject("/work", "/work/app")).toBe(true);
-    expect(isRelatedProject("/work/other", "/work/app")).toBe(false);
+  test("treats FTS5 operator syntax in queries as plain terms", async () => {
+    const db = await indexed([
+      { id: "s", cwd: "/w", text: 'webhook NOT retry "exact phrase" src/app.ts' },
+    ]);
+    expect(search(db, 'webhook NOT retry) "exact phrase" src/app.ts')).toEqual(["s"]);
+    expect(() => search(db, "  ()*  ")).toThrow("Query contains no searchable terms.");
+  });
+
+  test("ignores English and Danish stop words unless only stop words remain", async () => {
+    const db = await indexed([
+      { id: "en", cwd: "/w", text: "we chose to decide the webhook retry policy" },
+      { id: "da", cwd: "/w", text: "gjorde webhook færdig" },
+      { id: "stops", cwd: "/w", text: "what is this" },
+    ]);
+    expect(search(db, "what did we decide about the webhook")).toEqual(["en"]);
+    expect(search(db, "hvad gjorde vi med webhook")).toEqual(["da"]);
+    expect(search(db, "what is this")).toEqual(["stops"]);
+  });
+
+  test("combines a camelCase term with other terms in one valid query", async () => {
+    const db = await indexed([{ id: "aero", cwd: "/w", text: "AeroSpace toggle keybind" }]);
+    expect(search(db, "AeroSpace toggle keybind")).toEqual(["aero"]);
+    const partial = searchSessions(db, {
+      query: "AeroSpace toggle missing",
+      cwd: "/w",
+      excludeSessionId: "",
+    });
+    expect(partial).toMatchObject({ matchMode: "partial", results: [{ sessionId: "aero" }] });
   });
 });
 
@@ -69,6 +85,19 @@ describe("searchSessions", () => {
     });
     expect(result?.snippet).toContain("«webhook»");
     expect(result?.snippet.length).toBeLessThanOrEqual(SEARCH_LIMITS.snippetChars);
+  });
+
+  test("boosts ancestor and descendant projects but not siblings", async () => {
+    const db = await indexed([
+      { id: "sibling", cwd: "/work/other", text: "rollback migration" },
+      { id: "child", cwd: "/work/app/sub", text: "rollback migration" },
+    ]);
+    const ids = searchSessions(db, {
+      query: "rollback",
+      cwd: "/work/app",
+      excludeSessionId: "",
+    }).results.map((r) => r.sessionId);
+    expect(ids).toEqual(["child", "sibling"]);
   });
 
   test("ranks the current project first when relevance and age are equal", async () => {
@@ -105,7 +134,7 @@ describe("searchSessions", () => {
     ).toEqual([]);
   });
 
-  test("falls back to any-term matching and limits results", async () => {
+  test("falls back to partial matching and limits results", async () => {
     const db = await indexed(
       Array.from({ length: 25 }, (_, index) => ({ id: `s${index}`, cwd: "/w", text: "kiwi" })),
     );
@@ -115,7 +144,33 @@ describe("searchSessions", () => {
       excludeSessionId: "",
       limit: 50,
     });
-    expect(report.matchMode).toBe("any");
+    expect(report.matchMode).toBe("partial");
     expect(report.results).toHaveLength(SEARCH_LIMITS.maxResults);
+  });
+
+  test("partial matching ignores sessions that match only one of three terms", async () => {
+    const db = await indexed([
+      { id: "one", cwd: "/w", text: "kiwi smoothie" },
+      { id: "two", cwd: "/w", text: "kiwi mango salad" },
+    ]);
+    const report = searchSessions(db, {
+      query: "kiwi mango papaya",
+      cwd: "/w",
+      excludeSessionId: "",
+    });
+    expect(report.results.map((result) => result.sessionId)).toEqual(["two"]);
+  });
+
+  test("finds a part of a camelCase identifier and ranks whole-token matches higher", async () => {
+    const db = await indexed([
+      { id: "split", cwd: "/w", text: "moved createBrowserRouter out of render" },
+      { id: "whole", cwd: "/w", text: "the router state resets" },
+    ]);
+    const ids = searchSessions(db, {
+      query: "router",
+      cwd: "/w",
+      excludeSessionId: "",
+    }).results.map((r) => r.sessionId);
+    expect(ids).toEqual(["whole", "split"]);
   });
 });

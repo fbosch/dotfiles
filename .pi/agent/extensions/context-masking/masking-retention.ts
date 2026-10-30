@@ -7,6 +7,7 @@ import type {
   SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import { isMatching, P } from "ts-pattern";
+import { codemodeCallSummary } from "./codemode-calls";
 import { MARKER, type MaskingSettings } from "./policy";
 import { RETENTION_GOAL } from "./image-retention";
 
@@ -141,6 +142,8 @@ export interface RollingCandidate {
   turnsSince: number;
   /** A later successful call with equivalent arguments replaced this result. */
   superseded: boolean;
+  /** Codemode inner-call summary for placeholders. */
+  calls?: string | undefined;
 }
 
 export interface RollingContext {
@@ -345,6 +348,7 @@ export function collectRollingCandidates(
       estimatedTokens: estimatedUtf8Tokens(text),
       turnsSince: assistantIndexes.filter((index) => index > result.sourceIndex).length,
       superseded,
+      calls: codemodeCallSummary(result.message),
     }];
   });
 }

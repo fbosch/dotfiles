@@ -27,6 +27,7 @@ import {
   saveConversationArtifact,
 } from "./evidence-archive";
 import { assessmentKey, digestText, readPendingMasks } from "./masking-retention";
+import { codemodeCallSummary } from "./codemode-calls";
 import { placeholder } from "./policy";
 export const CLASSIFIER_CHECKPOINT = "context-masking-classifier-compaction";
 
@@ -70,7 +71,7 @@ export async function applyHeldMasks(
         items.push({ entryId, archiveId: artifact.entryId, toolName: message.toolName, path: artifact.path });
         masked.push({
           ...message,
-          content: [{ type: "text", text: placeholder({ entryId, toolName: message.toolName, text }, artifact.path) }],
+          content: [{ type: "text", text: placeholder({ entryId, toolName: message.toolName, text, calls: codemodeCallSummary(message) }, artifact.path) }],
         });
       } catch {
         // An unarchived original stays visible rather than becoming unrecoverable.

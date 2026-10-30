@@ -15,6 +15,7 @@ test("offline recall evaluation covers every probe category", () => {
       "danish",
       "distractor",
       "near-miss",
+      "codemode",
     ]),
   );
   expect(probes.filter((probe) => probe.expected === null).every((probe) => probe.prefetch)).toBe(

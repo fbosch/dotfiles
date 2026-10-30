@@ -33,6 +33,10 @@ Alternative: interval re-sync, as in `pi-session-search`, is simpler but conflic
 
 Reconciliation runs after `session_start` returns and yields between files. SQLite write-ahead logging with a busy timeout keeps concurrent Pi processes from corrupting or blocking each other.
 
+### Shared query rules, separate BM25 engines
+
+Query preparation reuses `.pi/agent/lib/lexical.ts`, shared with context-masking `recall`: English and Danish stop words and camelCase or snake_case splitting. FTS5's `unicode61` tokenizer keeps `createBrowserRouter` whole, so an extra `terms` column indexes identifier parts with a lower BM25 weight (0.4), mirroring recall's whole-identifier bonus. When no session matches every term, search retries requiring two terms, or one for two-term queries. The BM25 engines stay separate: recall scores small in-memory archives per call, and sharing an engine would force an in-memory index over the whole history or a database for recall's transient data.
+
 ### One chunk per message
 
 Each indexed message becomes one chunk tagged with its session ID and message ID. Messages longer than about 1,500 bytes split into overlapping parts with the same message ID. Citations therefore always map to a message that `history_read` can open.

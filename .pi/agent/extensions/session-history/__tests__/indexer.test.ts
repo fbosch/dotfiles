@@ -1,15 +1,18 @@
 import { afterEach, describe, expect, test } from "bun:test";
 import { mkdirSync, readFileSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { reconcile, syncFile } from "../indexer";
 import { searchSessions } from "../search";
+import { loadSqlite } from "../sqlite";
 import { HistoryStore, INDEX_FORMAT_VERSION } from "../store";
-import { listSessionFiles, reconcile, syncFile } from "../sync";
 import {
   appendEntries,
   assistant,
+  compaction,
   header,
   jsonl,
   tempDir,
+  title,
   toolResult,
   user,
   writeSession,
@@ -36,18 +39,65 @@ function find(store: HistoryStore, query: string) {
   return searchSessions(store, { query, cwd: "/elsewhere", excludeSessionId: "" }).results;
 }
 
-describe("listSessionFiles", () => {
-  test("lists top-level sessions and excludes subagent child sessions", async () => {
-    const { root } = await setup();
-    const parent = writeSession(root, "--work--", "parent", [header("p", "/work")]);
-    const childDir = join(root, "--work--", "parent", "tasks");
+describe("indexed content", () => {
+  test("indexes user text, assistant text, tool calls, compaction summaries, and titles", async () => {
+    const { root, store } = await setup();
+    writeSession(root, "--work--", "a", [
+      header("sa", "/work"),
+      user("fix the webhook retry"),
+      assistant([
+        { type: "text", text: "reading configuration" },
+        { type: "toolCall", id: "c1", name: "read", arguments: { path: "src/billing.ts" } },
+      ]),
+      compaction("## Goal\nship the migration"),
+      title("Webhook retries"),
+    ]);
+    await reconcile(store, root);
+    for (const query of ["webhook", "configuration", "billing", "migration"])
+      expect(find(store, query).map((result) => result.sessionId)).toEqual(["sa"]);
+    expect(find(store, "webhook")[0]?.title).toBe("Webhook retries");
+  });
+
+  test("excludes tool results, thinking, and subagent child sessions", async () => {
+    const { root, store } = await setup();
+    writeSession(root, "--work--", "a", [
+      header("sa", "/work"),
+      toolResult("zebrafish output"),
+      assistant([
+        { type: "thinking", thinking: "secret reasoning" },
+        { type: "text", text: "visible" },
+      ]),
+    ]);
+    const childDir = join(root, "--work--", "a", "tasks");
     mkdirSync(childDir, { recursive: true });
-    writeFileSync(join(childDir, "child.jsonl"), jsonl([header("c", "/work"), user("child only")]));
-    expect(await listSessionFiles(root)).toEqual([parent]);
+    writeFileSync(
+      join(childDir, "child.jsonl"),
+      jsonl([header("child", "/work"), user("childonly")]),
+    );
+    await reconcile(store, root);
+    expect(find(store, "visible")).toHaveLength(1);
+    expect(find(store, "zebrafish")).toHaveLength(0);
+    expect(find(store, "secret")).toHaveLength(0);
+    expect(find(store, "childonly")).toHaveLength(0);
+  });
+
+  test("splits long messages into overlapping chunks at word boundaries", async () => {
+    const { root, store } = await setup();
+    const words = Array.from({ length: 900 }, (_, index) => `word${index}`);
+    writeSession(root, "--work--", "a", [header("sa", "/work"), user(words.join(" "), "m1")]);
+    await reconcile(store, root);
+    const chunks = store.sessionStart("sa", 20);
+    expect(chunks.length).toBeGreaterThan(3);
+    const vocabulary = new Set(words);
+    for (const chunk of chunks) {
+      expect(chunk.text.length).toBeLessThanOrEqual(1_500);
+      for (const token of chunk.text.split(" ")) expect(vocabulary.has(token)).toBe(true);
+    }
+    expect(chunks.at(-1)?.text.endsWith("word899")).toBe(true);
   });
 });
 
-describe("reconcile", () => {
+describe("reconcile and syncFile", () => {
   test("indexes new sessions, then appends, rebuilds, and removes as files change", async () => {
     const { root, store } = await setup();
     const path = writeSession(root, "--work--", "a", [
@@ -83,18 +133,6 @@ describe("reconcile", () => {
     expect(find(store, "delta")).toHaveLength(1);
   });
 
-  test("excludes tool results from the index", async () => {
-    const { root, store } = await setup();
-    writeSession(root, "--work--", "a", [
-      header("sa", "/work"),
-      toolResult("zebrafish output"),
-      user("visible"),
-    ]);
-    await reconcile(store, root);
-    expect(find(store, "zebrafish")).toHaveLength(0);
-    expect(find(store, "visible")).toHaveLength(1);
-  });
-
   test("never modifies session files", async () => {
     const { root, store } = await setup();
     const path = writeSession(root, "--work--", "a", [header("sa", "/work"), user("alpha")]);
@@ -110,8 +148,7 @@ describe("reconcile", () => {
     stores.push(other);
     writeSession(root, "--work--", "a", [header("sa", "/work"), user("echo")]);
     await Promise.all([reconcile(store, root), reconcile(other, root)]);
-    const count = store.db.prepare("SELECT COUNT(*) AS n FROM chunks").get();
-    expect(Number(count?.n)).toBe(1);
+    expect(store.sessionStart("sa", 10)).toHaveLength(1);
   });
 });
 
@@ -122,13 +159,20 @@ describe("HistoryStore", () => {
     expect(statSync(join(indexDir, "index.db")).mode & 0o777).toBe(0o600);
     writeSession(root, "--work--", "a", [header("sa", "/work"), user("alpha")]);
     await reconcile(store, root);
-    store.db.prepare("UPDATE meta SET value = 'old' WHERE key = 'format'").run();
     store.close();
+    const { DatabaseSync } = await loadSqlite();
+    const raw = new DatabaseSync(join(indexDir, "index.db"));
+    raw.prepare("UPDATE meta SET value = 'old' WHERE key = 'format'").run();
+    raw.close();
     const reopened = await HistoryStore.open(indexDir);
     stores.push(reopened);
     expect(reopened.sessionPaths()).toEqual([]);
-    expect(reopened.db.prepare("SELECT value FROM meta WHERE key = 'format'").get()?.value).toBe(
+    await reconcile(reopened, root);
+    expect(find(reopened, "alpha")).toHaveLength(1);
+    const check = new DatabaseSync(join(indexDir, "index.db"), { readOnly: true });
+    expect(check.prepare("SELECT value FROM meta WHERE key = 'format'").get()?.value).toBe(
       INDEX_FORMAT_VERSION,
     );
+    check.close();
   });
 });

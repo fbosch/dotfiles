@@ -12,6 +12,7 @@ import {
   type ImageArchiveRecord as ImageRetention,
 } from "./evidence-archive";
 import type { ClassifierDecisionCache } from "./classifier-cache";
+import { codemodeCallSummary } from "./codemode-calls";
 import { MARKER, placeholder } from "./policy";
 import { classifyWithImages } from "./image-compaction";
 import { RETENTION_GOAL } from "./image-retention";
@@ -394,7 +395,7 @@ async function classifyTextCompaction(
         kind: "tool", id: `r${byCall.size}`, entryId: record.entryId, readWindow,
         toolCallId: message.toolCallId, tool: call.tool, arguments: call.arguments,
         mask: textOf(message).startsWith(MARKER) ? textOf(message)
-          : placeholder({ entryId: record.entryId, toolName: call.tool, text: textOf(message) }, record.path),
+          : placeholder({ entryId: record.entryId, toolName: call.tool, text: textOf(message), calls: codemodeCallSummary(message) }, record.path),
         path: record.path, content: "", complete: false, totalBytes: 0, readStatus: "budget",
       };
       const remaining = settings.maxTotalArtifactBytes - windowBytes;

@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, spyOn, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import { rmSync } from "node:fs";
 import type {
   ExtensionAPI,
@@ -6,21 +6,26 @@ import type {
   ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import sessionHistory from "../index";
+import { HistoryIndex } from "../lifecycle";
 import { header, tempDir, user, writeSession } from "./fixtures";
 
 type Handler = (event: unknown, ctx: ExtensionContext) => unknown;
 type ToolContext = Parameters<ToolDefinition["execute"]>[4];
 
 const cleanup: string[] = [];
+const indexes: HistoryIndex[] = [];
 
-afterEach(() => {
+afterEach(async () => {
+  for (const index of indexes.splice(0)) await index.shutdown(undefined);
   for (const path of cleanup.splice(0)) rmSync(path, { recursive: true, force: true });
 });
 
 function harness() {
   const root = tempDir("history-sessions-");
-  const indexDirectory = tempDir("history-index-");
-  cleanup.push(root, indexDirectory);
+  const directory = tempDir("history-index-");
+  cleanup.push(root, directory);
+  const index = new HistoryIndex(directory);
+  indexes.push(index);
   const handlers = new Map<string, Handler>();
   const tools = new Map<string, ToolDefinition>();
   const pi = {
@@ -36,8 +41,8 @@ function harness() {
       getSessionDir: () => `${root}/--work--`,
     },
   } as unknown as ToolContext;
-  sessionHistory(pi, { indexDirectory, sessionsRoot: () => root });
-  const fire = async (event: string) => handlers.get(event)?.({ type: event }, ctx);
+  sessionHistory(pi, { index, sessionsRoot: () => root });
+  const fire = (event: string) => handlers.get(event)?.({ type: event }, ctx);
   const run = async (name: string, params: Record<string, unknown>) => {
     const tool = tools.get(name);
     if (!tool) throw new Error(`missing tool ${name}`);
@@ -45,16 +50,7 @@ function harness() {
     const first = result.content[0];
     return first?.type === "text" ? first.text : "";
   };
-  return { root, tools, fire, run, setSessionFile: (path: string) => (sessionFile = path) };
-}
-
-async function settle(run: (name: string, params: Record<string, unknown>) => Promise<string>) {
-  for (let attempt = 0; attempt < 100; attempt++) {
-    const text = await run("history_search", { query: "probe" });
-    if (!text.includes("Index updating")) return;
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-  throw new Error("reconciliation did not finish");
+  return { root, index, tools, fire, run, setSessionFile: (path: string) => (sessionFile = path) };
 }
 
 describe("session-history extension", () => {
@@ -66,42 +62,29 @@ describe("session-history extension", () => {
     ]);
   });
 
-  test("session_start returns before reconciliation and searches report the updating index", async () => {
-    const { root, fire, run } = harness();
-    for (let index = 0; index < 20; index++)
-      writeSession(root, `--p${index}--`, `s${index}`, [
-        header(`s${index}`, "/p"),
-        user(`needle ${index}`),
-      ]);
-    const started = fire("session_start");
-    expect(started).toBeInstanceOf(Promise);
+  test("session_start returns before reconciliation finishes", async () => {
+    const { root, index, fire, run } = harness();
+    writeSession(root, "--p--", "s", [header("s", "/p"), user("needle")]);
+    expect(fire("session_start")).toBeUndefined();
     expect(await run("history_search", { query: "needle" })).toContain("Index updating");
-    await settle(run);
+    await index.reconcile(root);
     expect(await run("history_search", { query: "needle" })).not.toContain("Index updating");
-    await fire("session_shutdown");
   });
 
-  test("indexes the finished turn on agent_end and schedules no periodic work", async () => {
-    const { root, fire, run, setSessionFile } = harness();
-    const path = writeSession(root, "--work--", "other", [header("other", "/work")]);
-    const interval = spyOn(globalThis, "setInterval");
-    await fire("session_start");
-    await settle(run);
-    writeSession(root, "--work--", "other", [header("other", "/work"), user("late arrival")]);
-    setSessionFile(path);
+  test("agent_end indexes the current session file", async () => {
+    const { root, index, fire, run, setSessionFile } = harness();
+    await index.reconcile(root);
+    setSessionFile(
+      writeSession(root, "--work--", "other", [header("other", "/work"), user("late arrival")]),
+    );
     await fire("agent_end");
     expect(await run("history_search", { query: "arrival" })).toContain("session other");
-    expect(interval).not.toHaveBeenCalled();
-    interval.mockRestore();
-    await fire("session_shutdown");
   });
 
   test("history_read rejects combining question and around", async () => {
-    const { fire, run } = harness();
-    await fire("session_start");
+    const { run } = harness();
     await expect(run("history_read", { session: "x", question: "q", around: "m" })).rejects.toThrow(
       "Provide question or around, not both.",
     );
-    await fire("session_shutdown");
   });
 });

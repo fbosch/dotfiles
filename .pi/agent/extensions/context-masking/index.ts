@@ -112,7 +112,7 @@ async function rollingBoundary(
   const minimumBacklog = usage && usage.tokens !== null ? 1 : ROLLING_LIMITS.triggerTokens;
   const estimatedSavings = (items: readonly RollingCandidate[]) => items.reduce((total, candidate) =>
     total + candidate.estimatedTokens - estimatedUtf8Tokens(placeholder(
-      { entryId: candidate.sourceId, toolName: candidate.toolName, text: candidate.text },
+      { entryId: candidate.sourceId, toolName: candidate.toolName, text: candidate.text, calls: candidate.calls },
       join(dependencies.artifactRoot(), sessionId, `${candidate.bodyDigest}.txt`),
     )), 0);
   const assess = eligibleTokens >= minimumBacklog &&
@@ -219,7 +219,7 @@ async function rollingBoundary(
 
   const plannedMasks = [...archived.values()].map(({ candidate, item }) => {
     const replacement = placeholder(
-      { entryId: candidate.sourceId, toolName: candidate.toolName, text: candidate.text },
+      { entryId: candidate.sourceId, toolName: candidate.toolName, text: candidate.text, calls: candidate.calls },
       item.path,
     );
     const savedTokens = candidate.estimatedTokens - estimatedUtf8Tokens(replacement);

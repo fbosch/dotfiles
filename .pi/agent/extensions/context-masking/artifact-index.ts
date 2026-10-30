@@ -3,6 +3,7 @@ import type { ContextEvent, SessionEntry } from "@earendil-works/pi-coding-agent
 type AgentMessage = ContextEvent["messages"][number];
 
 import { isMatching, P } from "ts-pattern";
+import { codemodeCallSummary } from "./codemode-calls";
 import { MARKER } from "./policy";
 
 export const INDEX_TYPE = "context-masking-index";
@@ -29,12 +30,15 @@ export function callsFor(
   ids: ReadonlySet<string>,
 ): Map<string, string> {
   const resultCalls = new Map<string, string>();
+  const described = new Map<string, string>();
   for (const entry of branch) {
     if (ids.has(entry.id) && entry.type === "message" && entry.message.role === "toolResult") {
-      resultCalls.set(entry.message.toolCallId, entry.id);
+      // A codemode call's own argument is the script source; its inner calls say more.
+      const inner = codemodeCallSummary(entry.message);
+      if (inner !== undefined) described.set(entry.id, inner);
+      else resultCalls.set(entry.message.toolCallId, entry.id);
     }
   }
-  const described = new Map<string, string>();
   for (const entry of branch) {
     if (entry.type !== "message" || entry.message.role !== "assistant") continue;
     for (const block of entry.message.content) {

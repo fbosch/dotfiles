@@ -1,8 +1,4 @@
-export const STOP_WORDS = new Set(
-  "a about all also any an and are as at be by can could did do does for from had has have how i if in into is it its just me my may might must of on or our should so some than that the their them then there these they this those to us was we were what when where which who whom whose why will would with you your exact earlier previous af alle anden at blev bliver de dem den denne der det dette dig dine du efter eller en er et flere for fra hun hvad hvem hver hvilken hvilket hvilke hvis hvor hvordan hvorfor hvornår ikke igen jeg kan kunne lidt man mange med meget men mig min mine mod må ned noget nogle nu når og også om os over på så samme sig sin sine skal skulle som til under var vi vil ville være været".split(
-    " ",
-  ),
-);
+import { identifierLexemes, STOP_WORDS } from "../../lib/lexical";
 
 export interface LexicalQuery {
   /** Stemmed identifier parts and words; coverage and match counts use these. */
@@ -10,10 +6,6 @@ export interface LexicalQuery {
   /** Whole multi-part identifiers, scored as a bonus so exact matches outrank split ones. */
   compounds: string[];
 }
-
-const IDENTIFIER = /[\p{L}\p{N}]+(?:_[\p{L}\p{N}]+)*/gu;
-// Digits stay attached (`topic7`, `jev14`): splitting them makes lone numbers match everywhere.
-const CAMEL_BOUNDARY = /(?<=\p{Ll})(?=\p{Lu})|(?<=\p{Lu})(?=\p{Lu}\p{Ll})/u;
 
 // shortcut: suffix stripping for plain ASCII words only, not a full stemmer. Both queries and
 // archives pass through it, so mismatched stems stay consistent; upgrade if the recall
@@ -32,22 +24,9 @@ function stem(word: string): string {
   return base;
 }
 
-interface Lexeme {
-  parts: string[];
-  compound?: string;
-}
-
-function lexemes(text: string): Lexeme[] {
-  return (text.match(IDENTIFIER) ?? []).map((identifier) => {
-    const parts = identifier.split("_").flatMap((part) => part.split(CAMEL_BOUNDARY));
-    const lowered = parts.map((part) => part.toLowerCase()).filter(Boolean);
-    return lowered.length > 1 ? { parts: lowered, compound: lowered.join("") } : { parts: lowered };
-  });
-}
-
 /** Token bag for an archive passage: stemmed parts plus whole multi-part identifiers. */
 export function lexicalTokens(text: string): string[] {
-  return lexemes(text).flatMap(({ parts, compound }) => [
+  return identifierLexemes(text).flatMap(({ parts, compound }) => [
     ...parts.map(stem),
     ...(compound === undefined ? [] : [compound]),
   ]);
@@ -56,7 +35,7 @@ export function lexicalTokens(text: string): string[] {
 export function lexicalQuery(text: string): LexicalQuery {
   const terms = new Set<string>();
   const compounds = new Set<string>();
-  for (const { parts, compound } of lexemes(text)) {
+  for (const { parts, compound } of identifierLexemes(text)) {
     for (const part of parts) if (!STOP_WORDS.has(part)) terms.add(stem(part));
     if (compound !== undefined) compounds.add(compound);
   }
