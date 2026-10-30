@@ -1,7 +1,9 @@
 import { afterEach, expect, test } from "bun:test";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { spawnSync } from "node:child_process";
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 import { err, ok } from "neverthrow";
 import { dockStart, validStart, workdayStart } from "../workday_start.ts";
 
@@ -88,3 +90,28 @@ test("timestamp validation rejects future times and dates", () => {
     expect(dockStart("Fri Oct 30 12:59:49 2026", now)).toBeUndefined();
     expect(dockStart("invalid", now)).toBeUndefined();
 });
+
+for (const silent of [false, true]) {
+    test(`installed symlink resolves the helper independently of cwd (silent=${silent})`, () => {
+        const { cacheBase } = fixture();
+        const source = fileURLToPath(new URL("../../functions/first_login_of_the_day.fish", import.meta.url));
+        const runtime = fileURLToPath(new URL("../", import.meta.url)).replace(/\/$/, "");
+        const installed = join(cacheBase, "installed", "first_login_of_the_day.fish");
+        const bin = join(cacheBase, "bin");
+        mkdirSync(dirname(installed), { recursive: true });
+        mkdirSync(bin);
+        symlinkSync(source, installed);
+        writeFileSync(join(bin, "bun"), `#!/bin/sh
+test "$1" = --cwd && test "$2" = '${runtime}' && test "$3" = '${runtime}/workday_start.ts' || exit 42
+printf '09:04:00\\n'
+`, { mode: 0o755 });
+        const result = spawnSync("fish", ["--no-config", "-c", `source "$argv[1]"; first_login_of_the_day ${silent ? "--silent" : ""}`, "--", installed], {
+            cwd: cacheBase,
+            env: { ...process.env, PATH: `${bin}:${process.env.PATH}` },
+            encoding: "utf8",
+        });
+        expect(result.stderr).toBe("");
+        expect(result.status).toBe(0);
+        expect(result.stdout).toBe(silent ? "" : "09:04:00\n");
+    });
+}
