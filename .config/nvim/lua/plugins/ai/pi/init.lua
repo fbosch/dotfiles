@@ -3,6 +3,27 @@ local pi_session = require("plugins.ai.pi.session")
 local session = require("utils.session")
 
 local M = {}
+local pi_ask_host_path = vim.env.PI_NVIM_ASK_HOST
+local function load_pi_ask_host(path)
+	if type(path) ~= "string" or path:match("^/nix/store/") == nil then
+		return nil, "PI_NVIM_ASK_HOST must name an immutable Nix store file"
+	end
+	local real_path = vim.uv.fs_realpath(path)
+	local stat = vim.uv.fs_lstat(path)
+	if real_path ~= path or stat == nil or stat.type ~= "file" then
+		return nil, "PI_NVIM_ASK_HOST must be a canonical regular file"
+	end
+	local mode = stat.mode % 512
+	if math.floor(mode / 128) % 2 == 1 or math.floor(mode / 16) % 2 == 1 or math.floor(mode / 2) % 2 == 1 then
+		return nil, "PI_NVIM_ASK_HOST must be read-only"
+	end
+	local ok, factory = pcall(dofile, path)
+	if not ok or type(factory) ~= "table" or type(factory.start) ~= "function" then
+		return nil, "Pi Ask host factory could not be loaded: " .. tostring(factory)
+	end
+	return factory
+end
+local pi_ask_host_factory, pi_ask_host_load_error = load_pi_ask_host(pi_ask_host_path)
 
 local terminal_instance
 local terminal_session_id
@@ -10,6 +31,7 @@ local terminal_owner
 local terminal_owner_id
 local terminal_launch_id
 local terminal_channel_id
+local terminal_ask_host
 local terminal_bound = false
 local launch_sequence = 0
 local prompt_active_binding
@@ -38,8 +60,14 @@ local function clear_terminal_state()
 	local closed_owner = terminal_owner
 	local closed_launch_id = terminal_launch_id
 	if terminal_channel_id ~= nil then
-		pcall(vim.fn.chanclose, terminal_channel_id)
+		if terminal_ask_host ~= nil then
+			pcall(terminal_ask_host.close, terminal_channel_id)
+		end
 		M.prompt_channel_closed(terminal_channel_id)
+	end
+	if terminal_ask_host ~= nil then
+		pcall(terminal_ask_host.stop)
+		terminal_ask_host = nil
 	end
 	terminal_instance = nil
 	terminal_session_id = nil
@@ -167,17 +195,15 @@ local function prepare_launch(cwd, owner)
 end
 
 local function launch_command(session_flag, session_id, session_dir, socket, launch_id)
-	if type(socket) ~= "string" or socket == "" then
-		error("pi requires a Neovim RPC socket")
+	if type(socket) ~= "string" or socket == "" or #socket > 103 then
+		error("Pi Ask socket path is invalid")
 	end
 	if type(launch_id) ~= "string" or launch_id:match("^[a-f0-9]+$") == nil or #launch_id ~= 32 then
 		error("pi requires a valid Neovim launch ID")
 	end
-
 	local environment = "PI_NVIM_LAUNCH_ID="
 		.. vim.fn.shellescape(launch_id)
-		.. " "
-		.. "PI_NVIM_SOCKET="
+		.. " PI_NVIM_ASK_SOCKET="
 		.. vim.fn.shellescape(socket)
 		.. " "
 	if vim.env.HERDR_ENV == "1" then
@@ -189,7 +215,6 @@ local function launch_command(session_flag, session_id, session_dir, socket, lau
 		-- Herdr accepts official Pi lifecycle reports only when Pi owns the pane process.
 		environment = "env -u HERDR_PANE_ID PI_NVIM_HERDR_PANE_ID=" .. vim.fn.shellescape(pane_id) .. " " .. environment
 	end
-
 	local command = environment .. "pi"
 	if session_dir ~= nil then
 		command = command .. " --session-dir " .. vim.fn.shellescape(session_dir)
@@ -198,6 +223,38 @@ local function launch_command(session_flag, session_id, session_dir, socket, lau
 		return command
 	end
 	return command .. " " .. session_flag .. " " .. vim.fn.shellescape(session_id)
+end
+
+local function create_ask_host(launch_id, cwd)
+	if pi_ask_host_factory == nil then
+		vim.notify("Pi Ask is unavailable: " .. tostring(pi_ask_host_load_error), vim.log.levels.ERROR)
+		return nil
+	end
+	local callbacks = {
+		bind = M.bind_session,
+		acknowledge = M.prompt_acknowledge,
+		closed = M.prompt_channel_closed,
+	}
+	local started, host = pcall(pi_ask_host_factory.start, {
+		launchId = launch_id,
+		cwd = cwd,
+		bind = callbacks.bind,
+		acknowledge = callbacks.acknowledge,
+		closed = callbacks.closed,
+	})
+	if
+		not started
+		or type(host) ~= "table"
+		or type(host.socketPath) ~= "string"
+		or type(host.close) ~= "function"
+		or type(host.is_open) ~= "function"
+		or type(host.notify) ~= "function"
+		or type(host.stop) ~= "function"
+	then
+		vim.notify("Pi Ask host could not start: " .. tostring(host), vim.log.levels.ERROR)
+		return nil
+	end
+	return host
 end
 
 local function snacks_terminal()
@@ -219,6 +276,10 @@ local function open_terminal(session_flag, session_id, session_dir, cwd, expecte
 	assert(canonical_path(cwd) == expected_cwd, "Pi launch worktree changed")
 	launch_options = launch_options or {}
 	local launch_id = next_launch_id()
+	local host = create_ask_host(launch_id, expected_cwd)
+	if host == nil then
+		return nil
+	end
 	local win_options = vim.deepcopy(terminal_options.win)
 	if launch_options.focus == false then
 		win_options.enter = false
@@ -229,22 +290,23 @@ local function open_terminal(session_flag, session_id, session_dir, cwd, expecte
 		-- Snacks auto-close deletes its event group before our cleanup can run.
 		auto_close = false,
 	}
-	local socket = vim.v.servername
-	if socket == "" then
-		socket = vim.fn.serverstart()
+	local opened, terminal = pcall(function()
+		return snacks_terminal().open(
+			launch_command(session_flag, session_id, session_dir, host.socketPath, launch_id),
+			options
+		)
+	end)
+	if not opened or terminal == nil then
+		pcall(host.stop)
+		vim.notify(
+			"Pi terminal could not start: " .. tostring(opened and "terminal did not open" or terminal),
+			vim.log.levels.ERROR
+		)
+		return nil
 	end
-	local terminal =
-		snacks_terminal().open(launch_command(session_flag, session_id, session_dir, socket, launch_id), options)
-	if terminal == nil then
-		error("Pi terminal did not open")
-	end
-	terminal_instance = terminal
-	terminal_session_id = session_id
-	terminal_owner = owner
-	terminal_owner_id = owner_id(owner)
-	terminal_launch_id = launch_id
-	terminal_channel_id = nil
-	terminal_bound = false
+	terminal_instance, terminal_session_id, terminal_owner = terminal, session_id, owner
+	terminal_owner_id, terminal_launch_id = owner_id(owner), launch_id
+	terminal_channel_id, terminal_ask_host, terminal_bound = nil, host, false
 	configure_terminal(terminal)
 	local function clear_terminal()
 		if terminal_instance == terminal then
@@ -292,6 +354,10 @@ local function prepare_editor_exit()
 	-- Snacks wipes the terminal on ExitPre, before MiniSessions saves on VimLeavePre.
 	save_terminal_state()
 	editor_exiting = true
+	if terminal_ask_host ~= nil then
+		pcall(terminal_ask_host.stop)
+		terminal_ask_host = nil
+	end
 end
 
 local function notify_restore_failure(reason)
@@ -317,7 +383,7 @@ end
 
 local function open_fresh_session(nvim_session, worktree, launch_options)
 	local ok, terminal = pcall(open_terminal, nil, nil, nil, nvim_session.cwd, worktree, nvim_session, launch_options)
-	if not ok then
+	if not ok or terminal == nil then
 		notify_restore_failure("open_failed")
 		return nil
 	end
@@ -392,7 +458,7 @@ local function resume_saved_session(nvim_session, launch_options, prepared_workt
 		nvim_session,
 		launch_options
 	)
-	if not ok then
+	if not ok or terminal == nil then
 		notify_restore_failure("open_failed")
 		return nil
 	end
@@ -413,8 +479,11 @@ function M.restore()
 end
 
 function M.bind_session(binding)
-	-- Incoming RPC has no close autocmd; retire dead channels when binding or sending.
-	if terminal_channel_id ~= nil and vim.api.nvim_get_chan_info(terminal_channel_id).id == nil then
+	-- A peer may disconnect before the scheduled close callback; retire its virtual ingress.
+	if
+		terminal_channel_id ~= nil
+		and (terminal_ask_host == nil or not terminal_ask_host.is_open(terminal_channel_id))
+	then
 		M.prompt_channel_closed(terminal_channel_id)
 	end
 	local session_id = type(binding) == "table" and binding.sessionId or binding
@@ -436,7 +505,8 @@ function M.bind_session(binding)
 			or type(binding.channelId) ~= "number"
 			or binding.channelId < 1
 			or binding.channelId % 1 ~= 0
-			or vim.api.nvim_get_chan_info(binding.channelId).mode ~= "rpc"
+			or terminal_ask_host == nil
+			or not terminal_ask_host.is_open(binding.channelId)
 			or binding.editorPid ~= vim.fn.getpid()
 			or (binding.replacePending ~= nil and type(binding.replacePending) ~= "boolean")
 			or binding_cwd == nil
@@ -703,7 +773,10 @@ local function send_prompt()
 	prompt_next_sequence = sequence + 1
 	pending.sequence, pending.request_id, pending.session_id, pending.sent =
 		sequence, request.requestId, identity.sessionId, true
-	local sent_ok, sent = pcall(vim.rpcnotify, identity.channelId, "pi:nvim-prompt/v1", request)
+	local sent_ok, sent = false, false
+	if terminal_ask_host ~= nil then
+		sent_ok, sent = pcall(terminal_ask_host.notify, identity.channelId, "pi:nvim-prompt/v1", request)
+	end
 	if not sent_ok or sent == false then
 		if prompt_sequence_launch_id == identity.launchId and prompt_next_sequence == sequence + 1 then
 			prompt_next_sequence = sequence
@@ -738,7 +811,10 @@ bound = function(identity)
 end
 
 function M.prompt_available()
-	if terminal_channel_id ~= nil and vim.api.nvim_get_chan_info(terminal_channel_id).id == nil then
+	if
+		terminal_channel_id ~= nil
+		and (terminal_ask_host == nil or not terminal_ask_host.is_open(terminal_channel_id))
+	then
 		M.prompt_channel_closed(terminal_channel_id)
 	end
 	if prompt_uncertain_launch_id ~= nil then

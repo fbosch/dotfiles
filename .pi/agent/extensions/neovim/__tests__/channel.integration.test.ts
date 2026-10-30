@@ -64,27 +64,51 @@ for (const state of ["idle", "streaming", "blocked"] as const) {
   });
 }
 
-test("replacement binding waits for the host to observe the old channel disconnect", async () => {
+test("replacement binding reconnects after the old peer disconnects", async () => {
   const editor = await startEditor(true);
   cleanups.push(editor.close);
+  let disconnected!: () => void;
+  const disconnectedEvent = new Promise<void>((resolve) => { disconnected = resolve; });
   const handlers = {
-    dispatch: () => {
-      throw new Error("unexpected prompt");
-    },
-    reject: () => {
-      throw new Error("unexpected prompt");
-    },
-    disconnect: () => {},
+    dispatch: () => { throw new Error("unexpected prompt"); },
+    reject: () => { throw new Error("unexpected prompt"); },
+    disconnect: () => disconnected(),
   };
   const first = new PiAskChannel(editor.socket, editor.cwd, editor.launchId, handlers);
   const next = new PiAskChannel(editor.socket, editor.cwd, editor.launchId, handlers);
   try {
     await first.open("original-session");
-    const replacing = next.open("replacement-session");
-    first.close();
-    expect((await replacing).sessionId).toBe("replacement-session");
+    await first.close();
+    await disconnectedEvent;
+    expect((await next.open("replacement-session")).sessionId).toBe("replacement-session");
   } finally {
     first.close();
     next.close();
+  }
+});
+
+test("a new Pi session retires its previous editor binding before reconnecting", async () => {
+  const editor = await startEditor(true);
+  cleanups.push(editor.close);
+  const handlers = new Map<string, Handler>();
+  const failures: string[] = [];
+  const pi = {
+    on: (name: string, handler: Handler) => handlers.set(name, handler),
+    sendUserMessage: () => {},
+  } as unknown as ExtensionAPI;
+  initializeNeovim(pi, { socketPath: editor.socket, launchId: editor.launchId });
+  let sessionId = "original-session";
+  const context = {
+    cwd: editor.cwd, mode: "tui", hasUI: true, isIdle: () => true,
+    sessionManager: { getSessionId: () => sessionId },
+    ui: { getEditorText: () => "", notify: (message: string) => failures.push(message) },
+  } as unknown as ExtensionContext;
+  try {
+    await getHandler(handlers, "session_start")({}, context);
+    sessionId = "replacement-session";
+    await getHandler(handlers, "session_start")({}, context);
+    expect(failures).toEqual([]);
+  } finally {
+    await getHandler(handlers, "session_shutdown")({}, context);
   }
 });

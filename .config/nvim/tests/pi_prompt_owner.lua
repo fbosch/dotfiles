@@ -16,13 +16,16 @@ local function scenario(name, run)
 	end
 	local original_input, original_notify = vim.ui.input, vim.notify
 	local original_defer = vim.defer_fn
-	local original_rpcnotify, original_channel_info = vim.rpcnotify, vim.api.nvim_get_chan_info
+	local original_test_ask_notify = rawget(_G, "pi_test_ask_notify")
 	local original_cwd, original_window = vim.fn.getcwd(), vim.api.nvim_get_current_win()
 	local original_agent_dir, original_session_dir = vim.env.PI_CODING_AGENT_DIR, vim.env.PI_CODING_AGENT_SESSION_DIR
 	local agent_dir = vim.fn.tempname()
 	local session_dir = agent_dir .. "/sessions"
 	vim.fn.mkdir(session_dir, "p")
 	vim.env.PI_CODING_AGENT_DIR, vim.env.PI_CODING_AGENT_SESSION_DIR = agent_dir, session_dir
+	local previous_ask_host, previous_ask_root = vim.env.PI_NVIM_ASK_HOST, vim.env.PI_ASK_FIXTURE_ROOT
+	vim.env.PI_NVIM_ASK_HOST = dofile(repo_root .. "/.config/nvim/tests/pi_ask_host.lua")(repo_root)
+	vim.env.PI_ASK_FIXTURE_ROOT = agent_dir
 	vim.cmd.cd(repo_root)
 	local session = dofile(repo_root .. "/.config/nvim/lua/utils/session.lua")
 	local owner = { cwd = repo_root, metadata_path = vim.fn.tempname(), specifier = "prompt-owner" }
@@ -106,16 +109,13 @@ local function scenario(name, run)
 	rawset(vim, "notify", function(message)
 		table.insert(f.notices, message)
 	end)
-	rawset(vim, "rpcnotify", function(channel, method, request)
+	rawset(_G, "pi_test_ask_notify", function(channel, method, request)
 		assert(method == "pi:nvim-prompt/v1")
 		if f.fail_send then
 			return false
 		end
 		table.insert(f.requests, { channel = channel, payload = vim.deepcopy(request) })
 		return true
-	end)
-	rawset(vim.api, "nvim_get_chan_info", function(channel)
-		return { id = channel, mode = "rpc" }
 	end)
 	rawset(vim, "defer_fn", function(callback, delay)
 		local timer = { callback = callback, delay = delay, closed = false }
@@ -201,8 +201,8 @@ local function scenario(name, run)
 	rawset(vim.ui, "input", original_input)
 	rawset(vim, "notify", original_notify)
 	rawset(vim, "defer_fn", original_defer)
-	rawset(vim, "rpcnotify", original_rpcnotify)
-	rawset(vim.api, "nvim_get_chan_info", original_channel_info)
+	rawset(_G, "pi_test_ask_notify", original_test_ask_notify)
+	vim.env.PI_NVIM_ASK_HOST, vim.env.PI_ASK_FIXTURE_ROOT = previous_ask_host, previous_ask_root
 	for _, key in ipairs(module_names) do
 		package.loaded[key] = saved_modules[key]
 	end

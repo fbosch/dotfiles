@@ -1,20 +1,24 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { mkdirSync, mkdtempSync, realpathSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
 import { isMatching, P } from "ts-pattern";
 
 export async function startEditor(noPrompt = false, failFirstOpen = false, binding?: unknown) {
-  const root = realpathSync(mkdtempSync(join(tmpdir(), "pi-ask-")));
+  const hostSource = process.env.PI_ASK_PRODUCTION_HOST ?? resolve(import.meta.dir, "pi-ask-host.lua");
+  const hostResult = spawnSync("nix-store", ["--add", hostSource], { encoding: "utf8" });
+  if (hostResult.status !== 0) throw new Error(`nix-store --add failed for Pi Ask test host: ${hostResult.stderr}`);
+  const hostPath = hostResult.stdout.trim();
+  if (!hostPath.startsWith("/nix/store/")) throw new Error("Pi Ask test host is not in the Nix store");
+  const root = realpathSync(mkdtempSync(join("/tmp", "pi-ask-")));
+  const home = join(root, "home");
+  mkdirSync(home, { mode: 0o700 });
   const runtime = join(root, "run");
   mkdirSync(runtime, { mode: 0o700 });
   const child = spawn(
     "nvim",
     [
       "--headless",
-      "--listen",
-      join(root, "nvim.sock"),
       "-u",
       "NONE",
       "-i",
@@ -25,8 +29,10 @@ export async function startEditor(noPrompt = false, failFirstOpen = false, bindi
     {
       env: {
         ...process.env,
+        HOME: home,
         XDG_RUNTIME_DIR: runtime,
         PI_ASK_FIXTURE_ROOT: root,
+        PI_NVIM_ASK_HOST: hostPath,
         PI_ASK_FIXTURE_CONFIG: resolve(import.meta.dir, "../../../../../../.config/nvim"),
         PI_ASK_FIXTURE_NO_PROMPT: noPrompt ? "1" : "0",
         ...(binding === undefined ? {} : { PI_ASK_FIXTURE_BINDING: JSON.stringify(binding) }),

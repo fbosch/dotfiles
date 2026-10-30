@@ -192,7 +192,7 @@ test("enforces total scan bytes and artifact count limits", async () => {
   expect(report.limited).toBe(true);
 });
 
-test("clips aggregate passages to the output cap", async () => {
+test("splits long saved lines into bounded passages that fit the output cap", async () => {
   const f = await fixture(
     Array.from({ length: 3 }, () =>
       Array.from({ length: 6 }, (_, i) =>
@@ -201,6 +201,26 @@ test("clips aggregate passages to the output cap", async () => {
     ),
   );
   const report = await recallSaved(f.manager.getBranch(), f.root, "audit receipt");
+  expect(report.passages).toHaveLength(3);
   expect(report.text.length).toBeLessThanOrEqual(RECALL_LIMITS.outputChars);
-  expect(report.limited).toBe(true);
+  expect(report.text).not.toContain("[line clipped]");
+  expect(report.text).toContain("4│audit receipt");
+});
+
+test("searches JSON-encoded output as decoded lines and cites the saved line", async () => {
+  const output = [
+    ...Array.from({ length: 40 }, (_, i) => `routine step ${i}: passed with nominal timing`),
+    'Configured classifier: "typesafe/jev-1.14" with fallback luna',
+    ...Array.from({ length: 40 }, (_, i) => `trailing step ${i}: passed with nominal timing`),
+  ].join("\n");
+  const f = await fixture([
+    [
+      "Script completed",
+      JSON.stringify({ name: "settings", result: JSON.stringify({ text: output }) }),
+    ].join("\n"),
+  ]);
+  const report = await recallSaved(f.manager.getBranch(), f.root, "configured classifier fallback");
+  expect(report.text).toContain('2│Configured classifier: "typesafe/jev-1.14" with fallback luna');
+  expect(report.text).not.toContain("\\n");
+  expect(report.text).not.toContain("[line clipped]");
 });

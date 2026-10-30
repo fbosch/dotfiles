@@ -2,7 +2,7 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import type { NeovimExtensionDependencies } from "./extension";
 
 export function createNeovimExtension(dependencies: NeovimExtensionDependencies = {}) {
-  const socketPath = dependencies.socketPath ?? process.env.PI_NVIM_SOCKET;
+  const socketPath = dependencies.socketPath ?? process.env.PI_NVIM_ASK_SOCKET;
   const launchId = dependencies.launchId ?? process.env.PI_NVIM_LAUNCH_ID;
 
   return async function neovimExtension(pi: ExtensionAPI): Promise<void> {

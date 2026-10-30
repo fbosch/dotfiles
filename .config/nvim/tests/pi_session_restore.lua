@@ -1,11 +1,12 @@
 local repo_root = assert(vim.env.REPO_ROOT)
-local original_channel_info = vim.api.nvim_get_chan_info
-rawset(vim.api, "nvim_get_chan_info", function(channel)
-	return { id = channel, mode = "rpc" }
-end)
 local test_root = vim.fn.tempname()
 vim.fn.mkdir(test_root, "p")
 test_root = vim.uv.fs_realpath(test_root) or test_root
+local previous_pi_ask_host = vim.env.PI_NVIM_ASK_HOST
+local previous_ask_root = vim.env.PI_ASK_FIXTURE_ROOT
+local ask_socket = test_root .. "/pi-ask-" .. tostring(vim.fn.getpid()) .. ".sock"
+vim.env.PI_NVIM_ASK_HOST = dofile(repo_root .. "/.config/nvim/tests/pi_ask_host.lua")(repo_root)
+vim.env.PI_ASK_FIXTURE_ROOT = test_root
 local agent_dir = test_root .. "/pi-agent"
 local encoded_repo = repo_root:gsub("^/", ""):gsub("[/:]", "-")
 local session_dir = agent_dir .. "/sessions/--" .. encoded_repo .. "--"
@@ -134,8 +135,8 @@ local function assert_exact_command(command, directory, session_id, message)
 		command
 			== "PI_NVIM_LAUNCH_ID="
 				.. vim.fn.shellescape(launch_id)
-				.. " PI_NVIM_SOCKET="
-				.. vim.fn.shellescape(vim.v.servername)
+				.. " PI_NVIM_ASK_SOCKET="
+				.. vim.fn.shellescape(ask_socket)
 				.. " pi --session-dir "
 				.. vim.fn.shellescape(directory)
 				.. " --session "
@@ -151,8 +152,8 @@ local function assert_fresh_command(command, message)
 		command
 			== "PI_NVIM_LAUNCH_ID="
 				.. vim.fn.shellescape(launch_id)
-				.. " PI_NVIM_SOCKET="
-				.. vim.fn.shellescape(vim.v.servername)
+				.. " PI_NVIM_ASK_SOCKET="
+				.. vim.fn.shellescape(ask_socket)
 				.. " pi",
 		message .. ": fresh Pi command was not session-neutral"
 	)
@@ -486,5 +487,6 @@ vim.env.PI_CODING_AGENT_SESSION_DIR = previous_session_dir
 vim.env.HERDR_ENV = previous_herdr_env
 vim.env.HERDR_PANE_ID = previous_herdr_pane_id
 vim.env.PI_NVIM_HERDR_PANE_ID = previous_pi_herdr_pane_id
+vim.env.PI_NVIM_ASK_HOST = previous_pi_ask_host
+vim.env.PI_ASK_FIXTURE_ROOT = previous_ask_root
 vim.fn.delete(test_root, "rf")
-rawset(vim.api, "nvim_get_chan_info", original_channel_info)

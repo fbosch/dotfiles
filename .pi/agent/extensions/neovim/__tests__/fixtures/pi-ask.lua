@@ -70,11 +70,11 @@ pi.prompt_acknowledge = function(payload, channel)
 	return accepted
 end
 if vim.env.PI_ASK_FIXTURE_FAIL_FIRST_OPEN == "1" then
-	assert(not pcall(pi.start), "first terminal open unexpectedly succeeded")
+	assert(pi.start() == nil, "first terminal open unexpectedly succeeded")
 end
 assert(pi.start())
 local ready = {
-	socket = assert(terminal.command:match("PI_NVIM_SOCKET='([^']+)'")),
+	socket = assert(terminal.command:match("PI_NVIM_ASK_SOCKET='([^']+)'")),
 	launchId = assert(terminal.command:match("PI_NVIM_LAUNCH_ID='([a-f0-9]+)'")),
 	cwd = root,
 }

@@ -125,11 +125,78 @@ function excerptLine(line: string, terms: readonly string[]): string {
   return `${at > 0 ? "… " : ""}${line.slice(at, at + 800)} … [line clipped]`;
 }
 
+interface RecallSegment {
+  text: string;
+  /** One-based line in the saved file, kept for citations. */
+  line: number;
+}
+const SEGMENT_CHARS = 600;
+const SEGMENT_OVERLAP = 100;
+const MAX_DECODE_DEPTH = 3;
+// Prefetch injects without being asked, so it needs most of the question's distinctive terms.
+const PREFETCH_MIN_COVERAGE = 0.6;
+const JSON_ESCAPES: Record<string, string> = { n: "\n", r: "", t: "\t", '"': '"', "\\": "\\", "/": "/" };
+
+const segmentSpan = (path: string, from: number, to: number) => `${path}\0${from}\0${to}`;
+
+function decodeJsonEscapes(value: string): string {
+  return value.replace(/\\(?:u([0-9a-fA-F]{4})|([\s\S]))/gu, (sequence: string, hex?: string, char?: string) =>
+    hex !== undefined ? String.fromCharCode(Number.parseInt(hex, 16)) : (JSON_ESCAPES[char ?? ""] ?? sequence));
+}
+
+function chunkSegment(value: string): string[] {
+  const chunks: string[] = [];
+  let start = 0;
+  while (start < value.length) {
+    let end = Math.min(value.length, start + SEGMENT_CHARS);
+    const space = value.lastIndexOf(" ", end);
+    if (end < value.length && space > start + SEGMENT_CHARS / 2) end = space;
+    chunks.push(value.slice(start, end));
+    if (end === value.length) break;
+    // Overlap chunks so a fact split at a boundary still appears whole in one of them.
+    const next = value.indexOf(" ", end - SEGMENT_OVERLAP);
+    start = next > start && next < end ? next + 1 : end - SEGMENT_OVERLAP;
+  }
+  return chunks;
+}
+
+function expandSegment(value: string, depth: number): string[] {
+  if (value.length <= SEGMENT_CHARS) return [value];
+  if (depth < MAX_DECODE_DEPTH && /\\[nr]/u.test(value))
+    return decodeJsonEscapes(value).split("\n").flatMap((part) => expandSegment(part, depth + 1));
+  return chunkSegment(value);
+}
+
+// Codemode and MCP results are often saved as one JSON line with escaped newlines; search
+// decoded, bounded segments while citing the saved file's own line numbers.
+function recallSegments(text: string): RecallSegment[] {
+  return text.split("\n").flatMap((line, index) =>
+    expandSegment(line, 0).map((segment) => ({ text: segment, line: index + 1 })));
+}
+
+function termWeights(
+  segments: readonly RecallSegment[],
+  queries: readonly PreparedQuery[],
+): (term: string) => number {
+  const terms = new Set(queries.flatMap((query) => query.terms));
+  const frequency = new Map<string, number>();
+  for (const segment of segments) {
+    const tokens = new Set(words(segment.text));
+    for (const term of terms) if (tokens.has(term)) frequency.set(term, (frequency.get(term) ?? 0) + 1);
+  }
+  return (term) => {
+    const count = frequency.get(term) ?? 0;
+    return Math.log(1 + (segments.length - count + 0.5) / (count + 0.5));
+  };
+}
+
 interface Passage {
   path: string;
   call: string;
   from: number;
   to: number;
+  /** Segment range key; several segments can share one saved source line. */
+  span: string;
   text: string;
   score: number;
   evidenceKey?: string;
@@ -180,22 +247,10 @@ interface RecallScan {
   textCandidates: RecallTextCandidate[];
 }
 
-function candidateSnippet(
-  lines: readonly string[],
-  from: number,
-  to: number,
-  terms: readonly string[],
-): string {
-  let text = "";
-  for (let index = from; index < to; index++) {
-    const line = lines[index] ?? "";
-    const prefix = `${index + 1}│`;
-    const value = prefix + excerptLine(line, terms);
-    const remaining = RECALL_LIMITS.candidateChars - text.length - (text ? 1 : 0);
-    if (remaining <= 0) break;
-    text += `${text ? "\n" : ""}${value.slice(0, remaining)}`;
-  }
-  return text;
+function candidateSnippet(window: readonly RecallSegment[], terms: readonly string[]): string {
+  // Window starts include leading context, so center the classifier excerpt on the best segment.
+  const text = window.map((segment) => `${segment.line}│${excerptLine(segment.text, terms)}`).join("\n");
+  return fitExcerpt(text, terms, RECALL_LIMITS.candidateChars).text;
 }
 
 function sampledWindowStarts(lineCount: number): number[] {
@@ -208,7 +263,7 @@ function sampledWindowStarts(lineCount: number): number[] {
 function textCandidate(
   item: MaskedItem,
   call: string,
-  lines: readonly string[],
+  segments: readonly RecallSegment[],
   from: number,
   to: number,
   snapshot: RecallTextSnapshot,
@@ -216,16 +271,18 @@ function textCandidate(
   recency: number,
 ): RecallTextCandidate {
   const terms = [...new Set(queries.flatMap((query) => query.terms))];
-  const text = candidateSnippet(lines, from, to, terms);
-  const body = lines.slice(from, to).join(" ");
+  const window = segments.slice(from, to);
+  const text = candidateSnippet(window, terms);
+  const body = window.map((segment) => segment.text).join(" ");
   const score = Math.max(0, ...queries.map((query) =>
     hitsForCandidate(`${call} ${body}`, query.terms)
   ));
   return {
     path: item.path,
     call,
-    from: from + 1,
-    to,
+    from: window[0]?.line ?? from + 1,
+    to: window.at(-1)?.line ?? to,
+    span: segmentSpan(item.path, from, to),
     text,
     score,
     snapshot,
@@ -243,7 +300,7 @@ function selectTextCandidatePool(
 ): RecallTextCandidate[] {
   const unique = new Map<string, RecallTextCandidate>();
   for (const candidate of candidates) {
-    const key = candidate.path + "\\0" + candidate.from + "\\0" + candidate.to;
+    const key = candidate.span;
     const prior = unique.get(key);
     if (!prior || candidate.score > prior.score) unique.set(key, candidate);
   }
@@ -254,11 +311,11 @@ function selectTextCandidatePool(
     .sort((a, b) => b.recency - a.recency || a.from - b.from);
   const selected = lexical.slice(0, Math.floor(RECALL_LIMITS.textCandidates / 2));
   const selectedKeys = new Set(selected.map((candidate) =>
-    candidate.path + "\\0" + candidate.from + "\\0" + candidate.to));
+    candidate.span));
   const perArtifact = new Set(selected.map((candidate) => candidate.path));
   for (const candidate of nonlexical) {
     if (selected.length >= RECALL_LIMITS.textCandidates) break;
-    const key = candidate.path + "\\0" + candidate.from + "\\0" + candidate.to;
+    const key = candidate.span;
     if (selectedKeys.has(key) || perArtifact.has(candidate.path)) continue;
     selected.push(candidate);
     selectedKeys.add(key);
@@ -266,14 +323,14 @@ function selectTextCandidatePool(
   }
   for (const candidate of lexical) {
     if (selected.length >= RECALL_LIMITS.textCandidates) break;
-    const key = candidate.path + "\\0" + candidate.from + "\\0" + candidate.to;
+    const key = candidate.span;
     if (selectedKeys.has(key)) continue;
     selected.push(candidate);
     selectedKeys.add(key);
   }
   for (const candidate of nonlexical) {
     if (selected.length >= RECALL_LIMITS.textCandidates) break;
-    const key = candidate.path + "\\0" + candidate.from + "\\0" + candidate.to;
+    const key = candidate.span;
     if (selectedKeys.has(key)) continue;
     selected.push(candidate);
     selectedKeys.add(key);
@@ -347,6 +404,11 @@ async function scanSaved(
   let limited = all.length > candidates.length;
   const queryReports = queries.map((query) => ({ query: query.query, passages: [] as Passage[] }));
   const textCandidates: RecallTextCandidate[] = [];
+  const loaded: {
+    item: MaskedItem;
+    read: Awaited<ReturnType<typeof readArtifact>>;
+    segments: RecallSegment[];
+  }[] = [];
   for (const item of candidates) {
     signal?.throwIfAborted();
     if (bytes >= byteLimit) {
@@ -374,7 +436,17 @@ async function scanSaved(
     scanned++;
     bytes += read.bytes;
     limited ||= read.partial;
-    const lines = read.text.split("\n");
+    loaded.push({ item, read, segments: recallSegments(read.text) });
+  }
+  // Prefetch weighs terms across every scanned segment, so all artifacts load before scoring.
+  const weight = automatic
+    ? termWeights(loaded.flatMap(({ segments }) => segments), queries)
+    : undefined;
+  const usable = (line: string) => isEvidence(line) && !/[?？]\s*$/u.test(evidenceLine(line));
+  for (const { item, read, segments } of loaded) {
+    signal?.throwIfAborted();
+    const lines = segments.map((segment) => segment.text);
+    const sourceLine = (index: number) => segments[index]?.line ?? index + 1;
     const call = calls.get(item.entryId) ?? item.toolName;
 
     const snapshot = collectCandidates
@@ -383,7 +455,7 @@ async function scanSaved(
     if (snapshot) {
       for (const start of sampledWindowStarts(lines.length))
         textCandidates.push(textCandidate(
-          item, call, lines, start, Math.min(lines.length, start + 5), snapshot,
+          item, call, segments, start, Math.min(lines.length, start + 5), snapshot,
           queries, recency.get(item) ?? 0,
         ));
     }
@@ -392,18 +464,29 @@ async function scanSaved(
       const queryReport = queryReports[queryIndex];
       if (!query || !queryReport) continue;
       const sourceHits = automatic ? 0 : hits(call, query.terms);
+      // A distinctive identifier can stand alone; ordinary prose needs two terms on an evidence line.
+      const required = query.terms.length === 1 && /[\d_-]/u.test(query.query) ? 1 : 2;
+      const totalWeight = weight ? query.terms.reduce((sum, term) => sum + weight(term), 0) : 0;
+      // Prefetch scores IDF-weighted query coverage, so common words cannot carry a match alone.
+      const strength = (text: string) => {
+        if (!weight) return 0;
+        const tokens = new Set(words(text));
+        const matched = query.terms.filter((term) => tokens.has(term));
+        if (matched.length < required) return 0;
+        return matched.reduce((sum, term) => sum + weight(term), 0) / totalWeight;
+      };
       let best = 0;
       let bestHits = 0;
       for (let i = 0; i < lines.length; i++) {
         const line = lines[i] ?? "";
         const count = automatic
-          ? isEvidence(line) && !/[?？]\s*$/u.test(evidenceLine(line))
+          ? usable(line)
             ? Math.max(
-                hits(evidenceLine(line), query.terms),
+                strength(evidenceLine(line)),
                 ...[i - 1, i + 1].map((near) => {
                   const neighbor = lines[near] ?? "";
-                  return isEvidence(neighbor) && !/[?？]\s*$/u.test(evidenceLine(neighbor))
-                    ? hits(`${evidenceLine(line)} ${evidenceLine(neighbor)}`, query.terms)
+                  return usable(neighbor)
+                    ? strength(`${evidenceLine(line)} ${evidenceLine(neighbor)}`)
                     : 0;
                 }),
               )
@@ -414,31 +497,29 @@ async function scanSaved(
           best = i;
         }
       }
-      // A distinctive identifier can stand alone; ordinary prose needs two terms on an evidence line.
-      const required = automatic && query.terms.length === 1 && /[\d_-]/u.test(query.query) ? 1 : automatic ? 2 : 1;
-      if (bestHits < required && (automatic || sourceHits === 0)) continue;
+      if (bestHits === 0 && (automatic || sourceHits === 0)) continue;
       const whole = !automatic && bestHits === 0 && read.text.length <= 4_000 && !read.partial;
       const from = whole ? 0 : Math.max(0, best - (automatic ? 1 : 2));
       const to = whole ? lines.length : Math.min(lines.length, best + (automatic ? 2 : 4));
       const text = lines
         .slice(from, to)
-        .map((line, i) => ({ line, number: from + i + 1 }))
-        .filter(({ line }) => !automatic || isEvidence(line) && !/[?？]\s*$/u.test(evidenceLine(line)) && !visible.has(evidenceKey(line)))
+        .map((line, i) => ({ line, number: sourceLine(from + i) }))
+        .filter(({ line }) => !automatic || usable(line) && !visible.has(evidenceKey(line)))
         .map(({ line, number }) => `${number}│${excerptLine(line, query.terms)}`)
         .join("\n");
       const passage: Passage = {
         path: item.path,
         call: automatic ? item.toolName : call,
-        from: from + 1,
-        to,
+        from: sourceLine(from),
+        to: sourceLine(to - 1),
+        span: segmentSpan(item.path, from, to),
         text,
         score: bestHits + sourceHits / (query.terms.length + 1),
         ...(automatic ? { evidenceKey: evidenceKey(lines[best] ?? "") } : {}),
-
       };
       if (snapshot && bestHits + sourceHits > 0)
         textCandidates.push(textCandidate(
-          item, call, lines, from, to, snapshot, queries, recency.get(item) ?? 0,
+          item, call, segments, from, to, snapshot, queries, recency.get(item) ?? 0,
         ));
       passageRecency.set(passage, recency.get(item) ?? 0);
       if (!automatic || !visible.has(passage.evidenceKey ?? "")) queryReport.passages.push(passage);
@@ -911,13 +992,13 @@ function parseRecallSelections(
 
 function lexicalTextMatches(scan: RecallScan): RecallTextMatch[] {
   const candidates = new Map(scan.textCandidates.map((candidate) => [
-    `${candidate.path}\0${candidate.from}\0${candidate.to}`,
+    candidate.span,
     candidate,
   ]));
   const matches: RecallTextMatch[] = [];
   for (const [queryIndex, query] of scan.queries.entries()) {
     for (const passage of query.passages) {
-      const candidate = candidates.get(`${passage.path}\0${passage.from}\0${passage.to}`);
+      const candidate = candidates.get(passage.span);
       if (candidate)
         matches.push({ queryIndex, candidate, text: passage.text, score: passage.score });
     }
@@ -1400,7 +1481,7 @@ export function registerRecallPrefetch(
       }
     }
     const report = await recallBatch(
-      ctx.sessionManager.getBranch(), artifactRoot(ctx), queries, 2, undefined, 1,
+      ctx.sessionManager.getBranch(), artifactRoot(ctx), queries, 2, undefined, PREFETCH_MIN_COVERAGE,
       MAX_PREFETCH_QUERIES, true, visible,
     );
     if (report.passages.length === 0) return undefined;

@@ -56,6 +56,26 @@ test("structured data and neighboring lines remain evidence; exact identifier ne
   expect((await f.invoke("audit-æøå-314"))?.message?.content).toContain("audit-æøå-314");
 });
 
+test("common words matching a minority of the question do not trigger prefetch", async () => {
+  const f = await setup([
+    "Adapt the tool to your workflows, not the other way around.\nImprove the wording without changing any behavior.",
+    "Retrieval quality improved after splitting JSON output into decoded segments.",
+  ]);
+  expect(await f.invoke("any way we can improve retrieval quality?")).toBeUndefined();
+});
+
+test("prefetch finds facts inside JSON-encoded saved output", async () => {
+  const output = [
+    ...Array.from({ length: 30 }, (_, i) => `routine step ${i}: passed`),
+    "Archived audit receipt: encoded-417",
+    ...Array.from({ length: 30 }, (_, i) => `trailing step ${i}: passed`),
+  ].join("\n");
+  const f = await setup([JSON.stringify({ result: output })]);
+  const content = String((await f.invoke("What was the archived audit receipt?"))?.message?.content);
+  expect(content).toContain("1│Archived audit receipt: encoded-417");
+  expect(content).not.toContain("routine step 29: passed\\n");
+});
+
 test("deduplicates nested artifacts and balances distinct answers across questions", async () => {
   const f = await setup([
     'Archived audit receipt: shared-314',

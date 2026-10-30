@@ -36,6 +36,7 @@ export function initializeNeovim(
     activeContext = context;
     blockingPromptActive = false;
     publish({ state: "collecting" });
+    const previous = channel;
     const current = new PiAskChannel(dependencies.socketPath, context.cwd, dependencies.launchId, {
       dispatch: (request) => dispatcher.dispatch(request),
       reject: (request, code, fingerprint) =>
@@ -48,6 +49,8 @@ export function initializeNeovim(
     });
     channel = current;
     try {
+      await previous?.close();
+      if (channel !== current) return;
       await current.open(context.sessionManager.getSessionId());
       if (channel === current) publish({ state: "ready", observedAt: Date.now() });
     } catch (error) {
