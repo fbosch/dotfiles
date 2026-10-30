@@ -135,6 +135,24 @@ bun run --cwd .pi/agent benchmark:toon
 The benchmark uses 100 warmups and 1,000 measured runs by default. Override them with `PI_TOON_BENCHMARK_WARMUPS` and `PI_TOON_BENCHMARK_RUNS`.
 The tokenizer reference is enabled by setting `PI_TOON_TOKEN_COUNTER_MODULE` to a module exporting `countTokens(text)`.
 
+## Offline recall evaluation
+
+Score context-masking recall against one synthetic session without model calls:
+
+```bash
+bun run --cwd .pi/agent benchmark:context-recall
+```
+
+The probes mirror observed failures: split identifiers, escaped JSON output, duplicate errors across saves, superseded decisions, test logs, paths, Danish text, and prompts that saved output cannot answer. Explicit recall reports rank-1 and top-3 hits, whether the answer reaches the classifier's 12-candidate pool, stale first results, clipped passages, and redundant answer copies. Prefetch uses a classifier stub that approves every lexical match, so its answered rate and false positives measure the lexical gate before the real classifier screens it. `__tests__/context-recall-offline.test.ts` keeps these metrics at or above the recorded floor.
+
+Near-miss probes share vocabulary with saved output but have no answer, so they pass the lexical gate and test the classifier. Add `--classifier` to send explicit recall and prefetch through the configured hosted classifier (`classifier.providers` in `settings.json`):
+
+```bash
+bun run --cwd .pi/agent benchmark:context-recall --classifier
+```
+
+Live mode reports answered and abstained rates for explicit recall, how often its passages carry the "closest saved passage" label on unanswerable and answered queries, prefetch injections on distractors and near-misses, lexical fallbacks, classifier failures by reason, latency percentiles, tokens, and cost. Override the prefetch gates for a sweep with `--prefetch-coverage N` (lexical coverage that admits candidates to the classifier) and `--prefetch-margin N` (how far a candidate must beat `no_match` before injection). Classifier answers near the thresholds vary between runs, so compare several runs before tuning.
+
 ## Skill-selection hosted benchmark
 
 Run `bun run --cwd .pi/agent benchmark:skill-selection --classifier` for hosted classifier requests. Hosted calls use a 1-second delay by default; override it with `--delay-ms N` (a nonnegative safe integer, including `0` to disable pacing). Transient failures retry the same case before the benchmark advances, using up to 5 total attempts with 2-second exponential backoff capped at 30 seconds. Valid `Retry-After` seconds or HTTP dates are honored when they are longer, within the 120-second per-case and 10-minute per-run retry-wait budgets. Configure these values with `--max-attempts` (or the retry-count alias `--retries`), `--retry-base-ms`, `--retry-cap-ms`, `--max-case-wait-ms`, and `--max-run-wait-ms`.

@@ -14,6 +14,7 @@ import {
   installCodeBlockClipboard,
   installCodeBlockRenderer,
   renderCodeBlock,
+  renderTableBorders,
 } from "..";
 
 const FOREGROUND = "\u001b[38;2;187;187;187m";
@@ -514,5 +515,69 @@ describe("code block rendering", () => {
     expect(prototype.renderToken).toBe(secondRenderer);
     secondPatch.restore();
     expect(prototype.renderToken).toBe(originalRenderToken);
+  });
+});
+
+describe("table borders", () => {
+  const muted = "\u001b[38;2;85;85;85m";
+  const tableTheme: Pick<Theme, "fg" | "getBgAnsi"> = {
+    ...blockTheme,
+    fg: (color, text) => {
+      expect(color).toBe("borderMuted");
+      return `${muted}${text}${FOREGROUND_RESET}`;
+    },
+  };
+
+  test("dims the grid while preserving styled cells, wide characters, and literal borders", () => {
+    const styledCell = `\u001b[31m界│é\u001b[39m`;
+    const lines = [
+      "┌──────┬────┐",
+      `│ ${styledCell} │ æø │`,
+      "├──────┼────┤",
+      "│ data │ å  │",
+      "└──────┴────┘",
+      "",
+    ];
+    const rendered = renderTableBorders(lines, tableTheme);
+    expect(plain(rendered)).toEqual(plain(lines));
+    expect(rendered.map(visibleWidth)).toEqual(lines.map(visibleWidth));
+    expect(rendered[0]).toBe(`${muted}${lines[0]}${FOREGROUND_RESET}`);
+    expect(rendered[2]).toBe(`${muted}${lines[2]}${FOREGROUND_RESET}`);
+    expect(rendered[4]).toBe(`${muted}${lines[4]}${FOREGROUND_RESET}`);
+    expect(rendered[1]).toBe(
+      `${muted}│${FOREGROUND_RESET} ${styledCell} ${muted}│${FOREGROUND_RESET} æø ${muted}│${FOREGROUND_RESET}`,
+    );
+    expect(rendered[5]).toBe("");
+  });
+
+  test("preserves Pi's raw Markdown fallback at narrow widths", () => {
+    const lines = ["| a | b |", "| --- | --- |", "| c | d |"];
+    expect(renderTableBorders(lines, tableTheme)).toEqual(lines);
+  });
+
+  test("styles wrapped tables through Pi's lexer and uses the current theme after invalidation", () => {
+    const source =
+      "| Name | Value |\n| --- | --- |\n| æøå | long content that wraps |\n\nplain │ text";
+    const baseline = new Markdown(source, 0, 0, markdownTheme).render(24);
+    let currentTheme = tableTheme;
+    const patch = installCodeBlockRenderer(() => currentTheme);
+    try {
+      const markdown = new Markdown(source, 0, 0, markdownTheme);
+      const rendered = markdown.render(24);
+      expect(plain(rendered)).toEqual(plain(baseline));
+      const gridLines = rendered.filter((line) => /^[┌│├└]/.test(stripTerminalSequences(line)));
+      expect(gridLines.length).toBeGreaterThan(5);
+      expect(gridLines.every((line) => line.includes(muted))).toBe(true);
+      expect(rendered.find((line) => line.includes("plain"))).toBe(
+        baseline.find((line) => line.includes("plain")),
+      );
+
+      currentTheme = blockTheme;
+      markdown.invalidate();
+      expect(markdown.render(24)[0]).toContain(FOREGROUND);
+    } finally {
+      patch.restore();
+    }
+    expect(new Markdown(source, 0, 0, markdownTheme).render(24)).toEqual(baseline);
   });
 });

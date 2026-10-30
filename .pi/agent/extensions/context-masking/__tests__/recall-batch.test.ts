@@ -8,7 +8,7 @@ import {
   type ToolDefinition,
 } from "@earendil-works/pi-coding-agent";
 import { RECALL_LIMITS, recallSaved, recallSavedBatch, registerRecall, registerRecallPrefetch } from "../recall";
-import { sessionWith } from "./fixtures";
+import { approveEveryCandidate, sessionWith } from "./fixtures";
 import { customStartEvent, userStartEvent } from "../../shared/__tests__/agent-start-events";
 
 const roots: string[] = [];
@@ -174,6 +174,8 @@ test("prefetch parses ordinary Danish questions and structured question lists", 
       },
     } as unknown as Pick<ExtensionAPI, "on">,
     () => f.root,
+    () => true,
+    { classifier: approveEveryCandidate },
   );
   const ctx = { sessionManager: f.manager } as unknown as ExtensionContext;
   const invoke = async (event: Parameters<Handler>[0]) => {
@@ -208,7 +210,7 @@ test("batched prefetch does not let a strong question admit weak matches for ano
   type Handler = (event: import("@earendil-works/pi-coding-agent").BeforeAgentStartEvent,
     ctx: ExtensionContext) => Promise<import("@earendil-works/pi-coding-agent").BeforeAgentStartEventResult | undefined>;
   let handler: Handler | undefined;
-  registerRecallPrefetch({ on: (_name: string, fn: Handler) => { handler = fn; } } as unknown as Pick<ExtensionAPI, "on">, () => f.root);
+  registerRecallPrefetch({ on: (_name: string, fn: Handler) => { handler = fn; } } as unknown as Pick<ExtensionAPI, "on">, () => f.root, () => true, { classifier: approveEveryCandidate });
   if (!handler) throw Error("Missing prefetch hook");
   const result = await handler(userStartEvent("What was the archived audit receipt? Which mango orchard was selected?"),
     { sessionManager: f.manager } as unknown as ExtensionContext);
@@ -230,7 +232,7 @@ test("prefetch covers questions beyond the tool's eight-query batch within one o
   type Handler = (event: import("@earendil-works/pi-coding-agent").BeforeAgentStartEvent,
     ctx: ExtensionContext) => Promise<import("@earendil-works/pi-coding-agent").BeforeAgentStartEventResult | undefined>;
   let handler: Handler | undefined;
-  registerRecallPrefetch({ on: (_name: string, fn: Handler) => { handler = fn; } } as unknown as Pick<ExtensionAPI, "on">, () => f.root);
+  registerRecallPrefetch({ on: (_name: string, fn: Handler) => { handler = fn; } } as unknown as Pick<ExtensionAPI, "on">, () => f.root, () => true, { classifier: approveEveryCandidate });
   if (!handler) throw Error("Missing prefetch hook");
   const prompt = Array.from({ length: 12 }, (_, index) => `What was the archived marker${index} value?`).join(" ");
   const result = await handler(userStartEvent(prompt), { sessionManager: f.manager } as unknown as ExtensionContext);

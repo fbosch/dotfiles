@@ -12,6 +12,8 @@
     "context-compaction-eval.ts",
     "context-compaction-classify.ts",
     "__tests__/context-compaction.test.ts",
+    "context-recall-offline.ts",
+    "__tests__/context-recall-offline.test.ts",
     "context-pruning-recall.ts",
     "context-artifact-discovery-probe.ts",
     "context-compaction-task-fixtures.ts",

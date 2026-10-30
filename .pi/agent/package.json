@@ -19,6 +19,7 @@
     "benchmark:context-baseline": "bun benchmarks/context-baseline.ts",
     "benchmark:context-masking": "bun benchmarks/context-masking-replay.ts",
     "benchmark:context-masking-recall": "bun benchmarks/context-masking-recall-probe.ts",
+    "benchmark:context-recall": "bun benchmarks/context-recall-offline.ts",
     "check": "bun run lint && bun run test && bun run typecheck && bun run audit"
   },
   "devDependencies": {

@@ -1,4 +1,4 @@
-import { afterEach, beforeAll, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeAll, beforeEach, describe, expect, spyOn, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -11,6 +11,7 @@ import {
   installClassifierGate,
   resolveClassifierPreferences,
 } from "../classifier";
+import * as secretRedaction from "../secret-redaction";
 import { createNativeClassifierRegistry } from "./native-classifier-registry";
 
 const input: ClassifierRequestContext = {
@@ -81,6 +82,64 @@ function requester(now: () => number = Date.now) {
 }
 
 describe("input-aware classifier routing", () => {
+  test.each(["requester", "native gate", "guarded requester", "replaced gate"] as const)(
+    "redacts text through the %s and still classifies",
+    async (boundary) => {
+      const token = `ghp_${["A7fK9mP2qR5t", "V8xY3bC6dE1g", "H4jL0nS2wZ8u"].join("").slice(0, 36)}`;
+      const request: ClassifierRequestContext = {
+        ...imageInput,
+        state: { text: `Inspect ${token}`, nested: [{ password: "example-password" }] },
+        questions: {
+          clean: {
+            type: "bool",
+            instructions: `Inspect ${token}`,
+            criteria: { true: `Use ${token}`, false: "Skip" },
+          },
+        },
+      };
+      const before = JSON.stringify(request);
+      let calls = 0;
+      const fake = registry(undefined, async (model, redacted) => {
+        calls += 1;
+        expect(redacted.images).toBe(request.images);
+        expect(redacted.state).toEqual({
+          text: "Inspect [REDACTED]",
+          nested: [{ password: "[REDACTED]" }],
+        });
+        expect(redacted.questions.clean?.instructions).toBe("Inspect [REDACTED]");
+        expect(redacted.questions.clean?.criteria).toEqual({
+          true: "Use [REDACTED]",
+          false: "Skip",
+        });
+        expect(JSON.stringify(redacted)).not.toContain(token);
+        return success(model);
+      });
+      const redaction = spyOn(secretRedaction, "redactSecretValues");
+      try {
+        if (boundary !== "requester") {
+          const originalClassify = fake.classify;
+          const restore = installClassifierGate(
+            fake,
+            { cwd: directory, isProjectTrusted: () => false },
+            directory,
+          );
+          if (boundary === "replaced gate") fake.classify = originalClassify;
+          try {
+            if (boundary === "native gate")
+              expect((await fake.classify(imageModel, request)).stopReason).toBe("stop");
+            else expect((await requester()(fake, request)).ok).toBe(true);
+          } finally {
+            restore();
+          }
+        } else expect((await requester()(fake, request)).ok).toBe(true);
+        expect(redaction).toHaveBeenCalledTimes(1);
+        expect(calls).toBe(1);
+        expect(JSON.stringify(request)).toBe(before);
+      } finally {
+        redaction.mockRestore();
+      }
+    },
+  );
   test("keeps text-only and empty-image requests on Jev", async () => {
     const calls: string[] = [];
     const fake = registry(undefined, async (model) => {

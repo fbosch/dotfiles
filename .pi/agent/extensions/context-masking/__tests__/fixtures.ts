@@ -1,4 +1,25 @@
+import type { ClassifierAnswer } from "@earendil-works/pi-ai";
 import { type ProjectedSessionEntry, SessionManager } from "@earendil-works/pi-coding-agent";
+import type { RecallClassifier } from "../recall";
+
+/** Rates every candidate above no_match, so prefetch tests exercise lexical selection alone. */
+export const approveEveryCandidate: RecallClassifier = async (input) => {
+  const answers: Record<string, ClassifierAnswer> = {};
+  for (const [name, question] of Object.entries(input.questions)) {
+    if (question.type !== "choice") continue;
+    const candidates = Object.keys(question.criteria).filter((key) => key !== "no_match");
+    answers[name] = {
+      type: "choice",
+      choice: candidates[0] ?? "no_match",
+      probabilities: Object.fromEntries([
+        ...candidates.map((key) => [key, 1 / candidates.length]),
+        ["no_match", 0],
+      ]),
+      confidence: 1,
+    };
+  }
+  return { ok: true, value: { answers } };
+};
 
 const usage = {
   input: 0,

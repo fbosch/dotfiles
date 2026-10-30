@@ -40,6 +40,10 @@
 - Capture the smallest useful screenshot region unless a full-screen image is
   requested.
 
+- Before a non-trivial design choice or when an approach struggles, investigate
+  comparable implementations. Explain what to adopt or reject and why. Do a
+  bounded check proactively; ask before broader research.
+
 ## Conditional guidance
 
 - Before selecting or adding a dependency, library, or development tool, read

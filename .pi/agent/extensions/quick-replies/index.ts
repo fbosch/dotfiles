@@ -9,7 +9,6 @@ import {
   type QuickReply,
   type QuickReplyContextTurn,
   type QuickReplyGenerator,
-  SecretScanUnavailableError,
 } from "./generator";
 import {
   DEFAULT_QUICK_REPLY_SHORTCUTS,
@@ -174,7 +173,6 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
     let widgetMounted = false;
     let uiPromptActive = false;
     let enabled = settings.enabled;
-    let secretScanWarningShown = false;
 
     function abortGeneration(): void {
       activeGeneration?.controller.abort();
@@ -309,16 +307,8 @@ export function createQuickRepliesExtension(dependencies: QuickRepliesDependenci
           }
           showReplies(ctx, runId, replies);
         })
-        .catch((error: unknown) => {
+        .catch(() => {
           if (activeGeneration === generation) activeGeneration = undefined;
-          if (error instanceof SecretScanUnavailableError && secretScanWarningShown === false) {
-            secretScanWarningShown = true;
-            report(
-              ctx,
-              `Quick replies are off until the secret scan works: ${error.message}`,
-              "warning",
-            );
-          }
         });
     }
 

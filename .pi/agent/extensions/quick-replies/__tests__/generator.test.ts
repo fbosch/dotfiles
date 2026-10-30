@@ -1,7 +1,4 @@
 import { describe, expect, test } from "bun:test";
-import { mkdtempSync, rmSync } from "node:fs";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { AssistantMessage, ClassifierContext } from "@earendil-works/pi-ai";
 import { type ExtensionContext, SessionManager } from "@earendil-works/pi-coding-agent";
 import {
@@ -15,7 +12,6 @@ import {
   parseQuickReplyResponse,
   prepareQuickReplyInput,
   type QuickReply,
-  SecretScanUnavailableError,
 } from "../generator";
 import {
   classifierFetch,
@@ -208,35 +204,26 @@ describe("quick reply input", () => {
     ).toBeUndefined();
   });
 
-  test("checks omitted source content for secrets before truncating it", async () => {
-    let modelCalls = 0;
-    const ctx = {
-      cwd: "/project",
-      isProjectTrusted: () => false,
-      modelRegistry: {
-        find: () => ({
-          provider: "openai-codex",
-          id: "gpt-6-luna-fast",
-          api: "openai-codex-responses",
-        }),
-        complete: async () => {
-          modelCalls += 1;
-          throw new Error("secret-bearing input reached the model");
-        },
-      },
-    } as unknown as Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry">;
+  test("redacts source text before truncation without suppressing generation", async () => {
+    const candidates = [reply(1)];
+    const ctx = generatorContext(candidates);
+    let prompt = "";
+    const complete = ctx.modelRegistry.complete;
+    ctx.modelRegistry.complete = async (...args) => {
+      prompt = JSON.stringify(args[1]);
+      return complete(...args);
+    };
     const assistantText = `${"safe ".repeat(900)}${FAKE_GITHUB_TOKEN}${" safe".repeat(900)}`;
-
     expect(
       await generateQuickReplies(
         ctx,
         { userText: "Summarize the work", assistantText },
         new AbortController().signal,
       ),
-    ).toEqual([]);
-    expect(modelCalls).toBe(0);
+    ).toEqual(candidates);
+    expect(prompt).not.toContain(FAKE_GITHUB_TOKEN);
+    expect(prompt).toContain("[...truncated...]");
   });
-
   test.each([
     "Delete the local fixture after the test.",
     "I did not deploy anything.",
@@ -254,45 +241,31 @@ describe("quick reply input", () => {
     FAKE_DATABASE_URL,
     FAKE_REDIS_URL,
     `${FAKE_GITHUB_TOKEN} # pragma: allowlist secret`,
-  ])("does not send ripsecrets matches to the secondary model: %s", async (text) => {
+  ])("redacts potential secrets and continues generation: %s", async (text) => {
+    const candidates = [reply(1)];
+    const ctx = generatorContext(candidates);
     let modelCalls = 0;
-    const ctx = {
-      cwd: "/project",
-      isProjectTrusted: () => false,
-      modelRegistry: {
-        find: () => ({
-          provider: "openai-codex",
-          id: "gpt-6-luna-fast",
-          api: "openai-codex-responses",
-        }),
-        complete: async () => {
-          modelCalls += 1;
-          throw new Error("secret-bearing input reached the model");
-        },
+    const complete = ctx.modelRegistry.complete;
+    ctx.modelRegistry.complete = async (...args) => {
+      modelCalls += 1;
+      const prompt = JSON.stringify(args[1]);
+      expect(prompt).toContain("[REDACTED]");
+      expect(prompt).not.toContain(FAKE_RANDOM_VALUE.slice(0, 20));
+      return complete(...args);
+    };
+    for (const input of [
+      { userText: text, assistantText: "Inspect the value." },
+      {
+        userText: "Inspect the prior result",
+        assistantText: "The result is ready.",
+        recentContext: [{ role: "assistant" as const, text }],
       },
-    } as unknown as Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry">;
-
-    expect(
-      await generateQuickReplies(
-        ctx,
-        { userText: text, assistantText: "Inspect the value." },
-        new AbortController().signal,
-      ),
-    ).toEqual([]);
-    expect(
-      await generateQuickReplies(
-        ctx,
-        {
-          userText: "Inspect the prior result",
-          assistantText: "The result is ready.",
-          recentContext: [{ role: "assistant", text }],
-        },
-        new AbortController().signal,
-      ),
-    ).toEqual([]);
-    expect(modelCalls).toBe(0);
+    ])
+      expect(await generateQuickReplies(ctx, input, new AbortController().signal)).toEqual(
+        candidates,
+      );
+    expect(modelCalls).toBe(2);
   });
-
   test.each([
     {
       assistantText: "Run /reload to activate the new configuration.",
@@ -611,7 +584,7 @@ describe("quick reply model generation", () => {
     ).toEqual([]);
   });
 
-  test("filters secret-bearing suggestions before sending candidates to Classifier", async () => {
+  test("redacts secret-bearing suggestions before sending candidates to Classifier", async () => {
     const secretReply = {
       label: "Use value",
       message: `Use ${FAKE_GITHUB_TOKEN} # pragma: allowlist secret`,
@@ -631,12 +604,15 @@ describe("quick reply model generation", () => {
       new AbortController().signal,
     );
 
-    expect(replies).toEqual([safeReply]);
+    expect(replies).toEqual([
+      { ...secretReply, message: "Use [REDACTED] # pragma: allowlist secret" },
+      safeReply,
+    ]);
     expect(gatewayBody).not.toContain(FAKE_GITHUB_TOKEN);
     expect(gatewayBody).toContain(safeReply.message);
   });
 
-  test("filters secret-bearing suggestions without discarding safe neighbors", async () => {
+  test("redacts secret-bearing suggestions without discarding safe neighbors", async () => {
     const safeReply = { label: "Show config path", message: "Show config path" };
     const ctx = {
       cwd: "/project",
@@ -934,80 +910,48 @@ describe("quick reply model generation", () => {
         },
         new AbortController().signal,
       ),
-    ).toEqual([]);
+    ).toEqual([{ label: "/model", message: "/model [REDACTED]" }]);
     expect(calls).toBe(0);
   });
 
-  test("does not complete the model for secret-bearing or already-aborted input", async () => {
+  test("does not complete the model for already-aborted input", async () => {
+    const ctx = generatorContext([reply(1)]);
     let completions = 0;
-    const ctx = {
-      cwd: "/project",
-      isProjectTrusted: () => false,
-      modelRegistry: {
-        find: () => ({
-          provider: "openai-codex",
-          id: "gpt-6-luna-fast",
-          api: "openai-codex-responses",
-        }),
-        complete: async () => {
-          completions += 1;
-          throw new Error("unexpected model completion");
-        },
-      },
-    } as unknown as Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry">;
+    ctx.modelRegistry.complete = async () => {
+      completions += 1;
+      throw new Error("unexpected completion");
+    };
     const aborted = new AbortController();
     aborted.abort();
-
     expect(
       await generateQuickReplies(
         ctx,
-        { userText: `Use ${FAKE_GITHUB_TOKEN}`, assistantText: "Inspect the value." },
-        new AbortController().signal,
-      ),
-    ).toEqual([]);
-    expect(
-      await generateQuickReplies(
-        ctx,
-        { userText: "Proceed", assistantText: "The change is ready." },
+        { userText: "Proceed", assistantText: "Ready." },
         aborted.signal,
       ),
     ).toEqual([]);
     expect(completions).toBe(0);
   });
 
-  test("fails loudly without completing the model when ripsecrets is unavailable", async () => {
+  test("redacts source credentials and completes the model", async () => {
+    const candidates = [reply(1)];
+    const ctx = generatorContext(candidates);
     let completions = 0;
-    const ctx = {
-      cwd: "/project",
-      isProjectTrusted: () => false,
-      modelRegistry: {
-        find: () => ({
-          provider: "openai-codex",
-          id: "gpt-6-luna-fast",
-          api: "openai-codex-responses",
-        }),
-        complete: async () => {
-          completions += 1;
-          throw new Error("unexpected model completion");
-        },
-      },
-    } as unknown as Pick<ExtensionContext, "cwd" | "isProjectTrusted" | "modelRegistry">;
-    const originalPath = process.env.PATH;
-    process.env.PATH = mkdtempSync(join(tmpdir(), "quick-replies-empty-path-"));
-
-    try {
-      const generation = generateQuickReplies(
+    const complete = ctx.modelRegistry.complete;
+    ctx.modelRegistry.complete = async (...args) => {
+      completions += 1;
+      expect(JSON.stringify(args[1])).toContain("[REDACTED]");
+      expect(JSON.stringify(args[1])).not.toContain(FAKE_GITHUB_TOKEN);
+      return complete(...args);
+    };
+    expect(
+      await generateQuickReplies(
         ctx,
-        { userText: "Proceed", assistantText: "The change is ready." },
+        { userText: `Inspect ${FAKE_GITHUB_TOKEN}`, assistantText: "The change is ready." },
         new AbortController().signal,
-      );
-      await expect(generation).rejects.toBeInstanceOf(SecretScanUnavailableError);
-      await expect(generation).rejects.toThrow("ripsecrets is not on PATH");
-    } finally {
-      rmSync(process.env.PATH, { force: true, recursive: true });
-      process.env.PATH = originalPath;
-    }
-    expect(completions).toBe(0);
+      ),
+    ).toEqual(candidates);
+    expect(completions).toBe(1);
   });
   test("allows risky source wording to reach the generator agent", async () => {
     let calls = 0;

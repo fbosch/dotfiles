@@ -23,7 +23,7 @@ import { recallSaved, registerRecallPrefetch } from "../recall";
 import { recallableTextArchiveRecords, savedItems } from "../evidence-archive";
 import { CLASSIFIER_DEFAULTS, classifyCompaction } from "../classifier-compaction";
 import { userStartEvent } from "../../shared/__tests__/agent-start-events";
-import { sessionWith } from "./fixtures";
+import { approveEveryCandidate, sessionWith } from "./fixtures";
 
 type Dependencies = NonNullable<Parameters<typeof registerContextMasking>[1]>;
 type Classifier = NonNullable<Dependencies["classify"]>;
@@ -314,7 +314,7 @@ async function assertRecovered(f: Awaited<ReturnType<typeof harness>>, marker: s
   let prefetch: unknown;
   registerRecallPrefetch({
     on: (_name: string, callback: unknown) => { prefetch = callback; return () => { prefetch = undefined; }; },
-  } satisfies Pick<ExtensionAPI, "on">, () => f.root);
+  } satisfies Pick<ExtensionAPI, "on">, () => f.root, () => true, { classifier: approveEveryCandidate });
   if (typeof prefetch !== "function") throw Error("Missing prefetch registration");
   const prefetched = await (prefetch as Prefetch)(
     userStartEvent("What was the approved audit receipt?"),

@@ -14,6 +14,7 @@ import { isMatching, match, P } from "ts-pattern";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 import { readJsonConfig } from "./extension-config";
+import { redactSecretValues } from "./secret-redaction";
 
 export const OPENROUTER_PROVIDER_ID = "openrouter" as const;
 export const VERCEL_GATEWAY_PROVIDER_ID = "vercel-ai-gateway" as const;
@@ -177,6 +178,7 @@ function loadClassifierSettings(
 }
 
 const registryContexts = new WeakMap<ClassifierRegistry, ClassifierSettingsContext>();
+const registryGates = new WeakMap<ClassifierRegistry, ClassifierRegistry["classify"]>();
 
 export function installClassifierGate(
   registry: ClassifierRegistry,
@@ -199,12 +201,14 @@ export function installClassifierGate(
         timestamp: Date.now(),
       };
     }
-    return classifyWithInput(original.bind(registry), model, input, options);
+    return classifyWithInput(original.bind(registry), model, redactClassifierInput(input), options);
   };
   registry.classify = guarded;
+  registryGates.set(registry, guarded);
   return () => {
     if (registry.classify === guarded) registry.classify = original;
     registryContexts.delete(registry);
+    registryGates.delete(registry);
   };
 }
 
@@ -308,6 +312,13 @@ export function assertClassifierInput(value: unknown): asserts value is Classifi
     throw new Error("Classifier state and questions exceed 64 KB");
 }
 
+function redactClassifierInput(input: ClassifierRequestContext): ClassifierRequestContext {
+  assertClassifierInput(input);
+  const redacted = redactSecretValues({ state: input.state, questions: input.questions });
+  return redacted.state === input.state && redacted.questions === input.questions
+    ? input
+    : { ...input, ...redacted };
+}
 async function classifyWithInput(
   classify: ClassifierRegistry["classify"],
   model: ClassifierModel<ClassifierApi>,
@@ -534,6 +545,9 @@ export function createClassifierRequester(now: () => number = Date.now, agentDir
     if (!preferences) return fail("invalid-config", "config");
     const timeoutMs = options.timeoutMs ?? DEFAULT_CLASSIFIER_TIMEOUT_MS;
     if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) return fail("invalid-config", "config");
+    // The installed native gate owns redaction; standalone requesters still protect their boundary.
+    if (registry.classify !== registryGates.get(registry)) input = redactClassifierInput(input);
+    if (options.signal?.aborted) return fail("caller-cancellation", "request");
     const overall = new AbortController();
     const timer = setTimeout(() => overall.abort(), Math.max(1, Math.floor(timeoutMs)));
     const onAbort = () => overall.abort();

@@ -1,18 +1,12 @@
-import { spawn } from "node:child_process";
 import { randomUUID } from "node:crypto";
-import { mkdtemp, open, rm, unlink, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
-import { join } from "node:path";
 import type { AssistantMessage, ClassifierContext, TextContent, Tool } from "@earendil-works/pi-ai";
 import type { ExtensionContext, SessionEntry } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
 import { type ClassifierFetch, requestClassifier } from "../../lib/classifier";
+import { redactSecretValues } from "../../lib/secret-redaction";
 import { resolveFastModelRequest } from "../openai-capabilities";
 import { DEFAULT_QUICK_REPLY_SHORTCUTS, resolveQuickReplyModel } from "./settings";
 
-export class SecretScanUnavailableError extends Error {
-  override readonly name = "SecretScanUnavailableError";
-}
 export interface QuickReply {
   label: string;
   message: string;
@@ -61,8 +55,6 @@ const MAX_RESPONSE_CHARS = 4_096;
 const REQUEST_TIMEOUT_MS = 3_000;
 // Ranking is optional; cap its added latency so the fallback stays prompt.
 const CLASSIFIER_RANKING_TIMEOUT_MS = 1_200;
-const SECRET_SCAN_TIMEOUT_MS = 500;
-const RIPSECRETS_ALLOWLIST_DIRECTIVE = "pragma: allowlist secret";
 const MIN_REPLIES = 1;
 const MAX_REPLIES = 5;
 const DEFAULT_DISPLAY_REPLIES = 2;
@@ -384,18 +376,19 @@ export function createQuickReplyGenerator(
   options: QuickReplyGeneratorOptions = {},
 ): QuickReplyGenerator {
   return async (ctx, input, signal) => {
-    const prepared = prepareQuickReplyInput(input);
+    const source = prepareQuickReplyInput(input);
+    if (source === undefined || signal.aborted) return [];
+    const prepared = prepareQuickReplyInput(redactSecretValues(input));
     if (prepared === undefined || signal.aborted) return [];
     const deterministicReplies = getDeterministicQuickReplies(prepared);
     if (deterministicReplies.length > 0) {
-      return filterSecretFreeReplies(deterministicReplies, signal);
+      return redactSecretValues(deterministicReplies);
     }
 
     const configuredModel = resolveQuickReplyModel(ctx);
     if (configuredModel === undefined) return [];
     const model = ctx.modelRegistry.find(configuredModel.provider, configuredModel.id);
     if (model === undefined) return [];
-    if ((await passesSecretScan(buildSecretScanText(input, prepared), signal)) === false) return [];
     const fastRequest = resolveFastModelRequest(model.id);
     const requestModel = fastRequest === undefined ? model : { ...model, id: fastRequest.modelId };
     const usesStructuredOutput = requestModel.api === "openai-codex-responses";
@@ -443,10 +436,7 @@ export function createQuickReplyGenerator(
       ) {
         return [];
       }
-      const safeReplies = await filterSecretFreeReplies(
-        parseQuickReplyPayload(toolCall.arguments),
-        signal,
-      );
+      const safeReplies = redactSecretValues(parseQuickReplyPayload(toolCall.arguments));
       return rankQuickRepliesWithClassifier(ctx, prepared, safeReplies, signal, options);
     }
 
@@ -458,117 +448,12 @@ export function createQuickReplyGenerator(
       if (text.length + part.text.length + 1 > MAX_RESPONSE_CHARS) return [];
       text += `${text.length === 0 ? "" : "\n"}${part.text}`;
     }
-    const safeReplies = await filterSecretFreeReplies(parseQuickReplyResponse(text.trim()), signal);
+    const safeReplies = redactSecretValues(parseQuickReplyResponse(text.trim()));
     return rankQuickRepliesWithClassifier(ctx, prepared, safeReplies, signal, options);
   };
 }
 
 export const generateQuickReplies = createQuickReplyGenerator();
-
-function buildSecretScanText(input: QuickReplyInput, prepared: PreparedQuickReplyInput): string {
-  return [...prepared.recentContext.map((turn) => turn.text), input.userText, input.assistantText]
-    .map((text) => normalizeExcerpt(text.normalize("NFKC")))
-    .join("\n---\n");
-}
-
-async function filterSecretFreeReplies(
-  replies: readonly QuickReply[],
-  signal: AbortSignal,
-): Promise<QuickReply[]> {
-  if (replies.length === 0) return [];
-  // One combined scan covers the common clean case; per-reply scans keep safe neighbors of a match.
-  if (await passesSecretScan(JSON.stringify(replies), signal)) return [...replies];
-  if (replies.length === 1 || signal.aborted) return [];
-
-  const scanResults = await Promise.all(
-    replies.map((reply) => passesSecretScan(JSON.stringify(reply), signal)),
-  );
-  return replies.filter((_, index) => scanResults[index] === true);
-}
-
-async function passesSecretScan(text: string, signal: AbortSignal): Promise<boolean> {
-  if (signal.aborted) return false;
-
-  let directory: string | undefined;
-  let inputFile: Awaited<ReturnType<typeof open>> | undefined;
-  try {
-    directory = await mkdtemp(join(tmpdir(), "pi-quick-replies-"));
-    const inputPath = join(directory, "input.txt");
-    // Conversation text cannot opt out of the boundary through ripsecrets' source-code directive.
-    const scannableText = text.replaceAll(
-      RIPSECRETS_ALLOWLIST_DIRECTIVE,
-      "pragma: allowlist-secret",
-    );
-    await writeFile(inputPath, scannableText, { encoding: "utf8", flag: "wx", mode: 0o600 });
-    inputFile = await open(inputPath, "r");
-    // ripsecrets requires a path; unlinking removes its name before the scanner starts.
-    await unlink(inputPath);
-    return await runRipsecrets(inputFile.fd, directory, signal);
-  } catch (error) {
-    if (signal.aborted) return false;
-    if (error instanceof SecretScanUnavailableError) throw error;
-    throw new SecretScanUnavailableError(
-      `cannot prepare secret scan: ${error instanceof Error ? error.message : String(error)}`,
-    );
-  } finally {
-    await inputFile?.close().catch(() => undefined);
-    if (directory !== undefined) {
-      await rm(directory, { force: true, recursive: true }).catch(() => undefined);
-    }
-  }
-}
-
-function runRipsecrets(inputFd: number, cwd: string, signal: AbortSignal): Promise<boolean> {
-  return new Promise((resolve, reject) => {
-    const child = spawn("ripsecrets", ["/dev/fd/3"], {
-      cwd,
-      env: { PATH: process.env.PATH ?? "" },
-      stdio: ["ignore", "ignore", "ignore", inputFd],
-    });
-    let settled = false;
-    const finish = (settle: () => void): void => {
-      if (settled) return;
-      settled = true;
-      clearTimeout(timeout);
-      signal.removeEventListener("abort", abort);
-      settle();
-    };
-    const abort = (): void => {
-      child.kill("SIGKILL");
-      finish(() => resolve(false));
-    };
-    const timeout = setTimeout(() => {
-      child.kill("SIGKILL");
-      finish(() =>
-        reject(
-          new SecretScanUnavailableError(`ripsecrets timed out after ${SECRET_SCAN_TIMEOUT_MS} ms`),
-        ),
-      );
-    }, SECRET_SCAN_TIMEOUT_MS);
-
-    child.once("error", (error: NodeJS.ErrnoException) => {
-      const reason =
-        error.code === "ENOENT"
-          ? "ripsecrets is not on PATH"
-          : `ripsecrets failed: ${error.message}`;
-      finish(() => reject(new SecretScanUnavailableError(reason)));
-    });
-    child.once("close", (code) =>
-      finish(() => {
-        // ripsecrets exits 1 when it finds a secret; any other failure means the scan did not run.
-        if (code === 0 || code === 1) resolve(code === 0);
-        else
-          reject(
-            new SecretScanUnavailableError(
-              `ripsecrets exited with ${code === null ? "a signal" : `code ${code}`}`,
-            ),
-          );
-      }),
-    );
-    if (signal.aborted) abort();
-    else signal.addEventListener("abort", abort, { once: true });
-  });
-}
 
 function projectContextTurn(entry: SessionEntry): QuickReplyContextTurn | undefined {
   if (entry.type === "compaction" || entry.type === "branch_summary") {

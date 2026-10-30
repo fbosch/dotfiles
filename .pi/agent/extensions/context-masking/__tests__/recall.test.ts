@@ -10,7 +10,7 @@ import type {
   SessionEntry,
 } from "@earendil-works/pi-coding-agent";
 import { RECALL_LIMITS, recallSaved, registerRecall, registerRecallPrefetch } from "../recall";
-import { sessionWith } from "./fixtures";
+import { approveEveryCandidate, sessionWith } from "./fixtures";
 import { customStartEvent, userStartEvent } from "../../shared/__tests__/agent-start-events";
 
 const roots: string[] = [];
@@ -158,6 +158,7 @@ test("prefetch adds relevant passages once, skips unrelated and custom requests,
     pi,
     () => f.root,
     () => enabled,
+    { classifier: approveEveryCandidate },
   );
   const ctx = { sessionManager: f.manager } as unknown as ExtensionContext;
   const invoke = async (event: unknown) => {
@@ -194,9 +195,9 @@ test("enforces total scan bytes and artifact count limits", async () => {
 
 test("splits long saved lines into bounded passages that fit the output cap", async () => {
   const f = await fixture(
-    Array.from({ length: 3 }, () =>
+    Array.from({ length: 3 }, (_, file) =>
       Array.from({ length: 6 }, (_, i) =>
-        (i === 3 ? "audit receipt " : "other ").padEnd(790, "x"),
+        (i === 3 ? `audit receipt r-${file} ` : "other ").padEnd(790, "x"),
       ).join("\n"),
     ),
   );
@@ -205,6 +206,32 @@ test("splits long saved lines into bounded passages that fit the output cap", as
   expect(report.text.length).toBeLessThanOrEqual(RECALL_LIMITS.outputChars);
   expect(report.text).not.toContain("[line clipped]");
   expect(report.text).toContain("4│audit receipt");
+});
+
+test("collapses the same evidence line from several saves into one passage with a count", async () => {
+  const error = "error: cannot connect to socket at '/nix/var/nix/daemon-socket/socket': Operation not permitted";
+  const f = await fixture([
+    JSON.stringify({ name: "sdk", result: { output: `$ bun lib/runtime-sdk.ts\n${error}\n` } }),
+    JSON.stringify({ i: 1, result: { output: `$ bun lib/runtime-sdk.ts --check\n${error}\n` } }),
+    `${error}\nexit 1`,
+    "Approved daemon socket path: /run/nix/socket-v2",
+  ]);
+  const report = await recallSaved(f.manager.getBranch(), f.root, "nix daemon socket error", 3);
+  expect(report.passages.filter((passage) => passage.text.includes("Operation not permitted"))).toHaveLength(1);
+  expect(report.text).toContain("Same passage in 2 other saved outputs.");
+  expect(report.text).toContain("/run/nix/socket-v2");
+});
+
+test("matches split identifiers, plurals, and exact compounds", async () => {
+  const f = await fixture([
+    "const roundedPercent = Math.round(percent);\ncolor: roundedPercent >= 50 ? warning : error",
+    "  const cachePercent = cachedInputTokens / totalInputTokens;",
+    "unrelated routine output",
+  ]);
+  const branch = f.manager.getBranch();
+  expect((await recallSaved(branch, f.root, "cache percent formula", 1)).text).toContain("cachedInputTokens");
+  expect((await recallSaved(branch, f.root, "rounded percent thresholds", 1)).text).toContain("roundedPercent >= 50");
+  expect((await recallSaved(branch, f.root, "cachePercent", 1)).text).toContain("const cachePercent");
 });
 
 test("searches JSON-encoded output as decoded lines and cites the saved line", async () => {

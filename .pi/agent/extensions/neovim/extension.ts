@@ -73,7 +73,7 @@ export function initializeNeovim(
     channel = undefined;
     activeContext = undefined;
     blockingPromptActive = false;
-    current?.close();
     publisher?.dispose();
+    return current?.close();
   });
 }

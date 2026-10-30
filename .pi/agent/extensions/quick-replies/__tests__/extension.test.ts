@@ -8,12 +8,7 @@ import {
 import type { Component } from "@earendil-works/pi-tui";
 import { stripTerminalSequences, visibleWidth } from "@earendil-works/pi-tui";
 import { customStartEvent, userStartEvent } from "../../shared/__tests__/agent-start-events";
-import {
-  type QuickReply,
-  type QuickReplyGenerator,
-  type QuickReplyInput,
-  SecretScanUnavailableError,
-} from "../generator";
+import type { QuickReply, QuickReplyGenerator, QuickReplyInput } from "../generator";
 import {
   createQuickRepliesExtension,
   QUICK_REPLY_SHORTCUTS,
@@ -542,20 +537,6 @@ describe("quick replies lifecycle", () => {
 
     expect(failed.widgetActive).toBe(false);
     expect(failed.notifications).toEqual([]);
-  });
-
-  test("warns once when the secret scan is unavailable", async () => {
-    const harness = createHarness({
-      generate: async () =>
-        Promise.reject(new SecretScanUnavailableError("ripsecrets is not on PATH")),
-    });
-    await showGeneratedReplies(harness);
-    await showGeneratedReplies(harness);
-
-    expect(harness.widgetActive).toBe(false);
-    expect(harness.notifications).toEqual([
-      "Quick replies are off until the secret scan works: ripsecrets is not on PATH",
-    ]);
   });
 
   test.each([

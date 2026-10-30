@@ -285,8 +285,9 @@ test("default limit ranks multiple results from one independent choice question"
   let questions = 0;
   const report = await recallUnified(f.manager.getBranch(), f.root, f.manager.getSessionId(), ["Related evidence"], undefined, {
     classifier: async (input) => {
-      questions = Object.keys(input.questions).length;
-      return { ok: true, value: { answers: Object.fromEntries(Object.keys(input.questions).map((name) => [name, {
+      const choices = Object.entries(input.questions).filter(([, question]) => question.type === "choice");
+      questions = choices.length;
+      return { ok: true, value: { answers: Object.fromEntries(choices.map(([name]) => [name, {
         type: "choice" as const, choice: "text_0",
         probabilities: { text_0: 0.6, text_1: 0.25, text_2: 0.1, no_match: 0.05 }, confidence: 0.6,
       }])) }, usage };
@@ -344,4 +345,89 @@ test("nonlexical candidate pool spans different archived sources", async () => {
   });
   for (let index = 0; index < 8; index++)
     expect(excerpts.some((excerpt) => excerpt.includes(`Observation ${index} `))).toBe(true);
+});
+
+test("the classifier sees the window centered on a match, not a sample that stops before it", async () => {
+  const answer = "File exists (os error 17)";
+  const f = await fixture([
+    [
+      "Script completed",
+      "Wall time 1.2 seconds",
+      "Output:",
+      "",
+      "==> text 1/1 <==",
+      "failed to create devenv home directory: /Users/fbb/.local/share/devenv/",
+      answer,
+      "exit 1",
+    ].join("\n"),
+  ]);
+  let excerpts: string[] = [];
+  await recallUnified(f.manager.getBranch(), f.root, f.manager.getSessionId(), ["Why did devenv fail to create its home directory?"], 1, {
+    classifier: async (input) => {
+      const candidates = input.state.text_candidates;
+      if (!Array.isArray(candidates)) throw Error("Missing text candidates");
+      excerpts = candidates.flatMap((candidate) =>
+        typeof candidate === "object" && candidate !== null && "excerpt" in candidate &&
+        typeof candidate.excerpt === "string" ? [candidate.excerpt] : []);
+      return classifierChoosing(() => "no_match")(input, {});
+    },
+  });
+  const matching = excerpts.filter((excerpt) => excerpt.includes("devenv home directory"));
+  expect(matching).toHaveLength(1);
+  expect(matching[0]).toContain(answer);
+});
+
+test("a candidate tied with no_match counts as no match, not a malformed response", async () => {
+  const f = await fixture(["Mira owns the migration plan."]);
+  const tied: RecallClassifier = async (input) => {
+    const answers: Record<string, ClassifierAnswer> = {};
+    for (const [name, question] of Object.entries(input.questions)) {
+      if (question.type !== "choice") continue;
+      const candidates = Object.keys(question.criteria).filter((key) => key !== "no_match");
+      const first = candidates[0] ?? "no_match";
+      answers[name] = {
+        type: "choice",
+        choice: first,
+        probabilities: Object.fromEntries([
+          ...candidates.map((key) => [key, key === first ? 0.5 : 0]),
+          ["no_match", 0.5],
+        ]),
+        confidence: 0.5,
+      };
+    }
+    return { ok: true, value: { answers }, usage };
+  };
+  const report = await recallUnified(f.manager.getBranch(), f.root, f.manager.getSessionId(), ["Who owns the migration plan?"], 1, {
+    classifier: tied,
+  });
+  expect(report.rankingSource).toBe("classifier");
+  expect(report.fallbackReason).toBeUndefined();
+  expect(report.textMatches).toBe(0);
+});
+
+test("explicit recall labels passages the classifier says do not answer the query", async () => {
+  const f = await fixture(["Ledger exporter approved retention_days=106."]);
+  const answering = (probability: number | undefined): RecallClassifier => async (input) => {
+    const answers: Record<string, ClassifierAnswer> = {};
+    for (const [name, question] of Object.entries(input.questions)) {
+      if (question.type === "bool") {
+        if (probability !== undefined) answers[name] = { type: "bool", probability };
+        continue;
+      }
+      answers[name] = { type: "choice", choice: "text_0", probabilities: { text_0: 0.7, no_match: 0.3 }, confidence: 0.7 };
+    }
+    return { ok: true, value: { answers }, usage };
+  };
+  const label = "Closest saved passage; the classifier found no passage that answers this query.";
+  const text = async (probability: number | undefined) => {
+    const report = await recallUnified(f.manager.getBranch(), f.root, f.manager.getSessionId(),
+      ["What retention_days value was approved for the payments exporter?"], 1, { classifier: answering(probability) });
+    expect(report.textMatches).toBe(1);
+    return report.content.flatMap((block) => (block.type === "text" ? [block.text] : [])).join("\n");
+  };
+  expect(await text(0.1)).toContain(label);
+  expect(await text(0.1)).toContain("retention_days=106");
+  expect(await text(0.9)).not.toContain(label);
+  // A missing advisory answer must not discard the ranking or add the label.
+  expect(await text(undefined)).not.toContain(label);
 });

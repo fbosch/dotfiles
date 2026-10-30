@@ -1,4 +1,9 @@
-import { copyToClipboard, type ExtensionAPI, type Theme } from "@earendil-works/pi-coding-agent";
+import {
+  copyToClipboard,
+  type ExtensionAPI,
+  getMarkdownTheme,
+  type Theme,
+} from "@earendil-works/pi-coding-agent";
 import {
   hyperlink,
   Markdown,
@@ -677,7 +682,26 @@ export function installCodeBlockClipboard(
   return { installed: true, restore };
 }
 
-export function installCodeBlockRenderer(): CodeBlockPatch {
+export function renderTableBorders(lines: string[], theme: Pick<Theme, "fg">): string[] {
+  const top = lines[0] ?? "";
+  if (!/^┌[─┬]+┐$/.test(top)) return lines;
+
+  // shortcut: Pi 1.4 has no table-border theme token. Remove this adapter when upstream adds one.
+  // Derive grid columns from the frame so box-drawing characters inside cells keep their styling.
+  const columns = new Set([...top.matchAll(/[┌┬┐]/g)].map((match) => match.index));
+  return lines.map((line) => {
+    if (/^(┌[─┬]+┐|├[─┼]+┤|└[─┴]+┘)$/.test(line)) {
+      return theme.fg("borderMuted", line);
+    }
+    return line.replace(/│/g, (border, offset: number) =>
+      columns.has(visibleWidth(line.slice(0, offset))) ? theme.fg("borderMuted", border) : border,
+    );
+  });
+}
+
+export function installCodeBlockRenderer(
+  resolveTheme: () => CodeBlockTheme | undefined = () => resolveActiveTheme(),
+): CodeBlockPatch {
   globalPatchState()?.restore();
 
   // SAFETY: Private Markdown member; the typeof check below disables the patch if it is absent.
@@ -698,13 +722,19 @@ export function installCodeBlockRenderer(): CodeBlockPatch {
     styleContext,
   ): string[] {
     if (token.type === "code") return renderCodeBlock(this, token, width, nextTokenType);
-    return originalRenderToken.call(this, token, width, nextTokenType, styleContext);
+    const lines = originalRenderToken.call(this, token, width, nextTokenType, styleContext);
+    const theme = token.type === "table" ? resolveTheme() : undefined;
+    return theme ? renderTableBorders(lines, theme) : lines;
   };
 
   prototype.renderToken = patchedRenderToken;
+  // Pi shares rendered blocks across instances; swapping the renderer must invalidate that cache.
+  const cacheInvalidator = new Markdown("", 0, 0, getMarkdownTheme());
+  cacheInvalidator.invalidate();
   let state: PatchState;
   const restore = (): void => {
     if (prototype.renderToken === patchedRenderToken) prototype.renderToken = originalRenderToken;
+    cacheInvalidator.invalidate();
     if (globalPatchState() === state) setGlobalPatchState(undefined);
   };
   state = { prototype, patchedRenderToken, originalRenderToken, restore };
