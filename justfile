@@ -21,11 +21,6 @@ ags-refresh: ags-bundle
 ags-types:
     bash -lc 'cd .config/ags && ags types'
 
-# Install dependencies for shared FBB helpers.
-[group('dependencies')]
-install-fbb:
-    bun install --frozen-lockfile --cwd .config/fbb
-
 # Install dependencies for Fish Bun helpers.
 [group('dependencies')]
 install-fish-libexec:
@@ -40,7 +35,7 @@ _install-ags-dependencies:
 
 # Install all managed dependencies and build first-use artifacts.
 [group('dependencies')]
-install-all: install-ags install-fbb install-fish-libexec install-hooks install-pi install-vicinae
+install-all: install-ags install-fish-libexec install-hooks install-pi install-vicinae
 
 # Install repository Git hooks.
 [group('dependencies')]

@@ -1,4 +1,0 @@
-[install]
-auto = "fallback"
-linker = "hoisted"
-saveTextLockfile = true

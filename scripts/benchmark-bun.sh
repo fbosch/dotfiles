@@ -70,7 +70,6 @@ mkdir -p "$output_dir"
 output_dir="$(cd "$output_dir" && pwd -P)"
 
 untracked_workloads="$(git ls-files --others --exclude-standard -- \
-  .config/fbb \
   .config/ags)"
 if [[ -n "$untracked_workloads" ]]; then
   printf 'bun benchmark: untracked benchmark workload files found:\n%s\n' "$untracked_workloads" >&2
@@ -107,7 +106,6 @@ jq -n \
   --arg cpuGovernor "$cpu_governor" \
   --arg gitCommit "$(git rev-parse HEAD)" \
   --argjson gitDirty "$git_dirty" \
-  --arg fbbPackageManager "$(jq -r .packageManager .config/fbb/package.json)" \
   --arg fishPackageManager "$(jq -r .packageManager .config/fish/libexec/package.json)" \
   --argjson runs "$runs" \
   --argjson warmups "$warmups" \
@@ -128,7 +126,7 @@ jq -n \
       cpuGovernor: $cpuGovernor
     },
     git: { commit: $gitCommit, dirty: $gitDirty },
-    packageManagers: { fbb: $fbbPackageManager, fishLibexec: $fishPackageManager },
+    packageManagers: { fishLibexec: $fishPackageManager },
     repetitions: {
       hyperfine: $runs,
       warmups: $warmups,
@@ -172,12 +170,10 @@ run_install_benchmarks() (
   install_root="$(mktemp -d)"
   trap 'rm -rf -- "$install_root"' EXIT
 
-  mkdir -p "$install_root/fbb" "$install_root/fish-libexec"
-  cp .config/fbb/package.json .config/fbb/bun.lock "$install_root/fbb/"
+  mkdir -p "$install_root/fish-libexec"
   cp .config/fish/libexec/package.json .config/fish/libexec/bun.lock .config/fish/libexec/bunfig.toml \
     "$install_root/fish-libexec/"
 
-  bun install --frozen-lockfile --ignore-scripts --cwd "$install_root/fbb" >/dev/null
   bun install --frozen-lockfile --ignore-scripts --cwd "$install_root/fish-libexec" >/dev/null
 
   cd "$install_root"
@@ -187,10 +183,9 @@ run_install_benchmarks() (
     --sort command \
     --warmup "$warmups" \
     --runs "$runs" \
-    --prepare 'rm -rf fbb/node_modules fish-libexec/node_modules' \
+    --prepare 'rm -rf fish-libexec/node_modules' \
     --export-json "$output_dir/install.json" \
     --export-markdown "$output_dir/install.md" \
-    --command-name fbb-warm-install 'bun install --frozen-lockfile --ignore-scripts --cwd fbb' \
     --command-name fish-libexec-warm-install 'bun install --frozen-lockfile --ignore-scripts --cwd fish-libexec'
 )
 

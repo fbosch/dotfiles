@@ -246,7 +246,7 @@ function git_pull_system_repos --description 'Synchronize canonical system repos
         return 1
     end
 
-    set -l install_recipes install-fbb install-fish-libexec install-pi
+    set -l install_recipes install-fish-libexec install-pi
     printf '%sWorking%s  Installing Pi and Fish helper dependencies...\n' "$working" "$normal" >&2
     set -l just_args --justfile "$dotfiles/justfile" --working-directory "$dotfiles" $install_recipes
 

@@ -1,9 +1,4 @@
 set -gx PI_CACHE_RETENTION long
-if string match -q vscode $TERM_PROGRAM
-    # Switch to dash in Cursor editor to avoid fish configuration issues
-    set -x ENV "$HOME/.shinit"
-    exec dash
-end
 
 # Pi does not detect Herdr's Kitty graphics support; preserve explicit overrides.
 if test "$TERM_PROGRAM" = herdr; and not set -q PI_IMAGE_PROTOCOL

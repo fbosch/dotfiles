@@ -139,7 +139,6 @@ function test_corporate_context_reaches_native_plugin_install
 
     git_pull_system_repos --yes
     assert_status 0 $status
-    assert_log_contains install-fbb
     assert_log_contains install-fish-libexec
     assert_log_contains install-pi
     assert_status 1 "$TEST_NVIM_CORPORATE_EXPORTED"
@@ -153,7 +152,7 @@ function test_existing_devenv_is_reused
     git_pull_system_repos --yes
     assert_status 0 $status
     assert_status 0 (command grep -c '^devenv ' "$TEST_LOG")
-    assert_log_contains install-fbb
+    assert_log_contains install-fish-libexec
 end
 
 function test_clean_repositories_fast_forward
