@@ -1,7 +1,7 @@
 local repo_root = assert(vim.env.REPO_ROOT)
-local previous_ask_host, previous_ask_root = vim.env.PI_NVIM_ASK_HOST, vim.env.PI_ASK_FIXTURE_ROOT
+local previous_ask_root = vim.env.PI_ASK_FIXTURE_ROOT
 local ask_fixture_root = vim.fn.tempname()
-vim.env.PI_NVIM_ASK_HOST = dofile(repo_root .. "/.config/nvim/tests/pi_ask_host.lua")(repo_root)
+local restore_pi_ask_host = dofile(repo_root .. "/.config/nvim/tests/pi_ask_host.lua")(repo_root)
 vim.env.PI_ASK_FIXTURE_ROOT = ask_fixture_root
 local bridge = require("plugins.ai.pi.bridge")
 local original_input = vim.ui.input
@@ -284,7 +284,8 @@ vim.api.nvim_buf_delete(input_buffer, { force = true })
 rawset(vim.ui, "input", original_input)
 rawset(vim, "notify", original_notify)
 rawset(_G, "pi_test_ask_notify", original_test_ask_notify)
-vim.env.PI_NVIM_ASK_HOST, vim.env.PI_ASK_FIXTURE_ROOT = previous_ask_host, previous_ask_root
+restore_pi_ask_host()
+vim.env.PI_ASK_FIXTURE_ROOT = previous_ask_root
 vim.fn.delete(ask_fixture_root, "rf")
 package.loaded["plugins.ai.pi"] = original_integration
 package.loaded["plugins.ai.pi.prompt"] = original_prompt

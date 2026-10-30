@@ -32,7 +32,7 @@ export async function startEditor(noPrompt = false, failFirstOpen = false, bindi
         HOME: home,
         XDG_RUNTIME_DIR: runtime,
         PI_ASK_FIXTURE_ROOT: root,
-        PI_NVIM_ASK_HOST: hostPath,
+        PI_ASK_FIXTURE_HOST: hostPath,
         PI_ASK_FIXTURE_CONFIG: resolve(import.meta.dir, "../../../../../../.config/nvim"),
         PI_ASK_FIXTURE_NO_PROMPT: noPrompt ? "1" : "0",
         ...(binding === undefined ? {} : { PI_ASK_FIXTURE_BINDING: JSON.stringify(binding) }),

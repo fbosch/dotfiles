@@ -482,6 +482,11 @@ in
         --listen "$DEVENV_STATE/pi-launcher.sock" -l .config/nvim/tests/pi_launcher.lua
     '';
 
+    "test:nvim-pi-ask-discovery".exec = ''
+      REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE \
+        -l .config/nvim/tests/pi_ask_discovery.lua
+    '';
+
     "test:nvim-pi-cutover".exec = ''
       REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE \
         -l .config/nvim/tests/pi_cutover.lua
@@ -599,6 +604,7 @@ in
         "test:nvim-direnv-loader"
         "test:nvim-pi-direnv-launch"
         "test:nvim-pi-launcher"
+        "test:nvim-pi-ask-discovery"
         "test:nvim-pi-cutover"
         "test:nvim-pi-prompt"
         "test:nvim-pi-session-restore"

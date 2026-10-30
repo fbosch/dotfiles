@@ -1,7 +1,6 @@
 local repo_root = assert(vim.env.REPO_ROOT)
-local previous_pi_ask_host = vim.env.PI_NVIM_ASK_HOST
 local previous_ask_root = vim.env.PI_ASK_FIXTURE_ROOT
-vim.env.PI_NVIM_ASK_HOST = dofile(repo_root .. "/.config/nvim/tests/pi_ask_host.lua")(repo_root)
+local restore_pi_ask_host = dofile(repo_root .. "/.config/nvim/tests/pi_ask_host.lua")(repo_root)
 local original_herdr_env = vim.env.HERDR_ENV
 local original_herdr_pane_id = vim.env.HERDR_PANE_ID
 local original_pi_herdr_pane_id = vim.env.PI_NVIM_HERDR_PANE_ID
@@ -93,6 +92,16 @@ local pi = dofile(repo_root .. "/.config/nvim/lua/plugins/ai/pi/init.lua")
 local command_prefix = "env -u HERDR_PANE_ID PI_NVIM_HERDR_PANE_ID="
 	.. vim.fn.shellescape(vim.env.HERDR_PANE_ID)
 	.. " PI_IMAGE_PROTOCOL=none PI_NVIM_LAUNCH_ID="
+local profile_realpath = vim.uv.fs_realpath
+vim.uv.fs_realpath = function(path, ...)
+	if path == "/run/current-system/sw/share/pi/pi-ask.lua" then
+		return nil
+	end
+	return profile_realpath(path, ...)
+end
+assert(pi.start() == nil, "Pi started without its packaged host")
+assert(captured_command == nil, "missing host opened a terminal")
+vim.uv.fs_realpath = profile_realpath
 local first = pi.start()
 assert(first == terminal, "Pi launcher did not return its terminal")
 assert(captured_command ~= nil, "Pi launcher did not open a terminal")
@@ -221,6 +230,6 @@ assert(saved_metadata.pi_terminal_open == true, "resumed Pi terminal state was n
 vim.env.HERDR_ENV = original_herdr_env
 vim.env.HERDR_PANE_ID = original_herdr_pane_id
 vim.env.PI_NVIM_HERDR_PANE_ID = original_pi_herdr_pane_id
-vim.env.PI_NVIM_ASK_HOST = previous_pi_ask_host
+restore_pi_ask_host()
 vim.env.PI_ASK_FIXTURE_ROOT = previous_ask_root
 vim.fn.delete(metadata_root, "rf")

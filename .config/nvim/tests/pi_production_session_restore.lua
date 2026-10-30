@@ -1,6 +1,6 @@
 local repo_root = assert(vim.env.REPO_ROOT)
 local test_root = assert(vim.env.PI_PRODUCTION_TEST_ROOT)
-vim.env.PI_NVIM_ASK_HOST = dofile(repo_root .. "/.config/nvim/tests/pi_ask_host.lua")(repo_root)
+dofile(repo_root .. "/.config/nvim/tests/pi_ask_host.lua")(repo_root)
 vim.env.PI_ASK_FIXTURE_ROOT = test_root
 local expected_specifier = assert(vim.env.PI_EXPECTED_NVIM_SESSION)
 local expected_pane_id = assert(vim.env.PI_EXPECTED_HERDR_PANE_ID)

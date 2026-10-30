@@ -2,28 +2,9 @@ local pi_bridge = require("plugins.ai.pi.bridge")
 local pi_session = require("plugins.ai.pi.session")
 local session = require("utils.session")
 
+local ask_host = require("plugins.ai.pi.ask_host")
+
 local M = {}
-local pi_ask_host_path = vim.env.PI_NVIM_ASK_HOST
-local function load_pi_ask_host(path)
-	if type(path) ~= "string" or path:match("^/nix/store/") == nil then
-		return nil, "PI_NVIM_ASK_HOST must name an immutable Nix store file"
-	end
-	local real_path = vim.uv.fs_realpath(path)
-	local stat = vim.uv.fs_lstat(path)
-	if real_path ~= path or stat == nil or stat.type ~= "file" then
-		return nil, "PI_NVIM_ASK_HOST must be a canonical regular file"
-	end
-	local mode = stat.mode % 512
-	if math.floor(mode / 128) % 2 == 1 or math.floor(mode / 16) % 2 == 1 or math.floor(mode / 2) % 2 == 1 then
-		return nil, "PI_NVIM_ASK_HOST must be read-only"
-	end
-	local ok, factory = pcall(dofile, path)
-	if not ok or type(factory) ~= "table" or type(factory.start) ~= "function" then
-		return nil, "Pi Ask host factory could not be loaded: " .. tostring(factory)
-	end
-	return factory
-end
-local pi_ask_host_factory, pi_ask_host_load_error = load_pi_ask_host(pi_ask_host_path)
 
 local terminal_instance
 local terminal_session_id
@@ -226,6 +207,7 @@ local function launch_command(session_flag, session_id, session_dir, socket, lau
 end
 
 local function create_ask_host(launch_id, cwd)
+	local pi_ask_host_factory, pi_ask_host_load_error = ask_host.load()
 	if pi_ask_host_factory == nil then
 		vim.notify("Pi Ask is unavailable: " .. tostring(pi_ask_host_load_error), vim.log.levels.ERROR)
 		return nil

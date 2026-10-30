@@ -23,8 +23,8 @@ local function scenario(name, run)
 	local session_dir = agent_dir .. "/sessions"
 	vim.fn.mkdir(session_dir, "p")
 	vim.env.PI_CODING_AGENT_DIR, vim.env.PI_CODING_AGENT_SESSION_DIR = agent_dir, session_dir
-	local previous_ask_host, previous_ask_root = vim.env.PI_NVIM_ASK_HOST, vim.env.PI_ASK_FIXTURE_ROOT
-	vim.env.PI_NVIM_ASK_HOST = dofile(repo_root .. "/.config/nvim/tests/pi_ask_host.lua")(repo_root)
+	local previous_ask_root = vim.env.PI_ASK_FIXTURE_ROOT
+	local restore_pi_ask_host = dofile(repo_root .. "/.config/nvim/tests/pi_ask_host.lua")(repo_root)
 	vim.env.PI_ASK_FIXTURE_ROOT = agent_dir
 	vim.cmd.cd(repo_root)
 	local session = dofile(repo_root .. "/.config/nvim/lua/utils/session.lua")
@@ -202,7 +202,8 @@ local function scenario(name, run)
 	rawset(vim, "notify", original_notify)
 	rawset(vim, "defer_fn", original_defer)
 	rawset(_G, "pi_test_ask_notify", original_test_ask_notify)
-	vim.env.PI_NVIM_ASK_HOST, vim.env.PI_ASK_FIXTURE_ROOT = previous_ask_host, previous_ask_root
+	restore_pi_ask_host()
+	vim.env.PI_ASK_FIXTURE_ROOT = previous_ask_root
 	for _, key in ipairs(module_names) do
 		package.loaded[key] = saved_modules[key]
 	end

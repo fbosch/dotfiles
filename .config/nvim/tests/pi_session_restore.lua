@@ -2,10 +2,9 @@ local repo_root = assert(vim.env.REPO_ROOT)
 local test_root = vim.fn.tempname()
 vim.fn.mkdir(test_root, "p")
 test_root = vim.uv.fs_realpath(test_root) or test_root
-local previous_pi_ask_host = vim.env.PI_NVIM_ASK_HOST
 local previous_ask_root = vim.env.PI_ASK_FIXTURE_ROOT
 local ask_socket = test_root .. "/pi-ask-" .. tostring(vim.fn.getpid()) .. ".sock"
-vim.env.PI_NVIM_ASK_HOST = dofile(repo_root .. "/.config/nvim/tests/pi_ask_host.lua")(repo_root)
+local restore_pi_ask_host = dofile(repo_root .. "/.config/nvim/tests/pi_ask_host.lua")(repo_root)
 vim.env.PI_ASK_FIXTURE_ROOT = test_root
 local agent_dir = test_root .. "/pi-agent"
 local encoded_repo = repo_root:gsub("^/", ""):gsub("[/:]", "-")
@@ -487,6 +486,6 @@ vim.env.PI_CODING_AGENT_SESSION_DIR = previous_session_dir
 vim.env.HERDR_ENV = previous_herdr_env
 vim.env.HERDR_PANE_ID = previous_herdr_pane_id
 vim.env.PI_NVIM_HERDR_PANE_ID = previous_pi_herdr_pane_id
-vim.env.PI_NVIM_ASK_HOST = previous_pi_ask_host
+restore_pi_ask_host()
 vim.env.PI_ASK_FIXTURE_ROOT = previous_ask_root
 vim.fn.delete(test_root, "rf")

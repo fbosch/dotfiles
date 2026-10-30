@@ -1,6 +1,7 @@
 local root = assert(vim.env.PI_ASK_FIXTURE_ROOT)
 local config = assert(vim.env.PI_ASK_FIXTURE_CONFIG)
 package.path = config .. "/lua/?.lua;" .. config .. "/lua/?/init.lua;" .. package.path
+dofile(config .. "/tests/pi_ask_host.lua")(nil, assert(vim.env.PI_ASK_FIXTURE_HOST))
 vim.cmd.cd(root)
 local source = vim.api.nvim_create_buf(true, false)
 vim.api.nvim_buf_set_name(source, root .. "/example.lua")
