@@ -94,6 +94,13 @@ assert(detections == 2)
 files["/cache/first_login/26-10-30"] = "09:00:00"
 now = now + 10
 expect("3.5", "valid cache recovers")
+files["/cache/first_login/26-10-30"] = "12:59:49"
+now = now + 60
+expect("-.-", "future cache is hidden while detection retries")
+assert(detections == 3, "future cache must trigger repair, not remain stuck")
+files["/cache/first_login/26-10-30"] = "09:04:00"
+now = now + 10
+expect("3.4", "repaired cache replaces the future time")
 weekday = 7
 expect(nil, "weekend remains hidden")
 

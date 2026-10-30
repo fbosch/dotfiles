@@ -58,7 +58,8 @@ local function current_start()
 		file:close()
 		if value and value:match("^%d%d?:%d%d:%d%d$") then
 			local hour, minute, second = time_utils.parse_time(value)
-			if hour < 24 and minute < 60 and second < 60 then
+			local elapsed = time_utils.calculate_hour_difference(value, wezterm.strftime("%H:%M:%S"))
+			if hour < 24 and minute < 60 and second < 60 and elapsed >= 0 then
 				start_time = value
 			end
 		end

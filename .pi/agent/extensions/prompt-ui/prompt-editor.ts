@@ -34,7 +34,7 @@ import {
   getSuggestionGitStatus,
   splitEditorLines,
 } from "./autocomplete";
-import { contextIndicator, freedTokenIndicator } from "./context-health";
+import { cacheIndicator, contextIndicator, freedTokenIndicator } from "./context-health";
 import { type ContextSnapshot, readContextSnapshot } from "./context-status";
 import {
   backgroundToForeground,
@@ -101,7 +101,12 @@ function renderContext(theme: Theme, context: ContextSnapshot): string {
     context.estimated,
   );
   const freed = freedTokenIndicator(context.freedTokens);
-  return theme.fg(indicator.color, indicator.text) + (freed ? theme.fg("muted", ` ${freed}`) : "");
+  const cache = cacheIndicator(context.cachePercent);
+  return (
+    theme.fg(indicator.color, indicator.text) +
+    (freed ? theme.fg("muted", ` ${freed}`) : "") +
+    (cache.text ? theme.fg(cache.color, ` ${cache.text}`) : "")
+  );
 }
 
 function promptThemeKey(theme: Theme): string {
@@ -455,6 +460,7 @@ export class PromptEditor extends CustomEditor {
       context.usage?.percent,
       context.estimated,
       context.freedTokens,
+      context.cachePercent,
       profileName,
       isWorking,
       this.agentMentionCache.version,

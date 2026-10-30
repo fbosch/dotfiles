@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
-import { contextHealthColor, contextIndicator, freedTokenIndicator } from "../context-health";
+import {
+  cacheIndicator,
+  contextHealthColor,
+  contextIndicator,
+  freedTokenIndicator,
+} from "../context-health";
 
 describe("context health color", () => {
   test("uses success through 25 percent", () => {
@@ -57,5 +62,24 @@ describe("freed token indicator", () => {
   test("hides the badge when there is no net reduction", () => {
     expect(freedTokenIndicator(0)).toBe("");
     expect(freedTokenIndicator(-10)).toBe("");
+  });
+});
+
+describe("cache indicator", () => {
+  test.each([
+    { percent: 0, displayed: 0, color: "error" },
+    { percent: 49.4, displayed: 49, color: "error" },
+    { percent: 49.5, displayed: 50, color: "warning" },
+    { percent: 50, displayed: 50, color: "warning" },
+    { percent: 89, displayed: 89, color: "warning" },
+    { percent: 89.5, displayed: 90, color: "muted" },
+    { percent: 90, displayed: 90, color: "muted" },
+    { percent: 100, displayed: 100, color: "muted" },
+  ])("colors $displayed% as $color", ({ percent, displayed, color }) => {
+    expect(cacheIndicator(percent)).toEqual({ text: `󰆼 ${displayed}%`, color });
+  });
+
+  test("hides the badge when usage is unknown", () => {
+    expect(cacheIndicator(undefined)).toEqual({ text: "", color: "muted" });
   });
 });

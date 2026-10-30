@@ -37,3 +37,12 @@ export function contextIndicator(
 export function freedTokenIndicator(tokens: number): string {
   return tokens > 0 ? `󰈉 ~${compactTokenFormatter.format(tokens)}` : "";
 }
+
+export function cacheIndicator(percent: number | undefined): ContextIndicator {
+  if (percent === undefined) return { text: "", color: "muted" };
+  const roundedPercent = Math.round(percent);
+  return {
+    text: `󰆼 ${roundedPercent}%`,
+    color: roundedPercent >= 90 ? "muted" : roundedPercent >= 50 ? "warning" : "error",
+  };
+}

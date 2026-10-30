@@ -10,6 +10,7 @@ export interface ContextSnapshot {
   usage: ReturnType<ExtensionContext["getContextUsage"]>;
   estimated: boolean;
   freedTokens: number;
+  cachePercent: number | undefined;
 }
 
 export function readContextSnapshot(
@@ -18,6 +19,19 @@ export function readContextSnapshot(
   let usage = ctx.getContextUsage();
   const branch = ctx.sessionManager.getBranch();
   const projection = ctx.sessionManager.buildSessionProjection();
+  // Count historical requests, not the edited projection: masking and compaction cannot undo usage.
+  let cachedInputTokens = 0;
+  let totalInputTokens = 0;
+  for (const entry of branch) {
+    if (entry.type !== "message" || entry.message.role !== "assistant") continue;
+    const assistant = entry.message;
+    if (assistant.stopReason === "error" || assistant.stopReason === "aborted") continue;
+    const { input, cacheRead, cacheWrite } = assistant.usage;
+    cachedInputTokens += cacheRead;
+    totalInputTokens += input + cacheRead + cacheWrite;
+  }
+  const cachePercent =
+    totalInputTokens > 0 ? (cachedInputTokens / totalInputTokens) * 100 : undefined;
   const saved = savedItems(branch);
   let freedTokens = 0;
   let lastMessage: (typeof projection.messages)[number] | undefined;
@@ -70,5 +84,5 @@ export function readContextSnapshot(
     usage = { ...usage, tokens, percent: (tokens / usage.contextWindow) * 100 };
     estimated = true;
   }
-  return { usage, estimated, freedTokens: Math.max(0, freedTokens) };
+  return { usage, estimated, freedTokens: Math.max(0, freedTokens), cachePercent };
 }

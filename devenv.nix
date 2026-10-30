@@ -247,6 +247,7 @@ in
     "test:fish-corporate-opencode".exec = "fish tests/fish_corporate_opencode.fish";
 
 
+    "test:fish-workday-start".exec = "bun test ./.config/fish/libexec/__tests__/workday_start.test.js";
     "test:fish-ssh-agent".exec = "bun test ./.config/fish/libexec/__tests__/ssh_agent.test.js";
 
     "test:fish-starship-cache".exec = ''
@@ -583,6 +584,7 @@ in
         "test:stow"
         "test:fish"
         "test:git-pull-system-repos"
+        "test:fish-workday-start"
         "test:fish-ssh-agent"
         "test:fish-starship-cache"
         "test:herdr-neovim-sessions"

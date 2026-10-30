@@ -157,6 +157,25 @@ test("reuses prompt highlighting, layout, and context until render inputs change
   expect(contextReads).toBe(3);
   for (const read of syncReads) expect(read).not.toHaveBeenCalled();
 
+  const recordCacheUsage = (cacheRead: number) =>
+    sessionManager.appendMessage({
+      role: "assistant",
+      content: [{ type: "text", text: "Done." }],
+      api: "openai-responses",
+      provider: "openai",
+      model: "test",
+      timestamp: 0,
+      stopReason: "stop",
+      usage: {
+        input: 100 - cacheRead,
+        output: 10,
+        cacheRead,
+        cacheWrite: 0,
+        totalTokens: 110,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+    });
+  recordCacheUsage(80);
   const id = resultIds[0];
   const originalLeaf = sessionManager.getLeafId();
   if (!id || !originalLeaf) throw new Error("Missing test session");
@@ -172,8 +191,9 @@ test("reuses prompt highlighting, layout, and context until render inputs change
   if (!maskedLeaf) throw new Error("Missing masked leaf");
   usage = { tokens: 10_000, percent: 5, contextWindow: 200_000 };
   expect(stripTerminalSequences(editor.render(100).join("\n"))).toContain(
-    `~10K (5%) 󰈉 ~${freedTokens}`,
+    `~10K (5%) 󰈉 ~${freedTokens} 󰆼 80%`,
   );
+  expect(editor.render(100).join("\n")).toContain(currentTheme.fg("warning", " 󰆼 80%"));
   expect(contextReads).toBe(4);
   for (let frame = 0; frame < 20; frame++) editor.render(100);
   expect(contextReads).toBe(4);
@@ -181,12 +201,27 @@ test("reuses prompt highlighting, layout, and context until render inputs change
     for (const line of editor.render(width)) expect(visibleWidth(line)).toBeLessThanOrEqual(width);
   }
 
+  recordCacheUsage(10);
+  expect(stripTerminalSequences(editor.render(100).join("\n"))).toContain(
+    `󰈉 ~${freedTokens} 󰆼 45%`,
+  );
+  expect(editor.render(100).join("\n")).toContain(currentTheme.fg("error", " 󰆼 45%"));
+  recordCacheUsage(40.4);
+  expect(stripTerminalSequences(editor.render(100).join("\n"))).toContain(
+    `󰈉 ~${freedTokens} 󰆼 43%`,
+  );
+  expect(contextReads).toBe(6);
   sessionManager.branch(originalLeaf);
   expect(stripTerminalSequences(editor.render(100).join("\n"))).not.toContain("󰈉");
-  expect(contextReads).toBe(5);
+  expect(contextReads).toBe(7);
   sessionManager.branch(maskedLeaf);
-  expect(stripTerminalSequences(editor.render(100).join("\n"))).toContain(`󰈉 ~${freedTokens}`);
-  expect(contextReads).toBe(6);
+  expect(stripTerminalSequences(editor.render(100).join("\n"))).toContain(
+    `󰈉 ~${freedTokens} 󰆼 80%`,
+  );
+  expect(contextReads).toBe(8);
+  recordCacheUsage(100);
+  expect(editor.render(100).join("\n")).toContain(currentTheme.fg("muted", " 󰆼 90%"));
+  expect(contextReads).toBe(9);
   for (const read of syncReads) expect(read).not.toHaveBeenCalled();
   editor.dispose();
   cache.dispose();
