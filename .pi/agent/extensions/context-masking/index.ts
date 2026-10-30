@@ -43,7 +43,6 @@ import {
 } from "./masking-retention";
 import { registerRecall, registerRecallPrefetch } from "./recall";
 import { registerImageContext } from "./image-retention";
-import { registerImageRecall } from "./image-recall";
 
 export const CUSTOM_TYPE = "context-masking";
 
@@ -426,7 +425,6 @@ export default function contextMasking(pi: ExtensionAPI): void {
   registerContextMasking(pi);
   registerClassifierCompaction(pi);
   registerImageContext(pi, () => join(getAgentDir(), "cache", "context-masking"));
-  registerImageRecall(pi, () => join(getAgentDir(), "cache", "context-masking"));
   registerRecall(pi);
   registerRecallPrefetch(pi, undefined, (ctx) => {
     try {

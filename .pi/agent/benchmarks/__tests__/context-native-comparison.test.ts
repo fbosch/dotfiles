@@ -8,11 +8,27 @@ import {
   FOUR_WAY_SEEDS,
   DIVERSE_SEEDS,
   assertManifestRead,
+  classifierCallKind,
   buildPreflight,
   finalProbeRequest,
   registerSavedArtifacts,
 } from "../context-native-comparison";
 import { diverseStages } from "../context-classifier-diverse-history";
+import { RECALL_CLASSIFIER_TASK } from "../../extensions/context-masking/recall";
+
+test("probe recall inference stays separate from classifier compaction", () => {
+  const recall = { state: { task: RECALL_CLASSIFIER_TASK } };
+  const compaction = { state: { goal: "retain relevant evidence" } };
+  for (const arm of ["native-recall", "enabled-classifier", "hybrid-summary"] as const)
+    expect(classifierCallKind(arm, true, recall)).toBe("recall");
+  for (const arm of ["enabled-classifier", "hybrid-summary"] as const) {
+    expect(classifierCallKind(arm, false, compaction)).toBe("classifier");
+    expect(() => classifierCallKind(arm, false, recall)).toThrow("outside an enabled probe");
+  }
+  expect(() => classifierCallKind("native-recall", false, compaction)).toThrow("disabled");
+  expect(() => classifierCallKind("native-recall", true, compaction)).toThrow("disabled");
+  expect(() => classifierCallKind("native-pi-summary", true, recall)).toThrow("outside an enabled probe");
+});
 
 const scratch = join(PREFLIGHT_ROOT, "unit");
 const roots: string[] = [];
@@ -98,7 +114,7 @@ describe("native versus enabled-classifier comparison preflight", () => {
     expect(report.config.seeds).toEqual(["recall-holdout-1", "recall-holdout-2", "recall-holdout-3"]);
     expect(report.arms).toHaveLength(6);
     expect(report.config.limits).toEqual({
-      modelPerCompaction: 2, classifierPerCompaction: 40, modelPerProbe: 16,
+      modelPerCompaction: 2, classifierPerCompaction: 40, classifierPerProbe: 40, modelPerProbe: 16,
       toolOverheadPerProbe: 12, operationMs: 180_000, campaignMs: 900_000,
     });
     const nativeConfig = report.config.armSettings["native-recall"];
@@ -136,9 +152,9 @@ describe("native versus enabled-classifier comparison preflight", () => {
     expect(report.networkCalls).toBe(0);
     expect(report.config.seeds).toEqual(["fourway-holdout-1", "fourway-holdout-2", "fourway-holdout-3"]);
     expect(report.arms).toHaveLength(12);
-    expect(report.config.maximumRequests).toEqual({ model: 264, classifier: 720 });
+    expect(report.config.maximumRequests).toEqual({ model: 264, classifier: 720, recall: 360 });
     expect(report.config.limits).toEqual({
-      modelPerCompaction: 2, classifierPerCompaction: 40, modelPerProbe: 16,
+      modelPerCompaction: 2, classifierPerCompaction: 40, classifierPerProbe: 40, modelPerProbe: 16,
       toolOverheadPerProbe: 12, operationMs: 180_000, campaignMs: 900_000,
     });
     for (const [index, seed] of report.config.seeds.entries()) {

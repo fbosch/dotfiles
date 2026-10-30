@@ -1,6 +1,6 @@
 # Context masking
 
-This extension hides old, large tool results from the model's context before Pi needs to compact. Each hidden result is saved to a local file, and a short placeholder in the conversation points to it. User messages, assistant messages, tool calls, and recent tool results stay verbatim. Deterministic masking and local recall do not call a model. Optional rolling masking and classifier compaction are disabled by default.
+This extension hides old, large tool results from the model's context before Pi needs to compact. Each hidden result is saved to a local file, and a short placeholder in the conversation points to it. User messages, assistant messages, tool calls, and recent tool results stay verbatim. Deterministic masking and automatic saved-output lookup do not call a model. Explicit recall uses classifier-assisted search. Optional rolling masking and classifier compaction are disabled by default.
 
 ## Enable masking with native compaction
 
@@ -48,9 +48,11 @@ With `rollingEnabled` off, the extension runs this batch at the end of a turn on
 
 The raw session file keeps every original result, and `/tree` navigation to a point before the edit shows the originals again.
 
-A hidden result remains available through `read` at its saved path. The extension also registers a deferred `recall` tool that returns matching passages. Tool discovery can activate it; to declare it at startup, add `"+recall"` to `defaultTools`. Automatic lookup does not activate the tool or change the active tool list.
+A hidden result remains available through `read` at its saved path. The extension also registers a deferred `recall` tool that returns matching text passages and original image pixels. Tool discovery can activate it; to declare it at startup, add `"+recall"` to `defaultTools`. Automatic lookup does not activate the tool or change the active tool list.
 
-The `recall` tool accepts either `query` for one question or `queries` for one to eight distinct questions. For example, `{"queries":["Which schema was approved?","What retention period was approved?"],"limit":2}` retrieves both in one scan. `limit` applies per question. All questions share the same scan and output budgets, and each gets an output allowance so the first cannot consume the whole response.
+The `recall` tool accepts either `query` for one question or `queries` for one to eight distinct questions. For example, `{"queries":["Which schema was approved?","What retention period was approved?"],"limit":2}` retrieves both in one scan. `limit` applies per question and content type. All questions share the same scan and output budgets, and each gets an output allowance so the first cannot consume the whole response.
+
+Explicit search ranks a bounded set of text passages and image metadata with the configured classifier. Candidates do not need exact query-word overlap. The result reports whether ranking used the classifier or a lexical fallback, including the fallback reason. Automatic saved-output lookup remains lexical and does not make classifier requests.
 
 ## Opt-in rolling masking
 
@@ -258,7 +260,7 @@ Archival failures skip only the affected images, including unavailable previous 
 
 Final verification of successfully archived images still cancels compaction if an image is unavailable. If a kept image later becomes unavailable, context includes an explicit missing-pixels notice. Nothing deletes an image automatically.
 
-The deferred `recall_images` tool finds references by source label, identifier or path, including pruned images. It searches the latest 80 image archive records on the current branch, returns at most eight references and validates at most 16 MB per call. It does not search visual contents or call a model. Use `read` on a returned path to view its pixels. Older originals remain on disk and in session records even when outside this bounded lookup.
+The deferred `recall` tool searches archived images alongside saved text, including pruned images. Classifier ranking uses source labels, identifiers and paths, not visual contents. Selected images return as verified original pixels in the tool result. Originals remain on disk and in session records even when outside the bounded search.
 
 The image path allows at most 32 originals and 16 MB per attempt, with a 4 MB and 8-million-pixel limit per original. ImageMagick creates metadata-stripped classifier copies with white padding rather than upscaling small images. Copies fit 280–1,568 pixels per side, 78,400–2,458,624 pixels in area and 500 KB encoded. The source pixels remain unchanged. The serialized multimodal packet has a separate 1 MB ceiling; `maxRequestBytes` still bounds its text state and questions. `includeContent: false` disables saved-text hydration, not image transfer.
 

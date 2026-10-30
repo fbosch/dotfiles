@@ -22,6 +22,7 @@ import { scoreRecall } from "./context-classifier-recall-fixtures";
 import { assistant } from "./context-masking-recall-probe";
 import { savedItems } from "../extensions/context-masking/evidence-archive";
 import { readSavedArtifact } from "../extensions/context-masking/saved-artifact";
+import { RECALL_CLASSIFIER_TASK } from "../extensions/context-masking/recall";
 
 export const PREFLIGHT_ROOT = "/tmp/context-native-comparison-preflight";
 export const SEEDS = ["paired-1", "paired-2", "paired-3"] as const;
@@ -34,7 +35,7 @@ export const FOUR_WAY_SEEDS = ["fourway-holdout-1", "fourway-holdout-2", "fourwa
 export const DIVERSE_SEEDS = ["diverse-holdout-1", "diverse-holdout-2", "diverse-holdout-3"] as const;
 const MODEL = ["openai-codex", "gpt-6.1-sol"] as const;
 const CLASSIFIER = { ...CLASSIFIER_DEFAULTS, enabled: true, includeContent: true, maxOutputBytes: 4_000 };
-const LIMITS = { modelPerCompaction: 2, classifierPerCompaction: 40, modelPerProbe: 16, toolOverheadPerProbe: 12, operationMs: 180_000, campaignMs: 900_000 };
+const LIMITS = { modelPerCompaction: 2, classifierPerCompaction: 40, classifierPerProbe: 40, modelPerProbe: 16, toolOverheadPerProbe: 12, operationMs: 180_000, campaignMs: 900_000 };
 const FACT_DIAGNOSTICS = { maxMisses: 3, modelCalls: 5 } as const;
 type Arm = typeof ARMS[number] | typeof HYBRID_ARMS[number] | typeof RECALL_ABLATION_ARMS[number];
 interface ComparisonOptions { hybrid?: boolean; recallAblation?: boolean; fourWay?: boolean; classifierOnly?: boolean; diverse?: boolean; diverseSeed?: typeof DIVERSE_SEEDS[number]; diagnoseMisses?: boolean; diagnoseIds?: readonly string[] }
@@ -70,7 +71,7 @@ interface Fixture {
   diverse: boolean; stages: Array<ReturnType<typeof autonomousStages>[number] & Partial<Pick<DiverseStage, "tools" | "images">>>; traceIds: string[];
 }
 interface Call {
-  seed: string; arm: Arm; phase: number; kind: "summary" | "classifier" | "probe";
+  seed: string; arm: Arm; phase: number; kind: "summary" | "classifier" | "recall" | "probe";
   ms: number; usage?: Usage; stopReason?: string; error?: string;
 }
 interface State {
@@ -85,6 +86,20 @@ const digest = (bytes: string | Uint8Array) => createHash("sha256").update(bytes
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 function classifierSettings(arm: Arm, diverse = false) {
   return { ...CLASSIFIER, ...(diverse ? { maxRequestBytes: 28_000, maxConcurrentAssessments: 2 } : {}), enabled: arm === "enabled-classifier" || arm === "hybrid-summary", mode: arm === "hybrid-summary" ? "hybrid" as const : "extractive" as const };
+}
+
+// Recall inference is allowed during probes without enabling classifier compaction in native-recall.
+export function classifierCallKind(arm: Arm, probing: boolean, context: unknown): "classifier" | "recall" {
+  const state = typeof context === "object" && context !== null && "state" in context
+    ? context.state : undefined;
+  const recall = typeof state === "object" && state !== null && "task" in state &&
+    state.task === RECALL_CLASSIFIER_TASK;
+  if (recall) {
+    if (!probing || arm === "native-pi-summary") throw Error("Recall classifier outside an enabled probe");
+    return "recall";
+  }
+  if (!classifierSettings(arm).enabled) throw Error("Classifier compaction disabled for arm: " + arm);
+  return "classifier";
 }
 function route(details: unknown, arm: Arm) {
   return isHybridCheckpoint(details) ? "hybrid" : isClassifierCheckpoint(details) ? "classifier" : classifierSettings(arm).enabled ? "fallback" : "native";
@@ -284,7 +299,7 @@ async function session(runtime: ModelRuntime, model: Model, f: Fixture, state: S
           await assertManifestRead(knownArtifact ? artifactRoot : f.cwd,
             new Set(knownArtifact ? [...f.artifacts.keys()].map(p => relative(artifactRoot, p)) : f.manifest.keys()), path);
           event.input.limit = 80;
-        } else if (event.toolName !== "tool_search" && !(state.arm !== "native-pi-summary" && (event.toolName === "recall" || event.toolName === "recall_images")))
+        } else if (event.toolName !== "tool_search" && !(state.arm !== "native-pi-summary" && event.toolName === "recall"))
           throw Error("Out-of-scope tool: " + event.toolName);
       } catch (error) {
         // Missing files and directories are blocked, not a reason to abandon a bounded probe.
@@ -386,6 +401,7 @@ export async function buildPreflight(options: ComparisonOptions & { root: string
       maximumRequests: {
         model: seeds.length * comparisonArms.length * (3 * LIMITS.modelPerCompaction + LIMITS.modelPerProbe) + (options.diagnoseMisses ? seeds.length * FACT_DIAGNOSTICS.maxMisses * FACT_DIAGNOSTICS.modelCalls : 0),
         classifier: seeds.length * comparisonArms.filter(arm => classifierSettings(arm).enabled).length * 3 * LIMITS.classifierPerCompaction,
+        recall: seeds.length * (comparisonArms.filter(arm => arm !== "native-pi-summary").length + (options.diagnoseMisses ? FACT_DIAGNOSTICS.maxMisses : 0)) * LIMITS.classifierPerProbe,
       }, retries: false, thinkingLevel: "off" },
     arms,
   };
@@ -405,7 +421,7 @@ export async function runComparison(root: string, options: ComparisonOptions = {
   let active: State | undefined;
   const started = performance.now(), stream = runtime.streamSimple.bind(runtime), classify = runtime.classify.bind(runtime);
   const campaignMs = options.diverse ? 1_800_000 : LIMITS.campaignMs;
-  function check(kind: "model" | "classifier") {
+  function check(kind: "model" | "classifier" | "recall") {
     const s = active;
     if (!s || s.fatal || performance.now() - started > campaignMs) throw Error(s?.fatal ?? "Campaign request guard");
     if (kind === "classifier" && !classifierSettings(s.arm, options.diverse).enabled) {
@@ -416,7 +432,7 @@ export async function runComparison(root: string, options: ComparisonOptions = {
       if (s.probing) s.probeFailure = "model-request-limit";
       throw Error("Model-request budget exceeded");
     }
-    if (kind === "classifier" && ++s.classifierCalls > LIMITS.classifierPerCompaction) throw Error("Classifier-request budget exceeded");
+    if (kind !== "model" && ++s.classifierCalls > (s.probing ? LIMITS.classifierPerProbe : LIMITS.classifierPerCompaction)) throw Error("Classifier-request budget exceeded");
     return s;
   }
   runtime.streamSimple = (model, context, options) => {
@@ -431,7 +447,12 @@ export async function runComparison(root: string, options: ComparisonOptions = {
     return result;
   };
   runtime.classify = async (model, context, options) => {
-    const s = check("classifier"), call: Call = { seed: s.seed, arm: s.arm, phase: s.phase + 1, kind: "classifier", ms: 0 };
+    const current = active;
+    if (!current) throw Error("Campaign request guard");
+    let kind: "classifier" | "recall";
+    try { kind = classifierCallKind(current.arm, current.probing, context); }
+    catch (error) { current.fatal = String(error); throw error; }
+    const s = check(kind), call: Call = { seed: s.seed, arm: s.arm, phase: s.phase + 1, kind, ms: 0 };
     calls.push(call); const start = performance.now();
     try {
       const result = await classify(model, context, options);
