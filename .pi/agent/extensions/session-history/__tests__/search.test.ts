@@ -127,6 +127,21 @@ describe("searchSessions", () => {
     expect(ids).toEqual(["new", "old"]);
   });
 
+  test("takes each snippet from the result's own chunk, not an earlier match", async () => {
+    const db = await indexed([
+      { id: "first", cwd: "/w", text: "kiwi smoothie from the first session" },
+      { id: "second", cwd: "/w", text: "kiwi salad from the second session" },
+    ]);
+    const [result] = searchSessions(db, {
+      query: "kiwi",
+      cwd: "/w",
+      excludeSessionId: "first",
+    }).results;
+    expect(result?.sessionId).toBe("second");
+    expect(result?.snippet).toContain("salad");
+    expect(result?.snippet).not.toContain("smoothie");
+  });
+
   test("excludes the calling session", async () => {
     const db = await indexed([{ id: "me", cwd: "/work", text: "unique term" }]);
     expect(

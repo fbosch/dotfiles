@@ -289,9 +289,11 @@ export class HistoryStore {
   snippet(query: string, mode: MatchMode, rowid: number): string {
     const expression = ftsExpression(query, mode);
     if (!expression) return "";
+    // node:sqlite binds JS numbers as REAL, and FTS5 silently ignores a REAL rowid constraint,
+    // returning the first match instead; the CAST keeps the lookup on this row.
     const row = this.db
       .prepare(
-        "SELECT snippet(chunks_fts, 0, '«', '»', '…', 24) AS snippet FROM chunks_fts WHERE chunks_fts MATCH ? AND rowid = ?",
+        "SELECT snippet(chunks_fts, 0, '«', '»', '…', 24) AS snippet FROM chunks_fts WHERE chunks_fts MATCH ? AND rowid = CAST(? AS INTEGER)",
       )
       .get(expression, rowid);
     return row ? text(row, "snippet") : "";
