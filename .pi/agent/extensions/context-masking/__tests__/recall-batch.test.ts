@@ -126,7 +126,7 @@ test("supports cancellation and keeps the scalar API output contract", async () 
   expect(report.text).not.toContain("Query:");
 });
 
-test("tool accepts either the legacy scalar query or a batch, but rejects both together", async () => {
+test("tool accepts a scalar query or a batch, but rejects both together", async () => {
   const f = await fixture(["audit receipt: saved\n"]);
   const tool = capturedRecallTool();
   const base = { sessionManager: f.manager } as unknown as ExtensionContext;
@@ -146,7 +146,7 @@ test("tool accepts either the legacy scalar query or a batch, but rejects both t
     undefined,
     ctx,
   );
-  expect(single.content[0]?.type === "text" ? single.content[0].text : "").not.toContain("Query:");
+  expect(single.content[0]?.type === "text" ? single.content[0].text : "").toContain("Query: audit receipt");
   await expect(
     tool.execute(
       "invalid",
