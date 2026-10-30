@@ -405,11 +405,11 @@ async function scanSaved(
 ): Promise<RecallScan> {
   signal?.throwIfAborted();
   const all = recallableTextArchiveRecords(branch);
-  const candidates = all.slice(-RECALL_LIMITS.artifacts).reverse();
   // Catalogue order is chronological; equal-scoring passages favor newer saves so superseded revisions rank lower.
   const recency = new Map(all.map((item, index) => [item, index]));
   const passageRecency = new WeakMap<Passage, number>();
-  const calls = callsFor(branch, new Set(candidates.map((item) => item.entryId)));
+  // Labels come from the session, not archive files, so ranking every archive adds no file reads.
+  const calls = callsFor(branch, new Set(all.map((item) => item.entryId)));
   const callRelevance = (call: string) =>
     Math.max(
       ...queries.map((query) => {
@@ -417,10 +417,13 @@ async function scanSaved(
         return queries.length === 1 ? count : count / query.terms.length;
       }),
     );
-  candidates.sort(
-    (a, b) =>
-      callRelevance(calls.get(b.entryId) ?? "") - callRelevance(calls.get(a.entryId) ?? ""),
-  );
+  const relevance = new Map(all.map((item) => [item, callRelevance(calls.get(item.entryId) ?? "")]));
+  // The scan cap bounds file reads; choose which archives it admits by label relevance before
+  // recency, so an old result whose calls name the queried file is not cut by age alone.
+  const candidates = [...all]
+    .reverse()
+    .sort((a, b) => (relevance.get(b) ?? 0) - (relevance.get(a) ?? 0))
+    .slice(0, RECALL_LIMITS.artifacts);
 
   let scanned = 0;
   let skipped = 0;

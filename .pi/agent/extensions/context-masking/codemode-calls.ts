@@ -24,15 +24,19 @@ interface InnerCall {
   failed: boolean;
 }
 
-const oneLine = (value: string): string => {
+// Paths and URLs keep their end, where the file name is; commands and patterns keep their start.
+const oneLine = (value: string, key: (typeof MAIN_ARGUMENTS)[number]): string => {
   const line = value.replace(/\s+/gu, " ").trim();
-  return line.length > MAX_ARGUMENT_CHARS ? `${line.slice(0, MAX_ARGUMENT_CHARS - 1)}…` : line;
+  if (line.length <= MAX_ARGUMENT_CHARS) return line;
+  return key === "path" || key === "url"
+    ? `…${line.slice(-(MAX_ARGUMENT_CHARS - 1))}`
+    : `${line.slice(0, MAX_ARGUMENT_CHARS - 1)}…`;
 };
 
 function mainArgument(args: unknown): string | undefined {
   for (const key of MAIN_ARGUMENTS) {
     const shape = { [key]: P.string };
-    if (isMatching(shape, args) && args[key]) return oneLine(args[key]);
+    if (isMatching(shape, args) && args[key]) return oneLine(args[key], key);
   }
   return undefined;
 }
@@ -45,7 +49,7 @@ function mainArgumentFromJson(args: string | undefined): string | undefined {
   } catch {
     for (const key of MAIN_ARGUMENTS) {
       const value = args.match(new RegExp(`"${key}":"((?:[^"\\\\]|\\\\.)*)`, "u"))?.[1];
-      if (value) return oneLine(value.replace(/\\[nrt]/gu, " "));
+      if (value) return oneLine(value.replace(/\\[nrt]/gu, " "), key);
     }
     return undefined;
   }

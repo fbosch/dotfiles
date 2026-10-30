@@ -251,3 +251,20 @@ test("searches JSON-encoded output as decoded lines and cites the saved line", a
   expect(report.text).not.toContain("\\n");
   expect(report.text).not.toContain("[line clipped]");
 });
+
+test("an old archive whose call names the queried file is scanned despite the artifact cap", async () => {
+  const count = RECALL_LIMITS.artifacts + 10;
+  // fixture() labels result i with its read path, file<i>; file0 is the oldest.
+  const f = await fixture(
+    Array.from({ length: count }, (_, i) => (i === 0 ? "Archived audit receipt: oldest-007" : "routine passed")),
+  );
+  const branch = f.manager.getBranch();
+  const named = await recallSaved(branch, f.root, "audit receipt in file0");
+  expect(named.scanned).toBe(RECALL_LIMITS.artifacts);
+  expect(named.text).toContain("oldest-007");
+  expect(named.text).toContain(f.paths[0] ?? "");
+  // Without a label match, the cap still admits the newest archives and reports the limit.
+  const unnamed = await recallSaved(branch, f.root, "audit receipt");
+  expect(unnamed.text).not.toContain("oldest-007");
+  expect(unnamed.limited).toBe(true);
+});
