@@ -53,14 +53,6 @@ for _, mode in ipairs({ "n", "x" }) do
 	ask.callback()
 end
 assert(vim.deep_equal(pi_asks, { "", "" }), "Pi Ask mapping callbacks did not call pi.ask with literal input")
-for _, mode in ipairs({ "n", "x", "t" }) do
-	assert(
-		vim.iter(vim.api.nvim_get_keymap(mode)):all(function(candidate)
-			return candidate.desc == nil or candidate.desc:find("OpenCode", 1, true) == nil
-		end),
-		"OpenCode mapping survived the Pi-only cutover"
-	)
-end
 
 for _, command in ipairs({
 	"PiStart",
@@ -98,6 +90,3 @@ vim.cmd("PiAsk")
 vim.cmd("PiAsk literal prompt")
 assert(starts == 2 and toggles == 3, "Pi commands did not use the cutover integration")
 assert(vim.deep_equal(pi_asks, { "", "", "", "literal prompt" }), "Pi Ask did not preserve literal prefill")
-for _, command in ipairs({ "OpenCodeStart", "OpenCodeToggle", "OpenCodeAsk" }) do
-	assert(vim.fn.exists(":" .. command) == 0, command .. " survived the Pi-only cutover")
-end

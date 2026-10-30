@@ -11,7 +11,6 @@ Fish shell configuration for interactive work, dotfiles maintenance, and local w
 
 ## Function Groups
 - Agent workflows: `ai_commit.fish` and `codex-reset.fish`.
-- OpenCode fallback: `opencode.fish`.
 - Azure DevOps helpers: `ado_test_case.fish`, `workitems_on_date.fish`, `workitems_week.fish`, `workitems_cache_clear.fish`.
 - Herdr: `herdr_link_plugins.fish` links the tracked local Herdr plugins after `stow .`.
 - Worktree and branch helpers: `wt.fish`, `worktree_add.fish`, `worktree_clone.fish`, `latest_worktree.fish`, `wtfzf.fish`.
@@ -28,5 +27,5 @@ Biome config for helper scripts lives at `libexec/biome.json`.
 ## Notes
 
 - Functions are autoloaded by Fish; avoid sourcing function files manually from `config.fish` unless startup order requires it.
-- Some commands assume local tools such as `gum`, `fzf`, `fd`, `bun`, `opencode`, and `wt` are available from the system environment.
+- Some commands assume local tools such as `gum`, `fzf`, `fd`, `bun`, `pi`, and `wt` are available from the system environment.
 - Package installation belongs in the Nix system repo, not this dotfiles repo.

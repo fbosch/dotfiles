@@ -87,7 +87,7 @@ const CacheEntrySchema = z.object({
 const CacheSchema = z.record(z.string(), CacheEntrySchema);
 
 function usage(): void {
-    console.log("Usage: opencode/linear_issue_workflow_helper.ts <build-list|issue-branch> [args]");
+    console.log("Usage: linear/linear_issue_workflow_helper.ts <build-list|issue-branch> [args]");
     console.log("Commands:");
     console.log("  build-list            read 'linear issue list' output on stdin and emit TSV rows");
     console.log("  issue-branch <ID>     emit derived branch for an issue");
@@ -261,7 +261,11 @@ function deriveBranch(issueId: string, title: string, branchName?: string): stri
     return `feature/${issueId.toLowerCase()}-${slug.slice(0, 48)}`;
 }
 
-function applyCachedDetails(details: IssueDetails, cached: CachedIssueMeta | undefined, context: ListBuildContext): void {
+function applyCachedDetails(
+    details: IssueDetails,
+    cached: CachedIssueMeta | undefined,
+    context: ListBuildContext,
+): void {
     if (!cached || context.now - cached.timestamp > context.cacheTtlSeconds) {
         return;
     }

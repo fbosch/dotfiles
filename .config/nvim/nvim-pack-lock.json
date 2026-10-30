@@ -199,10 +199,6 @@
       "rev": "ec309a0eaff6ea967e58c275996155ab5c16938d",
       "src": "https://github.com/nvim-tree/nvim-web-devicons.git"
     },
-    "opencode.nvim": {
-      "rev": "41622312d5d8fb074699c1d5d96f089286191376",
-      "src": "https://github.com/NickvanDyke/opencode.nvim.git"
-    },
     "plenary.nvim": {
       "rev": "74b06c6c75e4eeb3108ec01852001636d85a932b",
       "src": "https://github.com/nvim-lua/plenary.nvim.git"

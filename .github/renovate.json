@@ -33,13 +33,6 @@
       "internalChecksFilter": "strict"
     },
     {
-      "description": "OpenCode currently has overlapping Bun and pnpm lockfile ownership",
-      "matchFileNames": [
-        ".config/opencode/**"
-      ],
-      "enabled": false
-    },
-    {
       "description": "Keep package-manager toolchain versions aligned manually",
       "matchPackageNames": [
         "bun",

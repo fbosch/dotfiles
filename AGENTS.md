@@ -36,10 +36,6 @@ Personal dotfiles managed with GNU Stow across macOS and Linux.
 - Configure the main agent's startup tools through `defaultTools` in `.pi/agent/settings.json`, using `+tool_name` to preserve the inherited selection. Do not hardcode startup activation in extension JavaScript or TypeScript.
 - Keep optional tools deferred in their registrations. Enable only the needed entry point by default, such as `subagent`; leave `subagent_result` and `subagent_control` discoverable on demand.
 
-## OpenCode Fallback
-
-- OpenCode is a backup harness for repairing `.pi/`; keep only `.config/opencode/opencode.jsonc`, the `zenwritten-dark` theme, and the native GitHub MCP (`gh mcp`).
-
 ## References
 
 - [Common operations](docs/agents/operations.md)

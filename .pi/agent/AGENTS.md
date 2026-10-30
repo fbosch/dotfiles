@@ -54,7 +54,7 @@
   validation paths, read `~/.pi/agent/references/compatibility.md`.
 - Before running or reporting validation, read
   `~/.pi/agent/references/validation.md`.
-- When a prompt or agent definition names a skill, resolve the advertised skill path first when one is available. If it is not advertised, use the documented canonical roots, such as `~/.agents/skills/<skill-name>/SKILL.md` or the repository's `.agents/skills/`, `.pi/skills/`, and `.opencode/skills/` paths as applicable. Follow mirrors only after identifying the canonical source.
+- When a prompt or agent definition names a skill, resolve the advertised skill path first when one is available. If it is not advertised, use the documented canonical roots, such as `~/.agents/skills/<skill-name>/SKILL.md` or the repository's `.agents/skills/` and `.pi/skills/` paths as applicable. Follow mirrors only after identifying the canonical source.
 - For worktree operations, use `wt`. Do not run mutating `git worktree` commands
   directly. Inspect with `wt list` or `wt status` before an explicitly authorized
   `wt remove`.

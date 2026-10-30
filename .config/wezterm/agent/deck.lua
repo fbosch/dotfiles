@@ -9,10 +9,6 @@ local init_notice
 
 local nf = wezterm.nerdfonts or {}
 local palette = require("theme")
-local detection = require("agent.detection")
-
-local detection_cache_ttl_ms = 5000
-local overlay_state_ttl_ms = 5000
 local pane_refresh_cooldown_ms_active = 250
 local pane_refresh_cooldown_ms_idle = 1000
 local attention_notification_timeout_ms = 4000
@@ -24,7 +20,6 @@ local is_linux = target_triple:find("linux") ~= nil
 local is_macos = target_triple:find("apple%-darwin") ~= nil
 
 local allowed_agents = {
-	opencode = true,
 	claude = true,
 	gemini = true,
 	codex = true,
@@ -52,16 +47,6 @@ local fallback_colors = {
 	inactive = palette.semantic.muted,
 }
 
-local agent_patterns = {
-	"opencode",
-	"@opencode-ai/",
-	"/.opencode/bin/opencode",
-	"opencode-darwin",
-	"opencode-linux",
-	"opencode-win",
-}
-
-local detection_cache = {}
 local pane_refresh_timestamps = {}
 local attention_notification_timestamps = {}
 local now_ms
@@ -103,7 +88,6 @@ local function prune_closed_panes()
 	for pane_id in pairs(pane_states) do
 		if not live_panes[pane_id] then
 			pane_states[pane_id] = nil
-			detection_cache[pane_id] = nil
 			pane_refresh_timestamps[pane_id] = nil
 			attention_notification_timestamps[pane_id] = nil
 		end
@@ -118,7 +102,6 @@ end
 
 local function get_agent_display_name(agent_type)
 	local names = {
-		opencode = "OpenCode",
 		claude = "Claude",
 		gemini = "Gemini",
 		codex = "Codex",
@@ -346,83 +329,6 @@ now_ms = function()
 	return os.time() * 1000
 end
 
-local function process_is_opencode(process_info)
-	if process_info == nil then
-		return false
-	end
-
-	if detection.matches_any_pattern(process_info.name or "", agent_patterns) then
-		return true
-	end
-
-	if detection.matches_any_pattern(process_info.executable or "", agent_patterns) then
-		return true
-	end
-
-	local argv = process_info.argv or {}
-	if #argv > 0 and detection.matches_any_pattern(table.concat(argv, " "), agent_patterns) then
-		return true
-	end
-
-	local children = process_info.children or {}
-	for _, child in pairs(children) do
-		if process_is_opencode(child) then
-			return true
-		end
-	end
-
-	return false
-end
-
-local function pane_has_opencode_process(pane)
-	local pane_id = pane:pane_id()
-	local cache = detection_cache[pane_id]
-	local now = now_ms()
-
-	if cache and (now - cache.checked_at_ms) < detection_cache_ttl_ms then
-		return cache.is_opencode
-	end
-
-	local ok, process_info = pcall(function()
-		return pane:get_foreground_process_info()
-	end)
-
-	local is_opencode = false
-	if ok and process_info then
-		is_opencode = process_is_opencode(process_info)
-	end
-
-	if is_opencode == false then
-		local title_ok, title = pcall(function()
-			return pane:get_title()
-		end)
-		if title_ok and title then
-			is_opencode = detection.matches_any_pattern(title, agent_patterns)
-		end
-	end
-
-	detection_cache[pane_id] = {
-		is_opencode = is_opencode,
-		checked_at_ms = now,
-	}
-
-	return is_opencode
-end
-
-local function detect_overlay_state(pane, has_opencode_process)
-	local ok, text = pcall(function()
-		return pane:get_lines_as_text(120)
-	end)
-	if ok == false or text == nil or text == "" then
-		return nil
-	end
-
-	return detection.detect_overlay_state_from_text({
-		text = text,
-		has_opencode_process = has_opencode_process,
-	})
-end
-
 local function normalize_state(state, source)
 	if state == nil then
 		return nil
@@ -494,7 +400,7 @@ function M.apply(config)
 
 	local success, plugin = pcall(wezterm.plugin.require, "https://github.com/Eric162/wezterm-agent-deck")
 	if success == false then
-		init_notice = "Agent deck plugin unavailable; using fallback detection"
+		init_notice = "Agent deck plugin unavailable"
 		wezterm.log_warn("[wezterm] failed to load agent deck plugin: " .. tostring(plugin))
 		initialized = true
 		return nil
@@ -523,7 +429,7 @@ function M.apply(config)
 	local ok_apply, apply_err = pcall(agent_deck.apply_to_config, config, plugin_config)
 	if ok_apply == false then
 		agent_deck = nil
-		init_notice = "Agent deck failed to initialize; using fallback detection"
+		init_notice = "Agent deck failed to initialize"
 		wezterm.log_warn("[wezterm] agent deck apply_to_config failed: " .. tostring(apply_err))
 		initialized = true
 		return nil
@@ -560,9 +466,7 @@ local function call_agent_deck(method_name, ...)
 	end
 
 	agent_deck = nil
-	wezterm.log_warn(
-		"[wezterm] agent deck " .. method_name .. " failed; using fallback detection: " .. tostring(result)
-	)
+	wezterm.log_warn("[wezterm] agent deck " .. method_name .. " failed: " .. tostring(result))
 	return nil
 end
 
@@ -589,22 +493,6 @@ function M.update_pane(pane)
 		plugin_state.last_seen_ms = now
 		pane_states[pane_id] = plugin_state
 		return plugin_state
-	end
-
-	local has_opencode_process = pane_has_opencode_process(pane)
-	local overlay_state = normalize_state(detect_overlay_state(pane, has_opencode_process), "overlay")
-
-	if overlay_state then
-		overlay_state.last_seen_ms = now
-		pane_states[pane_id] = overlay_state
-		return overlay_state
-	end
-
-	if previous_state and previous_state.source == "overlay" and previous_state.confidence == "confirmed" then
-		if (now - (previous_state.last_seen_ms or now)) <= overlay_state_ttl_ms then
-			pane_states[pane_id] = previous_state
-			return previous_state
-		end
 	end
 
 	pane_states[pane_id] = nil

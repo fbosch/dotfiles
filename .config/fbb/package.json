@@ -15,8 +15,6 @@
 		"fallow": "^3.8.0"
 	},
 	"scripts": {
-		"fallow": "fallow --config lib/opencode-multi-auth/.fallowrc.json",
-		"test": "bun test ./lib",
 		"typecheck": "tsc --noEmit"
 	}
 }

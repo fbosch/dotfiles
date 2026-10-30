@@ -10,7 +10,7 @@ source "${config_dir}/runtime/lib/hypr-ipc.sh"
 
 portrait_monitor="${HYPR_E2E_PORTRAIT_MONITOR:-HDMI-A-2}"
 ultrawide_monitor="${HYPR_E2E_ULTRAWIDE_MONITOR:-DP-2}"
-window_class="opencode-hypr-e2e"
+window_class="hypr-e2e"
 sleep_seconds="${HYPR_E2E_SLEEP_SECONDS:-300}"
 current_step="startup"
 original_workspace=""

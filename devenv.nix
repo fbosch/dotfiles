@@ -244,7 +244,11 @@ in
       fish tests/git_pull_system_repos.fish
     '';
 
-    "test:fish-corporate-opencode".exec = "fish tests/fish_corporate_opencode.fish";
+    "test:fish-pi-workflows".exec = "bun test ./.config/fish/libexec/__tests__/pi_workflows.test.js";
+    "test:fish-codex-reset".exec = ''
+      fish -n .config/fish/functions/codex-reset.fish
+      bun test ./.config/fish/libexec/codex/__tests__/reset_helper.test.js
+    '';
 
 
     "test:fish-workday-start".exec = "bun test ./.config/fish/libexec/__tests__/workday_start.test.js";
@@ -589,6 +593,8 @@ in
         "test:stow"
         "test:fish"
         "test:git-pull-system-repos"
+        "test:fish-pi-workflows"
+        "test:fish-codex-reset"
         "test:fish-workday-start"
         "test:fish-ssh-agent"
         "test:fish-starship-cache"

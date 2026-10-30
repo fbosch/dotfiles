@@ -1,8 +1,8 @@
-function ado_refinement_candidates --description 'Pick Azure DevOps refinement candidates for next sprint and open OpenCode'
+function ado_refinement_candidates --description 'Pick Azure DevOps refinement candidates for next sprint and open Pi'
     argparse -n ado_refinement_candidates c/context= t/team= r/refresh -- $argv
     or return
 
-    for cmd in bun fzf opencode az
+    for cmd in bun fzf pi az
         if not command -v $cmd >/dev/null 2>&1
             echo "ado_refinement_candidates: '$cmd' is required" >&2
             return 127
@@ -186,7 +186,7 @@ function ado_refinement_candidates --description 'Pick Azure DevOps refinement c
             --layout=reverse \
             --border=rounded \
             --info=inline-right \
-            --header='tab: toggle selection, enter: open in OpenCode' \
+            --header='tab: toggle selection, enter: open in Pi' \
             --preview-window='right,65%,border-left,wrap' \
             --preview="$preview_cmd" \
             < /dev/tty
@@ -212,5 +212,5 @@ function ado_refinement_candidates --description 'Pick Azure DevOps refinement c
         return 1
     end
 
-    opencode --prompt "$prompt"
+    pi -- "$prompt"
 end

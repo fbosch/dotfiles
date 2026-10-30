@@ -1,4 +1,4 @@
-function linear_issue_workflow --description 'Pick Linear issue, switch/create WorkTrunk worktree, open OpenCode workflow'
+function linear_issue_workflow --description 'Pick Linear issue, switch/create WorkTrunk worktree, open Pi workflow'
     set -l cmd_name linear_issue_workflow
     set -l tab (printf '\t')
 
@@ -32,7 +32,7 @@ function linear_issue_workflow --description 'Pick Linear issue, switch/create W
     set -l color_priority_4_hex "#959DA5"
     set -l color_priority_default_hex "#7B828C"
 
-    for cmd in linear fzf wt opencode git bun
+    for cmd in linear fzf wt pi git bun
         if not command -v $cmd >/dev/null 2>&1
             echo "$cmd_name: '$cmd' is required" >&2
             return 127
@@ -42,7 +42,7 @@ function linear_issue_workflow --description 'Pick Linear issue, switch/create W
     set -l helper_dir (path dirname (status filename))
     set -l fish_root (path resolve "$helper_dir/..")
     set -l libexec_dir "$fish_root/libexec"
-    set -l helper "$libexec_dir/opencode/linear_issue_workflow_helper.ts"
+    set -l helper "$libexec_dir/linear/linear_issue_workflow_helper.ts"
     if not test -f "$helper"
         echo "$cmd_name: helper not found: $helper" >&2
         return 1
@@ -278,7 +278,7 @@ function linear_issue_workflow --description 'Pick Linear issue, switch/create W
         return 1
     end
 
-    set -l prompt "/linear-issue $issue_id"
+    set -l prompt "/skill:linear-issue-workflow $issue_id"
 
     set -l branch_exists 0
     if git -C "$repo_root" show-ref --verify --quiet "refs/heads/$branch"
@@ -288,15 +288,10 @@ function linear_issue_workflow --description 'Pick Linear issue, switch/create W
     end
 
     if test $branch_exists -eq 1
-        wt -C "$repo_root" switch "$branch" --yes --execute=opencode -- --prompt "$prompt"
+        wt -C "$repo_root" switch "$branch" --yes --execute=pi -- -- "$prompt"
         return $status
     end
 
-    if functions -q wsc
-        wsc "$branch" -- --prompt "$prompt"
-        return $status
-    end
-
-    wt -C "$repo_root" switch --create "$branch" --yes --execute=opencode -- --prompt "$prompt"
+    wt -C "$repo_root" switch --create "$branch" --yes --execute=pi -- -- "$prompt"
     return $status
 end

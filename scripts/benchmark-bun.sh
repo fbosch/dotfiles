@@ -157,7 +157,6 @@ run_runtime_benchmarks() {
     --runs "$runs" \
     --export-json "$output_dir/runtime.json" \
     --export-markdown "$output_dir/runtime.md" \
-    --command-name fbb-tests 'bun test --cwd .config/fbb ./lib' \
     --command-name ags-tests 'bun test --cwd .config/ags'
 
   for ((iteration = 1; iteration <= internal_runs; iteration += 1)); do
@@ -206,13 +205,6 @@ run_profiles() {
     --cwd .config/ags \
     components/ai-pointer/__benchmarks__/policy.ts \
     >"$profile_dir/ai-pointer-policy-cpu.txt" 2>&1
-  bun \
-    --cpu-prof-md \
-    --cpu-prof-dir "$profile_dir" \
-    --cpu-prof-name typo-engine-cpu.md \
-    --cwd .config/opencode/plugins \
-    prompt-enhancements/typo-engine.bench.ts \
-    >"$profile_dir/typo-engine-cpu.txt" 2>&1
   AI_POINTER_BENCH_SAMPLES=5 AI_POINTER_POLICY_BATCH=100 bun \
     --heap-prof-md \
     --heap-prof-dir "$profile_dir" \

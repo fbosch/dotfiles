@@ -36,6 +36,3 @@
     - containers/podman
     - dockerhub:postgres:16-alpine
     - dockerhub:getmeili/meilisearch
-
-    # AI
-    - anomalyco/opencode

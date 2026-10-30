@@ -61,33 +61,26 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
     end
 
     set -l helper_dir (path dirname (status filename))
-    set -l fish_root (path resolve "$helper_dir/..")
-    set -l ocma (path resolve "$fish_root/../fbb/bin/ocma")
-    if not test -x "$ocma"
-        echo "error: ocma is required: $ocma" >&2
+    set -l libexec_dir (path resolve "$helper_dir/../libexec")
+    set -l helper "$libexec_dir/codex/reset_helper.ts"
+    if not test -f "$helper"
+        echo "error: Codex reset helper is required: $helper" >&2
         return 1
     end
 
-    set -l ocma_auth_args
+    set -l auth_args
     if test -n "$auth_file"
-        set ocma_auth_args --auth "$auth_file"
+        set auth_args --auth "$auth_file"
     end
-
     if test "$action" = consume
-        set -l preview_args reset preview --format=json $ocma_auth_args
+        set -l preview_args consume-preview $auth_args
         if test -n "$credit_id"
             set -a preview_args --credit-id "$credit_id"
         end
-        set -l preview ("$ocma" $preview_args)
-        if test $status -ne 0
-            printf '%s\n' "$preview" | jq -r '.diagnostics[]? | "ocma: \(.code): \(.message)"' >&2
-            return 1
-        end
-        set -l preview_data (__codex_reset_response_data "$preview" reset.preview)
-        if test $status -ne 0
-            echo "error: invalid response from ocma" >&2
-            return 1
-        end
+        set -l preview (bun --cwd "$libexec_dir" "$helper" $preview_args)
+        or return 1
+        set -l preview_data (__codex_reset_response_data "$preview" consume-preview)
+        or return 1
 
         set -l preview_credit (printf '%s\n' "$preview_data" | jq -c '.credit')
         if test "$preview_credit" = null
@@ -136,17 +129,10 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
             return 1
         end
 
-        set -l result ("$ocma" reset consume --format=json $ocma_auth_args --credit-id "$credit_id")
-        if test $status -ne 0
-            printf '%s\n' "$result" | jq -r '.diagnostics[]? | "ocma: \(.code): \(.message)"' >&2
-            return 1
-        end
-        set -l result_data (__codex_reset_response_data "$result" reset.consume)
-        if test $status -ne 0
-            echo "error: invalid response from ocma" >&2
-            return 1
-        end
-        printf '%s\n' "$result" | jq -r '.diagnostics[]? | "warning: \(.code): \(.message)"' >&2
+        set -l result (bun --cwd "$libexec_dir" "$helper" consume $auth_args --credit-id "$credit_id")
+        or return 1
+        set -l result_data (__codex_reset_response_data "$result" consume)
+        or return 1
         set -l result_fields (printf '%s\n' "$result_data" | jq -r '[(.windowsReset // "unknown"), (.code // "unknown"), (.redeemedAt // "unknown")] | @tsv')
         set fields (string split \t -- "$result_fields")
         set -l success_color ""
@@ -161,20 +147,14 @@ function codex-reset --description "Show or redeem banked Codex rate-limit reset
         return 0
     end
 
-    set -l status_args reset status --format=json $ocma_auth_args
+    set -l status_args status $auth_args
     if test "$refresh" = true
         set -a status_args --refresh
     end
-    set -l status_payload ("$ocma" $status_args)
-    if test $status -ne 0
-        printf '%s\n' "$status_payload" | jq -r '.diagnostics[]? | "ocma: \(.code): \(.message)"' >&2
-        return 1
-    end
-    set -l status_data (__codex_reset_response_data "$status_payload" reset.status)
-    if test $status -ne 0
-        echo "error: invalid response from ocma" >&2
-        return 1
-    end
+    set -l status_payload (bun --cwd "$libexec_dir" "$helper" $status_args)
+    or return 1
+    set -l status_data (__codex_reset_response_data "$status_payload" status)
+    or return 1
     if test "$refresh" = true
         wezterm_set_user_var codex_reset_refreshed (date +%s)
     end
@@ -304,25 +284,19 @@ end
 
 function __codex_reset_response_data --argument-names payload expected_command
     printf '%s\n' "$payload" | jq -ce --arg command "$expected_command" '
-        if .schema == "fbb.ocma/v1"
-            and .command == $command
-            and .outcome == "success"
-            and (.data | type) == "object"
-            and (
-                ($command == "reset.preview"
-                    and (.data | has("credit"))
-                    and (.data.credit == null or (.data.credit | type) == "object"))
-                or ($command == "reset.consume")
-                or ($command == "reset.status"
-                    and (.data.active | type) == "object"
-                    and (.data.active.profileLabel | type) == "string"
-                    and (.data.active.availableCount | type) == "number"
-                    and (.data.active.credits | type) == "array"
-                    and (.data.active.usage | type) == "array"
-                    and (.data.accounts | type) == "array")
-            )
-        then .data
-        else error("invalid ocma response")
-        end
+        if type == "object" and (
+            ($command == "consume-preview"
+                and has("credit")
+                and (.credit == null or (.credit | type) == "object"))
+            or ($command == "consume"
+                and (has("windowsReset") and has("code") and has("redeemedAt")))
+            or ($command == "status"
+                and (.active | type) == "object"
+                and (.active.profileLabel | type) == "string"
+                and (.active.availableCount | type) == "number"
+                and (.active.credits | type) == "array"
+                and (.active.usage | type) == "array"
+                and (.accounts | type) == "array")
+        ) then . else error("invalid Codex reset response") end
     ' 2>/dev/null
 end

@@ -8,12 +8,12 @@ Lua configuration for WezTerm. The entrypoint stays thin and delegates settings 
 - `base.lua`, `platform.lua`, `layout.lua`, `fonts.lua`, `colors.lua`, `theme.lua`, `tabs.lua`, `status/`, `keys.lua`, and `mux.lua` hold the main config groups.
 - `agent/` detects AI-agent activity and decorates tabs with state icons.
 - `utils/` contains small text, time, performance, and benchmark helpers.
-- `tests/` contains Lua specs for work-hour status, agent-deck detection, and Herdr tab titles.
+- `tests/` contains Lua specs for work-hour status, agent-deck integration, and Herdr tab titles.
 
 ## Behavior
 
 - Work-hour status reads today's `first_login` cache every 10 seconds. Missing records trigger background macOS start-time detection; yesterday's start is never reused.
-- Agent tab state can come from the WezTerm agent deck plugin or pane-text fallback detection.
+- Agent tab state comes from the WezTerm agent deck plugin.
 - Keybinds use raw key codes where layout independence matters.
 - The tab bar is bottom-aligned and styled from the shared theme palette.
 

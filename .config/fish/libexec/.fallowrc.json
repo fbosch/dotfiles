@@ -7,6 +7,6 @@
 		"azure/*.ts",
 		"codex/*.ts",
 		"nix/*.ts",
-		"opencode/*.ts"
+		"linear/*.ts"
 	]
 }
