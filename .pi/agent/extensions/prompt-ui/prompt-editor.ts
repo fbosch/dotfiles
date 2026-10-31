@@ -9,6 +9,9 @@ import {
   type AutocompleteItem,
   type AutocompleteProvider,
   type EditorTheme,
+  foregroundAnsi,
+  mixColors,
+  rgbColor,
   stripTerminalSequences,
   type TUI,
   truncateToWidth,
@@ -46,7 +49,9 @@ import {
 } from "./dock-rendering";
 import { colorizeFooterIcon, type FooterCustomization } from "./footer-config";
 import { colorizeHex } from "./terminal-color";
+import { WORKING_SWEEP_FRAMES, workingGutterStrength } from "./working-gutter";
 
+const WORKING_GLOW_TINT = rgbColor(255, 255, 255);
 const EDITOR_PADDING_X = 1;
 const PROMPT_RAIL_WIDTH = 1;
 const AUTOCOMPLETE_MAX_VISIBLE = 10;
@@ -76,14 +81,13 @@ export function formatFffGitStatus(theme: Pick<Theme, "getFgAnsi">, status: stri
 }
 export interface PromptEditorState {
   isWorking(): boolean;
-  getWorkingMarker(): string;
+  getWorkingPulse(): number;
+  getWorkingPosition(): number;
+  getInterruptPulse(): number;
+  onInterrupt(): void;
   getBranch(): string | null;
   getProfileName(): string | undefined;
   getStatuses(): readonly string[];
-}
-
-interface PromptKeybindings {
-  getKeys(action: "app.interrupt"): string[];
 }
 
 function formatCwd(cwd: string): string {
@@ -136,7 +140,6 @@ export interface PromptRenderInput {
   readonly thinkingLevel: ThinkingLevel;
   readonly context: ContextSnapshot;
   readonly profileName: string;
-  readonly isWorking: boolean;
 }
 
 function formatProvider(provider: string): string {
@@ -145,19 +148,6 @@ function formatProvider(provider: string): string {
     .split("-")
     .map((part) => `${part.slice(0, 1).toUpperCase()}${part.slice(1)}`)
     .join(" ");
-}
-
-function formatKey(key: string): string {
-  return key === "escape" ? "esc" : key;
-}
-
-function keyHint(
-  keybindings: PromptKeybindings,
-  action: "app.interrupt",
-  description: string,
-): string {
-  const key = keybindings.getKeys(action)[0];
-  return key === undefined ? "" : `${formatKey(key)} ${description}`;
 }
 
 function sanitizeStatus(status: string): string {
@@ -204,7 +194,6 @@ export function renderFooterStatus(theme: Pick<Theme, "fg">, key: string, status
 
 export function renderPromptHints(
   theme: Pick<Theme, "fg"> & Partial<Pick<Theme, "getColorMode">>,
-  keybindings: PromptKeybindings,
   promptState: PromptEditorState,
   cwd: string,
   width: number,
@@ -216,13 +205,7 @@ export function renderPromptHints(
     .getStatuses()
     .map((status) => sanitizeStatus(status))
     .filter((status) => status.length > 0);
-  const interruptHint = keyHint(keybindings, "app.interrupt", "interrupt");
   const statusText = statuses.join(" · ");
-  const workingText = promptState.isWorking()
-    ? [theme.fg("accent", `${promptState.getWorkingMarker()} working`), interruptHint]
-        .filter(Boolean)
-        .join("  ")
-    : "";
   const branch = promptState.getBranch();
   const repoIcon =
     footerCustomization === undefined ? "" : colorizeFooterIcon(theme, footerCustomization);
@@ -231,7 +214,7 @@ export function renderPromptHints(
     repoIcon.length === 0
       ? theme.fg("muted", locationText)
       : `${repoIcon} ${theme.fg("muted", locationText)}`;
-  const hintLeft = [workingText, location, statusText].filter(Boolean).join(" · ");
+  const hintLeft = [location, statusText].filter(Boolean).join(" · ");
   const renderedLeft = theme.fg("muted", ` ${hintLeft}`);
   const primaryRight = sanitizeStatus(primaryRightStatus);
   const secondaryRight = sanitizeStatus(secondaryRightStatus);
@@ -256,6 +239,7 @@ interface CachedPromptLayout {
   readonly theme: Theme;
   readonly lines: string[];
   readonly suggestions: string[];
+  readonly workingFrames: Map<string, string[]>;
 }
 
 export class PromptEditor extends CustomEditor {
@@ -431,7 +415,27 @@ export class PromptEditor extends CustomEditor {
       this.autocompleteOverlay.hide();
     }
 
-    super.handleInput(data);
+    const onEscape = this.onEscape;
+    if (
+      onEscape === undefined ||
+      !this.promptState.isWorking() ||
+      !this.appKeybindings.matches(data, "app.interrupt")
+    ) {
+      super.handleInput(data);
+      return;
+    }
+
+    // Let native shortcut/autocomplete routing decide whether an interrupt actually runs.
+    const interrupt = () => {
+      this.promptState.onInterrupt();
+      onEscape();
+    };
+    this.onEscape = interrupt;
+    try {
+      super.handleInput(data);
+    } finally {
+      if (this.onEscape === interrupt) this.onEscape = onEscape;
+    }
   }
 
   render(width: number): string[] {
@@ -447,11 +451,15 @@ export class PromptEditor extends CustomEditor {
     const thinkingLevel = this.pi.getThinkingLevel();
     const context = this.contextSnapshot();
     const profileName = sanitizeStatus(this.promptState.getProfileName() ?? "");
-    const isWorking = this.promptState.isWorking();
     const key = JSON.stringify([
       width,
       inputLines,
       promptThemeKey(theme),
+      // Terminal color detection can change resolved defaults without changing ANSI tokens.
+      theme.colors.borderMuted,
+      theme.colors.accent,
+      theme.colors.error,
+      theme.getColorMode(),
       model?.name,
       model?.provider,
       thinkingLevel,
@@ -462,7 +470,6 @@ export class PromptEditor extends CustomEditor {
       context.freedTokens,
       context.cachePercent,
       profileName,
-      isWorking,
       this.agentMentionCache.version,
     ]);
     let cached = this.layoutCache;
@@ -477,9 +484,8 @@ export class PromptEditor extends CustomEditor {
         thinkingLevel,
         context,
         profileName,
-        isWorking,
       });
-      cached = { key, theme, ...result };
+      cached = { key, theme, ...result, workingFrames: new Map() };
       this.layoutCache = cached;
     }
 
@@ -502,7 +508,38 @@ export class PromptEditor extends CustomEditor {
         selectedForegroundAnsi: backgroundToForeground(backgroundAnsi),
       },
     );
-    return cached.lines;
+    const workingPulse = this.promptState.getWorkingPulse();
+    const interruptPulse = this.promptState.getInterruptPulse();
+    if (workingPulse === 0 && interruptPulse === 0) return cached.lines;
+
+    // Reuse exact frames across sweeps; the layout owns invalidation for text, width, and theme.
+    const position = this.promptState.getWorkingPosition();
+    const frameKey = interruptPulse === 1 ? "interrupt" : `${position}:${workingPulse}:${interruptPulse}`;
+    const previousFrame = cached.workingFrames.get(frameKey);
+    if (previousFrame !== undefined) return previousFrame;
+
+    const baseColor = "borderMuted";
+    const baseRail = paintDockBorderSpace(theme.getFgAnsi(baseColor));
+    const lastRow = cached.lines.length - 1;
+    const glowAccent = mixColors(theme.colors.accent, WORKING_GLOW_TINT, 0.3, "srgb");
+    const frame = cached.lines.map((line, index) => {
+      const strength = workingPulse * workingGutterStrength(index, lastRow, position);
+      const workingColor = mixColors(theme.colors.borderMuted, glowAccent, strength, "srgb");
+      const color =
+        interruptPulse === 0
+          ? workingColor
+          : mixColors(workingColor, theme.colors.error, interruptPulse, "srgb");
+      const glowAnsi = foregroundAnsi(color, theme.getColorMode());
+      return index === lastRow
+        ? `${glowAnsi}▀\u001b[39m${line.slice(theme.fg(baseColor, "▀").length)}`
+        : paintDockBorderSpace(glowAnsi) + line.slice(baseRail.length);
+    });
+    if (cached.workingFrames.size === WORKING_SWEEP_FRAMES) {
+      const oldest = cached.workingFrames.keys().next().value;
+      if (oldest !== undefined) cached.workingFrames.delete(oldest);
+    }
+    cached.workingFrames.set(frameKey, frame);
+    return frame;
   }
 
   protected highlightPromptContent(content: readonly string[], theme: Theme): string[] {
@@ -557,7 +594,7 @@ export class PromptEditor extends CustomEditor {
       " ",
     ].join("");
     const modelRow = fitColumns(modelLeft, modelRight, input.editorWidth);
-    const inputBorderColor = input.isWorking ? "accent" : "borderMuted";
+    const inputBorderColor = "borderMuted";
     // Use the same styled spaces as suggestions so both borders align without copyable glyphs.
     const inputRail = paintDockBorderSpace(input.theme.getFgAnsi(inputBorderColor));
     const backgroundAnsi = input.theme.getBgAnsi("userMessageBg");

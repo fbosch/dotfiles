@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import {
   type ExtensionAPI,
   type ExtensionContext,
-  type KeybindingsManager,
+  CustomEditor,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
 import {
@@ -15,7 +15,9 @@ import {
   setThemeInstance,
   theme,
 } from "@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
-import { getKeybindings, stripTerminalSequences, type TUI } from "@earendil-works/pi-tui";
+import { KeybindingsManager } from "@earendil-works/pi-coding-agent/dist/core/keybindings.js";
+import { stripTerminalSequences, type TUI } from "@earendil-works/pi-tui";
+import { paintDockBorderSpace } from "../dock-rendering";
 import promptUi from "../index";
 
 const REPO_ROOT = fileURLToPath(new URL("../../../../../", import.meta.url));
@@ -117,7 +119,7 @@ test("uses MCP extension status in the footer and refreshes the editor after com
   const handlers = new Map<string, (event: unknown, ctx: ExtensionContext) => unknown>();
   let renderRequests = 0;
   let workingVisible = true;
-  let editor: { render(width: number): string[] } | undefined;
+  let editor: CustomEditor | undefined;
   let footer: ReturnType<FooterFactory> | undefined;
   const tui = {
     mode: "regular",
@@ -151,12 +153,15 @@ test("uses MCP extension status in the footer and refreshes the editor after com
       workingVisible = visible;
     },
     setWidget() {},
+    onTerminalInput: () => () => {},
     setFooter(factory: FooterFactory | undefined) {
       if (factory !== undefined) footer = factory(tui, theme, footerData);
     },
     setEditorComponent(factory: EditorFactory | undefined) {
       if (factory !== undefined) {
-        editor = factory(tui, getEditorTheme(), getKeybindings() as unknown as KeybindingsManager);
+        const component = factory(tui, getEditorTheme(), new KeybindingsManager());
+        if (!(component instanceof CustomEditor)) throw new Error("Expected native editor integration");
+        editor = component;
       }
     },
   };
@@ -167,13 +172,14 @@ test("uses MCP extension status in the footer and refreshes the editor after com
     events: { on: () => () => {} },
     getThinkingLevel: () => "low",
   };
+  const sessionManager = SessionManager.inMemory(REPO_ROOT);
   const ctx = {
     cwd: REPO_ROOT,
     hasUI: true,
     mode: "tui",
     isProjectTrusted: () => false,
     modelRegistry: { find: () => undefined },
-    sessionManager: SessionManager.inMemory(REPO_ROOT),
+    sessionManager,
     getContextUsage: () => usage,
     ui,
     model: { name: "Test", provider: "openai" },
@@ -187,13 +193,57 @@ test("uses MCP extension status in the footer and refreshes the editor after com
   expect(workingVisible).toBe(false);
   try {
     for (let run = 0; run < 2; run++) {
+      const beforeStart = editor?.render(100) ?? [];
       await handlers.get("agent_start")?.({}, ctx);
-      const workingFooter = stripTerminalSequences(footer?.render(120).join("\n") ?? "");
-      expect(workingFooter).toContain("working");
+      const starting = editor?.render(100) ?? [];
+      expect(starting).toEqual(beforeStart);
+      const requestsBeforePulse = renderRequests;
+      await Bun.sleep(200);
+      const fadingIn = editor?.render(100) ?? [];
+      expect(fadingIn).not.toEqual(starting);
+      await Bun.sleep(100);
+      const pulsed = editor?.render(100) ?? [];
+      expect(renderRequests).toBeGreaterThan(requestsBeforePulse);
+      expect(pulsed).not.toEqual(starting);
+      expect(pulsed.map(stripTerminalSequences)).toEqual(starting.map(stripTerminalSequences));
       await handlers.get("agent_settled")?.({}, ctx);
-      const idleFooter = stripTerminalSequences(footer?.render(120).join("\n") ?? "");
-      expect(idleFooter).not.toContain("working");
+      const settling = editor?.render(100) ?? [];
+      expect(settling).toEqual(pulsed);
+      await Bun.sleep(125);
+      const fading = editor?.render(100) ?? [];
+      expect(fading).not.toEqual(settling);
+      expect(fading.map(stripTerminalSequences)).toEqual(settling.map(stripTerminalSequences));
+      if (run === 0) {
+        await handlers.get("agent_start")?.({}, ctx);
+        expect(editor?.render(100)).toEqual(fading);
+        await handlers.get("agent_settled")?.({}, ctx);
+      }
+      await Bun.sleep(425);
+      const idle = editor?.render(100) ?? [];
+      expect(idle[0]).toStartWith(paintDockBorderSpace(theme.getFgAnsi("borderMuted")));
+      const requestsAfterSettlement = renderRequests;
+      await Bun.sleep(100);
+      expect(renderRequests).toBe(requestsAfterSettlement);
     }
+
+    if (editor === undefined) throw new Error("Editor was not installed");
+    editor.onEscape = () => {};
+    await handlers.get("agent_start")?.({}, ctx);
+    editor.handleInput("\u001b");
+    await handlers.get("agent_settled")?.({}, ctx);
+    const interrupted = editor.render(100);
+    const redRail = paintDockBorderSpace(theme.getFgAnsi("error"));
+    for (const line of interrupted.slice(0, -1)) expect(line).toStartWith(redRail);
+    expect(interrupted.at(-1)).toStartWith(theme.fg("error", "▀"));
+    await Bun.sleep(450);
+    expect(editor.render(100)).toEqual(interrupted);
+    await Bun.sleep(250);
+    expect(editor.render(100)).not.toEqual(interrupted);
+    await Bun.sleep(400);
+    expect(editor.render(100)[0]).toStartWith(paintDockBorderSpace(theme.getFgAnsi("borderMuted")));
+    const requestsAfterInterrupt = renderRequests;
+    await Bun.sleep(100);
+    expect(renderRequests).toBe(requestsAfterInterrupt);
   } finally {
     await handlers.get("agent_settled")?.({}, ctx);
   }
@@ -222,7 +272,7 @@ test("uses MCP extension status in the footer and refreshes the editor after com
   expect(before).toContain("80K (40%)");
   const requestsBeforeCompaction = renderRequests;
 
-  ctx.sessionManager.appendCompaction("s".repeat(80_000), null, 80_000);
+  sessionManager.appendCompaction("s".repeat(80_000), null, 80_000);
   usage = { tokens: null, percent: null, contextWindow: 200_000 };
   handlers.get("session_compact")?.({}, ctx);
 
@@ -234,5 +284,10 @@ test("uses MCP extension status in the footer and refreshes the editor after com
   await handlers.get("agent_settled")?.({}, ctx);
   expect(renderRequests).toBe(requestsBeforeSettled + 1);
   expect(editor?.render(100).join("\n")).toContain("~5K (3%)");
+  await handlers.get("agent_start")?.({}, ctx);
+  editor?.handleInput("\u001b");
   await handlers.get("session_shutdown")?.({}, ctx);
+  const requestsAfterShutdown = renderRequests;
+  await Bun.sleep(75);
+  expect(renderRequests).toBe(requestsAfterShutdown);
 });

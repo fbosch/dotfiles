@@ -9,6 +9,7 @@ import type {
 import {
   getEditorTheme,
   loadThemeFromPath,
+  setThemeInstance,
   theme,
 } from "@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import { stripTerminalSequences, type TUI, visibleWidth } from "@earendil-works/pi-tui";
@@ -16,6 +17,7 @@ import { sessionWith } from "../../context-masking/__tests__/fixtures";
 import { MARKER } from "../../context-masking/policy";
 import { AgentMentionCache, type AgentMentionCacheFileSystem } from "../../mentions/agent-mentions";
 import { PromptEditor, type PromptEditorState, type PromptRenderInput } from "../prompt-editor";
+import { WORKING_SWEEP_FRAMES } from "../working-gutter";
 
 const THEME_PATH = new URL("../../../themes/zenwritten-dark.json", import.meta.url).pathname;
 
@@ -46,6 +48,7 @@ class CountingPromptEditor extends PromptEditor {
 }
 
 test("reuses prompt highlighting, layout, and context until render inputs change", () => {
+  setThemeInstance(loadThemeFromPath(THEME_PATH));
   let currentTheme: Theme = theme;
   let usage: { tokens: number; percent: number; contextWindow: number } | undefined = {
     tokens: 80_000,
@@ -55,6 +58,8 @@ test("reuses prompt highlighting, layout, and context until render inputs change
   let model = { name: "Test", provider: "openai" };
   let profileName: string | undefined;
   let isWorking = false;
+  let workingPulse = 0;
+  let workingPosition = 0.2;
   let filesystemCalls = 0;
   let contextReads = 0;
   const fileSystem: AgentMentionCacheFileSystem = {
@@ -90,7 +95,10 @@ test("reuses prompt highlighting, layout, and context until render inputs change
   } as unknown as TUI;
   const state: PromptEditorState = {
     isWorking: () => isWorking,
-    getWorkingMarker: () => "●",
+    getWorkingPulse: () => workingPulse,
+    getWorkingPosition: () => workingPosition,
+    getInterruptPulse: () => 0,
+    onInterrupt() {},
     getBranch: () => null,
     getProfileName: () => profileName,
     getStatuses: () => [],
@@ -149,11 +157,42 @@ test("reuses prompt highlighting, layout, and context until render inputs change
   profileName = "Work";
   editor.render(100);
   isWorking = true;
-  editor.render(100);
+  workingPulse = 1;
+  const bright = editor.render(100);
+  workingPosition = 0.65;
+  const bottom = editor.render(100);
+  expect(bottom[0]).not.toBe(bright[0]);
+  expect(bottom.at(-1)).not.toBe(bright.at(-1));
+  expect(bottom.map(stripTerminalSequences)).toEqual(bright.map(stripTerminalSequences));
+  workingPosition = 0.2;
+  expect(editor.render(100)).toBe(bright);
+  workingPulse = 0.3;
+  const dimmed = editor.render(100);
+  expect(dimmed[0]).not.toBe(bright[0]);
+  expect(dimmed.map(stripTerminalSequences)).toEqual(bright.map(stripTerminalSequences));
+  expect(editor.operations).toEqual({ highlight: 6, context: 6, layout: 6 });
+  expect(contextReads).toBe(3);
+  workingPulse = 1;
+  for (let frame = 0; frame <= WORKING_SWEEP_FRAMES; frame++) {
+    workingPosition = frame / (WORKING_SWEEP_FRAMES * 2);
+    editor.render(100);
+  }
+  workingPosition = 0.2;
+  const regenerated = editor.render(100);
+  expect(regenerated).not.toBe(bright);
+  expect(regenerated).toEqual(bright);
+  workingPulse = 0.3;
   editor.setText("@Explore");
-  editor.render(100);
+  const updated = editor.render(100);
+  expect(updated).not.toEqual(dimmed);
+  expect(editor.render(100)).toBe(updated);
 
-  expect(editor.operations).toEqual({ highlight: 8, context: 8, layout: 8 });
+  expect(editor.operations).toEqual({ highlight: 7, context: 7, layout: 7 });
+  const resized = editor.render(101);
+  expect(resized).not.toBe(updated);
+  expect(editor.render(101)).toBe(resized);
+  currentTheme = theme;
+  expect(editor.render(101)).not.toBe(resized);
   expect(contextReads).toBe(3);
   for (const read of syncReads) expect(read).not.toHaveBeenCalled();
 

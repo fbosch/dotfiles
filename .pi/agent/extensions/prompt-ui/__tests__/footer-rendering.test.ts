@@ -9,10 +9,12 @@ const theme = {
   },
   getColorMode: () => "truecolor" as const,
 };
-const keybindings = { getKeys: () => [] };
 const promptState: PromptEditorState = {
   isWorking: () => false,
-  getWorkingMarker: () => "●",
+  getWorkingPulse: () => 0,
+  getWorkingPosition: () => 0,
+  getInterruptPulse: () => 0,
+  onInterrupt() {},
   getBranch: () => null,
   getProfileName: () => undefined,
   getStatuses: () => [],
@@ -20,7 +22,7 @@ const promptState: PromptEditorState = {
 
 describe("footer repository customization", () => {
   test("renders a configured icon before the repository location", () => {
-    const line = renderPromptHints(theme, keybindings, promptState, "~/nixos", 60, "", "", {
+    const line = renderPromptHints(theme, promptState, "~/nixos", 60, "", "", {
       icon: "",
       color: "blue",
     });

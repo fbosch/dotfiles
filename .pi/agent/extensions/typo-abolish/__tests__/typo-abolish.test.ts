@@ -60,7 +60,10 @@ const tui = {
 } as unknown as TUI;
 const state: PromptEditorState = {
   isWorking: () => false,
-  getWorkingMarker: () => "●",
+  getWorkingPulse: () => 0,
+  getWorkingPosition: () => 0,
+  getInterruptPulse: () => 0,
+  onInterrupt() {},
   getBranch: () => null,
   getProfileName: () => undefined,
   getStatuses: () => [],

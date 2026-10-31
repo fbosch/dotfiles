@@ -11,30 +11,21 @@ import {
 const theme = {
   fg: (color: string, text: string) => `${color}:${text}`,
 };
-const keybindings = {
-  getKeys: () => [],
-};
 const ansiTheme = {
   fg: (_color: string, text: string) => `\u001b[38;5;45m${text}\u001b[39m`,
 };
 const promptState: PromptEditorState = {
   isWorking: () => false,
-  getWorkingMarker: () => "●",
+  getWorkingPulse: () => 0,
+  getWorkingPosition: () => 0,
+  getInterruptPulse: () => 0,
+  onInterrupt() {},
   getBranch: () => null,
   getProfileName: () => undefined,
   getStatuses: () => [],
 };
 
 describe("prompt footer statuses", () => {
-  test("shows a direct interrupt hint while working", () => {
-    const state = {
-      ...promptState,
-      isWorking: () => true,
-    };
-    const line = renderPromptHints(theme, { getKeys: () => ["escape"] }, state, "~/dotfiles", 60);
-
-    expect(line).toContain("esc interrupt");
-  });
 
   test("renders MCP status and marks failures", () => {
     expect(renderMcpFooterStatus(theme, 2)).toBe("success: text:2 MCP");
@@ -59,7 +50,7 @@ describe("prompt footer statuses", () => {
       ...promptState,
       getStatuses: () => ["Plan"],
     };
-    const line = renderPromptHints(theme, keybindings, state, "~/dotfiles", 60);
+    const line = renderPromptHints(theme, state, "~/dotfiles", 60);
 
     expect(line).toContain("Plan");
   });
@@ -73,7 +64,6 @@ describe("prompt footer statuses", () => {
     const fileStatus = renderFooterStatus(ansiTheme, "file-changes", "2 files +40 -25");
     const line = renderPromptHints(
       ansiTheme,
-      keybindings,
       state,
       "~/dotfiles",
       60,
@@ -91,7 +81,6 @@ describe("prompt footer statuses", () => {
     const mcpStatus = renderMcpFooterStatus(ansiTheme, 2);
     const line = renderPromptHints(
       ansiTheme,
-      keybindings,
       promptState,
       "~/dotfiles",
       60,
@@ -108,7 +97,6 @@ describe("prompt footer statuses", () => {
     const fileStatus = renderFooterStatus(ansiTheme, "file-changes", "2 files +40 -25");
     const line = renderPromptHints(
       ansiTheme,
-      keybindings,
       promptState,
       "~/dotfiles",
       25,
@@ -135,7 +123,6 @@ describe("prompt footer statuses", () => {
     for (const width of [25, 60]) {
       const line = renderPromptHints(
         ansiTheme,
-        keybindings,
         promptState,
         "~/dotfiles",
         width,
@@ -154,7 +141,7 @@ describe("prompt footer statuses", () => {
       renderSandboxFooterStatus(ansiTheme, "nono"),
     ].join(" · ");
     const cwd = "/Projects/Organization/very-long-worktree-name-that-exceeds-the-footer-width";
-    const line = renderPromptHints(ansiTheme, keybindings, promptState, cwd, 60, primaryStatus);
+    const line = renderPromptHints(ansiTheme, promptState, cwd, 60, primaryStatus);
     const plainLine = stripTerminalSequences(line);
 
     expect(plainLine.endsWith(" 2 MCP ·  ")).toBe(true);
