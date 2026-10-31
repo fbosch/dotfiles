@@ -50,10 +50,6 @@ hl.config({
 			input_methods = true,
 			input_methods_ignorealpha = 0.8,
 		},
-		motion_blur = {
-			enabled = true,
-			samples = 32,
-		},
 	},
 	dwindle = {
 		force_split = 2,
