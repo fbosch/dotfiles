@@ -64,12 +64,15 @@ def prepare(repo: Path, run_root: Path, evidence: Path, baseline: bool, model: s
         raise ValueError("Candidate codemode guidance is empty")
     (evidence / "baseline.md").write_text(guidance + "\n")
     (evidence / "candidate.md").write_text(candidate)
-    files = [source / "fixture.ts", source / "check.py", source / "launch.py", source / "codemode.eval.yaml", agent / "extensions/openai-capabilities.ts"]
+    files = [source / "fixture.ts", source / "request.ts", source / "check.py", source / "launch.py", source / "codemode.eval.yaml", agent / "extensions/openai-capabilities.ts"]
     metadata = {"arm": "baseline" if baseline else "candidate", "model": model, "thinking": thinking,
                 "baseline_sha256": hashlib.sha256(guidance.encode()).hexdigest(),
                 "candidate_sha256": hashlib.sha256(candidate.encode()).hexdigest(),
                 "candidate_source": str(candidate_path),
                 "source_sha256": {str(p.relative_to(repo)): hashlib.sha256(p.read_bytes()).hexdigest() for p in files},
+                "capture_prompt": os.environ.get("CODEMODE_TRACE_PROMPT") == "1",
+                "tool_routing_guidance": os.environ.get("CODEMODE_EVAL_TOOL_ROUTING") == "1",
+                "typed_outputs": os.environ.get("CODEMODE_EVAL_TYPED_OUTPUTS") == "1",
                 "scope": "isolated tools and shared base prompt; not a full personal-extension-stack eval"}
     (evidence / "metadata.json").write_text(json.dumps(metadata, indent=2) + "\n")
     shutil.copy2(source / "check.py", evidence / "check.py")
@@ -127,7 +130,7 @@ def launch(pi: str, args: list[str]) -> int:
     latest.unlink(missing_ok=True)
     trace = evidence / f"attempt-{uuid.uuid4().hex}.jsonl"
     work = configure_attempt(Path(os.environ["HOME"]), Path(os.environ["PI_CODING_AGENT_DIR"]), config, trace, case)
-    env = {**os.environ, "PI_OFFLINE": "1", "CODEMODE_TRACE": str(trace), "CODEMODE_WORK": str(work), "CODEMODE_CASE": case, "CODEMODE_RULE": str(evidence / ("baseline.md" if config["arm"] == "baseline" else "candidate.md"))}
+    env = {**os.environ, "PI_OFFLINE": "1", "CODEMODE_EVAL_TYPED_OUTPUTS": "1" if config.get("typed_outputs") else "0", "CODEMODE_EVAL_TOOL_ROUTING": "1" if config.get("tool_routing_guidance") else "0", "CODEMODE_TRACE_PROMPT": "1" if config.get("capture_prompt") else "0", "CODEMODE_TRACE": str(trace), "CODEMODE_WORK": str(work), "CODEMODE_CASE": case, "CODEMODE_RULE": str(evidence / ("baseline.md" if config["arm"] == "baseline" else "candidate.md"))}
     result = subprocess.call([pi, "--no-builtin-tools", "--no-skills", "--no-prompt-templates", *args], cwd=work, env=env)
     latest.write_text(json.dumps({"trace": str(trace), "exit_code": result}))
     return result

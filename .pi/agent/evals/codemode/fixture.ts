@@ -2,6 +2,7 @@ import { appendFileSync, readFileSync, realpathSync, writeFileSync } from "node:
 import { basename, resolve, sep } from "node:path";
 import { createCodemodeExtension, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { Type } from "typebox";
+import { addToolRoutingGuidance, inspectProviderRequest } from "./request";
 
 export function instrumentScript(source: string): string {
   const options = /^\/\/ @options:[^\n]*\n/u.exec(source)?.[0] ?? "";
@@ -30,6 +31,7 @@ export default function codemodeFixture(pi: ExtensionAPI): void {
   const work = process.env.CODEMODE_WORK;
   const scenario = process.env.CODEMODE_CASE;
   if (!trace || !work || !scenario) throw new Error("Use the isolated codemode launcher");
+  const typedOutputs = process.env.CODEMODE_EVAL_TYPED_OUTPUTS === "1";
   const rulePath = process.env.CODEMODE_RULE;
   const rule = rulePath ? readFileSync(rulePath, "utf8").trim() : undefined;
   const root = realpathSync(work);
@@ -91,7 +93,19 @@ export default function codemodeFixture(pi: ExtensionAPI): void {
     description:
       "Read a fixture file. Returns {ok:true,path,text,lines:[{anchor,text}]}; text renders the same lines with anchors. Use lines for structured extraction or text for rendered rows.",
     parameters: Type.Object({ path: Type.String() }),
-    outputSchema: Type.Unknown(),
+    outputSchema: typedOutputs
+      ? Type.Object({
+          ok: Type.Literal(true),
+          path: Type.String(),
+          text: Type.String({ description: "Rendered anchor-prefixed display, not raw source." }),
+          lines: Type.Array(
+            Type.Object({
+              anchor: Type.String(),
+              text: Type.String({ description: "Raw source line without an anchor prefix." }),
+            }),
+          ),
+        })
+      : Type.Unknown(),
     async execute(id, params, signal) {
       const path = fixturePath(params.path);
       const name = basename(path);
@@ -174,7 +188,12 @@ export default function codemodeFixture(pi: ExtensionAPI): void {
       description:
         "Run a supplied check. Resolves to {ok:boolean,message?:string,error?:string}; ok:false is a tool-level failure even though the promise fulfills.",
       parameters: Type.Object({}),
-      outputSchema: Type.Unknown(),
+      outputSchema: typedOutputs
+        ? Type.Union([
+            Type.Object({ ok: Type.Literal(true), message: Type.String() }),
+            Type.Object({ ok: Type.Literal(false), error: Type.String() }),
+          ])
+        : Type.Unknown(),
       async execute(id, _params, signal) {
         record("start", { id, tool: name, scriptId });
         if (!["ordered-checks", "direct-checks"].includes(scenario)) await rendezvous(name);
@@ -242,15 +261,18 @@ export default function codemodeFixture(pi: ExtensionAPI): void {
     }),
   );
   pi.on("before_provider_request", (event) => {
-    if (!recordValue(event.payload) || !Array.isArray(event.payload.tools)) return;
-    const names = event.payload.tools.flatMap((tool) => {
-      if (!recordValue(tool)) return [];
-      if (typeof tool.name === "string") return [tool.name];
-      return recordValue(tool.function) && typeof tool.function.name === "string"
-        ? [tool.function.name]
-        : [];
+    const routing = process.env.CODEMODE_EVAL_TOOL_ROUTING === "1";
+    const payload = routing ? addToolRoutingGuidance(event.payload) : event.payload;
+    const request = inspectProviderRequest(payload);
+    record("declarations", {
+      tools: request.tools.map((tool) => tool.name),
+      ruleLoadedInRequest: rule === undefined ? undefined : request.instructions.includes(rule),
+      toolRoutingGuidance: routing,
+      ...(process.env.CODEMODE_TRACE_PROMPT === "1"
+        ? { instructions: request.instructions, toolDescriptions: request.tools }
+        : {}),
     });
-    record("declarations", { tools: names });
+    return routing ? payload : undefined;
   });
   pi.on("tool_call", (event) => {
     if (!allowed.has(event.toolName)) {

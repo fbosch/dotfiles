@@ -105,12 +105,19 @@ const cases: Array<{
   },
 ];
 
+function getCase(name: string) {
+  const scenario = cases.find((entry) => entry.name === name);
+  if (!scenario) throw new Error(`Missing fixture case: ${name}`);
+  return scenario;
+}
+
 async function executeCase(
   name: string,
   script: string | undefined,
   answer: string,
   freezePromise = false,
   directCalls?: Invocation[],
+  typedOutputs = false,
 ) {
   const directory = mkdtempSync(join(tmpdir(), "codemode-fixture-test-"));
   const trace = join(directory, "trace.jsonl");
@@ -118,11 +125,13 @@ async function executeCase(
     CODEMODE_TRACE: process.env.CODEMODE_TRACE,
     CODEMODE_WORK: process.env.CODEMODE_WORK,
     CODEMODE_CASE: process.env.CODEMODE_CASE,
+    CODEMODE_EVAL_TYPED_OUTPUTS: process.env.CODEMODE_EVAL_TYPED_OUTPUTS,
   };
   Object.assign(process.env, {
     CODEMODE_TRACE: trace,
     CODEMODE_WORK: directory,
     CODEMODE_CASE: name,
+    CODEMODE_EVAL_TYPED_OUTPUTS: typedOutputs ? "1" : "0",
   });
   for (const [path, value] of Object.entries(contents)) writeFileSync(join(directory, path), value);
   const tools = new Map<string, ToolDefinition>();
@@ -257,7 +266,7 @@ test("sequential reads fail event-order grading", async () => {
   const result = await executeCase(
     "independent",
     'text(await tools.read({path:"a.ts"})); text(await tools.read({path:"b.ts"}));',
-    cases[0].answer,
+    getCase("independent").answer,
   );
   expect(result.status).not.toBe(0);
   expect(result.error).toContain("Independent calls ran sequentially");
@@ -267,7 +276,7 @@ test("Promise.all and a dead allSettled mention do not pass", async () => {
   const result = await executeCase(
     "independent",
     'if(false){await Promise.allSettled([])}; const r=await Promise.all([tools.read({path:"a.ts"}),tools.read({path:"b.ts"})]);text(r.map(x=>x.text));',
-    cases[0].answer,
+    getCase("independent").answer,
   );
   expect(result.status).not.toBe(0);
   expect(result.error).toContain("No executed and completed allSettled batch");
@@ -277,20 +286,20 @@ test("printing duplicate bulk results fails output grading", async () => {
   const result = await executeCase(
     "large",
     'text(await Promise.allSettled([tools.read({path:"large.ts"}),tools.read({path:"small.ts"})]));',
-    cases[5].answer,
+    getCase("large").answer,
   );
   expect(result.status).not.toBe(0);
   expect(result.error).toContain("Bulk output was printed or spilled");
 });
 
 test("batch instrumentation works with the native frozen Promise constructor", async () => {
-  const result = await executeCase("independent", parallel, cases[0].answer, true);
+  const result = await executeCase("independent", parallel, getCase("independent").answer, true);
   expect(result.error).toBe("");
   expect(result.status).toBe(0);
 });
 
 test("large edit rejects full intermediate reads and successful write acknowledgements", async () => {
-  const scenario = cases[6];
+  const scenario = getCase("large-edit");
   if (!scenario.script) throw new Error("Missing large-edit script");
   for (const output of ["text(r);", "text(acknowledgement);"]) {
     const script = scenario.script.replace("text({path:", `${output} text({path:`);
@@ -301,7 +310,7 @@ test("large edit rejects full intermediate reads and successful write acknowledg
 });
 
 test("large edit rejects changes to unrelated data", async () => {
-  const scenario = cases[6];
+  const scenario = getCase("large-edit");
   if (!scenario.script) throw new Error("Missing large-edit script");
   const result = await executeCase(
     scenario.name,
@@ -314,7 +323,7 @@ test("large edit rejects changes to unrelated data", async () => {
 });
 
 test("model-visible accounting excludes successful nested results", async () => {
-  const scenario = cases[6];
+  const scenario = getCase("large-edit");
   const result = await executeCase(scenario.name, scenario.script, scenario.answer, true);
   const events: Array<{ kind: string; tool?: string; text?: string }> = result.events
     .trim()
@@ -322,8 +331,10 @@ test("model-visible accounting excludes successful nested results", async () => 
     .map((line) => JSON.parse(line));
   const visible = events.filter((event) => event.kind === "model-output");
   expect(visible).toHaveLength(1);
-  expect(visible[0].tool).toBe("codemode");
-  expect(visible[0].text?.length).toBeLessThan(1000);
+  const [output] = visible;
+  if (!output) throw new Error("Missing model-visible codemode result");
+  expect(output.tool).toBe("codemode");
+  expect(output.text?.length).toBeLessThan(1000);
 });
 
 test("reference reads through direct tools fail batching grading", async () => {
@@ -356,13 +367,36 @@ test("mixed searches through direct tools fail batching grading", async () => {
 });
 
 test("explicitly sequential checks reject batching even with immediate results", async () => {
-  const result = await executeCase("ordered-checks", cases[3].script, cases[3].answer);
+  const result = await executeCase(
+    "ordered-checks",
+    getCase("tool-error").script,
+    getCase("tool-error").answer,
+  );
   expect(result.status).not.toBe(0);
   expect(result.error).toContain("Explicitly sequential checks were batched");
 });
 
 test("explicitly direct checks reject codemode execution", async () => {
-  const result = await executeCase("direct-checks", cases[3].script, cases[3].answer);
+  const result = await executeCase(
+    "direct-checks",
+    getCase("tool-error").script,
+    getCase("tool-error").answer,
+  );
   expect(result.status).not.toBe(0);
   expect(result.error).toContain("Explicit direct-call request used codemode");
 });
+
+for (const scenario of cases) {
+  test(`precise output schemas preserve the ${scenario.name} execution contract`, async () => {
+    const result = await executeCase(
+      scenario.name,
+      scenario.script,
+      scenario.answer,
+      false,
+      scenario.directCalls,
+      true,
+    );
+    expect(result.error).toBe("");
+    expect(result.status).toBe(0);
+  });
+}

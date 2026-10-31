@@ -48,6 +48,21 @@ class CodemodeEvalTests(unittest.TestCase):
         LAUNCH.prepare(self.repo, run, evidence, baseline, "openai-codex/mock-parent-fast", "xhigh")
         return run, evidence, json.loads((run / "codemode.json").read_text())
 
+    def test_diagnostic_experiments_are_disabled_by_default(self):
+        with patch.dict(os.environ, {"CODEMODE_TRACE_PROMPT": "0", "CODEMODE_EVAL_TOOL_ROUTING": "0", "CODEMODE_EVAL_TYPED_OUTPUTS": "0"}):
+            _, _, config = self.prepare(False)
+        self.assertFalse(config["capture_prompt"])
+        self.assertFalse(config["tool_routing_guidance"])
+        self.assertFalse(config["typed_outputs"])
+
+    def test_diagnostic_experiments_are_frozen_in_the_run_configuration(self):
+        with patch.dict(os.environ, {"CODEMODE_TRACE_PROMPT": "1", "CODEMODE_EVAL_TOOL_ROUTING": "1", "CODEMODE_EVAL_TYPED_OUTPUTS": "1"}):
+            _, _, config = self.prepare(False)
+        self.assertTrue(config["capture_prompt"])
+        self.assertTrue(config["tool_routing_guidance"])
+        self.assertTrue(config["typed_outputs"])
+        self.assertIn(".pi/agent/evals/codemode/request.ts", config["source_sha256"])
+
     def test_arms_share_model_extensions_and_exact_candidate_snapshot(self):
         _, baseline, a = self.prepare(True)
         _, candidate, b = self.prepare(False)

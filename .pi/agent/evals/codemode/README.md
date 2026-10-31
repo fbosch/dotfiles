@@ -4,6 +4,50 @@ Thirteen Caliper cases compare codemode instruction snapshots, including
 session-derived batching failures and a large read-and-edit workflow. The runner
 does not change production instructions.
 
+## Accepted profile
+
+The promoted guidance passed 39/39 attempts on
+`openai-codex/gpt-6-luna-fast:high` with precise fixture output schemas.
+The matching original-guidance control passed 29/39. All 13 cases passed
+three attempts each, with no unusable attempts or timeouts.
+
+The production fragment and `candidate.md` match the frozen passing snapshot.
+The rule requires a short execution plan, distinguishes separate invocations
+from direct-tool requests, and preserves raw source values through parsing and
+reporting. `routing-reminder-baseline.md` freezes the failed first revision
+that preceded promotion.
+
+This gate pass applies only to the recorded high-effort, precise-schema
+profile. The final guidance has not cleared the low-effort gate or a full
+personal-extension-stack eval. Production model and thinking settings did not
+change. These were exploratory, sequential trials, not held-out confirmation.
+
+- Control: `.caliper/results/codemode/2026-10-31T13-28-13Z.json`
+- Passing candidate: `.caliper/results/codemode/2026-10-31T13-56-37Z.json`
+- Frozen evidence: `.caliper/codemode/run.4Qv7ZU`
+- Measurement: `.caliper/codemode/guidance-iteration/promoted-measurement.json`
+
+Caliper reported 11% more tokens and no rounded change in summed attempt
+execution time at the same reasoning level.
+
+Use a Pi entry point compatible with the runner's isolated HOME. The recorded
+runs used the temporary launcher described below. To repeat the matched profile:
+
+1. Run the original-guidance control.
+
+   ```sh
+   CODEMODE_EVAL_TYPED_OUTPUTS=1 \
+   CODEMODE_EVAL_CANDIDATE="$PWD/.pi/agent/evals/codemode/session-baseline.md" \
+     scripts/caliper-skill-eval.sh --codemode codemode openai-codex/gpt-6-luna-fast high 3
+   ```
+
+2. Run the promoted candidate.
+
+   ```sh
+   CODEMODE_EVAL_TYPED_OUTPUTS=1 \
+     scripts/caliper-skill-eval.sh --codemode codemode openai-codex/gpt-6-luna-fast high 3
+   ```
+
 ## Run
 
 Use the installed Pi, Caliper, and existing authenticated profile. No new
@@ -64,7 +108,7 @@ Codemode model selection now reads the configured default or an explicit
 physical model from production catalogs. It does not load specialist presets,
 because this fixture launches no specialists. Thinking can be set explicitly.
 
-### Live comparison
+### First revision comparison (superseded)
 
 Both arms completed 39 attempts on `openai-codex/gpt-6-luna-fast` at `low`,
 using Pi 1.4.0. The fixture, grader, launcher, spec, and routing-extension hashes
@@ -102,6 +146,79 @@ handling. The earlier preflight failures ran no model attempts.
 - Revised result: `.caliper/results/codemode/2026-10-31T11-42-28Z.json`
 - Evidence: `.caliper/codemode/run.ncDC0O` and `.caliper/codemode/run.vevqtZ`
 - Measurement: `.caliper/codemode/session-guidance-comparison/measurement.json`
+
+### Further routing experiments
+
+Six further candidates used the same prompts, grader, fixture, model, and
+thinking level. Two smoke runs passed 7/13 and 12/13. Four full runs passed
+35/39, 36/39, 35/39, and 29/39. No candidate met the 39/39 gate.
+
+`routing-candidate.md` preserves the best observed candidate, which passed
+36/39 in result `.caliper/results/codemode/2026-10-31T12-03-35Z.json`.
+It distinguishes tool invocations from answer formatting, requires inspecting
+actual JSON shapes, and specifies bounded output with source attribution.
+Two attempts still used direct reads instead of batching; one generated invalid
+JavaScript before recovering. All three session-derived cases passed 3/3.
+
+This candidate is not loaded in production. Its 36/39 score is an exploratory
+result selected from several variants, not a held-out confirmation of improvement.
+All trial hashes, outcomes, and failure paths are recorded in
+`.caliper/codemode/guidance-iteration/measurement.json`.
+
+### Instruction delivery and tool metadata
+
+The guidance reached the actual provider request. This runtime declares tools
+through `input` items of type `additional_tools`, not only `payload.tools`.
+The probe now reads both forms. Prompt tracing records system instructions
+and tool descriptions only, not request headers or user messages.
+
+Three eval-only flags are frozen in each run's metadata and disabled by default:
+
+- `CODEMODE_TRACE_PROMPT=1` captures instruction delivery and tool descriptions.
+- `CODEMODE_EVAL_TOOL_ROUTING=1` prepends advisory routing to tool descriptions.
+  It does not block, execute, or reroute calls. Its smoke run passed 10/13 and
+  was not promoted.
+- `CODEMODE_EVAL_TYPED_OUTPUTS=1` replaces `unknown` output declarations with
+  precise schemas for the fixture's existing read and check results. Returned
+  data, task prompts, and grader requirements remain unchanged. Offline tests
+  verify all 13 execution contracts in both schema modes.
+
+Requiring a short execution plan fixed required-call batching in all 24
+independent-call attempts of a 35/39 full run. Task failures remained in JSON
+parsing and reporting. A raw-source decoding example did not clear its next
+probe either.
+
+`planned-candidate.md` preserves the next candidate. With precise output
+schemas, the original guidance passed 30/39 and this candidate passed 37/39.
+Both arms used the same model, thinking, fixture, grader, and declared schemas.
+Do not compare 37/39 directly with the earlier 29/39 control, which declared
+outputs as `unknown`. The two remaining failures were a script error and a
+mutation that parsed anchor-prefixed display text as JSON.
+
+- Matching control: `.caliper/results/codemode/2026-10-31T12-50-03Z.json`
+- Candidate: `.caliper/results/codemode/2026-10-31T12-55-32Z.json`
+- Measurements: `.caliper/codemode/guidance-iteration/delivery-and-routing-measurement.json`
+
+At this stage neither schema mode had passed the 39/39 gate. The later
+high-effort validation in Accepted profile supersedes this outcome. Production
+model and thinking settings remain unchanged. Selecting a candidate across
+exploratory trials is not held-out confirmation.
+
+The first high-effort planned candidate passed 37/39 against a 29/39 control.
+Clarifying "separate tool calls" fixed that case in the next run, but the run
+had one reporting failure and one 120-second timeout after the script had
+succeeded. The timeout remains counted as unusable, not as a pass. Adding an
+explicit constants-and-values check produced the later 39/39 gate pass.
+
+The earlier high-effort results and failure traces remain in
+`.caliper/codemode/guidance-iteration/high-reasoning-measurement.json`.
+
+The root TypeScript config does not include eval files. Use the scoped
+`evals/codemode/tsconfig.json` to check this code against the installed SDK:
+
+```sh
+devenv test --no-tui --option enterTest:string 'cd .pi/agent && node_modules/.bin/tsc --noEmit --noUnusedLocals --noUnusedParameters --project evals/codemode/tsconfig.json && bun test evals/codemode && node_modules/.bin/biome check evals/codemode'
+```
 
 ## Compare the output contract
 
