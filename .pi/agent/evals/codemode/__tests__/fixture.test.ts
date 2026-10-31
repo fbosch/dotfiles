@@ -13,6 +13,9 @@ import fixture from "../fixture";
 type Handler = (event: unknown, ctx: ExtensionToolContext) => unknown | Promise<unknown>;
 const contents = {
   "a.ts": "export const alpha = 1;\n",
+  "policy.md": "policy = scoped\n",
+  "validation.md": "validation = readback\n",
+  "runtime.md": "runtime = installed\n",
   "b.ts": "export const beta = 2;\n",
   "c.ts": "export const gamma = 3;\n",
   "small.ts": "export const small = 4;\n",
@@ -23,7 +26,13 @@ const contents = {
 };
 const parallel =
   'const r = await Promise.allSettled([tools.read({path:"a.ts"}), tools.read({path:"b.ts"})]); text(r.map(x => x.status === "fulfilled" ? x.value.text : String(x.reason)));';
-const cases = [
+type Invocation = { name: string; input: Record<string, unknown> };
+const cases: Array<{
+  name: string;
+  script?: string;
+  answer: string;
+  directCalls?: Invocation[];
+}> = [
   { name: "independent", script: parallel, answer: "a.ts: alpha = 1; b.ts: beta = 2" },
   {
     name: "dependent",
@@ -62,6 +71,38 @@ const cases = [
     answer: "config-large.json: enabled = true; preserved mode slow and padding; verified.",
   },
   { name: "single", answer: "alpha = 1" },
+  {
+    name: "references",
+    script:
+      'const r=await Promise.allSettled(["policy.md","validation.md","runtime.md"].map(path=>tools.read({path})));text(r.map(x=>x.status==="fulfilled"?{path:x.value.path,lines:x.value.lines}:String(x.reason)));',
+    answer:
+      "policy.md: policy = scoped; validation.md: validation = readback; runtime.md: runtime = installed",
+  },
+  {
+    name: "mixed-search",
+    script:
+      'const r=await Promise.allSettled([tools.fffind({pattern:"a.ts"}),tools.ffgrep({pattern:"alpha"}),tools.ffgrep({pattern:"beta"})]);text(r.map(x=>x.status==="fulfilled"?x.value:String(x.reason)));',
+    answer: "a.ts: alpha = 1; b.ts: beta = 2",
+  },
+  {
+    name: "separate-checks",
+    script:
+      "const r=await Promise.allSettled([tools.check_one({}),tools.check_two({})]);text(r.map(x=>x.value));",
+    answer: "check_one: passed; check_two: failed: Invalid configuration",
+  },
+  {
+    name: "ordered-checks",
+    script: "text(await tools.check_one({}));text(await tools.check_two({}));",
+    answer: "check_one: passed; check_two: failed: Invalid configuration",
+  },
+  {
+    name: "direct-checks",
+    directCalls: [
+      { name: "check_one", input: {} },
+      { name: "check_two", input: {} },
+    ],
+    answer: "check_one: passed; check_two: failed: Invalid configuration",
+  },
 ];
 
 async function executeCase(
@@ -69,6 +110,7 @@ async function executeCase(
   script: string | undefined,
   answer: string,
   freezePromise = false,
+  directCalls?: Invocation[],
 ) {
   const directory = mkdtempSync(join(tmpdir(), "codemode-fixture-test-"));
   const trace = join(directory, "trace.jsonl");
@@ -140,21 +182,27 @@ async function executeCase(
     fixture(pi);
     await emit("session_start", {});
     await emit("before_agent_start", {});
-    const name = script === undefined ? "read" : "codemode";
-    const tool = tools.get(name);
-    if (!tool) throw new Error("Missing native codemode tool");
-    const input = script === undefined ? { path: "a.ts" } : { code: script };
-    await emit("tool_call", { toolName: name, toolCallId: "outer", input });
-    if (freezePromise && typeof input.code === "string")
-      input.code = `Object.freeze(globalThis.Promise);\n${input.code}`;
-    const result = await tool.execute("outer", input, undefined, undefined, ctx);
-    await emit("tool_result", {
-      toolName: name,
-      toolCallId: "outer",
-      input,
-      ...result,
-      isError: result.isError ?? false,
-    });
+    const invocations = directCalls ?? [
+      script === undefined
+        ? { name: "read", input: { path: "a.ts" } }
+        : { name: "codemode", input: { code: script } },
+    ];
+    for (const { name, input } of invocations) {
+      const tool = tools.get(name);
+      if (!tool) throw new Error("Missing fixture tool");
+      const id = `outer/${nextId++}`;
+      await emit("tool_call", { toolName: name, toolCallId: id, input });
+      if (freezePromise && typeof input.code === "string")
+        input.code = `Object.freeze(globalThis.Promise);\n${input.code}`;
+      const result = await tool.execute(id, input, undefined, undefined, ctx);
+      await emit("tool_result", {
+        toolName: name,
+        toolCallId: id,
+        input,
+        ...result,
+        isError: result.isError ?? false,
+      });
+    }
     await emit("message_end", {
       message: { role: "assistant", stopReason: "stop", content: [{ type: "text", text: answer }] },
     });
@@ -193,7 +241,13 @@ async function executeCase(
 
 for (const scenario of cases) {
   test(`native sandbox and deterministic grader accept ${scenario.name}`, async () => {
-    const result = await executeCase(scenario.name, scenario.script, scenario.answer);
+    const result = await executeCase(
+      scenario.name,
+      scenario.script,
+      scenario.answer,
+      false,
+      scenario.directCalls,
+    );
     expect(result.error).toBe("");
     expect(result.status).toBe(0);
   });
@@ -270,4 +324,45 @@ test("model-visible accounting excludes successful nested results", async () => 
   expect(visible).toHaveLength(1);
   expect(visible[0].tool).toBe("codemode");
   expect(visible[0].text?.length).toBeLessThan(1000);
+});
+
+test("reference reads through direct tools fail batching grading", async () => {
+  const scenario = cases.find((entry) => entry.name === "references");
+  if (!scenario) throw new Error("Missing reference scenario");
+  const result = await executeCase(
+    scenario.name,
+    undefined,
+    scenario.answer,
+    false,
+    ["policy.md", "validation.md", "runtime.md"].map((path) => ({
+      name: "read",
+      input: { path },
+    })),
+  );
+  expect(result.status).not.toBe(0);
+  expect(result.error).toContain("Independent calls were not in one codemode script");
+});
+
+test("mixed searches through direct tools fail batching grading", async () => {
+  const scenario = cases.find((entry) => entry.name === "mixed-search");
+  if (!scenario) throw new Error("Missing mixed-search scenario");
+  const result = await executeCase(scenario.name, undefined, scenario.answer, false, [
+    { name: "fffind", input: { pattern: "a.ts" } },
+    { name: "ffgrep", input: { pattern: "alpha" } },
+    { name: "ffgrep", input: { pattern: "beta" } },
+  ]);
+  expect(result.status).not.toBe(0);
+  expect(result.error).toContain("Independent calls were not in one codemode script");
+});
+
+test("explicitly sequential checks reject batching even with immediate results", async () => {
+  const result = await executeCase("ordered-checks", cases[3].script, cases[3].answer);
+  expect(result.status).not.toBe(0);
+  expect(result.error).toContain("Explicitly sequential checks were batched");
+});
+
+test("explicitly direct checks reject codemode execution", async () => {
+  const result = await executeCase("direct-checks", cases[3].script, cases[3].answer);
+  expect(result.status).not.toBe(0);
+  expect(result.error).toContain("Explicit direct-call request used codemode");
 });

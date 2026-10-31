@@ -44,6 +44,8 @@ Production definitions must name an available model and select trusted bundles t
 
 Every child retains the central authentication, model, classifier, command-policy, and instruction baseline. Skills load only from the names and paths explicitly selected for that specialist. Missing skills are skipped, with their names recorded in the child system prompt and full assignment transcript; no substitute or ambient skills are loaded. Missing models, bundles, and extension files still fail preflight. Explicit tool exclusions and command policies remain enforced.
 
+Children also load context masking from the mandatory baseline and use the global masking settings and context-pressure thresholds. Recall stays deferred until the child archives context, then activates with its usage guidelines before the next model request. Each child has its own session branch and archive catalog; recall does not search the parent or sibling workers.
+
 Unavailable tool hints produce startup warnings without blocking the assignment. Missing or disabled selected MCP servers are skipped with a warning. MCP connections run in the background without a readiness deadline for child launch. Matching tool definitions are activated when they arrive, including late registrations. Unavailable tools cannot be used, but their absence does not prevent the specialist from working with other tools.
 
 `permission` maps are rejected because this runner does not enforce that format. Extensions share the Pi process and are not an OS sandbox. Children cannot delegate. The parent owns workspace coordination; there are no automatic worktrees or runtime workspace locks.

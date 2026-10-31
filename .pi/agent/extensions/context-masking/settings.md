@@ -48,7 +48,7 @@ With `rollingEnabled` off, the extension runs this batch at the end of a turn on
 
 The raw session file keeps every original result, and `/tree` navigation to a point before the edit shows the originals again.
 
-A hidden result remains available through `read` at its saved path. The extension also registers a deferred `recall` tool that returns matching text passages and original image pixels. Tool discovery can activate it; to declare it at startup, add `"+recall"` to `defaultTools`. Automatic lookup does not activate the tool or change the active tool list.
+A hidden result remains available through `read` at its saved path. The extension registers a deferred `recall` tool that returns matching text passages and original image pixels. Once the current branch has committed text or image archives, the extension activates `recall` before the next model request, including its usage guidelines. Resuming a session, reloading, navigating branches, and completing compaction also check for archived context. Activation preserves the other active tools and does not run a search. Tool discovery can activate recall earlier; to declare it at startup, add `"+recall"` to `defaultTools`. Automatic lookup remains separate and does not activate the tool.
 
 The `recall` tool accepts either `query` for one question or `queries` for one to eight distinct questions. For example, `{"queries":["Which schema was approved?","What retention period was approved?"],"limit":2}` retrieves both in one scan. `limit` applies per question and content type. All questions share the same scan and output budgets, and each gets an output allowance so the first cannot consume the whole response.
 

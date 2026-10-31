@@ -92,8 +92,13 @@ if [[ -z "$skill" || $# -gt 6 ]]; then
 fi
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd -P)"
 if [[ "$orchestration" == true || "$codemode" == true || "$skill_suggestions" == true ]]; then
-  resolved_model="$(python3 "$repo_root/.pi/agent/evals/orchestration/model_config.py" \
-    "$repo_root" "${2:-configured}" "${3:-configured}")"
+  if [[ "$codemode" == true ]]; then
+    resolved_model="$(python3 "$repo_root/.pi/agent/evals/codemode/launch.py" resolve \
+      "$repo_root" "${2:-configured}" "${3:-configured}")"
+  else
+    resolved_model="$(python3 "$repo_root/.pi/agent/evals/orchestration/model_config.py" \
+      "$repo_root" "${2:-configured}" "${3:-configured}")"
+  fi
   read -r model thinking <<<"$resolved_model"
   judge_model="$model"
   judge_thinking="$thinking"

@@ -13,7 +13,30 @@ import sys
 import uuid
 from pathlib import Path
 
-CASES = {"independent", "dependent", "rejected", "tool-error", "mutations", "large", "large-edit", "single"}
+CASES = {"independent", "dependent", "rejected", "tool-error", "mutations", "large", "large-edit", "single",
+         "references", "mixed-search", "separate-checks", "ordered-checks", "direct-checks"}
+
+
+def resolve_model(repo: Path, model: str = "configured", thinking: str = "configured") -> tuple[str, str]:
+    # This fixture launches no specialists, so their virtual presets are irrelevant.
+    agent = repo / ".pi/agent"
+    settings = json.loads((agent / "settings.json").read_text())
+    if model == "configured":
+        model = f'{settings.get("defaultProvider", "")}/{settings.get("defaultModel", "")}'
+    elif "/" not in model:
+        model = f'{settings.get("defaultProvider", "")}/{model}'
+    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.:-]+", model):
+        raise ValueError("Codemode eval requires a physical provider/model")
+    thinking = settings.get("defaultThinkingLevel") if thinking == "configured" else thinking
+    if thinking not in {"off", "minimal", "low", "medium", "high", "xhigh", "max"}:
+        raise ValueError(f"Invalid thinking level: {thinking}")
+    provider, model_id = model.split("/", 1)
+    store = json.loads((agent / "models-store.json").read_text())
+    custom = json.loads((agent / "models.json").read_text()).get("providers", {})
+    registered = [*store.get(provider, {}).get("models", []), *custom.get(provider, {}).get("models", [])]
+    if not any(entry.get("id") == model_id for entry in registered):
+        raise ValueError(f"Model is absent from production catalogs: {model}")
+    return model, thinking
 
 
 def prepare(repo: Path, run_root: Path, evidence: Path, baseline: bool, model: str, thinking: str) -> None:
@@ -64,6 +87,9 @@ def configure_attempt(home: Path, agent: Path, config: dict, trace: Path, case: 
     contents = {"a.ts": "export const alpha = 1;\n", "b.ts": "export const beta = 2;\n",
                 "c.ts": "export const gamma = 3;\n", "small.ts": "export const small = 4;\n",
                 "manifest.json": '{"files":["a.ts","b.ts"]}\n',
+                "policy.md": "policy = scoped\n",
+                "validation.md": "validation = readback\n",
+                "runtime.md": "runtime = installed\n",
                 "config.json": '{"enabled":false,"mode":"slow","keep":"untouched"}\n',
                 "config-large.json": json.dumps({"enabled": False, "mode": "slow", "padding": "x" * 80_000}) + "\n",
                 "large.ts": "export const large = 5;\n" + "// BULK_CONTENT_OMIT " + "x" * 80_000 + "\n"}
@@ -110,5 +136,7 @@ def launch(pi: str, args: list[str]) -> int:
 if __name__ == "__main__":
     if sys.argv[1] == "prepare":
         prepare(Path(sys.argv[2]), Path(sys.argv[3]), Path(sys.argv[4]), sys.argv[5] == "true", *sys.argv[6:8])
+    elif sys.argv[1] == "resolve":
+        print(*resolve_model(Path(sys.argv[2]), *sys.argv[3:5]))
     else:
         raise SystemExit(launch(sys.argv[1], sys.argv[2:]))

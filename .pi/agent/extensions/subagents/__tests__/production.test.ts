@@ -22,6 +22,7 @@ const baselineFiles = [
   "extensions/classifier-policy/index.ts",
   "extensions/tool-call-guard/index.ts",
   "extensions/instruction-fragments.ts",
+  "extensions/context-masking/index.ts",
 ] as const;
 const hashline = "npm/node_modules/pi-hashline-edit-pro/index.ts";
 

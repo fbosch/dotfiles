@@ -1,7 +1,8 @@
 # Codemode batching eval
 
-Eight Caliper cases compare codemode instruction snapshots, including a large
-read-and-edit workflow. The runner does not change production instructions.
+Thirteen Caliper cases compare codemode instruction snapshots, including
+session-derived batching failures and a large read-and-edit workflow. The runner
+does not change production instructions.
 
 ## Run
 
@@ -20,16 +21,87 @@ scripts/caliper-skill-eval.sh --codemode codemode configured configured 3
 caliper compare BASELINE_RESULTS.json CANDIDATE_RESULTS.json
 ```
 
-The runner uses one worker and a configured model preset. Each attempt gets
+The runner uses one worker and a model from production catalogs. Each attempt gets
 an isolated HOME, fixture files, and the same tool definitions. Only the rule
 changes between arms. `baseline.md` freezes the original AGENTS.md rule so
 relocating production instructions cannot change the control arm. The candidate
 matches `.pi/agent/instructions/codemode.md`; a regression test checks equality
 and conditional loading. This is not a full personal-extension-stack eval.
 
-Require all 24 candidate attempts to pass before adopting the rule. Report
+Require all 39 candidate attempts to pass before declaring the rule validated. Report
 infrastructure errors separately. Caliper returning exit code zero does not
 mean every task passed; inspect the per-attempt outcomes and verdicts.
+
+## Compare session-derived batching guidance
+
+The October 31 session sample showed direct calls for three known reference
+paths and for a file search plus two independent content searches. The strict
+guidance was present in the inspected startup prompts. These observations
+motivate the `references` and `mixed-search` cases; the fixtures use synthetic
+content and do not copy private transcripts.
+
+Three controls distinguish separate invocations from explicit execution
+constraints. `separate-checks` requires a batch of distinct invocations.
+`ordered-checks` requires the first check to finish before the second starts.
+`direct-checks` requires direct tools without codemode. Existing prerequisite,
+mutation, failure-reporting, output-filtering, and single-read cases remain.
+
+`session-baseline.md` freezes the guidance before this revision. Compare that
+snapshot with the candidate, not the older `--baseline` arm:
+
+```sh
+CODEMODE_EVAL_CANDIDATE="$PWD/.pi/agent/evals/codemode/session-baseline.md" \
+  scripts/caliper-skill-eval.sh --codemode codemode openai-codex/gpt-6-luna-fast low 3
+scripts/caliper-skill-eval.sh --codemode codemode openai-codex/gpt-6-luna-fast low 3
+```
+
+Keep model and thinking identical across arms. Inspect per-case verdicts and
+the recorded hashes before comparing totals. The session sample confounded
+model and task type; it did not establish a model-only cause. Offline tests
+verify the fixture and grader, not whether a model follows the revised guidance.
+
+Codemode model selection now reads the configured default or an explicit
+physical model from production catalogs. It does not load specialist presets,
+because this fixture launches no specialists. Thinking can be set explicitly.
+
+### Live comparison
+
+Both arms completed 39 attempts on `openai-codex/gpt-6-luna-fast` at `low`,
+using Pi 1.4.0. The fixture, grader, launcher, spec, and routing-extension hashes
+matched. The guidance hashes differed.
+
+| Check | Previous guidance | Revised guidance |
+| --- | ---: | ---: |
+| Full task verdicts | 29/39 | 28/39 |
+| Executed independent batches | 20/24 | 19/24 |
+| Reference-read task verdicts | 3/3 | 1/3 |
+| Mixed-search task verdicts | 3/3 | 2/3 |
+| Separate-check task verdicts | 3/3 | 1/3 |
+
+Reference-read batching passed 3/3 in both arms. Two revised-guidance attempts
+filtered out the settings before reporting them. The remaining task failures
+included direct calls instead of batching, repeated target calls, omitted file
+attribution, and codemode use despite a direct-call requirement. Basic
+independent and prerequisite-followed-by-independent reads improved from 1/3
+to 3/3 each, but this did not produce an overall improvement.
+
+Caliper reports 17% more model tokens and 6% more summed attempt execution time
+for the revised guidance. Both runs returned exit code zero despite failed
+task verdicts. The 39/39 adoption gate was not met. These runs were sequential,
+not interleaved, and three attempts per case do not establish a reliable
+difference. The revised guidance remains unvalidated.
+
+The external Pi sandbox launcher rejected inherited credential variables and
+then Caliper's isolated HOME. Both completed arms used the same temporary
+launcher shim with `--no-sandbox` and removed unused GitHub, Context7, and Exa
+credential variables from the subprocess environment. No sandbox profile
+changed. The runner retained its normal auth-file isolation and refresh
+handling. The earlier preflight failures ran no model attempts.
+
+- Previous result: `.caliper/results/codemode/2026-10-31T11-37-15Z.json`
+- Revised result: `.caliper/results/codemode/2026-10-31T11-42-28Z.json`
+- Evidence: `.caliper/codemode/run.ncDC0O` and `.caliper/codemode/run.vevqtZ`
+- Measurement: `.caliper/codemode/session-guidance-comparison/measurement.json`
 
 ## Compare the output contract
 

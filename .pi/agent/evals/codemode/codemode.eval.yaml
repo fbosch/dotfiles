@@ -55,6 +55,38 @@ tasks:
       check it. Read the file back to verify the change, then report the changed
       value and whether verification succeeded.
     assert: *check
+  - name: Three required reference reads
+    prompt: |
+      [[codemode-case:references]]
+      Read the applicable references `policy.md`, `validation.md`, and
+      `runtime.md`. Report each reference's setting with its path.
+      Do not modify files.
+    assert: *check
+  - name: Independent mixed search tools
+    prompt: |
+      [[codemode-case:mixed-search]]
+      Find the source path matching `a.ts`. Also search source contents for
+      `alpha` and for `beta`. Report the matching path and both constant
+      declarations with their paths. Do not read or modify files.
+    assert: *check
+  - name: Separate independent check calls
+    prompt: |
+      [[codemode-case:separate-checks]]
+      Run `check_one` and `check_two` as separate tool calls. They are
+      independent. Report each check's result and any failure detail.
+    assert: *check
+  - name: Explicitly sequential check calls
+    prompt: |
+      [[codemode-case:ordered-checks]]
+      Run `check_one`, wait for its result, then run `check_two`.
+      Do not overlap the checks. Report each result and any failure detail.
+    assert: *check
+  - name: Explicitly direct check calls
+    prompt: |
+      [[codemode-case:direct-checks]]
+      Run `check_one` and `check_two` using direct tool calls, not codemode.
+      Report each result and any failure detail.
+    assert: *check
   - name: Single trivial operation
     prompt: |
       [[codemode-case:single]]

@@ -34,6 +34,22 @@ def validate(events: list[dict], expected: dict) -> None:
     def values(pairs):
         for name, value in pairs:
             assert re.search(rf"\b{name}\b[^\n]{{0,60}}\b{value}\b", final), f"Final answer missing {name} = {value}"
+    def check_results(answer):
+        answer = re.sub(r"\bcheck[ _-]+one\b", "check_one", answer, flags=re.I)
+        answer = re.sub(r"\bcheck[ _-]+two\b", "check_two", answer, flags=re.I)
+        assert "check_one" in answer and "check_two" in answer and "invalid configuration" in answer.lower()
+        assert re.search(r"check_one[^\n]{0,60}(pass|success)", answer, re.I), "Successful check not reported"
+        assert re.search(r"check_two[^\n]{0,60}(fail|error)", answer, re.I), "Fulfilled error misreported as success"
+    if case in {"ordered-checks", "direct-checks"}:
+        assert len(starts) == 2 and [e["tool"] for e in starts] == ["check_one", "check_two"], "Missing or repeated checks"
+        if case == "ordered-checks":
+            first_end = next(e for e in ends if e["id"] == starts[0]["id"])
+            assert events.index(first_end) < events.index(starts[1]), "Explicitly sequential checks overlapped"
+            assert all(not any(n > 1 for n in e.get("batches", [])) for e in results), "Explicitly sequential checks were batched"
+        else:
+            assert not scripts and all(not e.get("scriptId") for e in starts), "Explicit direct-call request used codemode"
+        check_results(final)
+        return
     if case == "single":
         assert not scripts, "Single trivial read used codemode"
         assert len(starts) == 1 and starts[0]["tool"] == "read" and starts[0]["path"] == "a.ts"
@@ -68,9 +84,21 @@ def validate(events: list[dict], expected: dict) -> None:
         assert len(output) < 4000 and "Full output:" not in output, "Large edit printed intermediate or full successful output"
         assert "config-large.json" in final and "true" in final.lower() and "verif" in final.lower(), "Changed value or verification not reported"
         return
-    target = ["check_one", "check_two"] if case == "tool-error" else (["large.ts", "small.ts"] if case == "large" else ["a.ts", "b.ts", "c.ts"] if case == "rejected" else ["a.ts", "b.ts"])
-    selected = [e for e in starts if (e["tool"] if case == "tool-error" else e.get("path")) in target]
-    assert len(selected) == len(target) and {e["tool"] if case == "tool-error" else e["path"] for e in selected} == set(target), "Missing or repeated target calls"
+    check_case = case in {"tool-error", "separate-checks"}
+    target = (
+        ["fffind:a.ts", "ffgrep:alpha", "ffgrep:beta"] if case == "mixed-search"
+        else ["policy.md", "validation.md", "runtime.md"] if case == "references"
+        else ["check_one", "check_two"] if check_case
+        else ["large.ts", "small.ts"] if case == "large"
+        else ["a.ts", "b.ts", "c.ts"] if case == "rejected"
+        else ["a.ts", "b.ts"]
+    )
+    def call_key(event):
+        if case == "mixed-search":
+            return f'{event["tool"]}:{event.get("pattern", "")}'
+        return event["tool"] if check_case else event.get("path")
+    selected = [e for e in starts if call_key(e) in target]
+    assert len(selected) == len(target) and {call_key(e) for e in selected} == set(target), "Missing or repeated target calls"
     assert all(e.get("scriptId") for e in selected) and len({e["scriptId"] for e in selected}) == 1, "Independent calls were not in one codemode script"
     cohort_ends = [e for e in ends if e["id"] in {s["id"] for s in selected}]
     assert max(events.index(e) for e in selected) < min(events.index(e) for e in cohort_ends), "Independent calls ran sequentially"
@@ -83,19 +111,18 @@ def validate(events: list[dict], expected: dict) -> None:
         assert end["success"] and events.index(end) < min(events.index(e) for e in selected), "Source reads preceded prerequisite"
     allowed_count = len(target) + (1 if case == "dependent" else 0)
     assert len(starts) == allowed_count, "Unrelated tool calls"
-    if case in {"independent", "dependent"}:
+    if case == "references":
+        values([("policy", "scoped"), ("validation", "readback"), ("runtime", "installed")])
+        assert all(path in final for path in target), "Reference settings not attributed to paths"
+    elif case in {"independent", "dependent", "mixed-search"}:
         values([("alpha", 1), ("beta", 2)])
         assert "a.ts" in final and "b.ts" in final, "Values not attributed to files"
     elif case == "rejected":
         values([("alpha", 1), ("gamma", 3)])
         assert "b.ts" in final and "permission denied" in final.lower(), "Failure not attributed"
         assert not next(e for e in cohort_ends if e["path"] == "b.ts")["success"]
-    elif case == "tool-error":
-        final = re.sub(r"\bcheck[ _-]+one\b", "check_one", final, flags=re.I)
-        final = re.sub(r"\bcheck[ _-]+two\b", "check_two", final, flags=re.I)
-        assert "check_one" in final and "check_two" in final and "invalid configuration" in final.lower()
-        assert re.search(r"check_one[^\n]{0,60}(pass|success)", final, re.I), "Successful check not reported"
-        assert re.search(r"check_two[^\n]{0,60}(fail|error)", final, re.I), "Fulfilled error misreported as success"
+    elif check_case:
+        check_results(final)
     elif case == "large":
         values([("large", 5), ("small", 4)])
         output = "\n".join(e["text"] for e in results) + final

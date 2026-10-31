@@ -29,6 +29,18 @@ class CodemodeEvalTests(unittest.TestCase):
         shutil.copytree(SOURCE, target, ignore=shutil.ignore_patterns("__pycache__"))
         (self.repo / ".pi/agent/AGENTS.md").write_text("- Unrelated instruction.\n")
 
+    def test_model_selection_uses_catalogs_without_loading_specialist_presets(self):
+        (self.repo / ".pi/agent/agents/quick.md").write_text("---\nmodel: presets/routine\n---\n")
+        self.assertEqual(LAUNCH.resolve_model(self.repo), ("openai-codex/mock-parent-fast", "xhigh"))
+        self.assertEqual(LAUNCH.resolve_model(self.repo, "mock-quick", "low"), ("openai-codex/mock-quick", "low"))
+        self.assertEqual(LAUNCH.resolve_model(self.repo, "openai-codex/mock-quick", "max"), ("openai-codex/mock-quick", "max"))
+
+    def test_model_selection_rejects_unknown_models_and_invalid_thinking(self):
+        with self.assertRaisesRegex(ValueError, "absent from production catalogs"):
+            LAUNCH.resolve_model(self.repo, "openai-codex/missing", "low")
+        with self.assertRaisesRegex(ValueError, "Invalid thinking level"):
+            LAUNCH.resolve_model(self.repo, "configured", "bogus")
+
     def prepare(self, baseline):
         run = self.root / ("baseline" if baseline else "candidate")
         (run / "home/.pi/agent").mkdir(parents=True)

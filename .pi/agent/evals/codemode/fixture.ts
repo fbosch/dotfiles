@@ -38,12 +38,22 @@ export default function codemodeFixture(pi: ExtensionAPI): void {
   let turns = 0;
   let scriptId: string | undefined;
   const allowed = new Set(["read", "write", "check_one", "check_two", "codemode"]);
-  const expected = scenario === "rejected" ? 3 : 2;
+  if (scenario === "mixed-search") {
+    allowed.add("fffind");
+    allowed.add("ffgrep");
+  }
+  const expected = ["rejected", "references", "mixed-search"].includes(scenario) ? 3 : 2;
   const arrivals = new Set<string>();
   const peers = Promise.withResolvers<void>();
   let watchdog: ReturnType<typeof setTimeout> | undefined;
-  const cohort =
-    scenario === "large" ? new Set(["large.ts", "small.ts"]) : new Set(["a.ts", "b.ts", "c.ts"]);
+  const references = ["policy.md", "validation.md", "runtime.md"];
+  const cohort = new Set(
+    scenario === "references"
+      ? references
+      : scenario === "large"
+        ? ["large.ts", "small.ts"]
+        : ["a.ts", "b.ts", "c.ts"],
+  );
   const allowedFiles = new Set([
     "a.ts",
     "b.ts",
@@ -53,6 +63,7 @@ export default function codemodeFixture(pi: ExtensionAPI): void {
     "config-large.json",
     "manifest.json",
     "config.json",
+    ...references,
   ]);
   function fixturePath(path: string): string {
     const absolute = resolve(root, path);
@@ -166,7 +177,7 @@ export default function codemodeFixture(pi: ExtensionAPI): void {
       outputSchema: Type.Unknown(),
       async execute(id, _params, signal) {
         record("start", { id, tool: name, scriptId });
-        await rendezvous(name);
+        if (!["ordered-checks", "direct-checks"].includes(scenario)) await rendezvous(name);
         signal?.throwIfAborted();
         const data: Record<string, string | boolean> =
           name === "check_one"
@@ -180,6 +191,39 @@ export default function codemodeFixture(pi: ExtensionAPI): void {
         };
       },
     });
+  }
+  if (scenario === "mixed-search") {
+    for (const name of ["fffind", "ffgrep"]) {
+      pi.registerTool({
+        name,
+        label: name,
+        description:
+          name === "fffind"
+            ? "Find fixture paths containing pattern. Returns a string of matching paths."
+            : "Search fixture source contents for literal pattern. Returns a string of path-prefixed matching lines.",
+        parameters: Type.Object({ pattern: Type.String() }),
+        async execute(id, params, signal) {
+          record("start", { id, tool: name, pattern: params.pattern, scriptId });
+          await rendezvous(`${name}:${params.pattern}`);
+          signal?.throwIfAborted();
+          const paths = ["a.ts", "b.ts", "c.ts"];
+          const text =
+            name === "fffind"
+              ? paths.filter((path) => path.includes(params.pattern)).join("\n")
+              : paths
+                  .flatMap((path) =>
+                    readFileSync(fixturePath(path), "utf8")
+                      .trimEnd()
+                      .split("\n")
+                      .filter((line) => line.includes(params.pattern))
+                      .map((line) => `${path}: ${line}`),
+                  )
+                  .join("\n");
+          record("end", { id, tool: name, pattern: params.pattern, success: true });
+          return { content: [{ type: "text", text }], details: undefined };
+        },
+      });
+    }
   }
   createCodemodeExtension({ models: false })(pi);
   pi.on("session_start", () => pi.setActiveTools([...allowed]));

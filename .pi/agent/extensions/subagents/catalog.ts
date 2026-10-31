@@ -50,6 +50,7 @@ export function capabilityCatalog(
         local("classifier-policy/index.ts"),
         local("tool-call-guard/index.ts"),
         local("instruction-fragments.ts"),
+        local("context-masking/index.ts"),
       ],
     },
     bundles,
