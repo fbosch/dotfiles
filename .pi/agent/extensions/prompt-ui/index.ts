@@ -8,9 +8,14 @@ import {
   loadFooterCustomization,
   renderSandboxFooterStatus,
 } from "./footer-config";
-import { gutterFade, WORKING_SWEEP_FRAMES } from "./working-gutter";
+import {
+  completionGlowStrength,
+  COMPLETION_GLOW_DURATION_MS,
+  gutterFade,
+  WORKING_FRAME_INTERVAL_MS,
+  WORKING_SWEEP_FRAMES,
+} from "./working-gutter";
 
-const WORKING_PULSE_INTERVAL_MS = 25;
 const WORKING_FADE_MS = 400;
 const INTERRUPT_HOLD_MS = 600;
 const INTERRUPT_FADE_MS = 400;
@@ -27,6 +32,10 @@ export default function promptUi(pi: ExtensionAPI): void {
   let fadeFrom = 0;
   let interruptStartedAt: number | undefined;
   let interruptPulse = 0;
+  let runInterrupted = false;
+  let completionEligible = false;
+  let completionStartedAt: number | undefined;
+  let completionPulse = 0;
   let workingPulseTimer: ReturnType<typeof setInterval> | undefined;
   let activeTui: TUI | undefined;
   let terminalFocused = true;
@@ -46,8 +55,10 @@ export default function promptUi(pi: ExtensionAPI): void {
     getWorkingPulse: () => workingPulse,
     getWorkingPosition: () => workingPulseIndex / WORKING_SWEEP_FRAMES,
     getInterruptPulse: () => interruptPulse,
+    getCompletionPulse: () => completionPulse,
     onInterrupt: () => {
       if (!isWorking) return;
+      runInterrupted = true;
       interruptStartedAt = performance.now();
       interruptPulse = 1;
       if (terminalFocused) activeTui?.requestRender();
@@ -75,6 +86,11 @@ export default function promptUi(pi: ExtensionAPI): void {
       interruptPulse = gutterFade(now - interruptStartedAt - INTERRUPT_HOLD_MS, INTERRUPT_FADE_MS);
       if (interruptPulse === 0) interruptStartedAt = undefined;
     }
+    if (completionStartedAt !== undefined) {
+      const elapsed = now - completionStartedAt;
+      completionPulse = completionGlowStrength(elapsed);
+      if (elapsed >= COMPLETION_GLOW_DURATION_MS) completionStartedAt = undefined;
+    }
   };
 
   const startWorkingPulse = () => {
@@ -82,16 +98,18 @@ export default function promptUi(pi: ExtensionAPI): void {
       !terminalFocused ||
       activeTui === undefined ||
       workingPulseTimer !== undefined ||
-      (!isWorking && workingPulse === 0 && interruptPulse === 0)
+      (!isWorking && workingPulse === 0 && interruptPulse === 0 && completionStartedAt === undefined)
     ) {
       return;
     }
     workingPulseTimer = setInterval(() => {
       updateWorkingPulse(true);
-      // Interrupt feedback must survive settlement until its own fade finishes.
-      if (!isWorking && workingPulse === 0 && interruptPulse === 0) stopWorkingPulse();
+      // Feedback can outlive settlement until its own fade finishes.
+      if (!isWorking && workingPulse === 0 && interruptPulse === 0 && completionStartedAt === undefined) {
+        stopWorkingPulse();
+      }
       activeTui?.requestRender();
-    }, WORKING_PULSE_INTERVAL_MS);
+    }, WORKING_FRAME_INTERVAL_MS);
   };
 
   pi.on("agent_start", () => {
@@ -102,8 +120,17 @@ export default function promptUi(pi: ExtensionAPI): void {
     fadeInStartedAt = performance.now();
     interruptStartedAt = undefined;
     interruptPulse = 0;
+    runInterrupted = false;
+    completionEligible = false;
+    completionStartedAt = undefined;
+    completionPulse = 0;
     startWorkingPulse();
     if (terminalFocused) activeTui?.requestRender();
+  });
+
+  // agent_end can precede retries and boundary continuations; only final settlement shows completion.
+  pi.on("agent_before_settle", (event) => {
+    completionEligible = event.outcome === "completed";
   });
 
   pi.on("agent_settled", () => {
@@ -114,7 +141,12 @@ export default function promptUi(pi: ExtensionAPI): void {
       fadeFrom = workingPulse;
       fadeStartedAt = performance.now();
       isWorking = false;
+      if (completionEligible && !runInterrupted) {
+        completionStartedAt = performance.now();
+        completionPulse = 0;
+      }
     }
+    startWorkingPulse();
     if (terminalFocused) activeTui?.requestRender();
   });
 
@@ -140,6 +172,10 @@ export default function promptUi(pi: ExtensionAPI): void {
     workingPulse = 0;
     interruptStartedAt = undefined;
     interruptPulse = 0;
+    runInterrupted = false;
+    completionEligible = false;
+    completionStartedAt = undefined;
+    completionPulse = 0;
     disposePromptEditor();
     disposePromptEditor = () => {};
     invalidateContextUsage = () => {};
@@ -153,6 +189,9 @@ export default function promptUi(pi: ExtensionAPI): void {
   pi.on("session_start", async (_event, ctx) => {
     const generation = ++sessionGeneration;
     stopWorkingPulse();
+    completionEligible = false;
+    completionStartedAt = undefined;
+    completionPulse = 0;
     disposeFocusListener();
     disposeFocusListener = () => {};
     disposePromptEditor();

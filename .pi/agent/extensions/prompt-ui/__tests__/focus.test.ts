@@ -13,7 +13,7 @@ import {
   setThemeInstance,
   theme,
 } from "@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
-import type { TUI } from "@earendil-works/pi-tui";
+import { foregroundAnsi, rgbColor, type TUI } from "@earendil-works/pi-tui";
 import { paintDockBorderSpace } from "../dock-rendering";
 import promptUi from "../index";
 
@@ -72,7 +72,7 @@ async function createFixture() {
     events: { on: () => () => {} },
     getThinkingLevel: () => "low",
   } as unknown as ExtensionAPI);
-  const fire = async (event: string) => { await handlers.get(event)?.({}, ctx); };
+  const fire = async (event: string, payload: unknown = {}) => { await handlers.get(event)?.(payload, ctx); };
   await fire("session_start");
   return {
     fire,
@@ -129,19 +129,20 @@ test("starts no animation timer when work begins in an unfocused terminal", asyn
   }
 });
 
-test("expires a settled fade while unfocused without restarting its timer on focus", async () => {
+test("expires completion feedback while unfocused without replaying it on focus", async () => {
   const fixture = await createFixture();
   try {
     await fixture.fire("agent_start");
     await Bun.sleep(450);
     fixture.input("\u001b[O");
     const pausedRequests = fixture.requests();
+    await fixture.fire("agent_before_settle", { outcome: "completed" });
     await fixture.fire("agent_settled");
-    await Bun.sleep(500);
+    await Bun.sleep(800);
     expect(fixture.requests()).toBe(pausedRequests);
     fixture.input("\u001b[I");
     expect(fixture.editor().render(100)[0]).toStartWith(
-      paintDockBorderSpace(theme.getFgAnsi("borderMuted")),
+      paintDockBorderSpace(foregroundAnsi(rgbColor(68, 68, 68), theme.getColorMode())),
     );
     const resumedRequests = fixture.requests();
     await Bun.sleep(100);
@@ -166,7 +167,7 @@ test("does not replay expired red interrupt feedback after regaining focus", asy
     expect(fixture.requests()).toBe(pausedRequests);
     fixture.input("\u001b[I");
     expect(fixture.editor().render(100)[0]).toStartWith(
-      paintDockBorderSpace(theme.getFgAnsi("borderMuted")),
+      paintDockBorderSpace(foregroundAnsi(rgbColor(68, 68, 68), theme.getColorMode())),
     );
     const resumedRequests = fixture.requests();
     await Bun.sleep(100);
@@ -197,4 +198,35 @@ test("replaces focus listeners on session changes and removes them at shutdown",
   expect(fixture.input("\u001b[I")).toEqual([]);
   await Bun.sleep(75);
   expect(fixture.requests()).toBe(stoppedRequests);
+});
+
+test("cleans up the completion timer when the session shuts down", async () => {
+  const fixture = await createFixture();
+  await fixture.fire("agent_start");
+  await fixture.fire("agent_before_settle", { outcome: "completed" });
+  await fixture.fire("agent_settled");
+  await fixture.fire("session_shutdown");
+  const stoppedRequests = fixture.requests();
+  await Bun.sleep(100);
+  expect(fixture.requests()).toBe(stoppedRequests);
+  expect(fixture.listenerCount()).toBe(0);
+});
+
+test("clears completion feedback when the session UI is replaced", async () => {
+  const fixture = await createFixture();
+  try {
+    await fixture.fire("agent_start");
+    await fixture.fire("agent_before_settle", { outcome: "completed" });
+    await fixture.fire("agent_settled");
+    await Bun.sleep(150);
+    await fixture.fire("session_start");
+    expect(fixture.editor().render(100)[0]).toStartWith(
+      paintDockBorderSpace(foregroundAnsi(rgbColor(68, 68, 68), theme.getColorMode())),
+    );
+    const requestsAfterReplacement = fixture.requests();
+    await Bun.sleep(100);
+    expect(fixture.requests()).toBe(requestsAfterReplacement);
+  } finally {
+    await fixture.fire("session_shutdown");
+  }
 });

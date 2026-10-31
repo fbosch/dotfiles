@@ -51,6 +51,7 @@ import { colorizeFooterIcon, type FooterCustomization } from "./footer-config";
 import { colorizeHex } from "./terminal-color";
 import { WORKING_SWEEP_FRAMES, workingGutterStrength } from "./working-gutter";
 
+const GUTTER_BASE_COLOR = rgbColor(68, 68, 68);
 const WORKING_GLOW_TINT = rgbColor(255, 255, 255);
 const EDITOR_PADDING_X = 1;
 const PROMPT_RAIL_WIDTH = 1;
@@ -84,6 +85,7 @@ export interface PromptEditorState {
   getWorkingPulse(): number;
   getWorkingPosition(): number;
   getInterruptPulse(): number;
+  getCompletionPulse(): number;
   onInterrupt(): void;
   getBranch(): string | null;
   getProfileName(): string | undefined;
@@ -456,9 +458,9 @@ export class PromptEditor extends CustomEditor {
       inputLines,
       promptThemeKey(theme),
       // Terminal color detection can change resolved defaults without changing ANSI tokens.
-      theme.colors.borderMuted,
       theme.colors.accent,
       theme.colors.error,
+      theme.colors.success,
       theme.getColorMode(),
       model?.name,
       model?.provider,
@@ -489,7 +491,7 @@ export class PromptEditor extends CustomEditor {
       this.layoutCache = cached;
     }
 
-    const suggestionsRail = paintDockBorderSpace(theme.getFgAnsi("borderMuted"));
+    const suggestionsRail = paintDockBorderSpace(foregroundAnsi(GUTTER_BASE_COLOR, theme.getColorMode()));
     const suggestionRails = cached.suggestions.map((line) => {
       const status = getSuggestionGitStatus(line, this.autocompleteItems);
       return (status === undefined ? "" : formatFffGitStatus(theme, status)) || suggestionsRail;
@@ -510,28 +512,39 @@ export class PromptEditor extends CustomEditor {
     );
     const workingPulse = this.promptState.getWorkingPulse();
     const interruptPulse = this.promptState.getInterruptPulse();
-    if (workingPulse === 0 && interruptPulse === 0) return cached.lines;
+    const completionPulse = this.promptState.getCompletionPulse();
+    if (workingPulse === 0 && interruptPulse === 0 && completionPulse === 0) return cached.lines;
 
     // Reuse exact frames across sweeps; the layout owns invalidation for text, width, and theme.
     const position = this.promptState.getWorkingPosition();
-    const frameKey = interruptPulse === 1 ? "interrupt" : `${position}:${workingPulse}:${interruptPulse}`;
+    const frameKey =
+      interruptPulse === 1
+        ? "interrupt"
+        : `${position}:${workingPulse}:${interruptPulse}:${completionPulse}`;
     const previousFrame = cached.workingFrames.get(frameKey);
     if (previousFrame !== undefined) return previousFrame;
 
-    const baseColor = "borderMuted";
-    const baseRail = paintDockBorderSpace(theme.getFgAnsi(baseColor));
+    const baseAnsi = foregroundAnsi(GUTTER_BASE_COLOR, theme.getColorMode());
+    const baseRail = paintDockBorderSpace(baseAnsi);
     const lastRow = cached.lines.length - 1;
     const glowAccent = mixColors(theme.colors.accent, WORKING_GLOW_TINT, 0.3, "srgb");
+    const workingBase = mixColors(GUTTER_BASE_COLOR, theme.colors.accent, workingPulse * 0.2, "srgb");
+    const completionColor =
+      completionPulse > 0 ? mixColors(GUTTER_BASE_COLOR, theme.colors.success, 0.4, "srgb") : undefined;
     const frame = cached.lines.map((line, index) => {
       const strength = workingPulse * workingGutterStrength(index, lastRow, position);
-      const workingColor = mixColors(theme.colors.borderMuted, glowAccent, strength, "srgb");
+      const workingColor = mixColors(workingBase, glowAccent, strength, "srgb");
+      const settledColor =
+        completionColor === undefined
+          ? workingColor
+          : mixColors(workingColor, completionColor, completionPulse, "srgb");
       const color =
         interruptPulse === 0
-          ? workingColor
-          : mixColors(workingColor, theme.colors.error, interruptPulse, "srgb");
+          ? settledColor
+          : mixColors(settledColor, theme.colors.error, interruptPulse, "srgb");
       const glowAnsi = foregroundAnsi(color, theme.getColorMode());
       return index === lastRow
-        ? `${glowAnsi}▀\u001b[39m${line.slice(theme.fg(baseColor, "▀").length)}`
+        ? `${glowAnsi}▀\u001b[39m${line.slice(`${baseAnsi}▀\u001b[39m`.length)}`
         : paintDockBorderSpace(glowAnsi) + line.slice(baseRail.length);
     });
     if (cached.workingFrames.size === WORKING_SWEEP_FRAMES) {
@@ -594,9 +607,9 @@ export class PromptEditor extends CustomEditor {
       " ",
     ].join("");
     const modelRow = fitColumns(modelLeft, modelRight, input.editorWidth);
-    const inputBorderColor = "borderMuted";
+    const inputBorderAnsi = foregroundAnsi(GUTTER_BASE_COLOR, input.theme.getColorMode());
     // Use the same styled spaces as suggestions so both borders align without copyable glyphs.
-    const inputRail = paintDockBorderSpace(input.theme.getFgAnsi(inputBorderColor));
+    const inputRail = paintDockBorderSpace(inputBorderAnsi);
     const backgroundAnsi = input.theme.getBgAnsi("userMessageBg");
     const dockRows = ["", ...coloredContent, "", modelRow].map((line) =>
       paintDockRow(line, input.width, inputRail, backgroundAnsi),
@@ -604,7 +617,7 @@ export class PromptEditor extends CustomEditor {
     // The full-width half-block joins the full-cell left rail without narrowing its bottom corner.
     const bottomEdge = paintDockBottomEdge(
       input.width,
-      input.theme.fg(inputBorderColor, "▀"),
+      `${inputBorderAnsi}▀\u001b[39m`,
       "",
       backgroundAnsi,
     );

@@ -6,7 +6,7 @@ import {
   type KeybindingsManager,
   SessionManager,
 } from "@earendil-works/pi-coding-agent";
-import { foregroundAnsi, mixColors, stripTerminalSequences, type TUI } from "@earendil-works/pi-tui";
+import { foregroundAnsi, mixColors, rgbColor, stripTerminalSequences, type TUI } from "@earendil-works/pi-tui";
 import {
   getEditorTheme,
   loadThemeFromPath,
@@ -26,6 +26,7 @@ const keybindings = {
 function createEditor(working: boolean) {
   let interruptCount = 0;
   let interruptPulse = 0;
+  let completionPulse = 0;
   let feedbackCount = 0;
   const tui = {
     terminal: { rows: 40, columns: 120 },
@@ -36,6 +37,7 @@ function createEditor(working: boolean) {
     getWorkingPulse: () => 0,
     getWorkingPosition: () => 0,
     getInterruptPulse: () => interruptPulse,
+    getCompletionPulse: () => completionPulse,
     onInterrupt() {
       feedbackCount += 1;
       interruptPulse = 1;
@@ -71,6 +73,7 @@ function createEditor(working: boolean) {
     editor,
     getInterruptCount: () => interruptCount,
     getFeedbackCount: () => feedbackCount,
+    setCompletionStrength: (value: number) => { completionPulse = value; },
     setFeedbackStrength: (value: number) => { interruptPulse = value; },
   };
 }
@@ -163,7 +166,7 @@ test("blends interrupt feedback evenly back toward the normal gutter color", () 
     fixture.setFeedbackStrength(0.5);
     const faded = fixture.editor.render(100);
     const color = foregroundAnsi(
-      mixColors(theme.colors.borderMuted, theme.colors.error, 0.5, "srgb"),
+      mixColors(rgbColor(68, 68, 68), theme.colors.error, 0.5, "srgb"),
       theme.getColorMode(),
     );
     for (const line of faded.slice(0, -1)) {
@@ -172,6 +175,20 @@ test("blends interrupt feedback evenly back toward the normal gutter color", () 
     expect(faded.at(-1)).toStartWith(`${color}▀`);
     expect(faded).not.toEqual(full);
     expect(fixture.editor.render(100)).toBe(faded);
+  } finally {
+    fixture.editor.dispose();
+  }
+});
+
+test("prioritizes red interruption feedback over completion feedback", () => {
+  const fixture = createEditor(true);
+  try {
+    fixture.setCompletionStrength(1);
+    fixture.editor.handleInput("\u001b");
+    const red = fixture.editor.render(100);
+    const rail = paintDockBorderSpace(theme.getFgAnsi("error"));
+    for (const line of red.slice(0, -1)) expect(line).toStartWith(rail);
+    expect(red.at(-1)).toStartWith(theme.fg("error", "▀"));
   } finally {
     fixture.editor.dispose();
   }

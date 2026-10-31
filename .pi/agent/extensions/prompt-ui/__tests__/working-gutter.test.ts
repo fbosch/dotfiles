@@ -1,5 +1,12 @@
 import { expect, test } from "bun:test";
-import { gutterFade, WORKING_SWEEP_FRAMES, workingGutterStrength } from "../working-gutter";
+import {
+  completionGlowStrength,
+  COMPLETION_GLOW_DURATION_MS,
+  gutterFade,
+  WORKING_FRAME_INTERVAL_MS,
+  WORKING_SWEEP_FRAMES,
+  workingGutterStrength,
+} from "../working-gutter";
 
 test.each([4, 11, 30])("moves the brightest point downward through a %i-row rail", (lastRow) => {
   let previous = 0;
@@ -60,4 +67,19 @@ test("travels faster through the middle than at the entrance", () => {
   const enteringDistance = peak(0.3) - peak(0.2);
   const middleDistance = peak(0.55) - peak(0.45);
   expect(middleDistance).toBeGreaterThan(enteringDistance * 1.5);
+});
+
+test("keeps a 1.2-second sweep when the rendering interval changes", () => {
+  expect(WORKING_SWEEP_FRAMES * WORKING_FRAME_INTERVAL_MS).toBe(1_200);
+  expect(Number.isInteger(WORKING_SWEEP_FRAMES)).toBe(true);
+});
+
+test("eases completion feedback in and fades it completely to idle", () => {
+  expect(completionGlowStrength(-1)).toBe(0);
+  expect(completionGlowStrength(0)).toBe(0);
+  expect(completionGlowStrength(50)).toBeCloseTo(0.5);
+  expect(completionGlowStrength(100)).toBe(1);
+  expect(completionGlowStrength(400)).toBeCloseTo(0.5);
+  expect(completionGlowStrength(COMPLETION_GLOW_DURATION_MS)).toBe(0);
+  expect(completionGlowStrength(COMPLETION_GLOW_DURATION_MS + 100)).toBe(0);
 });

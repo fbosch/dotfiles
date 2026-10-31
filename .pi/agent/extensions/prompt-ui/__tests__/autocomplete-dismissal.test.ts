@@ -8,6 +8,8 @@ import {
 } from "@earendil-works/pi-coding-agent";
 import {
   type Component,
+  foregroundAnsi,
+  rgbColor,
   getKeybindings,
   type OverlayHandle,
   stripTerminalSequences,
@@ -56,6 +58,7 @@ function createEditor() {
     getWorkingPulse: () => 0,
     getWorkingPosition: () => 0,
     getInterruptPulse: () => 0,
+    getCompletionPulse: () => 0,
     onInterrupt() {},
     getBranch: () => null,
     getProfileName: () => undefined,
@@ -120,7 +123,7 @@ test("aligns copy-safe suggestion rails with the unchanged prompt border color",
     await Bun.sleep(0);
     const promptLines = fixture.editor.render(100);
     const overlayLines = fixture.renderOverlay();
-    const rail = `${foregroundToBackground(theme.getFgAnsi("borderMuted"))} \u001b[0m`;
+    const rail = `${foregroundToBackground(foregroundAnsi(rgbColor(68, 68, 68), theme.getColorMode()))} \u001b[0m`;
 
     expect(overlayLines).toHaveLength(1);
     for (const line of [...promptLines.slice(0, -1), ...overlayLines]) {
@@ -133,7 +136,7 @@ test("aligns copy-safe suggestion rails with the unchanged prompt border color",
     );
     const bottomEdge = promptLines[promptLines.length - 1] ?? "";
     expect(stripTerminalSequences(bottomEdge)).toBe("▀".repeat(100));
-    expect(bottomEdge).toStartWith(theme.fg("borderMuted", "▀"));
+    expect(bottomEdge).toStartWith(`${foregroundAnsi(rgbColor(68, 68, 68), theme.getColorMode())}▀`);
     expect(bottomEdge).toEndWith(`${"▀".repeat(99)}\u001b[39m`);
   } finally {
     fixture.editor.dispose();

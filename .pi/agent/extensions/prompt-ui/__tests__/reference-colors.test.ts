@@ -26,6 +26,7 @@ const state: PromptEditorState = {
   getWorkingPulse: () => 0,
   getWorkingPosition: () => 0,
   getInterruptPulse: () => 0,
+  getCompletionPulse: () => 0,
   onInterrupt() {},
   getBranch: () => null,
   getProfileName: () => undefined,

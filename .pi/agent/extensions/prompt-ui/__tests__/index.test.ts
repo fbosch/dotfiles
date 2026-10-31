@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, spyOn, test } from "bun:test";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -16,7 +16,7 @@ import {
   theme,
 } from "@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
 import { KeybindingsManager } from "@earendil-works/pi-coding-agent/dist/core/keybindings.js";
-import { stripTerminalSequences, type TUI } from "@earendil-works/pi-tui";
+import { foregroundAnsi, mixColors, rgbColor, stripTerminalSequences, type TUI } from "@earendil-works/pi-tui";
 import { paintDockBorderSpace } from "../dock-rendering";
 import promptUi from "../index";
 
@@ -220,13 +220,98 @@ test("uses MCP extension status in the footer and refreshes the editor after com
       }
       await Bun.sleep(425);
       const idle = editor?.render(100) ?? [];
-      expect(idle[0]).toStartWith(paintDockBorderSpace(theme.getFgAnsi("borderMuted")));
+      expect(idle[0]).toStartWith(paintDockBorderSpace(foregroundAnsi(rgbColor(68, 68, 68), theme.getColorMode())));
       const requestsAfterSettlement = renderRequests;
       await Bun.sleep(100);
       expect(renderRequests).toBe(requestsAfterSettlement);
     }
 
     if (editor === undefined) throw new Error("Editor was not installed");
+    const completionEditor = editor;
+    let now = performance.now();
+    const clock = spyOn(performance, "now").mockImplementation(() => now);
+    let completionChecksPassed = false;
+    const expectGutter = (lines: string[], ansi: string) => {
+      for (const line of lines.slice(0, -1)) expect(line).toStartWith(paintDockBorderSpace(ansi));
+      expect(lines.at(-1)).toStartWith(`${ansi}▀`);
+    };
+    const idleColor = rgbColor(68, 68, 68);
+    const idleAnsi = foregroundAnsi(idleColor, theme.getColorMode());
+    const green = mixColors(idleColor, theme.colors.success, 0.4, "srgb");
+    try {
+      await handlers.get("agent_start")?.({}, ctx);
+      now += 450;
+      await Bun.sleep(75);
+      const beforeCompletion = completionEditor.render(100);
+      await handlers.get("agent_before_settle")?.({ outcome: "completed" }, ctx);
+      await handlers.get("agent_settled")?.({}, ctx);
+      expect(completionEditor.render(100)).toEqual(beforeCompletion);
+      now += 100;
+      await Bun.sleep(75);
+      const completed = completionEditor.render(100);
+      expectGutter(completed, foregroundAnsi(green, theme.getColorMode()));
+      expect(completed.map(stripTerminalSequences)).toEqual(beforeCompletion.map(stripTerminalSequences));
+
+      await handlers.get("agent_settled")?.({}, ctx);
+      now += 300;
+      await Bun.sleep(75);
+      expectGutter(
+        completionEditor.render(100),
+        foregroundAnsi(mixColors(idleColor, green, 0.5, "srgb"), theme.getColorMode()),
+      );
+      now += 301;
+      await Bun.sleep(75);
+      expectGutter(completionEditor.render(100), idleAnsi);
+      const requestsAfterCompletion = renderRequests;
+      await Bun.sleep(75);
+      expect(renderRequests).toBe(requestsAfterCompletion);
+
+      for (const outcome of ["aborted", "error"]) {
+        await handlers.get("agent_start")?.({}, ctx);
+        now += 450;
+        await Bun.sleep(75);
+        await handlers.get("agent_before_settle")?.({ outcome: "completed" }, ctx);
+        await handlers.get("agent_before_settle")?.({ outcome }, ctx);
+        await handlers.get("agent_settled")?.({}, ctx);
+        now += 450;
+        await Bun.sleep(75);
+        expectGutter(completionEditor.render(100), idleAnsi);
+      }
+
+      await handlers.get("agent_start")?.({}, ctx);
+      now += 450;
+      await Bun.sleep(75);
+      await handlers.get("agent_before_settle")?.({ outcome: "completed" }, ctx);
+      await handlers.get("agent_settled")?.({}, ctx);
+      now += 100;
+      await Bun.sleep(75);
+      expectGutter(completionEditor.render(100), foregroundAnsi(green, theme.getColorMode()));
+      await handlers.get("agent_start")?.({}, ctx);
+      expect(completionEditor.render(100)).not.toEqual(completed);
+      await handlers.get("agent_settled")?.({}, ctx);
+      now += 450;
+      await Bun.sleep(75);
+      expectGutter(completionEditor.render(100), idleAnsi);
+
+      completionEditor.onEscape = () => {};
+      await handlers.get("agent_start")?.({}, ctx);
+      completionEditor.handleInput("\u001b");
+      now += 1100;
+      await Bun.sleep(75);
+      await handlers.get("agent_before_settle")?.({ outcome: "completed" }, ctx);
+      await handlers.get("agent_settled")?.({}, ctx);
+      now += 450;
+      await Bun.sleep(75);
+      expectGutter(completionEditor.render(100), idleAnsi);
+      const requestsAfterInterruptedRun = renderRequests;
+      await Bun.sleep(75);
+      expect(renderRequests).toBe(requestsAfterInterruptedRun);
+      completionChecksPassed = true;
+    } finally {
+      clock.mockRestore();
+      if (!completionChecksPassed) await handlers.get("session_shutdown")?.({}, ctx);
+    }
+
     editor.onEscape = () => {};
     await handlers.get("agent_start")?.({}, ctx);
     editor.handleInput("\u001b");
@@ -240,7 +325,7 @@ test("uses MCP extension status in the footer and refreshes the editor after com
     await Bun.sleep(250);
     expect(editor.render(100)).not.toEqual(interrupted);
     await Bun.sleep(400);
-    expect(editor.render(100)[0]).toStartWith(paintDockBorderSpace(theme.getFgAnsi("borderMuted")));
+    expect(editor.render(100)[0]).toStartWith(paintDockBorderSpace(foregroundAnsi(rgbColor(68, 68, 68), theme.getColorMode())));
     const requestsAfterInterrupt = renderRequests;
     await Bun.sleep(100);
     expect(renderRequests).toBe(requestsAfterInterrupt);

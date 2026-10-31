@@ -12,11 +12,19 @@ import {
   setThemeInstance,
   theme,
 } from "@earendil-works/pi-coding-agent/dist/modes/interactive/theme/theme.js";
-import { stripTerminalSequences, type TUI, visibleWidth } from "@earendil-works/pi-tui";
+import {
+  foregroundAnsi,
+  mixColors,
+  rgbColor,
+  stripTerminalSequences,
+  type TUI,
+  visibleWidth,
+} from "@earendil-works/pi-tui";
 import { sessionWith } from "../../context-masking/__tests__/fixtures";
 import { MARKER } from "../../context-masking/policy";
 import { AgentMentionCache, type AgentMentionCacheFileSystem } from "../../mentions/agent-mentions";
 import { PromptEditor, type PromptEditorState, type PromptRenderInput } from "../prompt-editor";
+import { paintDockBorderSpace } from "../dock-rendering";
 import { WORKING_SWEEP_FRAMES } from "../working-gutter";
 
 const THEME_PATH = new URL("../../../themes/zenwritten-dark.json", import.meta.url).pathname;
@@ -59,6 +67,7 @@ test("reuses prompt highlighting, layout, and context until render inputs change
   let profileName: string | undefined;
   let isWorking = false;
   let workingPulse = 0;
+  let completionPulse = 0;
   let workingPosition = 0.2;
   let filesystemCalls = 0;
   let contextReads = 0;
@@ -98,6 +107,7 @@ test("reuses prompt highlighting, layout, and context until render inputs change
     getWorkingPulse: () => workingPulse,
     getWorkingPosition: () => workingPosition,
     getInterruptPulse: () => 0,
+    getCompletionPulse: () => completionPulse,
     onInterrupt() {},
     getBranch: () => null,
     getProfileName: () => profileName,
@@ -156,8 +166,46 @@ test("reuses prompt highlighting, layout, and context until render inputs change
   editor.render(100);
   profileName = "Work";
   editor.render(100);
+  const idle = editor.render(100);
   isWorking = true;
   workingPulse = 1;
+  workingPosition = 0;
+  const pause = editor.render(100);
+  const activeTint = foregroundAnsi(
+    mixColors(rgbColor(68, 68, 68), currentTheme.colors.accent, 0.2, "srgb"),
+    currentTheme.getColorMode(),
+  );
+  expect(pause.at(-1)).toStartWith(`${activeTint}▀`);
+  workingPulse = 0.5;
+  const fadingTint = foregroundAnsi(
+    mixColors(rgbColor(68, 68, 68), currentTheme.colors.accent, 0.1, "srgb"),
+    currentTheme.getColorMode(),
+  );
+  expect(editor.render(100).at(-1)).toStartWith(`${fadingTint}▀`);
+  workingPulse = 0;
+  isWorking = false;
+  expect(editor.render(100)).toBe(idle);
+  expect(pause.map(stripTerminalSequences)).toEqual(idle.map(stripTerminalSequences));
+  completionPulse = 1;
+  const completed = editor.render(100);
+  const completionColor = mixColors(rgbColor(68, 68, 68), currentTheme.colors.success, 0.4, "srgb");
+  const completionAnsi = foregroundAnsi(completionColor, currentTheme.getColorMode());
+  for (const line of completed.slice(0, -1)) expect(line).toStartWith(
+    paintDockBorderSpace(completionAnsi),
+  );
+  expect(completed.at(-1)).toStartWith(`${completionAnsi}▀`);
+  expect(editor.render(100)).toBe(completed);
+  completionPulse = 0.5;
+  const fadedCompletionAnsi = foregroundAnsi(
+    mixColors(rgbColor(68, 68, 68), completionColor, 0.5, "srgb"),
+    currentTheme.getColorMode(),
+  );
+  expect(editor.render(100).at(-1)).toStartWith(`${fadedCompletionAnsi}▀`);
+  completionPulse = 0;
+  expect(editor.render(100)).toBe(idle);
+  isWorking = true;
+  workingPulse = 1;
+  workingPosition = 0.2;
   const bright = editor.render(100);
   workingPosition = 0.65;
   const bottom = editor.render(100);
