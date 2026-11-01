@@ -16,6 +16,10 @@
     ]
   },
   "include": [
+    "benchmarks/codex-prefix-compaction.ts",
+    "benchmarks/context-prefix-comparison.ts",
+    "benchmarks/__tests__/codex-prefix-compaction.test.ts",
+    "benchmarks/__tests__/context-prefix-comparison.test.ts",
     "__tests__/**/*.ts",
     "extensions/**/*.ts",
     "lib/**/*.ts"

@@ -657,10 +657,7 @@ export default function authProfiles(
     options: { onlyIfChanged?: boolean } = {},
   ) => {
     const codexOwner = currentFallbackOwner(codexProviderId);
-    const label =
-      codexOwner === undefined || codexOwner === activeProfile
-        ? activeProfile
-        : `${activeProfile} · Codex via ${codexOwner}`;
+    const label = activeProfile;
     if (options.onlyIfChanged === true && label === publishedProfileStatus) return;
     publishedProfileStatus = label;
     ctx.ui.setStatus(PROFILE_STATUS_KEY, label);

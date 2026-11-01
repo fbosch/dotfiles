@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { convertToPng } from "@earendil-works/pi-coding-agent";
 import {
   getCapabilities,
   getCellDimensions,
@@ -12,6 +13,7 @@ import {
   type TuiMouseEventResult,
 } from "@earendil-works/pi-tui";
 import { calculateImageCellSize, isImageLine } from "@earendil-works/pi-tui/dist/terminal-image.js";
+import { openImageWithBroker } from "./desktop-image";
 
 const MAX_IMAGE_BYTES = 32 * 1024 * 1024;
 const MAX_ENCODED_IMAGE_BYTES = Math.ceil(MAX_IMAGE_BYTES / 3) * 4;
@@ -50,6 +52,7 @@ type ImageOpenOptions = {
   platform?: string;
   openFile?: (path: string) => Promise<void>;
   tempDirectory?: string;
+  environment?: NodeJS.ProcessEnv;
 };
 type ImageMousePatch = {
   handler: ImageMouseHandler;
@@ -285,6 +288,12 @@ export function installImageOpenClickHandler(options: ImageOpenOptions): () => v
   const original = prototype.handleMouse;
   const store = createImageFileStore(options.tempDirectory ?? tmpdir());
   const command = getOpenCommand(platform);
+  const environment = options.environment ?? process.env;
+  const brokered =
+    platform === "linux" &&
+    (environment.PI_NONO_MODE === "sandboxed" ||
+      Boolean(environment.NONO_CAP_FILE) ||
+      Boolean(environment.PI_DESKTOP_SOCKET));
   const openFile =
     options.openFile ??
     ((path: string) =>
@@ -310,9 +319,17 @@ export function installImageOpenClickHandler(options: ImageOpenOptions): () => v
       return original?.call(this, event);
     }
 
-    void store
-      .pathFor(this)
-      .then(openFile)
+    void Promise.resolve()
+      .then(async () => {
+        if (!brokered) return store.pathFor(this).then(openFile);
+        const endpoint = environment.PI_DESKTOP_SOCKET;
+        if (!endpoint) throw new Error("Image opening requires the desktop broker.");
+        const { bytes } = imageBytes(this);
+        // Force decoding even for PNG input: the host accepts only a bounded, canonical raster without metadata.
+        const png = await convertToPng(bytes.toString("base64"), "application/octet-stream");
+        if (!png) throw new Error("Could not convert the image to PNG.");
+        await openImageWithBroker(endpoint, Buffer.from(png.data, "base64"));
+      })
       .catch((error: unknown) => {
         options.notify(
           `Could not open image: ${error instanceof Error ? error.message : String(error)}`,

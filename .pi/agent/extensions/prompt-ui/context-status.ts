@@ -11,6 +11,7 @@ export interface ContextSnapshot {
   estimated: boolean;
   freedTokens: number;
   cachePercent: number | undefined;
+  compactionCount: number;
 }
 
 export function readContextSnapshot(
@@ -18,6 +19,7 @@ export function readContextSnapshot(
 ): ContextSnapshot {
   let usage = ctx.getContextUsage();
   const branch = ctx.sessionManager.getBranch();
+  const compactionCount = branch.filter((entry) => entry.type === "compaction").length;
   const projection = ctx.sessionManager.buildSessionProjection();
   // Count historical requests, not the edited projection: masking and compaction cannot undo usage.
   let cachedInputTokens = 0;
@@ -84,5 +86,5 @@ export function readContextSnapshot(
     usage = { ...usage, tokens, percent: (tokens / usage.contextWindow) * 100 };
     estimated = true;
   }
-  return { usage, estimated, freedTokens: Math.max(0, freedTokens), cachePercent };
+  return { usage, estimated, freedTokens: Math.max(0, freedTokens), cachePercent, compactionCount };
 }

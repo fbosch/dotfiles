@@ -41,7 +41,13 @@ test("distinguishes measured context from initial, trailing and invalid usage", 
   const manager = SessionManager.inMemory("/work");
   expect(snapshot(manager).estimated).toBe(true);
   measured(manager);
-  expect(snapshot(manager)).toEqual({ usage, estimated: false, cachePercent: 0, freedTokens: 0 });
+  expect(snapshot(manager)).toEqual({
+    compactionCount: 0,
+    usage,
+    estimated: false,
+    cachePercent: 0,
+    freedTokens: 0,
+  });
   manager.appendMessage({ role: "user", content: "next", timestamp: 0 });
   expect(snapshot(manager).estimated).toBe(true);
   measured(manager, "error");
@@ -58,9 +64,21 @@ test("marks a later masking edit as estimated and retains the badge after fresh 
   if (!id) throw new Error("Missing result");
   measured(manager);
   const freedTokens = 500 - mask(manager, id);
-  expect(snapshot(manager)).toEqual({ usage, estimated: true, cachePercent: 0, freedTokens });
+  expect(snapshot(manager)).toEqual({
+    compactionCount: 0,
+    usage,
+    estimated: true,
+    cachePercent: 0,
+    freedTokens,
+  });
   measured(manager);
-  expect(snapshot(manager)).toEqual({ usage, estimated: false, cachePercent: 0, freedTokens });
+  expect(snapshot(manager)).toEqual({
+    compactionCount: 0,
+    usage,
+    estimated: false,
+    cachePercent: 0,
+    freedTokens,
+  });
   manager.appendCustomEntry("unrelated", { note: "metadata is not model context" });
   expect(snapshot(manager).estimated).toBe(false);
 });
@@ -93,9 +111,16 @@ test("measures only active savings, not archives, quoted markers or omitted resu
     estimated: true,
     freedTokens: 0,
     cachePercent: undefined,
+    compactionCount: 1,
   });
   measured(manager);
-  expect(snapshot(manager)).toEqual({ usage, estimated: false, cachePercent: 0, freedTokens: 0 });
+  expect(snapshot(manager)).toEqual({
+    compactionCount: 1,
+    usage,
+    estimated: false,
+    cachePercent: 0,
+    freedTokens: 0,
+  });
 });
 
 test("estimates the compacted projection without reusing kept pre-compaction provider usage", () => {
@@ -117,12 +142,19 @@ test("estimates the compacted projection without reusing kept pre-compaction pro
     usage: { tokens, percent: (tokens / 11_000) * 100, contextWindow: 11_000 },
     estimated: true,
     cachePercent: 0,
+    compactionCount: 1,
     freedTokens: 0,
   });
   expect(tokens).toBeLessThan(110);
   measured(manager);
   currentUsage = usage;
-  expect(read()).toEqual({ usage, estimated: false, cachePercent: 0, freedTokens: 0 });
+  expect(read()).toEqual({
+    compactionCount: 1,
+    usage,
+    estimated: false,
+    cachePercent: 0,
+    freedTokens: 0,
+  });
 });
 
 test("post-compaction estimates count only the current system snapshot", () => {
@@ -146,6 +178,7 @@ test("post-compaction estimates count only the current system snapshot", () => {
     estimated: true,
     freedTokens: 0,
     cachePercent: undefined,
+    compactionCount: 1,
   });
 });
 
@@ -172,11 +205,29 @@ test("recomputes savings and usage provenance on branch changes", () => {
   const masked = measured(manager);
   expect(snapshot(manager).freedTokens).toBe(freedTokens);
   manager.branch(original);
-  expect(snapshot(manager)).toEqual({ usage, estimated: false, cachePercent: 0, freedTokens: 0 });
+  expect(snapshot(manager)).toEqual({
+    compactionCount: 0,
+    usage,
+    estimated: false,
+    cachePercent: 0,
+    freedTokens: 0,
+  });
   manager.branch(masked);
-  expect(snapshot(manager)).toEqual({ usage, estimated: false, cachePercent: 0, freedTokens });
+  expect(snapshot(manager)).toEqual({
+    compactionCount: 0,
+    usage,
+    estimated: false,
+    cachePercent: 0,
+    freedTokens,
+  });
   manager.appendContextEdit(id, null);
-  expect(snapshot(manager)).toEqual({ usage, estimated: true, cachePercent: 0, freedTokens: 0 });
+  expect(snapshot(manager)).toEqual({
+    compactionCount: 0,
+    usage,
+    estimated: true,
+    cachePercent: 0,
+    freedTokens: 0,
+  });
 });
 
 test("ignores marker-looking output without a recorded mask", () => {
@@ -279,4 +330,23 @@ test("ignores failed, aborted, and zero-input responses without discarding prior
   for (const reason of ["error", "aborted"] as const) measured(manager, reason);
   measured(manager, "stop", { input: 0, output: 10, cacheRead: 0, cacheWrite: 0 });
   expect(snapshot(manager).cachePercent).toBe(80);
+});
+
+test("counts completed compactions on the current branch", () => {
+  const manager = SessionManager.inMemory("/work");
+  const initial = measured(manager);
+  expect(snapshot(manager).compactionCount).toBe(0);
+  const first = manager.appendCompaction("First summary", null, 10_000);
+  expect(snapshot(manager).compactionCount).toBe(1);
+  measured(manager);
+  const second = manager.appendCompaction("Second summary", null, 20_000);
+  expect(snapshot(manager).compactionCount).toBe(2);
+  manager.branch(initial);
+  expect(snapshot(manager).compactionCount).toBe(0);
+  manager.appendCompaction("Alternative summary", null, 10_000);
+  expect(snapshot(manager).compactionCount).toBe(1);
+  manager.branch(second);
+  expect(snapshot(manager).compactionCount).toBe(2);
+  manager.branch(first);
+  expect(snapshot(manager).compactionCount).toBe(1);
 });

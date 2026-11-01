@@ -1,0 +1,9 @@
+{
+  "extends": "../tsconfig.json",
+  "include": [
+    "codex-prefix-compaction.ts",
+    "context-prefix-comparison.ts",
+    "__tests__/codex-prefix-compaction.test.ts",
+    "__tests__/context-prefix-comparison.test.ts"
+  ]
+}

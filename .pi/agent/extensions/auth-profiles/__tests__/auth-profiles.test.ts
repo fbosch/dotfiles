@@ -689,7 +689,7 @@ describe("auth profile prompt status", () => {
     };
     expect(statuses).toEqual([
       ["auth-profile", "fbb"],
-      ["auth-profile", "fbb · Codex via jpb"],
+      ["auth-profile", "fbb"],
     ]);
     expect(await codexKey()).toBe("codex-jpb");
     expect(notifications.at(-1)).toBe("fbb reached its Codex usage limit; switched Codex to jpb.");
@@ -704,7 +704,7 @@ describe("auth profile prompt status", () => {
       },
       ctx,
     );
-    expect(statuses.at(-1)).toEqual(["auth-profile", "fbb · Codex via ct"]);
+    expect(statuses.at(-1)).toEqual(["auth-profile", "fbb"]);
     expect(await codexKey()).toBe("codex-ct");
     expect(notifications.at(-1)).toBe("jpb reached its Codex usage limit; switched Codex to ct.");
     // The bound profile keeps serving fallback providers and /login.
@@ -1165,6 +1165,6 @@ describe("per-provider binding", () => {
     const anthropic = await runtime.credentials.store.read("anthropic");
     expect(codex?.type === "api_key" ? codex.key : undefined).toBe("codex-jpb");
     expect(anthropic?.type === "oauth" ? anthropic.access : undefined).toBe("fbb");
-    expect(statuses.at(-1)).toEqual(["auth-profile", "fbb · Codex via jpb"]);
+    expect(statuses.at(-1)).toEqual(["auth-profile", "fbb"]);
   });
 });

@@ -309,6 +309,17 @@ test("reuses prompt highlighting, layout, and context until render inputs change
   recordCacheUsage(100);
   expect(editor.render(100).join("\n")).toContain(currentTheme.fg("muted", " 󰆼 90%"));
   expect(contextReads).toBe(9);
+  expect(editor.render(100).join("\n")).not.toContain("");
+  const firstCompaction = sessionManager.appendCompaction("Summary", null, 10_000);
+  expect(editor.render(100).join("\n")).toContain(currentTheme.fg("muted", "  1"));
+  const firstFrame = editor.render(100);
+  sessionManager.appendCompaction("Updated summary", null, 10_000);
+  expect(editor.render(100)).not.toBe(firstFrame);
+  expect(editor.render(100).join("\n")).toContain(currentTheme.fg("muted", "  2"));
+  sessionManager.branch(firstCompaction);
+  expect(editor.render(100).join("\n")).toContain(currentTheme.fg("muted", "  1"));
+  sessionManager.branch(originalLeaf);
+  expect(editor.render(100).join("\n")).not.toContain("");
   for (const read of syncReads) expect(read).not.toHaveBeenCalled();
   editor.dispose();
   cache.dispose();

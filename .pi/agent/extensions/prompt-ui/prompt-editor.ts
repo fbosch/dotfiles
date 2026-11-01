@@ -110,6 +110,7 @@ function renderContext(theme: Theme, context: ContextSnapshot): string {
   const cache = cacheIndicator(context.cachePercent);
   return (
     theme.fg(indicator.color, indicator.text) +
+    (context.compactionCount > 0 ? theme.fg("muted", `  ${context.compactionCount}`) : "") +
     (freed ? theme.fg("muted", ` ${freed}`) : "") +
     (cache.text ? theme.fg(cache.color, ` ${cache.text}`) : "")
   );
@@ -471,6 +472,7 @@ export class PromptEditor extends CustomEditor {
       context.estimated,
       context.freedTokens,
       context.cachePercent,
+      context.compactionCount,
       profileName,
       this.agentMentionCache.version,
     ]);
