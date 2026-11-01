@@ -15,6 +15,7 @@
     "zod": "^4.3.6"
   },
   "scripts": {
+    "install:deps": "bun install --backend=copyfile --frozen-lockfile",
     "audit": "fallow audit --root . --format json --quiet"
   }
 }

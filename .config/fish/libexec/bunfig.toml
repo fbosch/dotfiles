@@ -1,4 +1,6 @@
 [install]
-auto = "auto"
+# Host-executed Fish helpers must not share writable inodes with Bun's cache.
+# Install explicitly with `bun run install:deps`; the copyfile backend is a CLI option.
+auto = "disable"
 linker = "hoisted"
 saveTextLockfile = true

@@ -245,6 +245,7 @@ in
     '';
 
     "test:fish-pi-workflows".exec = "bun test ./.config/fish/libexec/__tests__/pi_workflows.test.js";
+    "test:fish-dependency-isolation".exec = "bun test ./.config/fish/libexec/__tests__/dependency-isolation.test.js";
     "test:fish-codex-reset".exec = ''
       fish -n .config/fish/functions/codex-reset.fish
       bun test ./.config/fish/libexec/codex/__tests__/reset_helper.test.js
@@ -594,6 +595,7 @@ in
         "test:fish"
         "test:git-pull-system-repos"
         "test:fish-pi-workflows"
+        "test:fish-dependency-isolation"
         "test:fish-codex-reset"
         "test:fish-workday-start"
         "test:fish-ssh-agent"
