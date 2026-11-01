@@ -16,9 +16,16 @@ unreadable, the command reports that and exits.
 ## Agent context
 
 With valid capability metadata, the extension adds a `sandbox_context` system-prompt
-section before agent runs. It summarizes grants, denied-path and exception counts,
-network metadata, and permission-failure guidance. Paths are encoded as data.
-The prompt does not claim that command-list metadata is enforced.
+section before agent runs. It lists compact writable and read grants, denied paths,
+and the exception count. It tells the agent to plan writes within grants, consult
+`NONO_CAP_FILE` before uncertain access, and report permission failures without
+retrying unchanged or evading restrictions. Paths are encoded as data.
+
+Network guidance reports the blocking flag and domain count without treating either
+as a complete proxy policy or proof of connectivity. When blocking is enabled, it
+directs the agent to use configured proxies rather than bypass them. It does not
+read or expose proxy URLs or credentials, infer `/proc` access, or claim that
+command-list metadata is enforced. Reloading the summary does not change grants.
 
 The summary uses one snapshot per session and refreshes on session start or reload.
 A named section prevents duplicate injection and preserves other extensions' sections.

@@ -8,6 +8,9 @@ export interface MaskingSettings {
   enabled: boolean;
   rollingEnabled: boolean;
   prefetchRecall: boolean;
+  /** Inactive cache lifetime in days; zero disables expiry. */
+  retentionDays: number;
+  retainedSessionIds: string[];
   /** Mask once estimated context reaches this share of the context window. */
   triggerRatio: number;
   /** Tool results from the latest N assistant turns stay verbatim. */
@@ -23,6 +26,8 @@ export const DEFAULT_SETTINGS: MaskingSettings = {
   enabled: false,
   rollingEnabled: false,
   prefetchRecall: false,
+  retentionDays: 30,
+  retainedSessionIds: [],
   triggerRatio: 0.7,
   protectRecentTurns: 10,
   minResultChars: 800,
@@ -34,6 +39,8 @@ const SettingsPattern = {
   enabled: P.optional(P.boolean),
   rollingEnabled: P.optional(P.boolean),
   prefetchRecall: P.optional(P.boolean),
+  retentionDays: P.optional(P.number.int().gte(0).lte(36500)),
+  retainedSessionIds: P.optional(P.array(P.string.minLength(1))),
   triggerRatio: P.optional(P.number.gt(0).lte(1)),
   protectRecentTurns: P.optional(P.number.int().gte(1)),
   minResultChars: P.optional(P.number.int().gte(0)),

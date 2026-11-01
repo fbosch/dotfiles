@@ -30,12 +30,37 @@ Masking reads global settings only. Malformed masking settings leave context unc
 | `enabled` | `false` | Turns masking on. |
 | `rollingEnabled` | `false` | Replace ratio-trigger masking with the classifier-assisted 4,000-token trial. Requires `enabled`. |
 | `prefetchRecall` | `false` | Add matching saved passages when a new text request arrives. Requires `enabled`. |
+| `retentionDays` | `30` | Delete session caches after this many inactive days, on a later session start. Integer from 0 to 36,500; `0` disables expiry. |
+| `retainedSessionIds` | `[]` | Keep these session IDs indefinitely, regardless of inactivity. |
 | `triggerRatio` | `0.7` | With `rollingEnabled` off, mask once Pi's context estimate reaches this share of the context window. |
 | `protectRecentTurns` | `10` | Tool results from the latest N assistant turns stay verbatim. |
 | `minResultChars` | `800` | Shorter results stay verbatim. |
 | `minFreedRatio` | `0.15` | With `rollingEnabled` off, skip a batch that would free less than this share of the context. |
 
 The defaults come from replaying recorded sessions with `bun run --cwd .pi/agent benchmark:context-masking`.
+
+## Cache lifetime
+
+Saved text and image artifacts expire after 30 days of session inactivity by default. Cleanup runs when a session starts, including after reload, resume, or switching sessions. It deletes an expired session's whole directory under `~/.pi/agent/cache/context-masking/`; it does not run a background timer. A later session start retries deletion of directories quarantined by an interrupted cleanup.
+
+Starting or resuming a session resets its inactivity clock. Agent starts, agent ends, tree navigation, and shutdown update the clock too. Live Pi process owners protect their sessions, even while idle. A shared lock serializes owner registration and expiry across processes. Only owners confirmed dead on this host are discarded; unknown or remote owners preserve the cache.
+
+Existing directories without activity metadata get a full retention window when first discovered. Retention runs even when masking is disabled. Invalid settings or metadata prevent that cleanup attempt and report an extension error.
+
+Configure global `contextMasking` settings and run `/reload`:
+
+```json
+{
+  "contextMasking": {
+    "retentionDays": 30,
+    "retainedSessionIds": ["session-id-to-keep"]
+  }
+}
+```
+
+Set `retentionDays` to `0` to disable automatic expiry. Add a session's ID from its cache directory name to `retainedSessionIds` to keep its artifacts indefinitely. Other masking settings remain unchanged when merged with this fragment.
+
+After expiry, a resumed session still has its conversation and placeholders, but the saved paths no longer support recall. The raw session transcript retains original messages; cache deletion does not regenerate saved files. Symlinked session directories are skipped.
 
 ## What happens
 
@@ -258,7 +283,7 @@ Uncertain image decisions keep a reference. Classifier errors use native fallbac
 
 Archival failures skip only the affected images, including unavailable previous originals and images that exceed the archive limits. Text and successfully archived images still use classifier compaction; if every image fails, text classification continues without an image-decision request. The hook warns with a count and up to eight source entry/block identifiers, and the checkpoint records `skippedImageCount`. Skipped images receive no retention decisions or new recovery references; their pixels may leave active context, but the original session content is unchanged.
 
-Final verification of successfully archived images still cancels compaction if an image is unavailable. If a kept image later becomes unavailable, context includes an explicit missing-pixels notice. Nothing deletes an image automatically.
+Final verification of successfully archived images still cancels compaction if an image is unavailable. If a kept image later becomes unavailable, context includes an explicit missing-pixels notice. Image decisions do not delete originals; cache expiry applies to the entire session directory.
 
 The deferred `recall` tool searches archived images alongside saved text, including pruned images. Classifier ranking uses source labels, identifiers and paths, not visual contents. Selected images return as verified original pixels in the tool result. Originals remain on disk and in session records even when outside the bounded search.
 
@@ -377,6 +402,6 @@ In the last replay, one seed answered every fact from prefetched passages in a s
 
 ## Limits
 
-- Artifacts are not deleted automatically. Remove a session's directory under `~/.pi/agent/cache/context-masking/` when you no longer need to recall its results.
+- Session cache expiry applies to saved text and images. The raw session transcript is not deleted.
 - A placeholder still names the artifact path after the file is deleted, and the model can no longer recall that result.
 - Results are masked by age and size only. The extension does not judge whether an old result is still relevant.

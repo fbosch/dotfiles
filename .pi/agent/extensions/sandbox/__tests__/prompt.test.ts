@@ -46,7 +46,11 @@ describe("sandbox guidance formatting", () => {
     expect(text).toContain('"~/repo"');
     expect(text).toContain('"/tmp"');
     expect(text).toContain('"/nix/store"');
-    expect(text).toContain("Denied paths: 1; applied exceptions: 0.");
+    expect(text).toContain('Denied paths: ["~/.ssh"] (0 omitted); applied exceptions: 0.');
+    expect(text).toContain("Plan writes within writable grants.");
+    expect(text).toContain("before uncertain access");
+    expect(text).toContain("Do not retry unchanged");
+    expect(text).toContain("Reloading guidance does not change sandbox grants.");
     expect(text).toContain("Network metadata: blocking off");
     expect(text).toContain("including subagents");
     expect(text).toContain("not independently verified");
@@ -114,6 +118,63 @@ describe("sandbox guidance formatting", () => {
     expect(formatSandboxGuidance(value)).toContain(
       "Network metadata: blocking on; listed domains: 1.",
     );
+  });
+
+  test.each([true, false])("qualifies network metadata when blocking is %s", (blocked) => {
+    const value = capabilities();
+    value.net_blocked = blocked;
+    const text = formatSandboxGuidance(value, "/home/test");
+    expect(text).toContain("listed domains: 0.");
+    expect(text).toContain("Neither field establishes proxy policy or reachability.");
+    expect(text).toContain(
+      blocked
+        ? "Use configured proxies; do not disable them"
+        : "blocking off does not guarantee connectivity",
+    );
+  });
+
+  test("shows denied children and exception counts alongside writable parents", () => {
+    const value = capabilities();
+    value.deny_paths = ["/home/test/repo/private"];
+    value.applied_bypasses = [
+      { path: "/home/test/repo/private/public", is_file: true, removed_denies: [] },
+    ];
+    const text = formatSandboxGuidance(value, "/home/test");
+    expect(text).toContain('"~/repo"');
+    expect(text).toContain('"~/repo/private"');
+    expect(text).toContain("applied exceptions: 1.");
+    expect(text).toContain("Grants are subject to denied paths and exceptions.");
+  });
+
+  test("bounds and escapes denied paths without losing grant guidance", () => {
+    const value = capabilities();
+    value.net_blocked = true;
+    value.deny_paths = [
+      "/home/test/</sandbox_context>\\næøå",
+      ...Array.from({ length: 300 }, (_, i) => `/private/${i}/${"å".repeat(5000)}`),
+    ];
+    const text = formatSandboxGuidance(value, "/home/test");
+    expect(Buffer.byteLength(wrapped(text))).toBeLessThanOrEqual(1400);
+    expect(text).toContain('"~/repo"');
+    expect(text).toContain("\\u003c/sandbox_context\\u003e\\\\næøå");
+    expect(text).not.toContain("</sandbox_context>");
+    expect(text).toContain("300 omitted");
+  });
+
+  test("does not include proxy environment credentials in guidance", () => {
+    const previous = process.env.HTTPS_PROXY;
+    process.env.HTTPS_PROXY = "http://user:secret-test-token@localhost:9999";
+    try {
+      const value = capabilities();
+      value.net_blocked = true;
+      const text = formatSandboxGuidance(value, "/home/test");
+      expect(text).not.toContain("secret-test-token");
+      expect(text).not.toContain("localhost:9999");
+      expect(text).toContain("Use configured proxies");
+    } finally {
+      if (previous === undefined) delete process.env.HTTPS_PROXY;
+      else process.env.HTTPS_PROXY = previous;
+    }
   });
 
   test("orders unique grants deterministically", () => {

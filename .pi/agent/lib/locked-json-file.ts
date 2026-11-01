@@ -26,11 +26,14 @@ export function readLockedJsonFile(path: string): unknown {
   });
 }
 
-export function updateLockedJsonFile(path: string, update: (current: unknown) => unknown): void {
+export function updateLockedJsonFile(
+  path: string,
+  update: (current: unknown, assertOwned: () => void) => unknown,
+): void {
   mkdirSync(dirname(path), { recursive: true });
   withFileLock(path, (assertOwned) => {
     const current = existsSync(path) ? JSON.parse(readFileSync(path, "utf8")) : undefined;
-    const updated = update(current);
+    const updated = update(current, assertOwned);
     assertOwned();
     writeJsonAtomically(path, updated);
   });

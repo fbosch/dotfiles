@@ -62,10 +62,12 @@ describe("locked JSON file", () => {
     const lockPath = settingsLockPath(path);
 
     expect(() =>
-      updateLockedJsonFile(path, () => {
+      updateLockedJsonFile(path, (_current, assertOwned) => {
+        assertOwned();
         rmdirSync(lockPath);
         mkdirSync(lockPath);
         utimesSync(lockPath, new Date(0), new Date(0));
+        expect(assertOwned).toThrow("settings lock ownership was lost");
         return { count: 1 };
       }),
     ).toThrow("settings lock ownership was lost");
