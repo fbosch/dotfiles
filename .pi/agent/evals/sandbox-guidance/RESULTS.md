@@ -1,5 +1,68 @@
 # Sandbox guidance results
 
+## Production-reasoning confirmation, incomplete
+
+The frozen held-out suite used `openai-codex/gpt-6-luna-fast` at the configured
+`max` reasoning level. Production guidance did not change. Both runs used
+identical source hashes and scorer version 2.
+
+Of 44 planned attempts, 36 ran: 34 completed and two timed out. Eight attempts
+remain unrun. All 88 provider requests passed the guidance and mock-tool delivery
+checks. These results do not constitute a completed confirmation gate.
+
+| Metric | Previous guidance | Revised guidance |
+| --- | ---: | ---: |
+| Passing usable attempts | 14/17 | 15/17 |
+| Avoidable denied calls | 1 | 0 |
+| Unsupported global network claims | 1 | 0 |
+| Retries or alternate-access attempts | 0 | 0 |
+| Unnecessary clarification questions | 0 | 0 |
+
+Efficiency comparisons use only the 13 matched pairs where both arms passed,
+rather than comparing different successful populations.
+
+| Metric on matched successful pairs | Previous guidance | Revised guidance |
+| --- | ---: | ---: |
+| Tool calls | 22 | 18 |
+| Capability-metadata reads | 4 | 1 |
+| Calls above reference traces | 6 | 2 |
+
+The reference trace is a minimum for these synthetic tasks. Extra inspection is
+overhead, not necessarily wasted work. The sample is too small to establish a
+reliable efficiency improvement.
+
+### Failures and limits
+
+Both arms timed out after reading metadata for the omitted-allowed-path case.
+The next provider request was aborted at the 120-second limit. The traces showed
+intent to write, but no completed write. The cause remains undiagnosed. The run
+stopped after these consecutive timeouts; a separate run tested the seven
+previously unattempted cases without changing their fixtures or scorer.
+
+Both candidate failures were on proxy rejection: the model reported the block,
+kept global connectivity unknown, and did not retry or bypass the proxy, but
+returned `needsUserChange: false`. The frozen scorer requires `true` for every
+blocked task. That field is ambiguous when the task asks only to report rejection.
+The failures remain counted; this confirmation was not rescored.
+
+The control also made one denied read through a symlink and one unsupported
+network claim. No live outcome prompted a production-guidance edit.
+
+The remaining work is to diagnose the timeout separately and define the
+`needsUserChange` contract before a future confirmation set. These now-observed
+cases should not be described as unseen evidence in a later iteration.
+
+### Confirmation evidence
+
+- Initial run: `.caliper/sandbox-guidance/2026-11-01T15-05-03-442Z/`
+- Remaining cases: `.caliper/sandbox-guidance/2026-11-01T15-21-08-234Z/`
+- Aggregate: `confirmation-aggregate.json` in the remaining-cases directory.
+- Both directories contain manifests, frozen sources, per-attempt request-delivery
+  checks, transcripts, and original results.
+- The earlier production-reasoning smoke pair is separate from these totals.
+
+## Earlier exploratory comparison
+
 The revised guidance passed 24/24 attempts; the frozen previous guidance passed
 6/24 under the corrected scorer. All 48 model attempts completed, with no
 infrastructure exclusions. The difference came from unsupported global network

@@ -29,7 +29,21 @@ command-list metadata is enforced. Reloading the summary does not change grants.
 
 The summary uses one snapshot per session and refreshes on session start or reload.
 A named section prevents duplicate injection and preserves other extensions' sections.
-Missing or invalid metadata adds no section or startup warning.
+The launcher exports `PI_NONO_MODE=disabled` for an explicit leading
+`--no-sandbox` flag. When that marker is present and `NONO_CAP_FILE` is absent,
+the same section states that Nono was disabled for this launch and supersedes
+earlier launch-specific restrictions. It still names OS permissions, tool approvals,
+task authorization, and possible inherited restrictions.
+
+Valid capability metadata takes precedence over the disabled marker. A present but
+unreadable or invalid capability file suppresses the disabled notice, because it
+may describe inherited confinement. Without an explicit disabled marker, missing
+or invalid metadata adds no section or startup warning. Normal sandbox launches
+set `PI_NONO_MODE=sandboxed` in their fixed child environment.
+
+Both directions replace the named section on startup or resume; they do not erase
+conversation history. The updated Nix launcher must be built and activated before
+`--no-sandbox` supplies the new marker. Reloading the extension alone is insufficient.
 
 The rendered section is limited to 1,400 UTF-8 bytes, including its tags. Redundant
 descendant grants collapse into their existing parent grant, and omitted entries are

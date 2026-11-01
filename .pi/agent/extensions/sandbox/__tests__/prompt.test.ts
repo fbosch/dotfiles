@@ -20,7 +20,10 @@ function capabilities(): NonoCapabilities {
   };
 }
 
-function harness(load: () => NonoCapabilities | undefined) {
+function harness(
+  load: () => NonoCapabilities | undefined,
+  environment: () => NodeJS.ProcessEnv = () => ({}),
+) {
   const handlers = new Map<string, (event?: BeforeAgentStartEvent) => void>();
   registerSandboxGuidance(
     {
@@ -29,6 +32,7 @@ function harness(load: () => NonoCapabilities | undefined) {
       },
     } as unknown as ExtensionAPI,
     load,
+    environment,
   );
   return {
     start: () => handlers.get("session_start")?.(),
@@ -226,6 +230,94 @@ describe("sandbox prompt lifecycle", () => {
     h.start();
     h.apply(next);
     expect(next.systemPromptOptions.sections.sandbox_context).toBe("");
+  });
+
+  test.each([userStartEvent("resume work"), customStartEvent()])(
+    "replaces earlier sandbox context for an explicit raw launch on $messageType starts",
+    (event) => {
+      event.systemPromptOptions.sections.sandbox_context = "Old sandbox restrictions.";
+      event.systemPromptOptions.sections.other = "Keep this.";
+      const h = harness(
+        () => undefined,
+        () => ({ PI_NONO_MODE: "disabled" }),
+      );
+      h.start();
+      h.apply(event);
+      const notice = event.systemPromptOptions.sections.sandbox_context;
+      expect(notice).toContain("explicitly disabled Nono sandboxing for this launch");
+      expect(notice).toContain("replaces earlier launch-specific sandbox guidance");
+      expect(notice).toContain(
+        "OS permissions, tool approvals, and task authorization still apply",
+      );
+      expect(notice).toContain("Restrictions inherited from a parent process may still apply");
+      expect(event.systemPromptOptions.sections.other).toBe("Keep this.");
+      expect(event.systemPromptOptions.forceSystemPrompt).toBeUndefined();
+      h.apply(event);
+      expect(event.systemPromptOptions.sections.sandbox_context).toBe(notice);
+    },
+  );
+
+  test("fresh raw-mode instance informs a resumed conversation without an existing section", () => {
+    const h = harness(
+      () => undefined,
+      () => ({ PI_NONO_MODE: "disabled" }),
+    );
+    const event = userStartEvent("continue");
+    h.start();
+    h.apply(event);
+    expect(event.systemPromptOptions.sections.sandbox_context).toContain("do not carry forward");
+  });
+
+  test("refresh replaces raw guidance with current grants and clears it for an unknown launch", () => {
+    let value: NonoCapabilities | undefined;
+    let env: NodeJS.ProcessEnv = { PI_NONO_MODE: "disabled" };
+    const h = harness(
+      () => value,
+      () => env,
+    );
+    const event = userStartEvent("continue");
+    h.start();
+    h.apply(event);
+    expect(event.systemPromptOptions.sections.sandbox_context).toContain("explicitly disabled");
+    value = capabilities();
+    env = { PI_NONO_MODE: "sandboxed", NONO_CAP_FILE: "/synthetic/caps.json" };
+    h.start();
+    h.apply(event);
+    expect(event.systemPromptOptions.sections.sandbox_context).toBe(formatSandboxGuidance(value));
+    value = undefined;
+    env = {};
+    h.start();
+    h.apply(event);
+    expect(event.systemPromptOptions.sections.sandbox_context).toBe("");
+  });
+
+  test("valid inherited capability metadata takes precedence over the disabled marker", () => {
+    const value = capabilities();
+    const h = harness(
+      () => value,
+      () => ({
+        PI_NONO_MODE: "disabled",
+        NONO_CAP_FILE: "/synthetic/inherited.json",
+      }),
+    );
+    const event = userStartEvent("continue");
+    h.apply(event);
+    expect(event.systemPromptOptions.sections.sandbox_context).toBe(formatSandboxGuidance(value));
+  });
+
+  test.each([
+    {},
+    { PI_NONO_MODE: "sandboxed" },
+    { PI_NONO_MODE: "unknown" },
+    { PI_NONO_MODE: "disabled", NONO_CAP_FILE: "/synthetic/unreadable-or-invalid.json" },
+  ])("does not infer disabled confinement from ambiguous metadata: %j", (env) => {
+    const h = harness(
+      () => undefined,
+      () => env,
+    );
+    const event = userStartEvent("work");
+    h.apply(event);
+    expect(event.systemPromptOptions.sections).toEqual({});
   });
 
   test("missing or invalid metadata is silent and costs no prompt section", () => {

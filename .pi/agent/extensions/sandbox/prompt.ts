@@ -8,6 +8,10 @@ import {
 } from "../../lib/nono-capabilities";
 
 const SECTION = "sandbox_context";
+const DISABLED_GUIDANCE =
+  "The launcher explicitly disabled Nono sandboxing for this launch. " +
+  "This replaces earlier launch-specific sandbox guidance in the conversation; do not carry forward its Nono grants or denials. " +
+  "OS permissions, tool approvals, and task authorization still apply. Restrictions inherited from a parent process may still apply.";
 // shortcut: no provider tokenizer is installed. Limit UTF-8 bytes, then report a
 // chars/4 token estimate, not an exact provider token count. Revisit for token-exact budgets.
 const MAX_BYTES = 1400;
@@ -104,6 +108,7 @@ export function formatSandboxGuidance(capabilities: NonoCapabilities, home = hom
 export function registerSandboxGuidance(
   pi: ExtensionAPI,
   loadCapabilities: () => NonoCapabilities | undefined = readNonoCapabilities,
+  environment: () => NodeJS.ProcessEnv = () => process.env,
 ): void {
   let guidance: string | undefined;
   pi.on("session_start", () => {
@@ -112,7 +117,13 @@ export function registerSandboxGuidance(
   pi.on("before_agent_start", (event) => {
     if (guidance === undefined) {
       const capabilities = loadCapabilities();
-      guidance = capabilities ? formatSandboxGuidance(capabilities) : "";
+      const env = environment();
+      // Missing metadata alone is not evidence of raw mode; inherited confinement may survive --no-sandbox.
+      guidance = capabilities
+        ? formatSandboxGuidance(capabilities)
+        : env.PI_NONO_MODE === "disabled" && !env.NONO_CAP_FILE
+          ? DISABLED_GUIDANCE
+          : "";
     }
     // A named structured section replaces itself instead of growing on every run.
     // Preserve other extensions' sections and Pi's normal prompt/transcript handling.
