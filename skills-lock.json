@@ -57,7 +57,7 @@
       "source": "edonadei/caliper",
       "sourceType": "github",
       "skillPath": "skills/evaluate-skill/SKILL.md",
-      "computedHash": "e7ea1d33fb525012dc7eaf4210f56abf4160a8afe4fb8dafab915e411faa6993"
+      "computedHash": "9f5f1bffcbaa1feb9cfa9c64b63096da2e7ea2dff117c25a96eda2b36d75ec34"
     },
     "ghgrab": {
       "source": "akillness/jeo-skills",
@@ -81,7 +81,7 @@
       "source": "edonadei/caliper",
       "sourceType": "github",
       "skillPath": "skills/grill-skill/SKILL.md",
-      "computedHash": "8713b78f358d6130f2f6a242383f40b68d51b95fe23ae0e5709dac878b320e5a"
+      "computedHash": "e59d1d5ad7429b4c4c7386825321c380c5d2ec7ce550ec97fb96397fb53cf670"
     },
     "grill-with-docs": {
       "source": "mattpocock/skills",

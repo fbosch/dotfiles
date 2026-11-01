@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
   existsSync,
   mkdirSync,
@@ -9,12 +9,13 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs";
-import { basename, dirname, join } from "node:path";
+import { basename, dirname, isAbsolute, join, resolve } from "node:path";
 
 const LOCK_ATTEMPTS = 10;
 const LOCK_RETRY_DELAY_MS = 20;
 const STALE_LOCK_MS = 10_000;
 const sleepBuffer = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
+const RUNTIME_LOCK_DIRECTORY = process.env.PI_LOCKFILE_DIR;
 
 export function readLockedJsonFile(path: string): unknown {
   if (existsSync(path) === false) return undefined;
@@ -50,8 +51,13 @@ function withFileLock<T>(path: string, operation: (assertOwned: () => void) => T
 }
 
 function acquireFileLock(path: string): AcquiredLock {
-  // Match Pi's proper-lockfile protocol so extension writes serialize with core settings updates.
-  const lockPath = `${path}.lock`;
+  // Match the installed Pi runtime: read-only configuration uses a shared, writable lock namespace.
+  if (RUNTIME_LOCK_DIRECTORY && !isAbsolute(RUNTIME_LOCK_DIRECTORY)) {
+    throw new Error("PI_LOCKFILE_DIR must be absolute");
+  }
+  const lockPath = RUNTIME_LOCK_DIRECTORY
+    ? join(RUNTIME_LOCK_DIRECTORY, `${createHash("sha256").update(`${resolve(path)}.lock`).digest("hex")}.lock`)
+    : `${path}.lock`;
 
   for (let attempt = 1; attempt <= LOCK_ATTEMPTS; attempt += 1) {
     try {

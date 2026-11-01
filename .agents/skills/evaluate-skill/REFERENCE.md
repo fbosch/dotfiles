@@ -98,7 +98,8 @@ checks before its first attempt):
   `judge:` block fails validation and points at `--model` / `--judge-model`.
   The old singular `skill: path:` key is rejected too; use `skills:`.
 - **Identity is the frontmatter `name:`**, not the filename or directory.
-  `activates:` names must match it.
+  `activates:` names must match it. Two declared skills can't share a name,
+  even one that differs only in case.
 - **Declared skills win; the user's skills compete.** By default a run also
   installs the user's own skills (see User customizations), and one that fires
   counts as an extra activation, failing an exact `activates:` match. Isolate
@@ -162,12 +163,16 @@ caliper run spec.eval.yaml --judge-model claude-code:claude-haiku-4-5-20251001
 | `hermes` | Hermes Agent CLI, authenticated | stdio and remote with header auth |
 
 Every backend is a CLI agent using its own auth; for API billing, configure the
-CLI with an API key. Remote OAuth MCP isn't supported on `codex` or `hermes`. An
+CLI with an API key. To run `codex` on a ChatGPT plan, run `caliper login
+chatgpt` once: attempts and the judge then get a short-lived token instead of a
+copy of `~/.codex/auth.json`, which parallel attempts can break by refreshing. Remote OAuth MCP isn't supported on `codex` or `hermes`. An
 `mcp:` spec on a backend that can't honour it is a hard error.
 
 `hermes` is stateful, so Caliper strips it to a neutral agent per attempt:
 isolated `HERMES_HOME`, no persona or memory, `--ignore-rules`, and only the
-declared skills installed.
+declared skills installed. On Windows that home is a temporary standalone
+profile under `%LOCALAPPDATA%\hermes`, and Git for Windows' `sh` must be on
+`PATH`.
 
 An MCP tool call appears in the transcript as `mcp__<server>__<tool>` on
 `claude-code` and `codex`, and `mcp_<server>_<tool>` on `hermes`. If the spec
@@ -196,8 +201,12 @@ itself, merged with what the spec declares:
 |---|---|
 | `claude-code` | `~/.claude/skills`, `CLAUDE.md`, `settings.json`, enabled user-scope plugins, `~/.claude.json` MCP servers and claude.ai connectors |
 | `codex` | `~/.codex/skills`, `AGENTS.md` / `AGENTS.override.md`, plugins, settings, `~/.codex/config.toml` MCP servers and ChatGPT apps (its top-level model pin is stripped) |
-| `hermes` | `~/.hermes/skills`, settings, `~/.hermes/config.yaml` MCP servers (still `--ignore-rules`, no persona or memory) |
+| `hermes` | `~/.hermes/skills`, settings, `~/.hermes/config.yaml` MCP servers (`%LOCALAPPDATA%\hermes` on Windows; still `--ignore-rules`, no persona or memory) |
 | `pi` | nothing |
+
+The paths are the defaults. When the CLI's own config-home variable is set
+(`CLAUDE_CONFIG_DIR`, `CODEX_HOME`, `PI_CODING_AGENT_DIR`, `HERMES_HOME`),
+attempts read the user layer and the login from there, as the judge does.
 
 A declared skill or server wins a name clash, even when ablated, and `--ablate`
 can't name the user's own. User skills count as activations: one that fires
@@ -287,7 +296,7 @@ repo, so `caliper report <spec-name>` finds a run from anywhere in the project.
 Each run records every file each declared skill installed, the engine used
 for the skill and the judge and each one's CLI version, what was ablated, and per attempt the outcome, token
 usage, wall time, judge time, and the transcript. It also keeps the judge's input
-for debugging a verdict: each task's `expect`, the judge prompt version, and any
+for debugging a verdict: each task's `expect` and `prompt`, the judge prompt version, and any
 assertion script the judge wrote (`autorater_script`). `caliper report --verbose`
 shows the `expect` and the script; the default report does not.
 

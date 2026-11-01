@@ -1,3 +1,5 @@
+import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import type {
   AuthOperationOptions,
   AuthResult,
@@ -5,7 +7,7 @@ import type {
   CredentialInfo,
   CredentialStore,
 } from "@earendil-works/pi-ai";
-import { getAgentDir, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { getAgentDir, getPackageDir, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { isRecord } from "../../shared/is-record";
 import { readBoundedJson } from "../../shared/read-bounded-json";
 import { consumeCredentialLogin } from "../credential-login";
@@ -28,11 +30,10 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const REFRESH_TIMEOUT_MS = 20_000;
 const UNKNOWN_USAGE_COOLDOWN_MS = 60_000;
 const FORCE_REFRESH_VALIDITY_MS = 10 * 365 * 86_400_000;
-// shortcut: AuthStorage is not publicly exported, so use Pi's pinned implementation
-// until coding-agent exposes a supported file-backed CredentialStore constructor.
-const AUTH_STORAGE_MODULE_URL = new URL(
-  "../../../node_modules/@earendil-works/pi-coding-agent/dist/core/auth-storage.js",
-  import.meta.url,
+// shortcut: AuthStorage is private; use the loaded runtime, including its sandbox lock fixes,
+// until Pi exposes a public file-backed CredentialStore constructor. Never load the development SDK here.
+const AUTH_STORAGE_MODULE_URL = pathToFileURL(
+  join(getPackageDir(), "dist/core/auth-storage.js"),
 ).href;
 
 type AuthRuntime = {
