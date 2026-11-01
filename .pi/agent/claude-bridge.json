@@ -1,3 +1,6 @@
 {
+  "provider": {
+    "pathToClaudeCodeExecutable": "/run/current-system/sw/bin/claude"
+  },
   "startupNoticeShown": "2026-10-24"
 }

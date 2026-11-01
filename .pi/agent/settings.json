@@ -54,7 +54,7 @@
   "quickReplies": {
     "enabled": true
   },
-  "hideThinkingBlock": true,
+  "hideThinkingBlock": false,
   "showFileChanges": false,
   "tuiMode": "fullscreen",
   "selectorOverlayWidth": 72,
@@ -166,8 +166,8 @@
   },
   "packages": [
     "npm:pi-hashline-edit-pro@7.1.1",
-    "npm:pi-codex-goal@latest",
-    "npm:pi-context-view@0.8.1",
+    "npm:pi-codex-goal@0.7.0",
+    "npm:pi-context-view@0.8.2",
     "npm:@ff-labs/pi-fff@0.11.0",
     "npm:pi-web-access@0.46.0",
     "npm:pi-lens@4.4.7",
@@ -219,6 +219,7 @@
     "{\"source\":\"npm:pi-web-access@0.45.0\",\"scope\":\"user\"}": "0.45.0",
     "{\"source\":\"npm:pi-lens@4.4.6\",\"scope\":\"user\"}": "4.4.6",
     "{\"source\":\"npm:pi-web-access@0.46.0\",\"scope\":\"user\"}": "0.46.0",
-    "{\"source\":\"npm:pi-lens@4.4.7\",\"scope\":\"user\"}": "4.4.7"
+    "{\"source\":\"npm:pi-lens@4.4.7\",\"scope\":\"user\"}": "4.4.7",
+    "{\"source\":\"npm:pi-codex-goal@0.7.0\",\"scope\":\"user\"}": "0.7.0"
   }
 }
