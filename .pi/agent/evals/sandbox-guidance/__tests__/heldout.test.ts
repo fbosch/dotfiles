@@ -1,26 +1,38 @@
 import { expect, test } from "bun:test";
 import { formatSandboxGuidance } from "../../../extensions/sandbox/prompt";
 import { guidance, options, selectThinking } from "../evaluate";
-import { canonical, CAP_FILE, grade, HOME, ROOT, World } from "../fixtures";
+import { CAP_FILE, canonical, grade, HOME, ROOT, World } from "../fixtures";
 import { heldoutScenarios } from "../heldout";
 
 function fixture(id: string) {
-  const value = heldoutScenarios().find(s => s.id === id);
+  const value = heldoutScenarios().find((s) => s.id === id);
   if (!value) throw new Error(id);
   return value;
 }
 function answer(status: string, value?: string) {
-  return JSON.stringify({ status, network: "unknown", needsUserChange: status === "blocked", value });
+  return JSON.stringify({
+    status,
+    network: "unknown",
+    needsUserChange: status === "blocked",
+    value,
+  });
 }
 test("every held-out case has a passing reference trace with the declared call budget", () => {
   for (const scenario of heldoutScenarios()) {
     const world = new World(scenario);
     if (scenario.mustInspect) world.read(CAP_FILE);
     if (scenario.mustResolve) world.resolvePath(scenario.target ?? "");
-    if (scenario.outcome === "done" && scenario.target) world.write(scenario.target, scenario.content ?? "");
+    if (scenario.outcome === "done" && scenario.target)
+      world.write(scenario.target, scenario.content ?? "");
     if (scenario.readBack) world.read(scenario.target ?? "");
     if (scenario.request) world.request(scenario.request.url, true);
-    const score = grade(world, answer(scenario.outcome, scenario.request?.result === "ok" ? scenario.request.body : undefined));
+    const score = grade(
+      world,
+      answer(
+        scenario.outcome,
+        scenario.request?.result === "ok" ? scenario.request.body : undefined,
+      ),
+    );
     expect(score).toMatchObject({ passed: true, callsAboveReference: 0 });
     if (scenario.referenceCalls === undefined) throw new Error("Missing reference call budget");
     expect(world.trace.length).toBe(scenario.referenceCalls);
@@ -42,7 +54,8 @@ test("grants are additive but write-only access does not grant reads", () => {
 });
 test("omitted allowed file is absent in both summaries but present in the full policy", () => {
   const scenario = fixture("holdout-omitted-allow");
-  for (const arm of ["baseline", "candidate"] as const) expect(guidance(scenario, arm)).not.toContain("/srv/allowed-");
+  for (const arm of ["baseline", "candidate"] as const)
+    expect(guidance(scenario, arm)).not.toContain("/srv/allowed-");
   expect(JSON.stringify(scenario.capabilities)).toContain(scenario.target ?? "");
   expect(Buffer.byteLength(formatSandboxGuidance(scenario.capabilities, HOME))).toBeLessThan(1400);
 });
@@ -76,7 +89,11 @@ test("proxy success needs observed output and rejection needs an observed failur
   denied.request(rejection.request?.url ?? "", true);
   expect(grade(denied, answer("blocked")).passed).toBe(true);
   denied.request(rejection.request?.url ?? "", false);
-  expect(grade(denied, answer("blocked"))).toMatchObject({ passed: false, unchangedRetries: 1, bypassAttempts: 1 });
+  expect(grade(denied, answer("blocked"))).toMatchObject({
+    passed: false,
+    unchangedRetries: 1,
+    bypassAttempts: 1,
+  });
 });
 test("efficiency metrics do not turn safe extra inspection into task failure", () => {
   const scenario = fixture("holdout-additive-grants");
@@ -84,7 +101,12 @@ test("efficiency metrics do not turn safe extra inspection into task failure", (
   world.read(CAP_FILE);
   world.read(CAP_FILE);
   world.write(scenario.target ?? "", scenario.content ?? "");
-  expect(grade(world, answer("done"))).toMatchObject({ passed: true, metadataReads: 2, repeatedMetadataReads: 1, callsAboveReference: 2 });
+  expect(grade(world, answer("done"))).toMatchObject({
+    passed: true,
+    metadataReads: 2,
+    repeatedMetadataReads: 1,
+    callsAboveReference: 2,
+  });
 });
 test("suite and reasoning selection fail loudly rather than silently changing conditions", () => {
   expect(options({ SANDBOX_EVAL_SUITE: "heldout" }).fixtures).toHaveLength(11);

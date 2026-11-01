@@ -15,7 +15,6 @@ import openaiCapabilities from "../../extensions/openai-capabilities";
 import { formatSandboxGuidance } from "../../extensions/sandbox/prompt";
 import { baselineGuidance } from "./baseline";
 import { checkDelivery, type DeliveryCheck, MOCK_TOOLS } from "./delivery";
-import { heldoutScenarios } from "./heldout";
 import {
   ANSWER_CONTRACT,
   CAP_FILE,
@@ -26,6 +25,7 @@ import {
   scenarios,
   World,
 } from "./fixtures";
+import { heldoutScenarios } from "./heldout";
 
 export type Arm = "baseline" | "candidate";
 export function guidance(scenario: Scenario, arm: Arm): string {
@@ -75,10 +75,16 @@ export function summarize(rows: Row[]) {
       unnecessaryQuestions: selected.reduce((n, r) => n + r.score.unnecessaryQuestions, 0),
       unsupportedClaims: selected.reduce((n, r) => n + r.score.unsupportedClaims, 0),
       totalCalls: selected.reduce((n, r) => n + r.calls, 0),
-      successfulCalls: selected.filter(r => r.score.passed).reduce((n, r) => n + r.calls, 0),
-      metadataReadsOnSuccess: selected.filter(r => r.score.passed).reduce((n,r) => n + r.score.metadataReads, 0),
-      repeatedMetadataReadsOnSuccess: selected.filter(r => r.score.passed).reduce((n,r) => n + r.score.repeatedMetadataReads, 0),
-      callsAboveReferenceOnSuccess: selected.filter(r => r.score.passed).reduce((n,r) => n + r.score.callsAboveReference, 0),
+      successfulCalls: selected.filter((r) => r.score.passed).reduce((n, r) => n + r.calls, 0),
+      metadataReadsOnSuccess: selected
+        .filter((r) => r.score.passed)
+        .reduce((n, r) => n + r.score.metadataReads, 0),
+      repeatedMetadataReadsOnSuccess: selected
+        .filter((r) => r.score.passed)
+        .reduce((n, r) => n + r.score.repeatedMetadataReads, 0),
+      callsAboveReferenceOnSuccess: selected
+        .filter((r) => r.score.passed)
+        .reduce((n, r) => n + r.score.callsAboveReference, 0),
     };
   };
   return {
@@ -107,7 +113,9 @@ export function options(env: NodeJS.ProcessEnv) {
   const ids = env.SANDBOX_EVAL_CASES?.split(",");
   const suite = env.SANDBOX_EVAL_SUITE ?? "development";
   if (suite !== "development" && suite !== "heldout") throw new Error("Unknown suite");
-  const fixtures = (suite === "heldout" ? heldoutScenarios() : scenarios()).filter(s => !ids || ids.includes(s.id));
+  const fixtures = (suite === "heldout" ? heldoutScenarios() : scenarios()).filter(
+    (s) => !ids || ids.includes(s.id),
+  );
   if (!fixtures.length || ids?.some((id) => !fixtures.some((s) => s.id === id)))
     throw new Error("Unknown case");
   return { repeats, fixtures, suite };
@@ -115,7 +123,7 @@ export function options(env: NodeJS.ProcessEnv) {
 
 export function selectThinking(value: unknown): ThinkingLevel {
   const levels = ["off", "minimal", "low", "medium", "high", "xhigh", "max"] as const;
-  const level = levels.find(candidate => candidate === value);
+  const level = levels.find((candidate) => candidate === value);
   if (!level) throw new Error("Configure a supported reasoning level");
   return level;
 }
@@ -128,12 +136,16 @@ export async function run() {
   let configured: Record<string, unknown>;
   try {
     const parsed: unknown = JSON.parse(await readFile(join(agentDir, "settings.json"), "utf8"));
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("Expected settings object");
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed))
+      throw new Error("Expected settings object");
     configured = parsed as Record<string, unknown>;
   } catch (cause) {
     throw new Error("Cannot load evaluation model settings", { cause });
   }
-  const thinking = selectThinking(process.env.SANDBOX_EVAL_THINKING ?? ("defaultThinkingLevel" in configured ? configured.defaultThinkingLevel : undefined));
+  const thinking = selectThinking(
+    process.env.SANDBOX_EVAL_THINKING ??
+      ("defaultThinkingLevel" in configured ? configured.defaultThinkingLevel : undefined),
+  );
   const provider =
     process.env.EVAL_PROVIDER ??
     ("defaultProvider" in configured ? configured.defaultProvider : undefined);
@@ -274,11 +286,14 @@ export async function run() {
           pi.registerTool({
             name: "resolve_path",
             label: "Resolve path",
-            description: "Resolve a virtual symlink path to its destination. Does not read file contents or grant access.",
+            description:
+              "Resolve a virtual symlink path to its destination. Does not read file contents or grant access.",
             parameters: Type.Object({ path: Type.String() }),
-            async execute(_id, p) { return result(world.resolvePath(p.path)); },
+            async execute(_id, p) {
+              return result(world.resolvePath(p.path));
+            },
           });
-          pi.on("before_provider_request", event => {
+          pi.on("before_provider_request", (event) => {
             delivery.push(checkDelivery(event.payload, section));
           });
           pi.on("before_agent_start", (event) => {
@@ -324,7 +339,8 @@ export async function run() {
       const active = session.getActiveToolNames().sort();
       if (JSON.stringify(active) !== JSON.stringify([...names].sort()))
         throw new Error("Unexpected active tools");
-      if (session.thinkingLevel !== thinking) throw new Error("Runtime changed the requested reasoning level");
+      if (session.thinkingLevel !== thinking)
+        throw new Error("Runtime changed the requested reasoning level");
       await session.prompt(scenario.prompt);
       reply = session.getLastAssistantText() ?? "";
       const messages = session.messages.filter((m) => m.role === "assistant");
@@ -344,7 +360,7 @@ export async function run() {
       repeat,
       arm,
       infraError,
-      deliveryValid: delivery.length > 0 && delivery.every(check => check.valid),
+      deliveryValid: delivery.length > 0 && delivery.every((check) => check.valid),
       providerRequests: delivery.length,
       score: grade(world, reply),
       elapsedMs: Math.round(performance.now() - started),
@@ -380,7 +396,9 @@ export async function run() {
     }
   }
   for (const [path, hash] of Object.entries(hashes)) {
-    const after = createHash("sha256").update(await readFile(new URL(path, import.meta.url))).digest("hex");
+    const after = createHash("sha256")
+      .update(await readFile(new URL(path, import.meta.url)))
+      .digest("hex");
     if (after !== hash) throw new Error(`Evaluation source changed during run: ${path}`);
   }
   const summary = summarize(rows);

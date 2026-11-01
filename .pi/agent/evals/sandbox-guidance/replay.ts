@@ -1,10 +1,10 @@
 import { createHash } from "node:crypto";
 import { readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { type Row, summarize } from "./evaluate";
 import { deliveryVerified } from "./delivery";
-import { heldoutScenarios } from "./heldout";
+import { type Row, summarize } from "./evaluate";
 import { grade, scenarios, type Trace, World } from "./fixtures";
+import { heldoutScenarios } from "./heldout";
 
 export type EvidenceDocument = Record<string, unknown> | unknown[];
 
@@ -12,7 +12,7 @@ export function parseEvidence(text: string, source: string): EvidenceDocument {
   try {
     const value: unknown = JSON.parse(text);
     if (!value || typeof value !== "object") throw new Error("Expected evidence object or array");
-    return Array.isArray(value) ? value : value as Record<string, unknown>;
+    return Array.isArray(value) ? value : (value as Record<string, unknown>);
   } catch (cause) {
     throw new Error(`Invalid JSON in evaluation evidence: ${source}`, { cause });
   }
