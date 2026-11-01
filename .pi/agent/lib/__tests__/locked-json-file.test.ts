@@ -34,7 +34,12 @@ function settingsFile(): string {
 function settingsLockPath(path: string): string {
   const directory = process.env.PI_LOCKFILE_DIR;
   return directory
-    ? join(directory, `${createHash("sha256").update(`${resolve(path)}.lock`).digest("hex")}.lock`)
+    ? join(
+        directory,
+        `${createHash("sha256")
+          .update(`${resolve(path)}.lock`)
+          .digest("hex")}.lock`,
+      )
     : `${path}.lock`;
 }
 describe("locked JSON file", () => {

@@ -12,12 +12,16 @@ test("extension settings readers share core runtime locks without needing writab
   mkdirSync(agent);
   mkdirSync(locks);
   const settings = join(agent, "settings.json");
-  writeFileSync(settings, JSON.stringify({
-    showFileChanges: false,
-    quickReplies: { enabled: false },
-    autoSessionTitle: { model: "fixture/model", thinkingLevel: "minimal" },
-    references: { fixture: { path: root, description: "Local fixture" } },
-  }), { mode: 0o400 });
+  writeFileSync(
+    settings,
+    JSON.stringify({
+      showFileChanges: false,
+      quickReplies: { enabled: false },
+      autoSessionTitle: { model: "fixture/model", thinkingLevel: "minimal" },
+      references: { fixture: { path: root, description: "Local fixture" } },
+    }),
+    { mode: 0o400 },
+  );
   chmodSync(agent, 0o500);
   try {
     const moduleUrl = (path: string) => new URL(path, import.meta.url).href;

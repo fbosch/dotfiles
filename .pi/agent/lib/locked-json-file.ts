@@ -56,7 +56,12 @@ function acquireFileLock(path: string): AcquiredLock {
     throw new Error("PI_LOCKFILE_DIR must be absolute");
   }
   const lockPath = RUNTIME_LOCK_DIRECTORY
-    ? join(RUNTIME_LOCK_DIRECTORY, `${createHash("sha256").update(`${resolve(path)}.lock`).digest("hex")}.lock`)
+    ? join(
+        RUNTIME_LOCK_DIRECTORY,
+        `${createHash("sha256")
+          .update(`${resolve(path)}.lock`)
+          .digest("hex")}.lock`,
+      )
     : `${path}.lock`;
 
   for (let attempt = 1; attempt <= LOCK_ATTEMPTS; attempt += 1) {

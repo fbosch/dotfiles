@@ -5,7 +5,7 @@
       "source": "vercel-labs/agent-browser",
       "sourceType": "github",
       "skillPath": "skills/agent-browser/SKILL.md",
-      "computedHash": "80161e6836b3b40f4e83730a290deb40ac14d877d38c97ad5f6d71be37ce74c3"
+      "computedHash": "79add54dd6de82a262a88c94744d7decde000159c1d7f67c78eb9d4e523d54bb"
     },
     "ascii-visualizer": {
       "source": "./.agents/skills",
@@ -39,7 +39,7 @@
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/codebase-design/SKILL.md",
-      "computedHash": "b2888e4f4e8c0af3bfd557575a64b905c44e6248c3101d72077816882b3a92b9"
+      "computedHash": "aa11a96c08451f4ff86052d5da94004a8c97bb4ea41b2ac8a4300c189f66c89c"
     },
     "diagnosing-bugs": {
       "source": "mattpocock/skills",
@@ -93,7 +93,7 @@
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/productivity/grilling/SKILL.md",
-      "computedHash": "ef1641a2047b71b60f1942cd35efb47d3afc9d584dff5a0b01f8c7db923aaa08"
+      "computedHash": "e40cc1d348f6d935e28f1e24474302d7368f0a400429271a43b35fe154891dc5"
     },
     "herdr": {
       "source": "herdrdev/herdr",
@@ -111,7 +111,7 @@
       "source": "mattpocock/skills",
       "sourceType": "github",
       "skillPath": "skills/engineering/improve-codebase-architecture/SKILL.md",
-      "computedHash": "ac2c94885f34ff8492dc12aa4543182f661f32ea1722b8d6b6c2c7045af33ae3"
+      "computedHash": "f768cb44209e0d30e3449b8f95ea3dc8293093f73cfe02127d530db43412cf76"
     },
     "linear": {
       "source": "openai/skills",
@@ -164,7 +164,7 @@
       "source": "typesafe-ai/skills",
       "sourceType": "github",
       "skillPath": "skills/typesafe-ai/SKILL.md",
-      "computedHash": "9cd84c5e535dec8dec59917c110f9c00b4a61faadb86b432ec7e41051170af12"
+      "computedHash": "15e077333436b1e63e526c7c7559202816f4848dabefd3aa3d4c91988fd181b5"
     },
     "unslop": {
       "source": "cursor/plugins",
@@ -182,13 +182,13 @@
       "source": "max-sixty/worktrunk",
       "sourceType": "github",
       "skillPath": "skills/worktrunk/SKILL.md",
-      "computedHash": "9e50a03f6f370dcdd658276736296d32c4261e08037ec5f9c2e05ab0c0bab899"
+      "computedHash": "c903422179c2c2aec3288e7c9088d9bda1b81d4a575e0bb5c9fff485bc86f3a6"
     },
     "wt-switch-create": {
       "source": "max-sixty/worktrunk",
       "sourceType": "github",
       "skillPath": "skills/wt-switch-create/SKILL.md",
-      "computedHash": "ae03a4041c37bab00bd65f93d42bf06689c93fd8d916c6600a9aff1c5ed245a7"
+      "computedHash": "f91343158a8eae0d9043b174e1f2074570295ce227e4a417ae1562ead327ef0e"
     }
   }
 }
