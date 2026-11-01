@@ -223,7 +223,6 @@ export function getDumbbellChartLayout(
       details.maxHeightCells,
       cells.heightPx,
       naturalFixedHeightPx,
-      undefined,
     );
     const heightPx = Math.ceil(plotY + plotHeightPx + fontSizePx * (details.xLabel ? 6.5 : 5));
     return finalizeChartLayout(

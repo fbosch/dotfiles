@@ -169,7 +169,6 @@ export function getWaterfallChartLayout(
     undefined,
     cells.heightPx,
     baseFixedHeightPx,
-    undefined,
   );
   const baseNaturalHeightPx = baseFixedHeightPx + baseDisplayPlotHeightPx;
   const capHeightPx =
@@ -191,7 +190,6 @@ export function getWaterfallChartLayout(
     details.maxHeightCells,
     cells.heightPx,
     fixedHeightPx,
-    undefined,
   );
   const heightPx = Math.ceil(plotY + plotHeightPx + (fixedHeightPx - plotY));
   return finalizeChartLayout(

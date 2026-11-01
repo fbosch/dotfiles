@@ -20,7 +20,6 @@ import {
   DEFAULT_IMAGE_WIDTH_CELLS,
   escapeXml,
   getChartColors,
-  MAX_CHART_HEIGHT_CELLS,
   MAX_FONT_SIZE_PX,
   MIN_FONT_SIZE_PX,
   RASTER_DENSITY,
@@ -136,20 +135,13 @@ export function getBezierChartLayout(
   // A compact square in physical pixels, not terminal cells; labels reserve only their own space.
   const naturalPlotWidthPx = Math.max(
     1,
-    Math.floor(
-      Math.min(
-        imageWidthCells * cells.widthPx - plotX - padding,
-        10 * cells.heightPx,
-        MAX_CHART_HEIGHT_CELLS * cells.heightPx - plotY - bottom,
-      ),
-    ),
+    Math.floor(Math.min(imageWidthCells * cells.widthPx - plotX - padding, 10 * cells.heightPx)),
   );
   const plotWidthPx = clampChartPlotHeightPx(
     naturalPlotWidthPx,
     maxHeightCells,
     cells.heightPx,
     plotY + bottom,
-    MAX_CHART_HEIGHT_CELLS,
   );
   const plotHeightPx = plotWidthPx;
   const widthPx = plotX + plotWidthPx + padding;

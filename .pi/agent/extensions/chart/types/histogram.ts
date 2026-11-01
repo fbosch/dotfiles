@@ -28,7 +28,6 @@ import {
   DEFAULT_IMAGE_WIDTH_CELLS,
   escapeXml,
   getChartColors,
-  MAX_CHART_HEIGHT_CELLS,
   MAX_FONT_SIZE_PX,
   MIN_FONT_SIZE_PX,
   RASTER_DENSITY,
@@ -196,16 +195,12 @@ export function getHistogramChartLayout(
   const plotWidthPx = Math.max(1, widthPx - plotX - padding * 3);
   const bottomHeightPx =
     tickFontSizePx + padding * 2 + (hasXLabel ? axisLabelFontSizePx + padding : 0);
-  const naturalPlotHeightPx = Math.max(
-    1,
-    Math.min(cells.heightPx * 8, MAX_CHART_HEIGHT_CELLS * cells.heightPx - plotY - bottomHeightPx),
-  );
+  const naturalPlotHeightPx = Math.max(1, cells.heightPx * 8);
   const plotHeightPx = clampChartPlotHeightPx(
     naturalPlotHeightPx,
     maxHeightCells,
     cells.heightPx,
     plotY + bottomHeightPx,
-    MAX_CHART_HEIGHT_CELLS,
   );
   const heightPx = Math.ceil(plotY + plotHeightPx + bottomHeightPx);
   return finalizeChartLayout(

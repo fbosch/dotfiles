@@ -189,7 +189,6 @@ describe("bezier", () => {
           expect(projected.y).toBeGreaterThanOrEqual(layout.plotY);
           expect(projected.y).toBeLessThanOrEqual(layout.plotY + layout.plotHeightPx);
         }
-        expect(layout.heightCells).toBeLessThanOrEqual(18);
       }
     }
   });

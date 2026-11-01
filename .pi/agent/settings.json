@@ -67,7 +67,7 @@
   },
   "fullscreenExitOutput": "resume-hint",
   "terminal": {
-    "imageWidthCells": 80
+    "imageWidthCells": 120
   },
   "shellPath": "/run/current-system/sw/bin/bash",
   "npmCommand": [

@@ -2,7 +2,7 @@ import type { TSchema } from "typebox";
 import { Value } from "typebox/value";
 import type { NumericFormat } from "../schemas";
 import { MAX_REQUESTED_CHART_HEIGHT_CELLS, MIN_CHART_HEIGHT_CELLS } from "../schemas";
-import { type ChartDetails, type ChartLayout, escapeXml, MAX_CHART_HEIGHT_CELLS } from "../types";
+import { type ChartDetails, type ChartLayout, escapeXml } from "../types";
 
 export const MAX_SVG_ACCESSIBLE_DESCRIPTION_BYTES = 16 * 1024;
 export const ESTIMATED_CHARACTER_WIDTH = 0.58;
@@ -95,16 +95,13 @@ export function isValidChartHeight(value: unknown): value is number {
   );
 }
 
-/** Resolve a requested cell height to pixels, retaining a renderer-specific default cap. */
 export function getChartHeightLimitPx(
   maxHeightCells: number | undefined,
   cellHeightPx: number,
-  defaultMaxHeightCells: number | undefined = MAX_CHART_HEIGHT_CELLS,
 ): number {
-  const heightCells = maxHeightCells ?? defaultMaxHeightCells;
-  return heightCells === undefined
+  return maxHeightCells === undefined
     ? Number.POSITIVE_INFINITY
-    : Math.floor(heightCells * cellHeightPx);
+    : Math.floor(maxHeightCells * cellHeightPx);
 }
 
 export function clampChartPlotHeightPx(
@@ -112,11 +109,10 @@ export function clampChartPlotHeightPx(
   maxHeightCells: number | undefined,
   cellHeightPx: number,
   fixedHeightPx: number,
-  defaultMaxHeightCells: number | undefined = MAX_CHART_HEIGHT_CELLS,
 ): number {
   const maxPlotHeightPx = Math.max(
     1,
-    getChartHeightLimitPx(maxHeightCells, cellHeightPx, defaultMaxHeightCells) - fixedHeightPx,
+    getChartHeightLimitPx(maxHeightCells, cellHeightPx) - fixedHeightPx,
   );
   return Math.min(naturalPlotHeightPx, maxPlotHeightPx);
 }

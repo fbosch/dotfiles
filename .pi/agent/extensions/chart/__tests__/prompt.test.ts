@@ -55,6 +55,11 @@ describe("chart prompt guidance", () => {
     expect(guidance).toContain("timelines");
     expect(guidance).toContain("tool_search");
     expect(guidance).toContain("tool_load");
+    expect(guidance).toContain("Invoke chart_* tools directly in the main thread");
+    expect(guidance).toContain(
+      "Do not invoke chart tools through codemode, wrappers, or subagents",
+    );
+    expect(guidance).toContain("do not display chart images in the conversation");
     expect(guidance).toContain("12 nodes");
     expect(guidance).toContain("32 nodes");
     expect(guidance).toContain("balanced values");
@@ -70,6 +75,9 @@ describe("chart prompt guidance", () => {
     createHandler(["read", "chart_gantt"])(event, tuiContext);
     expect(event.systemPromptOptions.sections?.chart_visuals).toContain(
       "discover one chart_* tool with tool_search",
+    );
+    expect(event.systemPromptOptions.sections?.chart_visuals).toContain(
+      "Invoke chart_* tools directly in the main thread",
     );
     expect(event.systemPromptOptions.sections?.chart_visuals).not.toContain("12 nodes");
     expect(event.systemPromptOptions.sections?.chart_visuals).not.toContain("balanced values");

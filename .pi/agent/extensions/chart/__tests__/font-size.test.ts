@@ -154,7 +154,6 @@ describe("chart font size", () => {
       expect(svg).not.toContain("currentColor");
       expect(svgFontSizes(svg).some((size) => size >= 17)).toBe(true);
     }
-    expect(pieLayout.heightCells).toBeLessThanOrEqual(18);
     expect(barLayout.rowHeightPx).toBeGreaterThan(
       getBarChartLayout(
         dimensions,
@@ -169,7 +168,6 @@ describe("chart font size", () => {
     expect(lineLayout.heightPx).toBeGreaterThan(
       getLineChartLayout(dimensions, 28, true, true, true).heightPx,
     );
-    expect(getPieChartLayout(dimensions, 28, 12, 32).heightCells).toBeLessThanOrEqual(18);
 
     const pngs = await Promise.all(
       svgs.map((svg) => rasterizeSvg(svg, undefined, { fontFamily: "Zenbones Brainy" })),

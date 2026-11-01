@@ -186,8 +186,6 @@ describe("histogram", () => {
     }
     const cells = { widthPx: 16, heightPx: 38 };
     const layout = getHistogramChartLayout(cells, 60, true, true, 14);
-    expect(layout.heightCells).toBeLessThanOrEqual(18);
-    expect(getHistogramChartLayout(cells, 28, true, true, 32).heightCells).toBeLessThanOrEqual(18);
     const extreme = histogramChartRenderer.createDetails(
       parse([1e308, Number.MAX_VALUE], 2),
       settings,

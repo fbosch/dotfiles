@@ -38,7 +38,6 @@ import {
   clampChartPlotHeightPx,
   finalizeChartLayout,
   formatNumeric,
-  getChartHeightLimitPx,
   isRecord,
   isValidChartHeight,
   normalizeBoundedText,
@@ -242,20 +241,12 @@ export function getLineChartLayout(
   const plotWidthPx = Math.max(Math.round(dimensions.widthPx * 10), widthPx - plotX - paddingPx);
   const fixedHeightPx = plotY + tickLabelHeightPx + xLabelHeightPx + paddingPx;
   const naturalPlotHeightPx = Math.round(dimensions.heightPx * 8);
-  const clampedPlotHeightPx = clampChartPlotHeightPx(
+  const plotHeightPx = clampChartPlotHeightPx(
     naturalPlotHeightPx,
     maxHeightCells,
     dimensions.heightPx,
     fixedHeightPx,
   );
-  const plotHeightPx =
-    maxHeightCells === undefined
-      ? clamp(
-          clampedPlotHeightPx,
-          Math.round(dimensions.heightPx * 5),
-          getChartHeightLimitPx(undefined, dimensions.heightPx) - fixedHeightPx,
-        )
-      : clampedPlotHeightPx;
   const heightPx = plotY + plotHeightPx + tickLabelHeightPx + xLabelHeightPx + paddingPx;
   return finalizeChartLayout(
     {

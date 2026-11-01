@@ -195,7 +195,6 @@ export function getTreemapChartLayout(
             details.maxHeightCells,
             cells.heightPx,
             fixedHeightPx,
-            undefined,
           ),
     ),
   );

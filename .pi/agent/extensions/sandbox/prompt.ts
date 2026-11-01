@@ -88,7 +88,7 @@ export function formatSandboxGuidance(capabilities: NonoCapabilities, home = hom
         ? "Use configured proxies; do not disable them or attempt direct connections to bypass restrictions."
         : "Use configured network access; blocking off does not guarantee connectivity.",
       "Grants do not authorize work beyond the user's request. EACCES/EPERM may reflect sandbox rules or ordinary OS permissions. Do not retry unchanged; do not evade restrictions via other tools or services. Report the block and ask for a profile change.",
-      "/sandbox is a user command. Reloading guidance does not change sandbox grants.",
+      "Reloading guidance does not change sandbox grants.",
     ].join("\n");
   const emptyWrites = pathData(writable, 0);
   const emptyReads = pathData(reads, 0);

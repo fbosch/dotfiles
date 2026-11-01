@@ -1213,11 +1213,7 @@ export function getNetworkChartLayout(
   const naturalPlotHeightPx = modest
     ? planNetworkLabels(details, plotWidthPx, fontSizePx).height
     : Math.max(rowHeightPx * 2, maxBreadth * rowHeightPx);
-  const maxHeightPx = getChartHeightLimitPx(
-    details.maxHeightCells,
-    cells.heightPx,
-    Number.POSITIVE_INFINITY,
-  );
+  const maxHeightPx = getChartHeightLimitPx(details.maxHeightCells, cells.heightPx);
   const maxPlotHeightPx = Math.max(1, maxHeightPx - paddingPx * 2 - titleHeightPx);
   // Pack broad layers into the requested bound; node positions remain ordered and inside the viewport.
   const plotHeightPx = Math.min(naturalPlotHeightPx, maxPlotHeightPx);

@@ -18,7 +18,6 @@ import { CHART_COMPONENT_MARKER } from "./component-marker";
 
 export const DEFAULT_IMAGE_WIDTH_CELLS = 60;
 export const FALLBACK_CELL_DIMENSIONS = { widthPx: 9, heightPx: 18 };
-export const MAX_CHART_HEIGHT_CELLS = 18;
 export const RASTER_DENSITY = 1;
 export const DEFAULT_FONT_FAMILY = "sans-serif";
 export const MIN_FONT_SIZE_PX = 8;

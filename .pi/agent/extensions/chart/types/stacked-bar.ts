@@ -220,7 +220,6 @@ export function getStackedBarChartLayout(
             details.maxHeightCells,
             cells.heightPx,
             naturalFixedHeightPx,
-            undefined,
           );
     // One legend entry per line avoids collisions without hiding zero-valued series.
     const heightPx = Math.ceil(

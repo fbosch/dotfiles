@@ -8,6 +8,7 @@ import {
   setCellDimensions,
 } from "@earendil-works/pi-tui";
 import { ChartComponent, rasterizeSvg, renderChartSvg } from "../types";
+import { barChartRenderer } from "../types/bar";
 import { pieChartRenderer } from "../types/pie";
 
 const theme = {
@@ -91,6 +92,56 @@ describe("TUI chart raster resolution", () => {
         expect(placement(rendered)).toEqual(placement(baseline));
         expect(placement(rendered)).toEqual({ columns, rows: layout.heightCells });
         expect(rendered).toHaveLength(layout.heightCells);
+      } finally {
+        setCellDimensions({ widthPx: 9, heightPx: 18 });
+      }
+    },
+  );
+
+  test.each([122, 82])(
+    "renders tall charts at native pixels within a 120-column limit (width %i)",
+    async (width) => {
+      const cells = { widthPx: 9, heightPx: 18 };
+      setCapabilities({ images: "kitty", trueColor: true, hyperlinks: true });
+      setCellDimensions(cells);
+      try {
+        const chart = barChartRenderer.createDetails(
+          barChartRenderer.parseParameters({
+            type: "bar",
+            data: Array.from({ length: 32 }, (_, index) => ({
+              label: `Row ${index + 1}`,
+              value: index + 1,
+            })),
+          }),
+          { imageWidthCells: 120, fontFamily: "sans-serif" },
+        );
+        let png = "";
+        let redraw!: () => void;
+        const ready = new Promise<void>((resolve) => {
+          redraw = resolve;
+        });
+        const component = new ChartComponent(
+          chart,
+          theme,
+          redraw,
+          barChartRenderer,
+          async (svg) => {
+            png = await rasterizeSvg(svg);
+            return png;
+          },
+        );
+        expect(component.render(width)).toEqual([]);
+        await ready;
+        const columns = Math.min(chart.imageWidthCells, width - 2);
+        const layout = barChartRenderer.getLayout(chart, cells, columns);
+        expect(getPngDimensions(png)).toEqual({
+          widthPx: columns * cells.widthPx,
+          heightPx: layout.heightCells * cells.heightPx,
+        });
+        expect(placement(component.render(width))).toEqual({
+          columns,
+          rows: layout.heightCells,
+        });
       } finally {
         setCellDimensions({ widthPx: 9, heightPx: 18 });
       }

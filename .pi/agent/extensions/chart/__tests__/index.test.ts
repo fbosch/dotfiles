@@ -519,9 +519,8 @@ describe("pie chart", () => {
 
     expect(wide).toMatchObject({ widthPx: 540, heightPx: 220, heightCells: 13, stacked: false });
     expect(narrow).toMatchObject({ widthPx: 252, heightPx: 251, heightCells: 14, stacked: true });
-    expect(narrow.heightCells).toBeLessThanOrEqual(18);
     expect(narrow.legendY).toBeGreaterThan(narrow.pieY + narrow.pieDiameterPx);
-    expect(narrowTwelveSlices).toMatchObject({ heightCells: 18, legendColumns: 2, stacked: true });
+    expect(narrowTwelveSlices).toMatchObject({ heightCells: 19, legendColumns: 2, stacked: true });
     expect(narrowTwelveSlices.legendRowHeightPx).toBeGreaterThan(
       narrowTwelveSlices.labelFontSizePx,
     );

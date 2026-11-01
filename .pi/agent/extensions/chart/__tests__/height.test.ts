@@ -397,6 +397,35 @@ function withoutType(input: object): object {
 }
 
 describe("chart height option", () => {
+  test("preserves natural row spacing as bar and tree data grows", () => {
+    const rows = Array.from({ length: 32 }, (_, index) => ({
+      label: `Row ${index + 1}`,
+      value: index + 1,
+    }));
+    const bar = barChartRenderer.createDetails(
+      barChartRenderer.parseParameters({ type: "bar", data: rows }),
+      settings,
+    );
+    const smallBar = barChartRenderer.getLayout({ ...bar, rows: rows.slice(0, 2) }, cells, 60);
+    const largeBar = barChartRenderer.getLayout(bar, cells, 60);
+    expect(largeBar.rowHeightPx).toBe(smallBar.rowHeightPx);
+    expect(largeBar.plotHeightPx).toBe(rows.length * smallBar.rowHeightPx);
+
+    const tree = treeChartRenderer.createDetails(
+      treeChartRenderer.parseParameters({
+        type: "tree",
+        data: rows.map((row, index) => ({
+          id: String(index),
+          parentId: index === 0 ? null : "0",
+          label: row.label,
+        })),
+      }),
+      settings,
+    );
+    const layout = treeChartRenderer.getLayout(tree, cells, 60);
+    const rowHeightPx = Math.max(Math.round(cells.heightPx * 1.25), 14 + 7);
+    expect(layout.plotHeightPx).toBe(rows.length * rowHeightPx);
+  });
   test("uses one bounded option in every public chart schema", () => {
     for (const chart of heightCases) {
       expect(Value.Check(chart.schema, { ...withoutType(chart.input), maxHeightCells: 8 })).toBe(

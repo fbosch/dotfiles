@@ -329,7 +329,6 @@ describe("scatter chart", () => {
     expect(svg).toContain('font-family="Zenbones Brainy"');
     expect(svg).toContain('font-size="16"');
     const narrow = getScatterChartLayout({ widthPx: 9, heightPx: 18 }, 28, true, true, true, 16);
-    expect(narrow.heightCells).toBeLessThanOrEqual(18);
     expect(renderScatterChartSvg(chart, theme, narrow)).toContain('data-point-label="0"');
   });
 

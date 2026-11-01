@@ -31,7 +31,6 @@ import {
   DEFAULT_FONT_FAMILY,
   escapeXml,
   getChartColors,
-  MAX_CHART_HEIGHT_CELLS,
   MAX_FONT_SIZE_PX,
   MIN_FONT_SIZE_PX,
   RASTER_DENSITY,
@@ -210,7 +209,6 @@ export function getTreeChartLayout(
     details.maxHeightCells,
     cells.heightPx,
     paddingPx * 2 + titleHeightPx,
-    MAX_CHART_HEIGHT_CELLS,
   );
   const plotWidthPx = Math.max(1, widthPx - paddingPx * 2);
   const heightPx = paddingPx + titleHeightPx + plotHeightPx + paddingPx;

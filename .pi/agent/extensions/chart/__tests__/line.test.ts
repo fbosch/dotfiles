@@ -148,7 +148,6 @@ describe("line chart", () => {
     const lineDetails = details(input);
     expect(lineDetails.markers).toBe(false);
     const narrow = getLineChartLayout({ widthPx: 9, heightPx: 18 }, 28, true, true, true);
-    expect(narrow.heightCells).toBeLessThanOrEqual(18);
     const svg = renderLineChartSvg(lineDetails, theme, narrow, `A < B & C "quoted" '`);
     expect(svg).toContain("Time &amp; date");
     expect(svg).toContain("Value &gt; 0");
