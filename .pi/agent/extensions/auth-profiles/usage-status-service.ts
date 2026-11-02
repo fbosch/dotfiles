@@ -494,7 +494,10 @@ async function anthropicUsageFor(
   previous: Record<string, CachedAccount>,
   cache: Record<string, CachedAccount>,
 ): Promise<{ windows: UsageWindowStatus[] | undefined; needsRevalidation: boolean }> {
-  let credential: AnthropicCredential | undefined = readAnthropicCredential(profileLabel, agentDir);
+  let credential: AnthropicCredential | undefined = await readAnthropicCredential(
+    profileLabel,
+    agentDir,
+  );
   if (credential === undefined) return { windows: undefined, needsRevalidation: false };
   const key = accountCredentialKey(ANTHROPIC_PROVIDER_ID, credential.identity);
   const cached = previous[key];
@@ -659,7 +662,8 @@ export async function collectUsageStatus(
       }
 
       if (result.kind === "missing") {
-        if (providersIn(profileLabel, agentDir).length > 0) codexlessProfiles.push(profileLabel);
+        if ((await providersIn(profileLabel, agentDir)).length > 0)
+          codexlessProfiles.push(profileLabel);
         return undefined;
       }
       if (result.kind !== "valid") {

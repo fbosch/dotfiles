@@ -1,5 +1,3 @@
-import { join } from "node:path";
-import { pathToFileURL } from "node:url";
 import type {
   AuthOperationOptions,
   AuthResult,
@@ -7,11 +5,11 @@ import type {
   CredentialInfo,
   CredentialStore,
 } from "@earendil-works/pi-ai";
-import { getAgentDir, getPackageDir, ModelRuntime } from "@earendil-works/pi-coding-agent";
+import { getAgentDir, ModelRuntime } from "@earendil-works/pi-coding-agent";
 import { isRecord } from "../../shared/is-record";
 import { readBoundedJson } from "../../shared/read-bounded-json";
 import { consumeCredentialLogin } from "../credential-login";
-import { authPathFor, normalizeName } from "../profile-store";
+import { authPathFor, createCredentialStore, normalizeName } from "../profile-store";
 import {
   type ProfileCredentialReadResult,
   type ProfileProviderAdapter,
@@ -30,11 +28,6 @@ const REQUEST_TIMEOUT_MS = 10_000;
 const REFRESH_TIMEOUT_MS = 20_000;
 const UNKNOWN_USAGE_COOLDOWN_MS = 60_000;
 const FORCE_REFRESH_VALIDITY_MS = 10 * 365 * 86_400_000;
-// shortcut: AuthStorage is private; use the loaded runtime, including its sandbox lock fixes,
-// until Pi exposes a public file-backed CredentialStore constructor. Never load the development SDK here.
-const AUTH_STORAGE_MODULE_URL = pathToFileURL(
-  join(getPackageDir(), "dist/core/auth-storage.js"),
-).href;
 
 type AuthRuntime = {
   getAuth(
@@ -47,10 +40,6 @@ export type OpenAiCodexAdapterDependencies = {
   createCredentialStore?: (path: string) => Promise<CredentialStore>;
   createRuntime?: (credentials: CredentialStore) => Promise<AuthRuntime>;
   now?: () => number;
-};
-
-type AuthStorageModule = {
-  AuthStorage: { create(path?: string): CredentialStore };
 };
 
 function finiteNumber(value: unknown): number | undefined {
@@ -188,10 +177,7 @@ export function guardOpenAiCodexCredential(
   };
 }
 
-export async function createCredentialStore(path: string): Promise<CredentialStore> {
-  const module = (await import(AUTH_STORAGE_MODULE_URL)) as AuthStorageModule;
-  return module.AuthStorage.create(path);
-}
+export { createCredentialStore };
 
 export async function createRuntime(credentials: CredentialStore): Promise<AuthRuntime> {
   return ModelRuntime.create({ credentials, modelsPath: null, refreshOnCreate: false });

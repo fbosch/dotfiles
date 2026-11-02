@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { isRecord } from "../../shared/is-record";
 import { readBoundedJson } from "../../shared/read-bounded-json";
-import { authPathFor, DEFAULT_PROFILE, readJsonFile } from "../profile-store";
+import { authPathFor, DEFAULT_PROFILE, readCredentialStore } from "../profile-store";
 import {
   ProviderAuthError,
   type ProviderFetch,
@@ -39,16 +39,19 @@ function parse(value: unknown, owner: string): AnthropicCredential | undefined {
 }
 
 /** A profile without its own Anthropic credential falls back to the default auth.json. */
-export function readAnthropicCredential(
+export async function readAnthropicCredential(
   profileLabel: string,
   agentDir: string,
-): AnthropicCredential | undefined {
+): Promise<AnthropicCredential | undefined> {
   for (const owner of profileLabel === DEFAULT_PROFILE
     ? [DEFAULT_PROFILE]
     : [profileLabel, DEFAULT_PROFILE]) {
-    const file = readJsonFile(authPathFor(owner, agentDir));
-    if (file?.[ANTHROPIC_PROVIDER_ID] === undefined) continue;
-    return parse(file[ANTHROPIC_PROVIDER_ID], owner);
+    const store = await readCredentialStore(authPathFor(owner, agentDir));
+    const credential = await store
+      .read(ANTHROPIC_PROVIDER_ID, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
+      .catch(() => undefined);
+    if (credential === undefined) continue;
+    return parse(credential, owner);
   }
   return undefined;
 }

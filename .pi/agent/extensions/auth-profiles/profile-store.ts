@@ -1,8 +1,36 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
+import type { CredentialStore } from "@earendil-works/pi-ai";
 import type { ExtensionContext } from "@earendil-works/pi-coding-agent";
-import { getAgentDir } from "@earendil-works/pi-coding-agent";
+import { getAgentDir, getPackageDir } from "@earendil-works/pi-coding-agent";
 import { isRecord } from "../shared/is-record";
+
+// shortcut: AuthStorage is private; use the loaded runtime, including its sandbox lock fixes,
+// until Pi exposes a public file-backed CredentialStore constructor. Never load the development SDK here.
+const AUTH_STORAGE_MODULE_URL = pathToFileURL(
+  join(getPackageDir(), "dist/core/auth-storage.js"),
+).href;
+
+type AuthStorageModule = {
+  AuthStorage: { create(path?: string): CredentialStore };
+  ReadOnlyAuthStorage: new (path?: string) => CredentialStore;
+};
+
+/**
+ * Pi's file-backed credential store for `path`. Credential reads go through it rather than the
+ * file, so they work unchanged where Pi hides secrets behind references.
+ */
+export async function createCredentialStore(path: string): Promise<CredentialStore> {
+  const module = (await import(AUTH_STORAGE_MODULE_URL)) as AuthStorageModule;
+  return module.AuthStorage.create(path);
+}
+
+/** A read-only view of the credential file at `path` that never creates it. */
+export async function readCredentialStore(path: string): Promise<CredentialStore> {
+  const module = (await import(AUTH_STORAGE_MODULE_URL)) as AuthStorageModule;
+  return new module.ReadOnlyAuthStorage(path);
+}
 
 export const DEFAULT_PROFILE = "default";
 
@@ -54,17 +82,42 @@ export function listProfiles(agentDir = getAgentDir()): string[] {
   return [...names];
 }
 
-export function providersIn(profile: string, agentDir = getAgentDir()): string[] {
-  return Object.keys(readJsonFile(authPathFor(profile, agentDir)) ?? {});
+export type StoredCredential = { type: "oauth" | "api_key"; accountId?: string };
+
+/** Non-secret metadata of a profile's stored credentials, keyed by provider. */
+export async function storedCredentials(
+  profile: string,
+  agentDir = getAgentDir(),
+): Promise<Map<string, StoredCredential>> {
+  const credentials = new Map<string, StoredCredential>();
+  let store: CredentialStore;
+  try {
+    store = await readCredentialStore(authPathFor(profile, agentDir));
+  } catch {
+    return credentials;
+  }
+  for (const { providerId, type } of await store.list().catch(() => [])) {
+    const credential = await store.read(providerId).catch(() => undefined);
+    const accountId = isRecord(credential) ? credential.accountId : undefined;
+    credentials.set(providerId, {
+      type,
+      ...(typeof accountId === "string" && /^[A-Za-z0-9._-]{1,200}$/.test(accountId)
+        ? { accountId }
+        : {}),
+    });
+  }
+  return credentials;
 }
 
-export function accountIdFor(profile: string, agentDir = getAgentDir()): string | undefined {
-  const provider = readJsonFile(authPathFor(profile, agentDir))?.["openai-codex"];
-  if (!isRecord(provider)) return undefined;
-  const accountId = provider.accountId;
-  return typeof accountId === "string" && /^[A-Za-z0-9._-]{1,200}$/.test(accountId)
-    ? accountId
-    : undefined;
+export async function providersIn(profile: string, agentDir = getAgentDir()): Promise<string[]> {
+  return [...(await storedCredentials(profile, agentDir)).keys()];
+}
+
+export async function accountIdFor(
+  profile: string,
+  agentDir = getAgentDir(),
+): Promise<string | undefined> {
+  return (await storedCredentials(profile, agentDir)).get("openai-codex")?.accountId;
 }
 
 export function updateJsonFile(

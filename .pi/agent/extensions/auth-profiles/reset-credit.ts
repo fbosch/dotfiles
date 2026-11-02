@@ -209,8 +209,8 @@ function creditLabel(credit: ResetCredit, now: number): string {
   return `${name} (expires in ${durationUntil(credit.expiresAt, now)})`;
 }
 
-function cachedProfileLabel(profile: string, cachePath: string): string {
-  const accountId = accountIdFor(profile);
+async function cachedProfileLabel(profile: string, cachePath: string): Promise<string> {
+  const accountId = await accountIdFor(profile);
   const cached = accountId ? cachedResetCreditStatusForAccount(accountId, cachePath) : undefined;
   if (cached === undefined) return `${profile} (availability unknown)`;
   return `${profile} (${cached.availableCount} cached)`;
@@ -277,10 +277,12 @@ async function chooseProfile(
   const selected = await askQuestion(
     ctx,
     "Select a Pi auth profile",
-    profiles.map((profile) => ({
-      label: cachedProfileLabel(profile, cachePath),
-      value: profile,
-    })),
+    await Promise.all(
+      profiles.map(async (profile) => ({
+        label: await cachedProfileLabel(profile, cachePath),
+        value: profile,
+      })),
+    ),
     "Cached availability is only a hint; banked resets are checked after selection.",
   );
   if (selected === undefined) return undefined;

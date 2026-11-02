@@ -17,6 +17,17 @@ afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((path) => rm(path, { recursive: true })));
 });
 
+// Stored like a real Codex login so Pi's credential stores accept it.
+function storedCodexCredential(accountId: string) {
+  return {
+    type: "oauth",
+    access: "test-access",
+    refresh: "test-refresh",
+    expires: Number.MAX_SAFE_INTEGER,
+    accountId,
+  };
+}
+
 async function setupProfiles(): Promise<{ agentDir: string; cachePath: string }> {
   const root = await mkdtemp(join(tmpdir(), "pi-reset-credit-"));
   temporaryDirectories.push(root);
@@ -24,11 +35,11 @@ async function setupProfiles(): Promise<{ agentDir: string; cachePath: string }>
   await mkdir(join(agentDir, "auth-profiles"), { recursive: true });
   await writeFile(
     join(agentDir, "auth-profiles", "personal.json"),
-    '{"openai-codex":{"accountId":"personal-account"}}\n',
+    `${JSON.stringify({ "openai-codex": storedCodexCredential("personal-account") })}\n`,
   );
   await writeFile(
     join(agentDir, "auth-profiles", "work.json"),
-    '{"openai-codex":{"accountId":"work-account"}}\n',
+    `${JSON.stringify({ "openai-codex": storedCodexCredential("work-account") })}\n`,
   );
   process.env.PI_CODING_AGENT_DIR = agentDir;
   return { agentDir, cachePath: join(root, "cache.json") };

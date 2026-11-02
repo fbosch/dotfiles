@@ -32,7 +32,7 @@ import {
   PROFILE_STATUS_KEY,
   providersIn,
   publishWezTermChange,
-  readJsonFile,
+  storedCredentials,
   updateJsonFile,
 } from "./profile-store";
 import type { ProfileProviderAdapter } from "./provider-adapter";
@@ -356,7 +356,7 @@ export type AuthObservationOptions = {
   /** Effective profile order used for fallback-provider lookup. */
   profileOrder?: readonly string[];
   /** Whether a profile's own auth file holds a credential for the provider. */
-  hasCredential?: (profile: string, providerId: string) => boolean;
+  hasCredential: (profile: string, providerId: string) => boolean;
   /** Live fallback-provider routing, so status shows the owner requests actually use. */
   route?: FallbackOwnerRoute;
   /** The bound profile and the profile whose adapter-provider login serves it. */
@@ -368,8 +368,7 @@ function fallbackProviderObservations(
   profileLabel: string,
   options: AuthObservationOptions,
 ): AuthProviderObservation[] {
-  const hasCredential =
-    options.hasCredential ?? ((profile, provider) => providersIn(profile).includes(provider));
+  const { hasCredential } = options;
   const byLabel = new Map(status.profiles.map((profile) => [profile.profileLabel, profile]));
   return [...PROFILE_FALLBACK_PROVIDERS].flatMap((provider) => {
     const owner = fallbackCredentialOwner(
@@ -433,7 +432,7 @@ function observedProfileWindows(profile: ProfileUsageStatus) {
 export function authObservations(
   status: UsageStatusPayload,
   providerId: string,
-  options: AuthObservationOptions = {},
+  options: AuthObservationOptions,
 ): AuthProfileObservation[] {
   const failures = new Set(status.diagnostics.map(({ profileLabel }) => profileLabel));
   const byLabel = new Map(status.profiles.map((profile) => [profile.profileLabel, profile]));
@@ -520,8 +519,18 @@ export default function authProfiles(
       );
     },
   };
+  // Owner lookups run synchronously on every request, so provider lists are loaded through
+  // Pi's credential store when profiles are bound or credentials change.
+  const credentialProviders = new Map<string, ReadonlySet<string>>();
+  const refreshCredentialProviders = async (profiles: Iterable<string>) => {
+    await Promise.all(
+      [...new Set(profiles)].map(async (profile) => {
+        credentialProviders.set(profile, new Set(await providersIn(profile)));
+      }),
+    );
+  };
   const holdsFallbackCredential = (profile: string, providerId: string) =>
-    providersIn(profile).includes(providerId);
+    credentialProviders.get(profile)?.has(providerId) === true;
   /** The profile whose credential the live store currently uses for `providerId`. */
   const currentFallbackOwner = (providerId: string) =>
     fallbackCredentialOwner(
@@ -587,6 +596,7 @@ export default function authProfiles(
     lastUsageStatus = status;
     return authObservations(status, providerAdapter.providerId, {
       profileOrder,
+      hasCredential: holdsFallbackCredential,
       route: fallbackRoute,
       profileProviderOwner: { profile: activeProfile, owner: codexServingOwner() },
     });
@@ -693,6 +703,7 @@ export default function authProfiles(
         runtime,
         installCredentialLoginBoundary(runtime, PROFILE_LOGIN_PROVIDERS, (providerId) => {
           authRejectedOwners.delete(fallbackKey(providerId, activeProfile));
+          void refreshCredentialProviders([activeProfile]).catch(() => {});
         }),
       );
     }
@@ -700,6 +711,12 @@ export default function authProfiles(
     // bound, so Anthropic and /login keep following the preferred profile.
     const { fallbackFrom, ...rest } = selection;
     const bound: ProfileSelection = { ...rest, profile: fallbackFrom ?? selection.profile };
+    await refreshCredentialProviders([
+      bound.profile,
+      selection.profile,
+      ...bound.profileOrder,
+      DEFAULT_PROFILE,
+    ]);
     const previousPin = fallbackPins.get(codexProviderId);
     if (selection.profile === bound.profile) fallbackPins.delete(codexProviderId);
     else {
@@ -918,9 +935,7 @@ export default function authProfiles(
       // A concurrent failure from the same owner was already handled.
       if ((limitSeenUntil.get(key) ?? 0) > now()) return;
       // API-key 429s are per-minute rate limits, not plan usage limits.
-      const entry = readJsonFile(authPathFor(exhaustedOwner))?.[providerId];
-      if (typeof entry !== "object" || entry === null || !("type" in entry)) return;
-      if (entry.type !== "oauth") return;
+      if ((await storedCredentials(exhaustedOwner)).get(providerId)?.type !== "oauth") return;
       const chain = fallbackOwnerChain(activeProfile, activeSelection?.profileOrder ?? []).filter(
         (profile) => holdsFallbackCredential(profile, providerId),
       );
@@ -1114,7 +1129,7 @@ export default function authProfiles(
           case "show": {
             const resolution =
               activeSelection ?? (await chooseProfile(ctx, { providerAdapter, runGit }));
-            const providers = providersIn(resolution.fallbackFrom ?? resolution.profile);
+            const providers = await providersIn(resolution.fallbackFrom ?? resolution.profile);
             const repository = resolution.repository
               ? `${resolution.repository.name} (${resolution.repository.source})`
               : "not resolved";
@@ -1143,11 +1158,13 @@ export default function authProfiles(
             return;
           }
           case "list": {
-            const lines = listProfiles().map((name) => {
-              const marker = name === activeProfile ? "* " : "  ";
-              const providers = providersIn(name);
-              return `${marker}${name} (${providers.length ? providers.join(", ") : "no credentials"})`;
-            });
+            const lines = await Promise.all(
+              listProfiles().map(async (name) => {
+                const marker = name === activeProfile ? "* " : "  ";
+                const providers = await providersIn(name);
+                return `${marker}${name} (${providers.length ? providers.join(", ") : "no credentials"})`;
+              }),
+            );
             ctx.ui.notify(lines.join("\n"), "info");
             return;
           }

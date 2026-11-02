@@ -93,7 +93,7 @@ function testProviderAdapter(agentDir: string): ProfileProviderAdapter {
       return FakeAuthStore.create(authPathFor(profileLabel, agentDir));
     },
     async readCredential(profileLabel) {
-      const identity = accountIdFor(profileLabel, agentDir);
+      const identity = await accountIdFor(profileLabel, agentDir);
       return identity === undefined
         ? { kind: "missing" }
         : {
@@ -106,7 +106,7 @@ function testProviderAdapter(agentDir: string): ProfileProviderAdapter {
           };
     },
     async resolveCredential(profileLabel) {
-      const identity = accountIdFor(profileLabel, agentDir);
+      const identity = await accountIdFor(profileLabel, agentDir);
       if (identity === undefined) throw new Error("missing test credential");
       return { accessToken: "test-access", expiresAt: Number.MAX_SAFE_INTEGER, identity };
     },
@@ -721,13 +721,25 @@ describe("auth profile prompt status", () => {
     await writeFile(
       join(agentDir, "auth-profiles", "personal.json"),
       JSON.stringify({
-        "openai-codex": { type: "oauth", accountId: "personal-account" },
+        "openai-codex": {
+          type: "oauth",
+          access: "test-access",
+          refresh: "test-refresh",
+          expires: Number.MAX_SAFE_INTEGER,
+          accountId: "personal-account",
+        },
       }),
     );
     await writeFile(
       join(agentDir, "auth-profiles", "work.json"),
       JSON.stringify({
-        "openai-codex": { type: "oauth", accountId: "work-account" },
+        "openai-codex": {
+          type: "oauth",
+          access: "test-access",
+          refresh: "test-refresh",
+          expires: Number.MAX_SAFE_INTEGER,
+          accountId: "work-account",
+        },
       }),
     );
     process.env.PI_CODING_AGENT_DIR = agentDir;
