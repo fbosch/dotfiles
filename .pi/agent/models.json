@@ -34,8 +34,7 @@
             "low": "low",
             "medium": "medium",
             "high": "high",
-            "xhigh": "xhigh",
-            "max": "max"
+            "xhigh": "xhigh"
           },
           "compat": {
             "supportsOpenAIGrammarTools": true,
@@ -76,8 +75,7 @@
             "low": "low",
             "medium": "medium",
             "high": "high",
-            "xhigh": "xhigh",
-            "max": "max"
+            "xhigh": "xhigh"
           },
           "compat": {
             "supportsOpenAIGrammarTools": true,
@@ -118,8 +116,7 @@
             "low": "low",
             "medium": "medium",
             "high": "high",
-            "xhigh": "xhigh",
-            "max": "max"
+            "xhigh": "xhigh"
           },
           "compat": {
             "supportsOpenAIGrammarTools": true,
@@ -156,7 +153,6 @@
           "maxTokens": 128000,
           "thinkingLevelMap": {
             "xhigh": "xhigh",
-            "max": "max",
             "minimal": "low"
           },
           "compat": {
@@ -193,7 +189,6 @@
           "maxTokens": 128000,
           "thinkingLevelMap": {
             "xhigh": "xhigh",
-            "max": "max",
             "minimal": "low"
           },
           "compat": {

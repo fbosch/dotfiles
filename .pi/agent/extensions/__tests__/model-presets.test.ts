@@ -347,18 +347,18 @@ describe("quota-aware model presets", () => {
   test("current presets explicitly select Sonnet 5.5 and Opus 5.5 with per-model defaults", () => {
     expect(MODEL_PRESETS.planning.models[1]).toEqual({
       model: "anthropic/claude-sonnet-5-5",
-      thinking: ["low", "medium", "high", "xhigh", "max"],
+      thinking: ["low", "medium", "high"],
       defaultThinking: "medium",
     });
     expect(MODEL_PRESETS.deliberation.models[1]).toEqual({
       model: "anthropic/claude-opus-5-5",
-      thinking: ["medium", "high", "xhigh", "max"],
+      thinking: ["medium", "high"],
       defaultThinking: "high",
     });
     expect(MODEL_PRESETS["deep-analysis"].models[1]).toEqual({
       model: "anthropic/claude-opus-5-5",
-      thinking: ["medium", "high", "xhigh", "max"],
-      defaultThinking: "max",
+      thinking: ["medium", "high"],
+      defaultThinking: "high",
     });
   });
 
@@ -368,21 +368,22 @@ describe("quota-aware model presets", () => {
       { reason: "user", messages },
       f.ctx,
     );
-    expect(Object.keys(f.input()?.questions.route?.criteria ?? {})).toHaveLength(5);
+    expect(Object.keys(f.input()?.questions.route?.criteria ?? {})).toHaveLength(4);
     expect(f.activated).toEqual([codex]);
   });
 
   const adaptivePolicies = [
     ["focused-execution", ["low", "medium", "high", "xhigh"], "xhigh"],
-    ["planning", ["low", "medium", "high", "xhigh", "max"], "medium"],
-    ["implementation", ["low", "medium", "high", "xhigh", "max"], "xhigh"],
-    ["deliberation", ["medium", "high", "xhigh", "max"], "high"],
-    ["deep-analysis", ["medium", "high", "xhigh", "max"], "max"],
+    ["planning", ["low", "medium", "high", "xhigh"], "medium"],
+    ["implementation", ["low", "medium", "high", "xhigh"], "xhigh"],
+    ["deliberation", ["medium", "high", "xhigh"], "high"],
+    ["deep-analysis", ["medium", "high", "xhigh"], "xhigh"],
   ] as const;
 
   for (const [id, thinking, defaultThinking] of adaptivePolicies) {
-    test(`${id} expands effort choices without changing its fallback default`, () => {
+    test(`${id} preserves expanded non-native effort choices and defaults`, () => {
       for (const policy of MODEL_PRESETS[id].models) {
+        if (policy.model.startsWith("anthropic/")) continue;
         expect([...policy.thinking]).toEqual([...thinking]);
         expect(policy.defaultThinking).toBe(defaultThinking);
       }
@@ -395,7 +396,7 @@ describe("quota-aware model presets", () => {
           (candidate) => candidate.provider === provider,
         );
         if (!account) throw new Error(`Missing fixture account for ${policy.model}`);
-        for (const level of [thinking[0], ...thinking.slice(-1)]) {
+        for (const level of [policy.thinking[0], ...policy.thinking.slice(-1)]) {
           const f = fixture([account]);
           f.dependencies.classify = async (_registry, input) => {
             const question = input.questions.route;
@@ -432,4 +433,46 @@ describe("quota-aware model presets", () => {
       }
     });
   }
+
+  test("native Anthropic effort choices honor the runtime ceiling despite broader catalog metadata", async () => {
+    for (const id of ["planning", "deliberation", "deep-analysis"] as const) {
+      const f = fixture([native]);
+      const expected = id === "planning" ? ["low", "medium", "high"] : ["medium", "high"];
+      const result = await createVirtualPreset(id, MODEL_PRESETS[id], f.dependencies).route(
+        { reason: "user", messages },
+        f.ctx,
+      );
+      const question = f.input()?.questions.route;
+      if (question?.type !== "choice") throw new Error("Expected routing choices");
+      const model = id === "planning" ? "claude-sonnet-5-5" : "claude-opus-5-5";
+      expect(Object.values(question.criteria)).toEqual(
+        expected.map((level) => `anthropic/${model}; reasoning effort ${level}`),
+      );
+      expect(result.thinkingLevel).toBe(id === "planning" ? "medium" : "high");
+    }
+  });
+
+  test("a native decision outside its allowed range cannot bypass the effort policy", async () => {
+    const f = fixture([native]);
+    const result = await createVirtualPreset(
+      "deep-analysis",
+      MODEL_PRESETS["deep-analysis"],
+      f.dependencies,
+    ).route(
+      {
+        reason: "continuation",
+        messages,
+        state: {
+          provider: "anthropic",
+          model: "claude-opus-5-5",
+          profile: native.profile,
+          thinking: "xhigh",
+        },
+      },
+      f.ctx,
+    );
+    expect(result.thinkingLevel).toBe("high");
+    expect(result.state?.thinking).toBe("high");
+    expect(f.activated).toEqual([native]);
+  });
 });

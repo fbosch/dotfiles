@@ -21,7 +21,7 @@
   ],
   "defaultProvider": "openai-codex",
   "defaultModel": "gpt-6-luna-fast",
-  "defaultThinkingLevel": "max",
+  "defaultThinkingLevel": "xhigh",
   "defaultTools": [
     "+codemode",
     "+subagent"
