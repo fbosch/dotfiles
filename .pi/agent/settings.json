@@ -222,6 +222,7 @@
     "{\"source\":\"npm:pi-lens@4.4.7\",\"scope\":\"user\"}": "4.4.7",
     "{\"source\":\"npm:pi-codex-goal@0.7.0\",\"scope\":\"user\"}": "0.7.0",
     "{\"source\":\"npm:pi-codex-goal@0.7.2\",\"scope\":\"user\"}": "0.7.2",
-    "{\"source\":\"npm:pi-lens@4.4.8\",\"scope\":\"user\"}": "4.4.8"
+    "{\"source\":\"npm:pi-lens@4.4.8\",\"scope\":\"user\"}": "4.4.8",
+    "{\"source\":\"npm:pi-codex-goal@0.7.7\",\"scope\":\"user\"}": "0.7.7"
   }
 }
