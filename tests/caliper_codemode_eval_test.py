@@ -48,6 +48,18 @@ class CodemodeEvalTests(unittest.TestCase):
         LAUNCH.prepare(self.repo, run, evidence, baseline, "openai-codex/mock-parent-fast", "xhigh")
         return run, evidence, json.loads((run / "codemode.json").read_text())
 
+    def test_prepare_preserves_model_prompt_cache_metadata(self):
+        path = self.repo / ".pi/agent/models-store.json"
+        store = json.loads(path.read_text())
+        model = next(entry for entry in store["openai-codex"]["models"]
+                     if entry["id"] == "mock-parent-fast")
+        model["promptCache"] = {"short": 300, "long": 3600}
+        path.write_text(json.dumps(store))
+        _, evidence, _ = self.prepare(False)
+        snapshot = json.loads((evidence / "models-store.json").read_text())
+        self.assertEqual(snapshot["openai-codex"]["models"][0]["promptCache"],
+                         {"short": 300, "long": 3600})
+
     def test_diagnostic_experiments_are_disabled_by_default(self):
         with patch.dict(os.environ, {"CODEMODE_TRACE_PROMPT": "0", "CODEMODE_EVAL_TOOL_ROUTING": "0", "CODEMODE_EVAL_TYPED_OUTPUTS": "0"}):
             _, _, config = self.prepare(False)

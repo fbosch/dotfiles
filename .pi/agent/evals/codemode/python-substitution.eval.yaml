@@ -1,0 +1,30 @@
+skills: []
+sandbox:
+  forbidden_files:
+    - '.*\.eval\.yaml$'
+    - '.*(?:check\.py|expected\.json|latest\.json|\.jsonl|verdict\.json)$'
+tasks:
+  - name: Source reads with shell available
+    prompt: |
+      [[codemode-case:shell-reads]]
+      Read a.ts and b.ts and report their exported constant declarations
+      with paths. Do not modify files.
+    assert: &check |
+      import os
+      import sys
+      sys.path.insert(0, os.environ["CODEMODE_EVAL_RUN"])
+      from check import check
+      check()
+  - name: Manifest-driven reads with shell available
+    prompt: |
+      [[codemode-case:shell-dependent]]
+      Read manifest.json, then read each listed file. Report each exported
+      constant declaration with its source path. Do not modify files.
+    assert: *check
+  - name: Source aggregation with shell available
+    prompt: |
+      [[codemode-case:shell-transform]]
+      Inspect a.ts, b.ts, and c.ts. Report each exported constant declaration
+      with its source path, then calculate the sum of the squares of their
+      numeric values. Do not modify files.
+    assert: *check

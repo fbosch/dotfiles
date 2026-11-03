@@ -27,6 +27,13 @@ const data = JSON.parse(source);
 
 Keep requested values as well as their names when extracting declarations.
 
+Use codemode JavaScript for tool orchestration and in-memory transformation of
+tool results. Do not substitute ad hoc `python3`, Node, or shell scripts for work
+supported by codemode and the available tools, even when the substitute fits in
+one `bash` call. Use the designated tools for file reads and edits. Shell commands
+remain appropriate for project commands, tests, and capabilities unavailable
+through those tools.
+
 ## Route tools before calling them
 
 - Exactly one trivial tool call: use the tool directly. A request to read one

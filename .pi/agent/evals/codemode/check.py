@@ -84,6 +84,27 @@ def validate(events: list[dict], expected: dict) -> None:
         assert len(output) < 4000 and "Full output:" not in output, "Large edit printed intermediate or full successful output"
         assert "config-large.json" in final and "true" in final.lower() and "verif" in final.lower(), "Changed value or verification not reported"
         return
+    if case.startswith("shell-"):
+        assert all("bash" in e.get("tools", []) for e in execution), "Shell alternative was not available"
+        pairs = [("alpha", 1), ("beta", 2)]
+        paths = ["a.ts", "b.ts"]
+        if case == "shell-transform":
+            pairs.append(("gamma", 3))
+            paths.append("c.ts")
+            assert re.search(r"\b14\b", final), "Sum of squares missing"
+        values(pairs)
+        assert all(path in final for path in paths), "Values not attributed to paths"
+        assert not any(e["tool"] == "bash" for e in starts), "Shell substituted for available tools/codemode"
+        assert len(scripts) == 1 and len(results) == 1, "Expected one codemode script"
+        reads = [e for e in starts if e["tool"] == "read" and e.get("path") in paths]
+        assert len(reads) == len(paths), "Missing or repeated source reads"
+        assert len(paths) in results[0].get("batches", []), "Missing allSettled source batch"
+        if case == "shell-dependent":
+            manifest = [e for e in starts if e.get("path") == "manifest.json"]
+            assert len(manifest) == 1, "Missing manifest prerequisite"
+            end = next(e for e in ends if e["id"] == manifest[0]["id"])
+            assert events.index(end) < min(events.index(e) for e in reads), "Source reads preceded manifest"
+        return
     check_case = case in {"tool-error", "separate-checks"}
     target = (
         ["fffind:a.ts", "ffgrep:alpha", "ffgrep:beta"] if case == "mixed-search"

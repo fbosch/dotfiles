@@ -34,6 +34,19 @@ const cases: Array<{
   directCalls?: Invocation[];
 }> = [
   { name: "independent", script: parallel, answer: "a.ts: alpha = 1; b.ts: beta = 2" },
+  { name: "shell-reads", script: parallel, answer: "a.ts: alpha = 1; b.ts: beta = 2" },
+  {
+    name: "shell-dependent",
+    script:
+      'const m=await tools.read({path:"manifest.json"}); const paths=JSON.parse(m.lines[0].text).files; const r=await Promise.allSettled(paths.map(path=>tools.read({path})));text(r.map(x=>x.value.text));',
+    answer: "a.ts: alpha = 1; b.ts: beta = 2",
+  },
+  {
+    name: "shell-transform",
+    script:
+      'const r=await Promise.allSettled(["a.ts","b.ts","c.ts"].map(path=>tools.read({path})));text(r.map(x=>x.value.text));',
+    answer: "a.ts: alpha = 1; b.ts: beta = 2; c.ts: gamma = 3; sum of squares = 14",
+  },
   {
     name: "dependent",
     script:
@@ -261,6 +274,30 @@ for (const scenario of cases) {
     expect(result.status).toBe(0);
   });
 }
+
+test("Python is executable but shell substitution fails routing grading", async () => {
+  const result = await executeCase("shell-reads", undefined, getCase("shell-reads").answer, false, [
+    {
+      name: "bash",
+      input: {
+        command: `python3 -c 'from pathlib import Path; print(Path("a.ts").read_text(), Path("b.ts").read_text())'`,
+      },
+    },
+  ]);
+  const events: Array<{ kind: string; tool?: string; success?: boolean; text?: string }> =
+    result.events
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+  expect(
+    events.some((event) => event.kind === "end" && event.tool === "bash" && event.success),
+  ).toBe(true);
+  expect(events.find((event) => event.kind === "model-output")?.text).toContain(
+    "export const alpha = 1",
+  );
+  expect(result.status).not.toBe(0);
+  expect(result.error).toContain("Shell substituted for available tools/codemode");
+});
 
 test("sequential reads fail event-order grading", async () => {
   const result = await executeCase(

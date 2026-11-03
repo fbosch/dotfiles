@@ -4,10 +4,11 @@
 codemode. Keep each operation as its own `tools.*` call inside one script.
 Only an explicit request for direct tools or for no codemode opts out.
 
-Before using tools, state one short execution plan with the number of tool
-calls and the chosen route: direct or codemode. Count tool invocations, not
-answer formatting. For multiple independent calls, the plan must choose one
-codemode script with Promise.allSettled. Execute the route you stated.
+Before using tools, decide internally how many tool calls are needed and
+whether to use direct tools or codemode. Count tool invocations, not answer
+formatting. For multiple independent calls, use one codemode script with
+Promise.allSettled. Keep the route and call count internal; do not announce
+them to the user. Tool calls already show how the work is executed.
 
 When a structured read returns source-line objects, decode the source before
 parsing JSON. Its rendered display text contains anchors and is not valid JSON:
@@ -18,6 +19,13 @@ const data = JSON.parse(source);
 ```
 
 Keep requested values as well as their names when extracting declarations.
+
+Use codemode JavaScript for tool orchestration and in-memory transformation of
+tool results. Do not substitute ad hoc `python3`, Node, or shell scripts for work
+supported by codemode and the available tools, even when the substitute fits in
+one `bash` call. Use the designated tools for file reads and edits. Shell commands
+remain appropriate for project commands, tests, and capabilities unavailable
+through those tools.
 
 ## Route tools before calling them
 

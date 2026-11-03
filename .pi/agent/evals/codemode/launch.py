@@ -14,7 +14,7 @@ import uuid
 from pathlib import Path
 
 CASES = {"independent", "dependent", "rejected", "tool-error", "mutations", "large", "large-edit", "single",
-         "references", "mixed-search", "separate-checks", "ordered-checks", "direct-checks"}
+         "references", "mixed-search", "separate-checks", "ordered-checks", "direct-checks", "shell-reads", "shell-dependent", "shell-transform"}
 
 
 def resolve_model(repo: Path, model: str = "configured", thinking: str = "configured") -> tuple[str, str]:
@@ -64,7 +64,7 @@ def prepare(repo: Path, run_root: Path, evidence: Path, baseline: bool, model: s
         raise ValueError("Candidate codemode guidance is empty")
     (evidence / "baseline.md").write_text(guidance + "\n")
     (evidence / "candidate.md").write_text(candidate)
-    files = [source / "fixture.ts", source / "request.ts", source / "check.py", source / "launch.py", source / "codemode.eval.yaml", agent / "extensions/openai-capabilities.ts"]
+    files = [source / "fixture.ts", source / "request.ts", source / "check.py", source / "launch.py", source / "codemode.eval.yaml", source / "python-substitution.eval.yaml", agent / "extensions/openai-capabilities.ts"]
     metadata = {"arm": "baseline" if baseline else "candidate", "model": model, "thinking": thinking,
                 "baseline_sha256": hashlib.sha256(guidance.encode()).hexdigest(),
                 "candidate_sha256": hashlib.sha256(candidate.encode()).hexdigest(),

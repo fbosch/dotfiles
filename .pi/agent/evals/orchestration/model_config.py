@@ -100,7 +100,7 @@ def snapshot_store(repo: Path, catalog: dict) -> dict:
     custom = json.loads((repo / ".pi/agent/models.json").read_text()).get("providers", {})
     references = [catalog["parent"]["model"], *(entry["model"] for entry in catalog["agents"].values())]
     selected = {}
-    allowed = {"api", "baseUrl", "compat", "contextWindow", "cost", "id", "input", "inputLimits", "maxTokens", "name", "provider", "reasoning", "thinkingLevelMap", "type"}
+    allowed = {"api", "baseUrl", "compat", "contextWindow", "cost", "id", "input", "inputLimits", "maxTokens", "name", "provider", "promptCache", "reasoning", "thinkingLevelMap", "type"}
     for reference in references:
         provider, model = reference.split("/", 1)
         entry = store.get(provider, {})

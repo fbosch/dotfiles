@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { appendFileSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { basename, resolve, sep } from "node:path";
 import { createCodemodeExtension, type ExtensionAPI } from "@earendil-works/pi-coding-agent";
@@ -243,6 +244,34 @@ export default function codemodeFixture(pi: ExtensionAPI): void {
         },
       });
     }
+  }
+  if (scenario.startsWith("shell-")) {
+    allowed.add("bash");
+    pi.registerTool({
+      name: "bash",
+      label: "Bash",
+      description:
+        "Execute a bash command in the fixture directory. Python3 and standard shell utilities are available. Returns stdout, stderr, and exit_code.",
+      parameters: Type.Object({ command: Type.String() }),
+      async execute(id, params) {
+        record("start", { id, tool: "bash", command: params.command, scriptId });
+        // Do not pass provider credentials or the auth-copy HOME to shell children.
+        const result = spawnSync("/bin/bash", ["-c", params.command], {
+          cwd: root,
+          env: { PATH: process.env.PATH, HOME: root, TMPDIR: root },
+          encoding: "utf8",
+          timeout: 10_000,
+          maxBuffer: 100_000,
+        });
+        const data = {
+          stdout: result.stdout ?? "",
+          stderr: result.stderr ?? String(result.error ?? ""),
+          exit_code: result.status ?? -1,
+        };
+        record("end", { id, tool: "bash", success: data.exit_code === 0 });
+        return { content: [{ type: "text", text: JSON.stringify(data) }], details: undefined };
+      },
+    });
   }
   createCodemodeExtension({ models: false })(pi);
   pi.on("session_start", () => pi.setActiveTools([...allowed]));
