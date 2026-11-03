@@ -14,49 +14,101 @@ import {
 } from "./auth-profiles/routing-eligibility";
 
 type Thinking = ModelRoute["thinkingLevel"];
+interface ModelPolicy {
+  model: `${string}/${string}`;
+  thinking: readonly [Thinking, ...Thinking[]];
+  defaultThinking: Thinking;
+}
+
 interface Preset {
-  model: string;
-  thinking: Thinking;
-  allowed?: readonly Thinking[];
-  claude?: string;
+  models: readonly [ModelPolicy, ...ModelPolicy[]];
 }
 
 export const MODEL_PRESETS = {
-  discovery: { model: "gpt-6-luna-fast", thinking: "minimal" },
-  routine: { model: "gpt-6-luna-fast", thinking: "low" },
-  verification: { model: "gpt-6-luna-fast", thinking: "medium" },
-  "focused-execution": {
-    model: "gpt-6-luna-fast",
-    thinking: "xhigh",
-    allowed: ["low", "medium", "high", "xhigh"],
+  discovery: {
+    models: [
+      { model: "openai-codex/gpt-6-luna-fast", thinking: ["minimal"], defaultThinking: "minimal" },
+    ],
   },
-  creative: { model: "gpt-6.1-sol", thinking: "low" },
+  routine: {
+    models: [{ model: "openai-codex/gpt-6-luna-fast", thinking: ["low"], defaultThinking: "low" }],
+  },
+  verification: {
+    models: [
+      { model: "openai-codex/gpt-6-luna-fast", thinking: ["medium"], defaultThinking: "medium" },
+    ],
+  },
+  "focused-execution": {
+    models: [
+      {
+        model: "openai-codex/gpt-6-luna-fast",
+        thinking: ["low", "medium", "high", "xhigh"],
+        defaultThinking: "xhigh",
+      },
+    ],
+  },
+  creative: {
+    models: [{ model: "openai-codex/gpt-6.1-sol", thinking: ["low"], defaultThinking: "low" }],
+  },
   planning: {
-    model: "gpt-6.1-sol",
-    thinking: "medium",
-    allowed: ["low", "medium", "high"],
-    claude: "claude-sonnet-4-6",
+    models: [
+      {
+        model: "openai-codex/gpt-6.1-sol",
+        thinking: ["low", "medium", "high"],
+        defaultThinking: "medium",
+      },
+      {
+        model: "anthropic/claude-sonnet-5-5",
+        thinking: ["low", "medium"],
+        defaultThinking: "medium",
+      },
+      {
+        model: "claude-bridge/claude-sonnet-5-5",
+        thinking: ["low", "medium"],
+        defaultThinking: "medium",
+      },
+    ],
   },
   deliberation: {
-    model: "gpt-6.1-sol",
-    thinking: "high",
-    allowed: ["medium", "high"],
-    claude: "claude-opus-4-6",
+    models: [
+      { model: "openai-codex/gpt-6.1-sol", thinking: ["medium", "high"], defaultThinking: "high" },
+      { model: "anthropic/claude-opus-5-5", thinking: ["medium", "high"], defaultThinking: "high" },
+      {
+        model: "claude-bridge/claude-opus-5-5",
+        thinking: ["medium", "high"],
+        defaultThinking: "high",
+      },
+    ],
   },
-  "technical-discovery": { model: "gpt-6-luna", thinking: "medium" },
+  "technical-discovery": {
+    models: [{ model: "openai-codex/gpt-6-luna", thinking: ["medium"], defaultThinking: "medium" }],
+  },
   implementation: {
-    model: "gpt-6-luna",
-    thinking: "xhigh",
-    allowed: ["medium", "high", "xhigh"],
+    models: [
+      {
+        model: "openai-codex/gpt-6-luna",
+        thinking: ["medium", "high", "xhigh"],
+        defaultThinking: "xhigh",
+      },
+    ],
   },
   "deep-analysis": {
-    model: "gpt-6-luna",
-    thinking: "max",
-    allowed: ["high", "xhigh", "max"],
-    claude: "claude-opus-4-6",
+    models: [
+      {
+        model: "openai-codex/gpt-6-luna",
+        thinking: ["high", "xhigh", "max"],
+        defaultThinking: "max",
+      },
+      { model: "anthropic/claude-opus-5-5", thinking: ["high", "max"], defaultThinking: "max" },
+      { model: "claude-bridge/claude-opus-5-5", thinking: ["high", "max"], defaultThinking: "max" },
+    ],
   },
-  "critical-review": { model: "gpt-6-astra", thinking: "high" },
-  "failure-analysis": { model: "gpt-6-astra", thinking: "xhigh" },
+  "critical-review": {
+    models: [{ model: "openai-codex/gpt-6-astra", thinking: ["high"], defaultThinking: "high" }],
+  },
+  "failure-analysis": {
+    models: [{ model: "openai-codex/gpt-6-astra", thinking: ["xhigh"], defaultThinking: "xhigh" }],
+  },
 } as const satisfies Record<string, Preset>;
 
 interface RouteState {
@@ -76,6 +128,7 @@ interface Candidate {
   model: ModelRoute["model"];
   account: RoutingAccount;
   thinking: Thinking;
+  preferred: boolean;
 }
 interface Dependencies {
   accounts(signal?: AbortSignal): Promise<readonly RoutingAccount[]>;
@@ -109,8 +162,9 @@ function candidatesFor(
   now: number,
 ): Candidate[] {
   const candidates: Candidate[] = [];
-  // Each candidate binds execution to one eligible owner. Profile names and quota
-  // observations stay local; the classifier sees only opaque choices and model/effort.
+  const seen = new Set<string>();
+  // Quota chooses the owner locally. Model/effort choices never expose profile names
+  // or duplicate the same route merely because two profiles own the same provider.
   for (const account of [...accounts].sort((a, b) => b.remaining - a.remaining)) {
     if (
       !Number.isFinite(account.remaining) ||
@@ -122,32 +176,57 @@ function candidatesFor(
       account.staleAt <= now
     )
       continue;
-    const id = account.provider === "openai-codex" ? preset.model : preset.claude;
-    if (!id) continue;
-    const model = ctx.modelRegistry.find(account.provider, id);
-    if (!model || !ctx.modelRegistry.hasConfiguredAuth(model)) continue;
-    const supported = getSupportedThinkingLevels(model);
-    for (const thinking of preset.allowed ?? [preset.thinking]) {
-      if (supported.includes(thinking)) candidates.push({ model, account, thinking });
+    for (const policy of preset.models) {
+      const separator = policy.model.indexOf("/");
+      const provider = policy.model.slice(0, separator);
+      const id = policy.model.slice(separator + 1);
+      if (provider !== account.provider) continue;
+      const model = ctx.modelRegistry.find(provider, id);
+      if (!model || !ctx.modelRegistry.hasConfiguredAuth(model)) continue;
+      const supported = getSupportedThinkingLevels(model);
+      const invalid = policy.thinking.filter((level) => !supported.includes(level));
+      if (invalid.length > 0)
+        throw new Error(
+          `Preset model ${policy.model} does not support configured thinking: ${invalid.join(", ")}`,
+        );
+      for (const thinking of policy.thinking) {
+        const key = `${model.provider}/${model.id}:${thinking}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        candidates.push({
+          model,
+          account,
+          thinking,
+          preferred: thinking === policy.defaultThinking,
+        });
+      }
     }
   }
   return candidates;
 }
 
 export function createVirtualPreset(id: string, preset: Preset, dependencies: Dependencies) {
+  for (const policy of preset.models) {
+    if (
+      !/^[^/\s]+\/[^\s]+$/u.test(policy.model) ||
+      new Set(policy.thinking).size !== policy.thinking.length ||
+      !policy.thinking.includes(policy.defaultThinking)
+    ) {
+      throw new Error(`Preset presets/${id}: invalid model policy for ${policy.model}`);
+    }
+  }
   return {
     provider: "presets",
     id,
     name: id,
-    thinkingLevels: [preset.thinking],
+    thinkingLevels: [preset.models[0].defaultThinking],
     async route(request: RouteRequest, ctx: RouteContext): Promise<ModelRoute<RouteState>> {
       request.signal?.throwIfAborted();
       const accounts = await dependencies.accounts(request.signal);
       const candidates = candidatesFor(preset, accounts, ctx, dependencies.now());
       if (candidates.length === 0)
         throw new Error(`Preset presets/${id}: no eligible account with fresh available quota`);
-      let selected =
-        candidates.find((candidate) => candidate.thinking === preset.thinking) ?? candidates[0];
+      let selected = candidates.find((candidate) => candidate.preferred) ?? candidates[0];
       if (!selected) throw new Error(`Preset presets/${id}: no supported reasoning level`);
       const sticky =
         request.reason !== "user" && request.state
@@ -160,7 +239,7 @@ export function createVirtualPreset(id: string, preset: Preset, dependencies: De
             )
           : undefined;
       if (sticky) selected = sticky;
-      else if (preset.allowed && candidates.length > 1) {
+      else if (candidates.length > 1) {
         const prompt = routingPrompt(request.messages);
         if (prompt) {
           const result = await dependencies.classify(
@@ -175,7 +254,7 @@ export function createVirtualPreset(id: string, preset: Preset, dependencies: De
                   criteria: Object.fromEntries(
                     candidates.map((candidate, index) => [
                       `candidate_${index}`,
-                      `${candidate.model.provider === "openai-codex" ? "OpenAI" : "Claude"} ${candidate.model.id}; reasoning effort ${candidate.thinking}`,
+                      `${candidate.model.provider}/${candidate.model.id}; reasoning effort ${candidate.thinking}`,
                     ]),
                   ),
                 },

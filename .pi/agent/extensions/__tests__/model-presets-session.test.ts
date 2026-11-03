@@ -136,7 +136,7 @@ async function fixture(
           ...(provider === "claude-bridge" ? { apiKey: "external-fixture" } : {}),
           models: [
             {
-              id: provider === "openai-codex" ? "gpt-6.1-sol" : "claude-sonnet-4-6",
+              id: provider === "openai-codex" ? "gpt-6.1-sol" : "claude-sonnet-5-5",
               name: "Fixture",
               reasoning: true,
               input: ["text"],

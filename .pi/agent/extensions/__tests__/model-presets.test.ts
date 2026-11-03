@@ -43,7 +43,10 @@ function physical(provider: string, id: string): ModelRoute["model"] {
     },
   };
 }
-function fixture(initial: readonly RoutingAccount[] = [codex]) {
+function fixture(
+  initial: readonly RoutingAccount[] = [codex],
+  find: (provider: string, id: string) => ModelRoute["model"] | undefined = physical,
+) {
   let accounts = initial;
   let classifyCalls = 0;
   let input: ClassifierRequestContext | undefined;
@@ -64,7 +67,7 @@ function fixture(initial: readonly RoutingAccount[] = [codex]) {
     cwd: "/fixture",
     isProjectTrusted: () => true,
     modelRegistry: {
-      find: (provider: string, id: string) => physical(provider, id),
+      find,
       hasConfiguredAuth: () => true,
       findOfType: () => undefined,
       classify: async () => {
@@ -113,10 +116,10 @@ describe("quota-aware model presets", () => {
         f.ctx,
       );
       expect(result.model.provider).toBe("openai-codex");
-      expect(result.model.id).toBe(preset.model);
-      expect(result.thinkingLevel).toBe(preset.thinking);
+      expect(`${result.model.provider}/${result.model.id}`).toBe(preset.models[0].model);
+      expect(result.thinkingLevel).toBe(preset.models[0].defaultThinking);
       expect(f.activated).toEqual([codex]);
-      expect(f.calls()).toBe("allowed" in preset ? 1 : 0);
+      expect(f.calls()).toBe(preset.models[0].thinking.length > 1 ? 1 : 0);
     });
   }
   test("presents only eligible providers and never sends account identities or quotas to classification", async () => {
@@ -126,7 +129,7 @@ describe("quota-aware model presets", () => {
     const input = f.input();
     expect(input?.state).toEqual({ prompt: "Inspect the assignment æ ø å", workload: "planning" });
     const encoded = JSON.stringify(input);
-    expect(encoded).toContain("claude-sonnet-4-6");
+    expect(encoded).toContain("claude-sonnet-5-5");
     expect(encoded).not.toContain('"kk"');
     expect(encoded).not.toContain('"native"');
     expect(encoded).not.toContain('"fbb"');
@@ -240,5 +243,116 @@ describe("quota-aware model presets", () => {
     expect(
       routingPrompt([{ role: "user", timestamp: now, content: "api_key=secret-value" }]),
     ).not.toContain("secret-value");
+  });
+  test("each provider offers only its own configured thinking levels", async () => {
+    const f = fixture([codex, native, bridge]);
+    await createVirtualPreset("planning", MODEL_PRESETS.planning, f.dependencies).route(
+      { reason: "user", messages },
+      f.ctx,
+    );
+    const criteria = f.input()?.questions.route?.criteria;
+    expect(criteria).toEqual({
+      candidate_0: "openai-codex/gpt-6.1-sol; reasoning effort low",
+      candidate_1: "openai-codex/gpt-6.1-sol; reasoning effort medium",
+      candidate_2: "openai-codex/gpt-6.1-sol; reasoning effort high",
+      candidate_3: "anthropic/claude-sonnet-5-5; reasoning effort low",
+      candidate_4: "anthropic/claude-sonnet-5-5; reasoning effort medium",
+      candidate_5: "claude-bridge/claude-sonnet-5-5; reasoning effort low",
+      candidate_6: "claude-bridge/claude-sonnet-5-5; reasoning effort medium",
+    });
+  });
+
+  test("unsupported configured effort fails rather than being silently clamped", async () => {
+    const f = fixture([native], (provider, id) => ({
+      ...physical(provider, id),
+      thinkingLevelMap: {
+        off: null,
+        minimal: null,
+        low: "low",
+        medium: "medium",
+        high: "high",
+        xhigh: null,
+        max: null,
+      },
+    }));
+    const route = createVirtualPreset(
+      "invalid-effort",
+      {
+        models: [
+          {
+            model: "anthropic/fixture-model",
+            thinking: ["medium", "xhigh"],
+            defaultThinking: "medium",
+          },
+        ],
+      },
+      f.dependencies,
+    );
+    await expect(route.route({ reason: "user", messages }, f.ctx)).rejects.toThrow(
+      "does not support configured thinking: xhigh",
+    );
+    expect(f.calls()).toBe(0);
+    expect(f.activated).toEqual([]);
+  });
+
+  test("a model policy is independent of model family and has its own default", async () => {
+    const f = fixture([native]);
+    const route = createVirtualPreset(
+      "generic",
+      {
+        models: [
+          {
+            model: "anthropic/fixture-model",
+            thinking: ["low", "medium"],
+            defaultThinking: "low",
+          },
+        ],
+      },
+      f.dependencies,
+    );
+    const result = await route.route({ reason: "direct", messages }, f.ctx);
+    expect(result.model.id).toBe("fixture-model");
+    expect(result.thinkingLevel).toBe("low");
+  });
+
+  test("invalid policy identifiers, duplicate effort levels, and out-of-range defaults fail at registration", () => {
+    const f = fixture();
+    for (const policy of [
+      { model: "/missing-provider", thinking: ["low"], defaultThinking: "low" },
+      { model: "anthropic/fixture", thinking: ["low", "low"], defaultThinking: "low" },
+      { model: "anthropic/fixture", thinking: ["low"], defaultThinking: "high" },
+    ] as const) {
+      expect(() => createVirtualPreset("bad-policy", { models: [policy] }, f.dependencies)).toThrow(
+        "invalid model policy",
+      );
+    }
+  });
+
+  test("current presets explicitly select Sonnet 5.5 and Opus 5.5 with per-model defaults", () => {
+    expect(MODEL_PRESETS.planning.models[1]).toEqual({
+      model: "anthropic/claude-sonnet-5-5",
+      thinking: ["low", "medium"],
+      defaultThinking: "medium",
+    });
+    expect(MODEL_PRESETS.deliberation.models[1]).toEqual({
+      model: "anthropic/claude-opus-5-5",
+      thinking: ["medium", "high"],
+      defaultThinking: "high",
+    });
+    expect(MODEL_PRESETS["deep-analysis"].models[1]).toEqual({
+      model: "anthropic/claude-opus-5-5",
+      thinking: ["high", "max"],
+      defaultThinking: "max",
+    });
+  });
+
+  test("multiple eligible profiles do not duplicate model/effort choices", async () => {
+    const f = fixture([codex, { ...codex, profile: "second-profile", remaining: 20 }]);
+    await createVirtualPreset("planning", MODEL_PRESETS.planning, f.dependencies).route(
+      { reason: "user", messages },
+      f.ctx,
+    );
+    expect(Object.keys(f.input()?.questions.route?.criteria ?? {})).toHaveLength(3);
+    expect(f.activated).toEqual([codex]);
   });
 });
