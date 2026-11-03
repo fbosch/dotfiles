@@ -592,7 +592,7 @@ async function askInline(
       if (signal?.aborted === true) queueMicrotask(handleAbort);
       return component;
     },
-    { overlay: false },
+    { overlay: false, blocked: { kind: "question", message: "Answer a question" } },
   );
 }
 

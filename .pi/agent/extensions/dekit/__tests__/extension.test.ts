@@ -110,6 +110,7 @@ async function harness(options?: {
         stderr: "CLI failure",
         code: command === "devenv" ? state.devenvCode : state.code,
         killed: false,
+        truncated: false,
       };
     },
   } as unknown as ExtensionAPI;
@@ -1126,7 +1127,7 @@ liveTest(
         new Response(child.stderr).text(),
         child.exited,
       ]);
-      return { stdout, stderr, code, killed: false };
+      return { stdout, stderr, code, killed: false, truncated: false };
     };
     try {
       const inspection = await h.invoke({ action: "inspect", script: "just:metadata" });

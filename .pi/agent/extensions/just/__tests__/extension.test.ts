@@ -91,6 +91,7 @@ function createHarness(initialDump: unknown): Harness {
     stderr: "",
     code: 0,
     killed: false,
+    truncated: false,
     timedOut: false,
     stdoutTruncated: false,
     stderrTruncated: false,
@@ -112,9 +113,15 @@ function createHarness(initialDump: unknown): Harness {
     async exec(command: string, args: string[], options?: ExecOptions) {
       executions.push({ command, args, ...(options === undefined ? {} : { options }) });
       if (args.includes("--json")) {
-        return { stdout: JSON.stringify(currentDump), stderr: "", code: 0, killed: false };
+        return {
+          stdout: JSON.stringify(currentDump),
+          stderr: "",
+          code: 0,
+          killed: false,
+          truncated: false,
+        };
       }
-      return { stdout: "checked\n", stderr: "", code: 0, killed: false };
+      return { stdout: "checked\n", stderr: "", code: 0, killed: false, truncated: false };
     },
   } as unknown as ExtensionAPI;
   const recipeExecutor: RecipeExecutor = async (cwd, args) => {
@@ -224,7 +231,13 @@ test("registers /just completion and executes the selected public recipe", async
       command = definition;
     },
     async exec() {
-      return { stdout: JSON.stringify(dump()), stderr: "", code: 0, killed: false };
+      return {
+        stdout: JSON.stringify(dump()),
+        stderr: "",
+        code: 0,
+        killed: false,
+        truncated: false,
+      };
     },
   } as unknown as ExtensionAPI;
   const recipeExecutor: RecipeExecutor = async (cwd, args) => {
@@ -234,6 +247,7 @@ test("registers /just completion and executes the selected public recipe", async
       stderr: "",
       code: 0,
       killed: false,
+      truncated: false,
       timedOut: false,
       stdoutTruncated: false,
       stderrTruncated: false,
@@ -289,7 +303,13 @@ test("cancels a running /just recipe from terminal input", async () => {
       command = definition;
     },
     async exec() {
-      return { stdout: JSON.stringify(dump()), stderr: "", code: 0, killed: false };
+      return {
+        stdout: JSON.stringify(dump()),
+        stderr: "",
+        code: 0,
+        killed: false,
+        truncated: false,
+      };
     },
   } as unknown as ExtensionAPI;
   const recipeExecutor: RecipeExecutor = async (_cwd, _args, signal, onOutput) => {
@@ -308,6 +328,7 @@ test("cancels a running /just recipe from terminal input", async () => {
           stderr: "",
           code: 143,
           killed: true,
+          truncated: false,
           timedOut: false,
           stdoutTruncated: false,
           stderrTruncated: false,
@@ -402,9 +423,21 @@ test("retries recipe completion discovery after a failed Justfile read", async (
     async exec() {
       discoveryAttempts += 1;
       if (discoveryAttempts === 1) {
-        return { stdout: "not json", stderr: "invalid Justfile", code: 1, killed: false };
+        return {
+          stdout: "not json",
+          stderr: "invalid Justfile",
+          code: 1,
+          killed: false,
+          truncated: false,
+        };
       }
-      return { stdout: JSON.stringify(dump()), stderr: "", code: 0, killed: false };
+      return {
+        stdout: JSON.stringify(dump()),
+        stderr: "",
+        code: 0,
+        killed: false,
+        truncated: false,
+      };
     },
   } as unknown as ExtensionAPI;
 
@@ -524,6 +557,7 @@ describe("Just tools extension", () => {
       stderr: "",
       code: 1,
       killed: true,
+      truncated: false,
       timedOut: true,
       stdoutTruncated: false,
       stderrTruncated: false,

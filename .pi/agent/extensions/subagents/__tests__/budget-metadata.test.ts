@@ -70,3 +70,24 @@ test("repeated inspection does not request advice or mutate budget counters", ()
   expect(calls).toBe(0);
   expect(budget.snapshot()).toMatchObject({ grantedTurns: 16, checks: 0, automaticGrants: 0 });
 });
+
+test.each([
+  ["provider", "Cls billed cost"],
+  ["estimate", "Cls estimated cost"],
+  ["mixed", "Cls mixed cost"],
+] as const)(
+  "labels %s classifier costs without implying all totals are billed",
+  async (costProvenance, label) => {
+    const budget = new AssignmentBudget(16, {
+      hardMaxTurns: 24,
+      advisor: async () => ({
+        kind: "judgment",
+        probability: 0.99,
+        usage: { providerAttempts: 1, cost: 0.03, costProvenance },
+      }),
+    });
+    budget.observe("success");
+    await budget.beforeModel(15, () => true);
+    expect(budgetMetadata(budget.snapshot(), budget.maxTurns)).toContainEqual([label, "0.03"]);
+  },
+);

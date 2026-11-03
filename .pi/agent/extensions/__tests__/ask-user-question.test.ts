@@ -80,9 +80,12 @@ function createInlineContext(
           keybindings: object,
           done: (value: unknown) => void,
         ) => Component,
-        options: { overlay?: boolean },
+        options: { overlay?: boolean; blocked?: { kind: "question"; message: string } },
       ) => {
-        expect(options).toEqual({ overlay: false });
+        expect(options).toEqual({
+          overlay: false,
+          blocked: { kind: "question", message: "Answer a question" },
+        });
         return new Promise((resolve, reject) => {
           const component = factory(
             { requestRender: () => undefined },

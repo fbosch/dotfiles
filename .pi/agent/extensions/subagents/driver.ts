@@ -28,6 +28,7 @@ export interface ChildObservation {
   readonly inputTokens?: number;
   readonly outputTokens?: number;
   readonly cost?: number;
+  readonly costProvenance?: "provider" | "estimate" | "mixed";
   readonly resolvedModel?: string | undefined;
   readonly resolvedThinking?: AgentSession["thinkingLevel"] | undefined;
 }
@@ -382,11 +383,20 @@ export class PiChildDriver implements ChildDriver {
         .exhaustive();
       if (message.stopReason !== "error" && message.stopReason !== "aborted") {
         const previous = this.observations.get(workerId);
+        const currentCostProvenance =
+          message.usage.cost.totalFromProvider === true ? "provider" : "estimate";
+        const costProvenance =
+          previous?.cost === undefined
+            ? currentCostProvenance
+            : previous.costProvenance === currentCostProvenance
+              ? currentCostProvenance
+              : "mixed";
         this.change(workerId, {
           ...runtimeModelDetails(session),
           inputTokens: (previous?.inputTokens ?? 0) + message.usage.input,
           outputTokens: (previous?.outputTokens ?? 0) + message.usage.output,
           cost: (previous?.cost ?? 0) + message.usage.cost.total,
+          costProvenance,
         });
       }
     }

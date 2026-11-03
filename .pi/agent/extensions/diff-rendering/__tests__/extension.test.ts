@@ -359,6 +359,8 @@ describe("Diff extension", () => {
       lastComponent: undefined,
       showImages: false,
       state: {},
+      keyText: () => "ctrl+o",
+      keyHint: (_keybinding, description) => `ctrl+o ${description}`,
       toolCallId: "diff-1",
     };
     const rendered = renderResult(
@@ -439,6 +441,10 @@ describe("Diff extension", () => {
       lastComponent: undefined,
       showImages: false,
       state: {},
+      keyText: () => "ctrl+o",
+      keyHint: (_keybinding, description) => `ctrl+o ${description}`,
+      durationMs: undefined,
+      outputPad: 1,
       toolCallId: "diff-1",
     } as Parameters<typeof tool.renderResult>[3];
 
@@ -555,6 +561,10 @@ describe("Diff extension", () => {
         lastComponent: undefined,
         showImages: false,
         state: {},
+        keyText: () => "ctrl+o",
+        keyHint: (_keybinding, description) => `ctrl+o ${description}`,
+        durationMs: undefined,
+        outputPad: 1,
         toolCallId: "edit-1",
       } as Parameters<typeof renderResult>[3]);
 
@@ -572,6 +582,10 @@ describe("Diff extension", () => {
         lastComponent: rendered,
         showImages: false,
         state: { preview: editDetails },
+        keyText: () => "ctrl+o",
+        keyHint: (_keybinding, description) => `ctrl+o ${description}`,
+        durationMs: undefined,
+        outputPad: 1,
         toolCallId: "edit-1",
       } as Parameters<typeof renderResult>[3]);
       expect(deduplicated.render(120)).toEqual([]);
@@ -628,6 +642,8 @@ describe("Diff extension", () => {
       lastComponent: undefined,
       showImages: false,
       state: {},
+      keyText: () => "ctrl+o",
+      keyHint: (_keybinding, description) => `ctrl+o ${description}`,
       toolCallId: "diff-1",
     };
 
@@ -679,6 +695,8 @@ describe("Diff extension", () => {
       lastComponent: undefined,
       showImages: false,
       state: {},
+      keyText: () => "ctrl+o",
+      keyHint: (_keybinding, description) => `ctrl+o ${description}`,
       toolCallId: "diff-1",
     };
 

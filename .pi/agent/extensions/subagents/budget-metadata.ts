@@ -37,7 +37,16 @@ export function budgetMetadata(
         "Cls tokens",
         `${decision.usage?.inputTokens ?? "—"} input · ${decision.usage?.outputTokens ?? "—"} output`,
       ],
-      ["Cls cost", decision.usage?.cost === undefined ? "—" : String(decision.usage.cost)],
+      [
+        decision.usage?.costProvenance === "provider"
+          ? "Cls billed cost"
+          : decision.usage?.costProvenance === "estimate"
+            ? "Cls estimated cost"
+            : decision.usage?.costProvenance === "mixed"
+              ? "Cls mixed cost"
+              : "Cls cost",
+        decision.usage?.cost === undefined ? "—" : String(decision.usage.cost),
+      ],
     );
   }
   return rows;

@@ -250,3 +250,44 @@ test("missing registry objects are ordinary unsupported capability, not a launch
     });
   }
 });
+
+test.each([
+  [true, "provider"],
+  [false, "estimate"],
+  [undefined, "estimate"],
+] as const)(
+  "retains classifier cost provenance when provider reporting is %s",
+  async (reported, provenance) => {
+    const fixture = await registryFixture();
+    const classify = fixture.registry.classify;
+    const registry = {
+      ...fixture.registry,
+      classify: async (...args: Parameters<ClassifierRegistry["classify"]>) => ({
+        ...(await classify(...args)),
+        usage: {
+          input: 10,
+          output: 2,
+          cacheRead: 0,
+          cacheWrite: 0,
+          totalTokens: 12,
+          cost: {
+            input: 0.01,
+            output: 0.02,
+            cacheRead: 0,
+            cacheWrite: 0,
+            total: 0.03,
+            ...(reported === undefined ? {} : { totalFromProvider: reported }),
+          },
+        },
+      }),
+    };
+    const advisor = createBudgetAdvisor(registry, {
+      agentDirectory: directory(),
+      fetch: async () => response(),
+    });
+    expect(await advisor(input, new AbortController().signal)).toMatchObject({
+      kind: "judgment",
+      usage: { cost: 0.03, costProvenance: provenance },
+    });
+  },
+);

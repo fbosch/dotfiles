@@ -164,7 +164,7 @@ export async function confirmCommandPermission(
             },
           };
         },
-        { overlay: false },
+        { overlay: false, blocked: { kind: "permission", message: "Review a command" } },
       )) === true
     );
   } finally {

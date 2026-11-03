@@ -1,6 +1,7 @@
 import { type ClassifierAnswer, type ClassifierContext, StringEnum } from "@earendil-works/pi-ai";
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
-import { type Static, Type } from "typebox";
+import type { Static } from "@earendil-works/pi-schema";
+import { Type } from "typebox";
 import { requestClassifier } from "../../lib/classifier";
 import { INACTIVE_SPECIALIST_TOOL } from "../../lib/tool-exposure";
 import { type BrowserInteraction, createBrowserBackends } from "./backends";

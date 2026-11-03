@@ -99,6 +99,8 @@ async function setup(live = false) {
       lastComponent: undefined,
       showImages: false,
       state: {},
+      keyText: () => "ctrl+o",
+      keyHint: (_keybinding, description) => `ctrl+o ${description}`,
       toolCallId: "render",
     })
       .render(180)

@@ -11,12 +11,14 @@ export type BudgetTaskKind =
   | "other";
 export type BudgetToolOutcome = "success" | "failure" | "unknown";
 export type BudgetFailureReason = ClassifierFailure["reason"] | "unsupported";
+export type CostProvenance = "provider" | "estimate" | "mixed";
 export interface BudgetUsage {
   readonly provider?: string;
   readonly providerAttempts: number;
   readonly inputTokens?: number;
   readonly outputTokens?: number;
   readonly cost?: number;
+  readonly costProvenance?: CostProvenance;
 }
 export interface BudgetProgress {
   readonly completedTools: number;

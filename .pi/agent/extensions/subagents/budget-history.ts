@@ -32,6 +32,9 @@ const usage = Type.Object({
   inputTokens: Type.Optional(count),
   outputTokens: Type.Optional(count),
   cost: Type.Optional(measured),
+  costProvenance: Type.Optional(
+    Type.Union(["provider", "estimate", "mixed"].map((value) => Type.Literal(value))),
+  ),
 });
 export const budgetEvidenceSchema = Type.Object({
   version: Type.Literal(1),

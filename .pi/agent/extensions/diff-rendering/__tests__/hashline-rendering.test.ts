@@ -131,6 +131,8 @@ function renderContext(expanded: boolean, isError = false) {
     lastComponent: undefined,
     showImages: false,
     state: {},
+    keyText: () => "ctrl+o",
+    keyHint: (_keybinding: string, description: string) => `ctrl+o ${description}`,
     toolCallId: "hashline-render-test",
     durationMs: undefined,
     outputPad: 1,

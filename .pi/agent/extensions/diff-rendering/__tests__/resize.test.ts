@@ -60,6 +60,8 @@ function preview(captured: boolean, expanded = true, snapshot?: DiffDetails) {
     lastComponent: undefined,
     showImages: false,
     state: {},
+    keyText: () => "ctrl+o",
+    keyHint: (_keybinding, description) => `ctrl+o ${description}`,
     toolCallId: "resize",
   });
   return { body, component, result, original };

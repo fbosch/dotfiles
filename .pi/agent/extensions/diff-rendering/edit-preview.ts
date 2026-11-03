@@ -339,6 +339,7 @@ export function createDiffEditTool(
           context.expanded,
           theme,
           context.expanded && state.expandedPreviewPending,
+          context.keyHint,
         );
   };
 
@@ -371,7 +372,7 @@ export function createDiffEditTool(
         component.clear();
         return component;
       }
-      return renderEditDiffResult(result, expandedDiff, options.expanded, theme);
+      return renderEditDiffResult(result, expandedDiff, options.expanded, theme, context.keyHint);
     }
     return nativeRenderResult(result, options, theme, context);
   };

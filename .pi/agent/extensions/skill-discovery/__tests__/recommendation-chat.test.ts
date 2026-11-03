@@ -106,7 +106,11 @@ describe("recommendation chat entries", () => {
         customType: "skill-recommendations",
         data: { skills: ["bun", "æøå"] },
       },
-      { expanded: false },
+      {
+        expanded: false,
+        keyText: () => "ctrl+o",
+        keyHint: (_keybinding, description) => `ctrl+o ${description}`,
+      },
       {
         fg: (_color: string, text: string) => text,
       } as Parameters<typeof renderer>[2],

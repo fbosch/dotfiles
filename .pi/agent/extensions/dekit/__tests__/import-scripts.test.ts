@@ -23,7 +23,7 @@ async function harness() {
     }),
   );
   const calls: Array<{ command: string; args: string[] }> = [];
-  const state = { code: 0, killed: false, response: '{"matched":1}' };
+  const state = { code: 0, killed: false, truncated: false, response: '{"matched":1}' };
   const executor: Pick<ExtensionAPI, "exec"> = {
     async exec(command, args) {
       calls.push({ command, args });
@@ -48,6 +48,7 @@ async function harness() {
         stderr: "fixture registration failure",
         code: command === "just" ? 0 : state.code,
         killed: state.killed,
+        truncated: state.truncated,
       };
     },
   };

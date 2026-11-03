@@ -265,6 +265,7 @@ describe("in-process diff execution", () => {
             async () => ({
               code: 0,
               killed: false,
+              truncated: false,
               stderr: "",
               stdout: formatPatch(patch(old, next)),
             }),
@@ -306,6 +307,7 @@ describe("in-process diff execution", () => {
         return {
           code: 0,
           killed: false,
+          truncated: false,
           stderr: "",
           stdout: "--- a/sample.ts\n+++ b/sample.ts\n@@ -1 +1 @@\n-old\n+new\n",
         };
@@ -322,7 +324,7 @@ describe("in-process diff execution", () => {
   test("keeps binary and metadata-only changes visible", async () => {
     const raw = "diff --git a/a.png b/a.png\nBinary files a/a.png and b/a.png differ\n";
     const result = await runGitDiff(
-      async () => ({ code: 0, killed: false, stderr: "", stdout: raw }),
+      async () => ({ code: 0, killed: false, truncated: false, stderr: "", stdout: raw }),
       {},
       "/repo",
       { engine },
@@ -389,7 +391,7 @@ describe("in-process diff execution", () => {
         source.header +
         `--- ${source.oldPath}\n+++ ${source.newPath}\n${source.hunk}`;
       const result = await runGitDiff(
-        async () => ({ code: 0, killed: false, stderr: "", stdout: raw }),
+        async () => ({ code: 0, killed: false, truncated: false, stderr: "", stdout: raw }),
         {},
         "/repo",
         { engine },
@@ -411,7 +413,7 @@ describe("in-process diff execution", () => {
     const raw =
       "diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n@@ -1 +1 @@\n-old\n+new\ndiff --git a/a.png b/a.png\nBinary files a/a.png and b/a.png differ\ndiff --git a/run.sh b/run.sh\nold mode 100644\nnew mode 100755\n";
     const result = await runGitDiff(
-      async () => ({ code: 0, killed: false, stderr: "", stdout: raw }),
+      async () => ({ code: 0, killed: false, truncated: false, stderr: "", stdout: raw }),
       {},
       "/repo",
       { engine },
@@ -426,6 +428,7 @@ describe("in-process diff execution", () => {
         async () => ({
           code: 128,
           killed: false,
+          truncated: false,
           stdout: "",
           stderr: `${ESCAPE}[31mfatal${ESCAPE}[0m`,
         }),
@@ -435,10 +438,15 @@ describe("in-process diff execution", () => {
       ),
     ).rejects.toThrow("Could not read Git diff:\nfatal");
     await expect(
-      runGitDiff(async () => ({ code: 0, killed: false, stdout: "", stderr: "" }), {}, "/repo", {
-        engine,
-        signal: AbortSignal.abort(),
-      }),
+      runGitDiff(
+        async () => ({ code: 0, killed: false, truncated: false, stdout: "", stderr: "" }),
+        {},
+        "/repo",
+        {
+          engine,
+          signal: AbortSignal.abort(),
+        },
+      ),
     ).rejects.toThrow();
   });
   test("saves full output when bounded output truncates and preserves save failures", async () => {
@@ -452,6 +460,7 @@ describe("in-process diff execution", () => {
     const execute = async () => ({
       code: 0,
       killed: false,
+      truncated: false,
       stderr: "",
       stdout: "--- a/a\n+++ b/a\n@@ -1 +1 @@\n-a\n+b\n",
     });

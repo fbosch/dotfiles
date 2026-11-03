@@ -26,6 +26,15 @@ describe("browser backend routing", () => {
         "domcontentloaded",
       ],
     ]);
+    expect(f.calls[0]?.maxBuffer).toBe(512 * 1024);
+  });
+
+  test("rejects truncated browser CLI output instead of parsing a partial page", async () => {
+    const f = browserFixture("agent-browser");
+    f.state.truncated = true;
+    const browser = createBrowserBackends()(f.pi, f.ctx, {});
+    await expect(browser.snapshot()).rejects.toThrow("agent-browser output exceeded");
+    expect(f.calls[0]?.maxBuffer).toBe(512 * 1024);
   });
 
   test("requires explicit MCP page binding and never falls back to another backend", async () => {

@@ -91,8 +91,12 @@ function usageSummary(
   const inputTokens = usages.reduce((sum, usage) => sum + usage.input, 0);
   const outputTokens = usages.reduce((sum, usage) => sum + usage.output, 0);
   const cost = usages.reduce((sum, usage) => sum + usage.cost.total, 0);
+  const billed = usages.filter((usage) => usage.cost.totalFromProvider === true).length;
+  const costProvenance =
+    billed === usages.length ? "provider" : billed === 0 ? "estimate" : "mixed";
   return {
     ...base,
+    ...(Number.isFinite(cost) && cost >= 0 ? { costProvenance } : {}),
     ...(Number.isSafeInteger(inputTokens) && inputTokens >= 0 ? { inputTokens } : {}),
     ...(Number.isSafeInteger(outputTokens) && outputTokens >= 0 ? { outputTokens } : {}),
     ...(Number.isFinite(cost) && cost >= 0 ? { cost } : {}),

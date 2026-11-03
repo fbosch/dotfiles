@@ -38,6 +38,7 @@ async function harness() {
     ]),
     code: 0,
     killed: false,
+    truncated: false,
     onList: () => {},
   };
   const calls: Array<{ command: string; args: string[]; timeout?: number }> = [];
@@ -55,6 +56,7 @@ async function harness() {
           stderr: "private fixture diagnostic",
           code: state.code,
           killed: state.killed,
+          truncated: false,
         };
       }
       if (command === "just") {
@@ -68,10 +70,11 @@ async function harness() {
           stderr: "",
           code: 0,
           killed: false,
+          truncated: false,
         };
       }
       if (command !== "dekit") throw new Error(`Unexpected command: ${command}`);
-      return { stdout: '{"matched":1}', stderr: "", code: 0, killed: false };
+      return { stdout: '{"matched":1}', stderr: "", code: 0, killed: false, truncated: false };
     },
   };
   return { root, executor, calls, state };

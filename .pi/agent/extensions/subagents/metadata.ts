@@ -50,7 +50,15 @@ export function workerMetadata(
       `${observation?.inputTokens ?? "—"} input · ${observation?.outputTokens ?? "—"} output`,
     ),
   );
-  lines.push(row("Cost", observation?.cost === undefined ? "—" : String(observation.cost)));
+  const costLabel =
+    observation?.costProvenance === "provider"
+      ? "Billed cost"
+      : observation?.costProvenance === "estimate"
+        ? "Estimated cost"
+        : observation?.costProvenance === "mixed"
+          ? "Mixed cost"
+          : "Cost";
+  lines.push(row(costLabel, observation?.cost === undefined ? "—" : String(observation.cost)));
   if (expanded) {
     if (assignment) {
       lines.push(

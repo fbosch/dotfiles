@@ -48,6 +48,8 @@ const context = {
   lastComponent: undefined,
   showImages: false,
   state: {},
+  keyText: () => "ctrl+o",
+  keyHint: (_keybinding: string, description: string) => `ctrl+o ${description}`,
   toolCallId: "read",
 };
 const result = {
@@ -204,6 +206,8 @@ test("the same resolved renderer works in native main-window and saved subagent 
               text: JSON.stringify({
                 ...result,
                 role: "toolResult",
+                keyText: () => "ctrl+o",
+                keyHint: (_keybinding: string, description: string) => `ctrl+o ${description}`,
                 toolCallId: "call",
                 toolName: "read",
                 isError: false,

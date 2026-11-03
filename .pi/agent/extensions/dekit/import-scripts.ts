@@ -90,7 +90,7 @@ if (import.meta.main) {
         child.exited,
       ]);
       // Bun marks normally exited subprocesses as killed too.
-      return { stdout, stderr, code, killed: child.signalCode !== null };
+      return { stdout, stderr, code, killed: child.signalCode !== null, truncated: false };
     },
   };
   try {

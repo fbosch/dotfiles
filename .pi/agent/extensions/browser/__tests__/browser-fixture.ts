@@ -9,7 +9,12 @@ import type { BrowserBackend } from "../backends";
 
 type Control = "email" | "submit" | "updates" | "learn" | "country";
 export function browserFixture(backend: BrowserBackend) {
-  const calls: { name: string; args: Record<string, unknown>; signal?: AbortSignal }[] = [];
+  const calls: {
+    name: string;
+    args: Record<string, unknown>;
+    signal?: AbortSignal;
+    maxBuffer?: number;
+  }[] = [];
   const actions: { action: string; value?: string }[] = [];
   const tools: ToolDefinition[] = [];
   const state = {
@@ -22,6 +27,7 @@ export function browserFixture(backend: BrowserBackend) {
     metadataOverrides: {} as Record<string, unknown>,
     failTool: "",
     failMessage: "Native tool denied by permission hook",
+    truncated: false,
   };
   const uids =
     backend === "firefox"
@@ -133,16 +139,27 @@ export function browserFixture(backend: BrowserBackend) {
   const pi = {
     registerTool: (tool: ToolDefinition) => tools.push(tool),
     on: () => {},
-    exec: async (command: string, args: string[], options?: { signal?: AbortSignal }) => {
+    exec: async (
+      command: string,
+      args: string[],
+      options?: { signal?: AbortSignal; maxBuffer?: number },
+    ) => {
       calls.push({
         name: command,
         args: { argv: args },
         ...(options?.signal === undefined ? {} : { signal: options.signal }),
+        ...(options?.maxBuffer === undefined ? {} : { maxBuffer: options.maxBuffer }),
       });
       const action = args[4] ?? "";
       const target = args[5] ?? "";
       if (action === state.failTool)
-        return { stdout: state.failMessage, stderr: "", code: 1, killed: false };
+        return {
+          stdout: state.failMessage,
+          stderr: "",
+          code: 1,
+          killed: false,
+          truncated: state.truncated,
+        };
       let stdout = "CLI action completed";
       if (action === "snapshot")
         stdout = snapshot(true) + (state.value ? `\nvalue="${state.value}"` : "");
@@ -157,7 +174,7 @@ export function browserFixture(backend: BrowserBackend) {
           ...(args[6] === undefined ? {} : { value: args[6] }),
         });
       }
-      return { stdout, stderr: "", code: 0, killed: false };
+      return { stdout, stderr: "", code: 0, killed: false, truncated: state.truncated };
     },
   } as unknown as ExtensionAPI;
   const ctx = {

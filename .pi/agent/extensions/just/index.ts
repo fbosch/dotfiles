@@ -276,6 +276,7 @@ export async function executeJustRecipe(
         timedOut,
         stdoutTruncated: stdout.truncated,
         stderrTruncated: stderr.truncated,
+        truncated: stdout.truncated || stderr.truncated,
       });
     }
 

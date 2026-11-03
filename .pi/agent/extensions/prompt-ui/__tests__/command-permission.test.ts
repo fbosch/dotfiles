@@ -90,7 +90,9 @@ describe("command permission UI", () => {
   test("uses the orange inline permission dock and preserves decision context", async () => {
     const h = harness((component) => component.handleInput?.("\r"));
     expect(await confirmCommandPermission(h.ctx, h.request)).toBe(true);
-    expect(h.options).toEqual([{ overlay: false }]);
+    expect(h.options).toEqual([
+      { overlay: false, blocked: { kind: "permission", message: "Review a command" } },
+    ]);
     const lines = h.dialogs[0]?.render(120) ?? [];
     const plain = lines.map(stripTerminalSequences).join("\n");
     expect(plain).toContain("Run this bash command?");

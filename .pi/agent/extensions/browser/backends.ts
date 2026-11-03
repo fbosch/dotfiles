@@ -30,6 +30,7 @@ export interface BrowserDriver {
 }
 
 const COMMAND_TIMEOUT_MS = 30_000;
+const MAX_CLI_OUTPUT_BYTES = 512 * 1024;
 const MAX_MCP_CONTROLS = 200;
 const MCP_NODE = /^\s*uid=(\S+)\s+([\w-]+)(?:\s+("(?:\\.|[^"\\])*"))?(.*)$/u;
 const ROLES = new Set(["button", "link", "textbox", "searchbox", "checkbox", "radio", "combobox"]);
@@ -49,7 +50,13 @@ function cliDriver(pi: ExtensionAPI, sessionId: string, signal?: AbortSignal): B
     const result = await pi.exec("agent-browser", browserArgs(sessionId, command), {
       ...(signal === undefined ? {} : { signal }),
       timeout: COMMAND_TIMEOUT_MS,
+      maxBuffer: MAX_CLI_OUTPUT_BYTES,
     });
+    if (result.truncated) {
+      throw new Error(
+        `agent-browser output exceeded the ${MAX_CLI_OUTPUT_BYTES} byte limit; the subprocess was terminated`,
+      );
+    }
     const output = [result.stdout.trimEnd(), result.stderr.trimEnd()].filter(Boolean).join("\n");
     if (result.code !== 0 || result.killed) throw new Error(output || "agent-browser failed");
     return boundedOutput(output);

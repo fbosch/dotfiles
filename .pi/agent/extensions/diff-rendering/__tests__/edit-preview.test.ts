@@ -64,6 +64,8 @@ for (const failure of ["missing file", "unmatched edit", "renderer failure"] as 
       lastComponent: undefined,
       showImages: false,
       state,
+      keyText: () => "ctrl+o",
+      keyHint: (_keybinding, description) => `ctrl+o ${description}`,
       toolCallId: "preview-test",
     };
     const settled = (render: () => void) =>

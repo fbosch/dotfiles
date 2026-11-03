@@ -57,7 +57,13 @@ export function registerHashlineRendering(pi: RendererAPI): void {
           const component = new Container();
           if (captured)
             component.addChild(
-              diffComponent(captured, options.expanded || context.expanded, theme),
+              diffComponent(
+                captured,
+                options.expanded || context.expanded,
+                theme,
+                false,
+                context.keyHint,
+              ),
             );
           const notices = editNotices(details, text);
           if (notices) component.addChild(new Text(notices, 0, 0));
@@ -145,6 +151,7 @@ export function registerHashlineRendering(pi: RendererAPI): void {
               options.expanded || context.expanded,
               theme,
               false,
+              context.keyHint,
               trailingPreview,
             ),
           );

@@ -17,7 +17,7 @@ const pi: Pick<ExtensionAPI, "exec"> = {
       new Response(child.stderr).text(),
       child.exited,
     ]);
-    return { stdout, stderr, code, killed: false };
+    return { stdout, stderr, code, killed: false, truncated: false };
   },
 };
 
@@ -69,7 +69,13 @@ test("invalid worktree Justfiles remain errors rather than empty catalogs", asyn
 test("permission failures remain errors rather than empty catalogs", async () => {
   const denied: Pick<ExtensionAPI, "exec"> = {
     async exec() {
-      return { stdout: "", stderr: "Operation not permitted (os error 1)", code: 1, killed: false };
+      return {
+        stdout: "",
+        stderr: "Operation not permitted (os error 1)",
+        code: 1,
+        killed: false,
+        truncated: false,
+      };
     },
   };
   await worktree(async (cwd) => {

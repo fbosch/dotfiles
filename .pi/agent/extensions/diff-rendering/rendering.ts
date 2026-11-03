@@ -1,5 +1,4 @@
-import type { Theme } from "@earendil-works/pi-coding-agent";
-import { keyHint } from "@earendil-works/pi-coding-agent";
+import type { KeybindingHints, Theme } from "@earendil-works/pi-coding-agent";
 import {
   Box,
   type Component,
@@ -68,7 +67,8 @@ export function diffComponent(
   details: DiffDetails,
   expanded: boolean,
   theme: Theme,
-  loading = false,
+  loading: boolean,
+  keyHint: KeybindingHints["keyHint"],
   trailingPreview = "",
 ): Component {
   const lines = sourceLinesForRender(applyDiffTheme(details.output, theme));
@@ -115,14 +115,15 @@ export function replaceEditPreview(
   details: DiffDetails,
   expanded: boolean,
   theme: Theme,
-  loading = false,
+  loading: boolean,
+  keyHint: KeybindingHints["keyHint"],
 ): Component {
   if (!(component instanceof Box)) return component;
   const header = component.children[0];
   component.clear();
   if (header !== undefined) component.addChild(header);
   component.addChild(new Spacer(1));
-  component.addChild(diffComponent(details, expanded, theme, loading));
+  component.addChild(diffComponent(details, expanded, theme, loading, keyHint));
   component.setBgFn((text) => theme.bg("toolSuccessBg", text));
   return component;
 }
@@ -132,6 +133,7 @@ export function renderEditDiffResult(
   details: DiffDetails,
   expanded: boolean,
   theme: Theme,
+  keyHint: KeybindingHints["keyHint"],
 ): Component {
   const component = new Container();
   const summary = result.content
@@ -143,6 +145,6 @@ export function renderEditDiffResult(
     component.addChild(new Text(theme.fg("success", summary), 1, 0));
   }
   component.addChild(new Spacer(1));
-  component.addChild(diffComponent(details, expanded, theme));
+  component.addChild(diffComponent(details, expanded, theme, false, keyHint));
   return component;
 }

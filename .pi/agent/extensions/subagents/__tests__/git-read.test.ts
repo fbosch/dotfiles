@@ -10,7 +10,7 @@ test("read-only Git diff uses fixed arguments and disables external drivers", as
     },
     async exec(...args) {
       calls.push(args);
-      return { code: 0, stdout: "diff evidence", stderr: "", killed: false };
+      return { code: 0, stdout: "diff evidence", stderr: "", killed: false, truncated: false };
     },
   });
   const signal = new AbortController().signal;

@@ -290,6 +290,8 @@ function wrapHashlineTool(tool: ToolDefinition, runEdit: EditDiffRunner): ToolDe
         warning === "" ? details.diffRendering : { ...details.diffRendering, warning },
         options.expanded === true || context.expanded === true,
         theme,
+        false,
+        context.keyHint,
       );
     }
     return originalRenderResult(result, options, theme, context);
@@ -522,11 +524,11 @@ export function registerDiffRenderingExtension(
     await registerHashlineDiffTools(session);
   });
 
-  pi.registerEntryRenderer<DiffDetails>(ENTRY_TYPE, (entry, { expanded }, theme) => {
+  pi.registerEntryRenderer<DiffDetails>(ENTRY_TYPE, (entry, options, theme) => {
     const details = entry.data;
     return details === undefined
       ? new Text(theme.fg("warning", "Diff data is unavailable."), 0, 0)
-      : diffComponent(details, expanded, theme);
+      : diffComponent(details, options.expanded, theme, false, options.keyHint);
   });
 
   pi.registerTool(
@@ -579,7 +581,13 @@ export function registerDiffRenderingExtension(
         const component = new Container();
         component.addChild(new Spacer(1));
         component.addChild(
-          diffComponent(details, expanded, theme, expanded && context.state.expandedPending),
+          diffComponent(
+            details,
+            expanded,
+            theme,
+            expanded && context.state.expandedPending,
+            context.keyHint,
+          ),
         );
         return component;
       },

@@ -695,7 +695,15 @@ describe("standalone tasks checklist", () => {
         return text;
       },
     } as unknown as Theme;
-    const component = renderer(marker, { expanded: false }, theme);
+    const component = renderer(
+      marker,
+      {
+        expanded: false,
+        keyText: () => "ctrl+o",
+        keyHint: (_keybinding, description) => `ctrl+o ${description}`,
+      },
+      theme,
+    );
     expect(component?.render(120)).toHaveLength(1);
     expect(component?.render(120).join("\n").trimEnd()).toBe(
       decision.source === "classifier"
@@ -726,7 +734,15 @@ describe("standalone tasks checklist", () => {
     if (restoredMarker?.type !== "custom") throw new Error("Missing restored marker");
     expect(
       reloaded.renderers
-        .get(TASKS_RECONCILIATION_ENTRY)?.(restoredMarker, { expanded: false }, theme)
+        .get(TASKS_RECONCILIATION_ENTRY)?.(
+          restoredMarker,
+          {
+            expanded: false,
+            keyText: () => "ctrl+o",
+            keyHint: (_keybinding, description) => `ctrl+o ${description}`,
+          },
+          theme,
+        )
         ?.render(120),
     ).toEqual(component?.render(120));
   });
@@ -748,11 +764,25 @@ describe("standalone tasks checklist", () => {
     const renderer = tasks.renderers.get(TASKS_RECONCILIATION_ENTRY);
     if (!renderer) throw new Error("Missing indicator renderer");
     const theme = { fg: (_color: string, text: string) => text } as unknown as Theme;
-    expect(renderer(marker, { expanded: false }, theme)).toBeUndefined();
+    expect(
+      renderer(
+        marker,
+        {
+          expanded: false,
+          keyText: () => "ctrl+o",
+          keyHint: (_keybinding, description) => `ctrl+o ${description}`,
+        },
+        theme,
+      ),
+    ).toBeUndefined();
     expect(
       renderer(
         { ...marker, data: { remind: false, source: "classifier" } },
-        { expanded: false },
+        {
+          expanded: false,
+          keyText: () => "ctrl+o",
+          keyHint: (_keybinding, description) => `ctrl+o ${description}`,
+        },
         theme,
       ),
     ).toBeUndefined();
@@ -806,6 +836,8 @@ describe("standalone tasks checklist", () => {
     const input: TasksInput = { action: "set", items: plan };
     const renderContext: TaskRenderContext = {
       args: input,
+      keyText: () => "ctrl+o",
+      keyHint: (_keybinding, description) => `ctrl+o ${description}`,
       toolCallId: "render-test",
       invalidate() {},
       lastComponent: undefined,

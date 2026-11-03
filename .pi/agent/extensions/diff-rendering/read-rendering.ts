@@ -71,6 +71,8 @@ export function registerHashlineReadRendering(pi: {
             },
             options.expanded || context.expanded,
             theme,
+            false,
+            context.keyHint,
           ),
         );
         if (lines.length > source.length)

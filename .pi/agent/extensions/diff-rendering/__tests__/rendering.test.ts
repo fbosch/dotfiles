@@ -19,14 +19,26 @@ function expected(width: number): string[] {
 }
 
 test("diff output reuses wrapped rows at the same terminal width", () => {
-  const component = diffComponent(details, true, theme);
+  const component = diffComponent(
+    details,
+    true,
+    theme,
+    false,
+    (_keybinding, description) => `configured ${description}`,
+  );
   const first = component.render(40);
   expect(first).toEqual(expected(40));
   expect(component.render(40)).toBe(first);
 });
 
 test("diff output recomputes wrapping after resize and explicit invalidation", () => {
-  const component = diffComponent(details, true, theme);
+  const component = diffComponent(
+    details,
+    true,
+    theme,
+    false,
+    (_keybinding, description) => `configured ${description}`,
+  );
   const wide = component.render(120);
   const narrow = component.render(40);
   expect(narrow).toEqual(expected(40));
@@ -40,10 +52,31 @@ test("diff output recomputes wrapping after resize and explicit invalidation", (
 });
 
 test("empty diff output can reuse and invalidate an empty row buffer", () => {
-  const component = diffComponent({ ...details, noChanges: true }, true, theme);
+  const component = diffComponent(
+    { ...details, noChanges: true },
+    true,
+    theme,
+    false,
+    (_keybinding, description) => `configured ${description}`,
+  );
   const first = component.render(40);
   expect(first).toEqual([]);
   expect(component.render(40)).toBe(first);
   component.invalidate();
   expect(component.render(40)).toEqual([]);
+});
+
+test("diff overflow uses configured key hints", () => {
+  const longDetails = {
+    ...details,
+    output: Array.from({ length: 40 }, (_, index) => `line ${index}`).join("\n"),
+  };
+  const component = diffComponent(
+    longDetails,
+    false,
+    theme,
+    false,
+    (_keybinding, description) => `configured ${description}`,
+  );
+  expect(component.render(120).join("\n")).toContain("configured to expand");
 });

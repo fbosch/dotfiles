@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "1.4.0",
+  "lastChangelogVersion": "1.5.0",
   "theme": "zenwritten-dark",
   "quietStartup": true,
   "references": {
@@ -166,7 +166,7 @@
   },
   "packages": [
     "npm:pi-hashline-edit-pro@7.1.1",
-    "npm:pi-codex-goal@0.7.2",
+    "npm:pi-codex-goal@0.7.7",
     "npm:pi-context-view@0.8.2",
     "npm:@ff-labs/pi-fff@0.11.0",
     "npm:pi-web-access@0.46.0",

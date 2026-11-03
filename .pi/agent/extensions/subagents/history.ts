@@ -115,6 +115,9 @@ const observationSchema = Type.Object({
   inputTokens: Type.Optional(Type.Number()),
   outputTokens: Type.Optional(Type.Number()),
   cost: Type.Optional(Type.Number()),
+  costProvenance: Type.Optional(
+    Type.Union(["provider", "estimate", "mixed"].map((value) => Type.Literal(value))),
+  ),
   resolvedModel: Type.Optional(Type.String()),
   resolvedThinking: Type.Optional(
     Type.Union(

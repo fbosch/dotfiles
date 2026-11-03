@@ -191,7 +191,7 @@ export function workerDetails(worker: WorkerSnapshot, observation?: ChildObserva
     `Started: ${observation ? new Date(observation.startedAt).toISOString() : "unavailable"}`,
     `Ended: ${observation?.endedAt === undefined ? "unavailable" : new Date(observation.endedAt).toISOString()}`,
     `Input tokens: ${observation?.inputTokens ?? "unavailable"} | Output tokens: ${observation?.outputTokens ?? "unavailable"}`,
-    `Cost: ${observation?.cost ?? "unavailable"}`,
+    `${observation?.costProvenance === "provider" ? "Billed cost" : observation?.costProvenance === "estimate" ? "Estimated cost" : observation?.costProvenance === "mixed" ? "Mixed cost" : "Cost"}: ${observation?.cost ?? "unavailable"}`,
     "Reports are worker evidence, not verified conclusions.",
   ];
   for (const assignment of worker.assignments) {

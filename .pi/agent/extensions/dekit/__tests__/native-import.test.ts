@@ -67,7 +67,7 @@ async function fixture(configured = false) {
         new Response(child.stderr).text(),
         child.exited,
       ]);
-      return { stdout, stderr, code, killed: child.signalCode !== null };
+      return { stdout, stderr, code, killed: child.signalCode !== null, truncated: false };
     },
   };
   async function run(args: string[]): Promise<unknown> {

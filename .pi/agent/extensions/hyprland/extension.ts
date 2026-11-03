@@ -12,11 +12,12 @@ import {
   type ExtensionCommandContext,
   truncateHead,
 } from "@earendil-works/pi-coding-agent";
+import type { Static } from "@earendil-works/pi-schema";
 import { Type } from "typebox";
 import { INACTIVE_SPECIALIST_TOOL } from "../../lib/tool-exposure";
 
-type Mode = "auto" | "browser" | "window" | "region" | "monitor" | "full";
-type Format = "png" | "jpeg";
+type Mode = Static<typeof ModeSchema>;
+type Format = Static<typeof FormatSchema>;
 
 type CommandResult = {
   stdout: string;
@@ -2091,6 +2092,19 @@ async function captureByMode(
     : withFallback(fullResult, fallback);
 }
 
+function isMode(value: unknown): value is Mode {
+  return (
+    value === "auto" ||
+    value === "browser" ||
+    value === "window" ||
+    value === "region" ||
+    value === "monitor" ||
+    value === "full"
+  );
+}
+function isFormat(value: unknown): value is Format {
+  return value === "png" || value === "jpeg";
+}
 const ModeSchema = StringEnum(["auto", "browser", "window", "region", "monitor", "full"] as const);
 const FormatSchema = StringEnum(["png", "jpeg"] as const);
 const HyprWindowScreenshotParameters = Type.Object({
@@ -2144,8 +2158,8 @@ function createHyprWindowScreenshotTool(
         );
       }
 
-      const mode = args.mode ?? "auto";
-      const format = args.format ?? "png";
+      const mode: Mode = isMode(args.mode) ? args.mode : "auto";
+      const format: Format = isFormat(args.format) ? args.format : "png";
       const hint = args.hint ?? "";
       const captureArgs = {
         mode,
