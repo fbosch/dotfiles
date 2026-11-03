@@ -54,28 +54,36 @@ export const MODEL_PRESETS = {
     models: [
       {
         model: "openai-codex/gpt-6.1-sol",
-        thinking: ["low", "medium", "high"],
+        thinking: ["low", "medium", "high", "xhigh", "max"],
         defaultThinking: "medium",
       },
       {
         model: "anthropic/claude-sonnet-5-5",
-        thinking: ["low", "medium"],
+        thinking: ["low", "medium", "high", "xhigh", "max"],
         defaultThinking: "medium",
       },
       {
         model: "claude-bridge/claude-sonnet-5-5",
-        thinking: ["low", "medium"],
+        thinking: ["low", "medium", "high", "xhigh", "max"],
         defaultThinking: "medium",
       },
     ],
   },
   deliberation: {
     models: [
-      { model: "openai-codex/gpt-6.1-sol", thinking: ["medium", "high"], defaultThinking: "high" },
-      { model: "anthropic/claude-opus-5-5", thinking: ["medium", "high"], defaultThinking: "high" },
+      {
+        model: "openai-codex/gpt-6.1-sol",
+        thinking: ["medium", "high", "xhigh", "max"],
+        defaultThinking: "high",
+      },
+      {
+        model: "anthropic/claude-opus-5-5",
+        thinking: ["medium", "high", "xhigh", "max"],
+        defaultThinking: "high",
+      },
       {
         model: "claude-bridge/claude-opus-5-5",
-        thinking: ["medium", "high"],
+        thinking: ["medium", "high", "xhigh", "max"],
         defaultThinking: "high",
       },
     ],
@@ -87,7 +95,7 @@ export const MODEL_PRESETS = {
     models: [
       {
         model: "openai-codex/gpt-6-luna",
-        thinking: ["medium", "high", "xhigh"],
+        thinking: ["low", "medium", "high", "xhigh", "max"],
         defaultThinking: "xhigh",
       },
     ],
@@ -96,11 +104,19 @@ export const MODEL_PRESETS = {
     models: [
       {
         model: "openai-codex/gpt-6-luna",
-        thinking: ["high", "xhigh", "max"],
+        thinking: ["medium", "high", "xhigh", "max"],
         defaultThinking: "max",
       },
-      { model: "anthropic/claude-opus-5-5", thinking: ["high", "max"], defaultThinking: "max" },
-      { model: "claude-bridge/claude-opus-5-5", thinking: ["high", "max"], defaultThinking: "max" },
+      {
+        model: "anthropic/claude-opus-5-5",
+        thinking: ["medium", "high", "xhigh", "max"],
+        defaultThinking: "max",
+      },
+      {
+        model: "claude-bridge/claude-opus-5-5",
+        thinking: ["medium", "high", "xhigh", "max"],
+        defaultThinking: "max",
+      },
     ],
   },
   "critical-review": {

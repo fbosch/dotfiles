@@ -244,21 +244,37 @@ describe("quota-aware model presets", () => {
       routingPrompt([{ role: "user", timestamp: now, content: "api_key=secret-value" }]),
     ).not.toContain("secret-value");
   });
-  test("each provider offers only its own configured thinking levels", async () => {
+  test("each model offers only its own configured thinking levels", async () => {
     const f = fixture([codex, native, bridge]);
-    await createVirtualPreset("planning", MODEL_PRESETS.planning, f.dependencies).route(
-      { reason: "user", messages },
-      f.ctx,
-    );
-    const criteria = f.input()?.questions.route?.criteria;
-    expect(criteria).toEqual({
-      candidate_0: "openai-codex/gpt-6.1-sol; reasoning effort low",
-      candidate_1: "openai-codex/gpt-6.1-sol; reasoning effort medium",
-      candidate_2: "openai-codex/gpt-6.1-sol; reasoning effort high",
-      candidate_3: "anthropic/claude-sonnet-5-5; reasoning effort low",
-      candidate_4: "anthropic/claude-sonnet-5-5; reasoning effort medium",
-      candidate_5: "claude-bridge/claude-sonnet-5-5; reasoning effort low",
-      candidate_6: "claude-bridge/claude-sonnet-5-5; reasoning effort medium",
+    await createVirtualPreset(
+      "mixed-effort",
+      {
+        models: [
+          {
+            model: "openai-codex/gpt-6.1-sol",
+            thinking: ["high", "xhigh"],
+            defaultThinking: "high",
+          },
+          {
+            model: "anthropic/claude-sonnet-5-5",
+            thinking: ["low", "medium"],
+            defaultThinking: "medium",
+          },
+          {
+            model: "claude-bridge/claude-sonnet-5-5",
+            thinking: ["medium"],
+            defaultThinking: "medium",
+          },
+        ],
+      },
+      f.dependencies,
+    ).route({ reason: "user", messages }, f.ctx);
+    expect(f.input()?.questions.route?.criteria).toEqual({
+      candidate_0: "openai-codex/gpt-6.1-sol; reasoning effort high",
+      candidate_1: "openai-codex/gpt-6.1-sol; reasoning effort xhigh",
+      candidate_2: "anthropic/claude-sonnet-5-5; reasoning effort low",
+      candidate_3: "anthropic/claude-sonnet-5-5; reasoning effort medium",
+      candidate_4: "claude-bridge/claude-sonnet-5-5; reasoning effort medium",
     });
   });
 
@@ -331,17 +347,17 @@ describe("quota-aware model presets", () => {
   test("current presets explicitly select Sonnet 5.5 and Opus 5.5 with per-model defaults", () => {
     expect(MODEL_PRESETS.planning.models[1]).toEqual({
       model: "anthropic/claude-sonnet-5-5",
-      thinking: ["low", "medium"],
+      thinking: ["low", "medium", "high", "xhigh", "max"],
       defaultThinking: "medium",
     });
     expect(MODEL_PRESETS.deliberation.models[1]).toEqual({
       model: "anthropic/claude-opus-5-5",
-      thinking: ["medium", "high"],
+      thinking: ["medium", "high", "xhigh", "max"],
       defaultThinking: "high",
     });
     expect(MODEL_PRESETS["deep-analysis"].models[1]).toEqual({
       model: "anthropic/claude-opus-5-5",
-      thinking: ["high", "max"],
+      thinking: ["medium", "high", "xhigh", "max"],
       defaultThinking: "max",
     });
   });
@@ -352,7 +368,68 @@ describe("quota-aware model presets", () => {
       { reason: "user", messages },
       f.ctx,
     );
-    expect(Object.keys(f.input()?.questions.route?.criteria ?? {})).toHaveLength(3);
+    expect(Object.keys(f.input()?.questions.route?.criteria ?? {})).toHaveLength(5);
     expect(f.activated).toEqual([codex]);
   });
+
+  const adaptivePolicies = [
+    ["focused-execution", ["low", "medium", "high", "xhigh"], "xhigh"],
+    ["planning", ["low", "medium", "high", "xhigh", "max"], "medium"],
+    ["implementation", ["low", "medium", "high", "xhigh", "max"], "xhigh"],
+    ["deliberation", ["medium", "high", "xhigh", "max"], "high"],
+    ["deep-analysis", ["medium", "high", "xhigh", "max"], "max"],
+  ] as const;
+
+  for (const [id, thinking, defaultThinking] of adaptivePolicies) {
+    test(`${id} expands effort choices without changing its fallback default`, () => {
+      for (const policy of MODEL_PRESETS[id].models) {
+        expect([...policy.thinking]).toEqual([...thinking]);
+        expect(policy.defaultThinking).toBe(defaultThinking);
+      }
+    });
+
+    test(`${id} allows classification to select either boundary for each eligible model`, async () => {
+      for (const policy of MODEL_PRESETS[id].models) {
+        const provider = policy.model.split("/")[0];
+        const account = [codex, native, bridge].find(
+          (candidate) => candidate.provider === provider,
+        );
+        if (!account) throw new Error(`Missing fixture account for ${policy.model}`);
+        for (const level of [thinking[0], ...thinking.slice(-1)]) {
+          const f = fixture([account]);
+          f.dependencies.classify = async (_registry, input) => {
+            const question = input.questions.route;
+            if (question?.type !== "choice") throw new Error("Expected routing choices");
+            const entry = Object.entries(question.criteria).find(
+              ([, description]) => description === `${policy.model}; reasoning effort ${level}`,
+            );
+            if (!entry) throw new Error(`Missing choice for ${policy.model} at ${level}`);
+            const choice = entry[0];
+            return {
+              ok: true,
+              value: {
+                answers: {
+                  route: {
+                    type: "choice",
+                    choice,
+                    confidence: 0.9,
+                    probabilities: Object.fromEntries(
+                      Object.keys(question.criteria).map((key) => [key, key === choice ? 1 : 0]),
+                    ),
+                  },
+                },
+              },
+            };
+          };
+          const result = await createVirtualPreset(id, MODEL_PRESETS[id], f.dependencies).route(
+            { reason: "user", messages },
+            f.ctx,
+          );
+          expect(`${result.model.provider}/${result.model.id}`).toBe(policy.model);
+          expect(result.thinkingLevel).toBe(level);
+          expect(f.activated).toEqual([account]);
+        }
+      }
+    });
+  }
 });

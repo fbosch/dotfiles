@@ -139,6 +139,13 @@ async function fixture(
               id: provider === "openai-codex" ? "gpt-6.1-sol" : "claude-sonnet-5-5",
               name: "Fixture",
               reasoning: true,
+              thinkingLevelMap: {
+                low: "low",
+                medium: "medium",
+                high: "high",
+                xhigh: "xhigh",
+                max: "max",
+              },
               input: ["text"],
               contextWindow: 200000,
               maxTokens: 32000,
