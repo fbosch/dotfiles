@@ -113,6 +113,7 @@ export class PiChildDriver implements ChildDriver {
       cwd: string;
       agentDir: string;
       projectTrusted: boolean;
+      authProfile?: () => string | undefined;
       resolveModel: (
         config: ResolvedSpecialist,
       ) => NonNullable<ExtensionContext["model"]> | undefined;
@@ -142,11 +143,13 @@ export class PiChildDriver implements ChildDriver {
       activity: "Starting",
       liveText: "",
     });
+    const authProfile = this.options.authProfile?.();
     record.building = (this.options.create ?? createChildSession)({
       config: input.config,
       cwd: this.options.cwd,
       agentDir: this.options.agentDir,
       projectTrusted: this.options.projectTrusted,
+      ...(authProfile === undefined ? {} : { authProfile }),
       model,
       protocol: this.protocol(input.workerId, record),
       onUncertainStartup: (_error, resources) => {

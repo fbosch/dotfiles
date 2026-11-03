@@ -16,6 +16,7 @@ afterEach(async () => {
 });
 
 const baselineFiles = [
+  "npm/node_modules/pi-claude-bridge/src/index.ts",
   "extensions/auth-profiles/index.ts",
   "extensions/model-presets.ts",
   "extensions/openai-capabilities.ts",

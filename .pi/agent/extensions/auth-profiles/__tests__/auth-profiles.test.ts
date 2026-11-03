@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { existsSync } from "node:fs";
-import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
+import { existsSync, realpathSync } from "node:fs";
+import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { CredentialStore } from "@earendil-works/pi-ai";
@@ -155,6 +155,7 @@ describe("auth profile prompt status", () => {
       },
     });
 
+    const notifications: string[] = [];
     const statuses: Array<[string, string | undefined]> = [];
     let failNextModelRefresh = false;
     let reportNextModelRefreshError = false;
@@ -190,7 +191,7 @@ describe("auth profile prompt status", () => {
         getHeader: () => ({ id: activeSessionId }),
       },
       ui: {
-        notify: () => undefined,
+        notify: (message: string) => notifications.push(message),
         setStatus: (key: string, value: string | undefined) => statuses.push([key, value]),
       },
     } as unknown as ExtensionCommandContext;
@@ -207,7 +208,14 @@ describe("auth profile prompt status", () => {
     expect(modelRefreshes).toBe(1);
 
     expect(startupUsageCalls).toBe(1);
+    const storedWorkPath = join(realpathSync(root), "stored-work.json");
+    await writeFile(storedWorkPath, "{}");
+    await mkdir(join(agentDir, "auth-profiles"), { recursive: true });
+    await symlink(storedWorkPath, join(agentDir, "auth-profiles", "work.json"));
     await profileCommand?.("use work", ctx);
+    expect(notifications.at(-1)).toContain(`/login now saves to ${storedWorkPath}`);
+    await profileCommand?.("show", ctx);
+    expect(notifications.at(-1)).toContain(`File: ${storedWorkPath}\n`);
     expect(statuses.at(-1)).toEqual(["auth-profile", "work"]);
     expect(runtime.credentials.store.path).toBe(join(agentDir, "auth-profiles", "work.json"));
     expect(modelRefreshes).toBe(2);

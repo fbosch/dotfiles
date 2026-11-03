@@ -15,18 +15,21 @@
 - Use `docs` when documentation is the main deliverable and `refactor` for behavior-preserving code improvements. Use `benchmark` for performance measurement rather than general diagnosis.
 - Use `quick` for tightly scoped execution with explicit acceptance criteria, such as reading a known file or applying a fully specified comparison. Use `explore` when the location must be discovered, not merely because a request says "discover". Reserve `general` for complex implementation or mixed work without a narrower specialist fit.
 
-## Model and thinking presets
+## Model presets
 
-Explicit mentions use the specialist's configured model and thinking defaults unless the user requests an override. Do not select a new preset or inspect the role file merely to launch a named specialist.
-For `general`, select the lowest-cost fitting preset below and pass both `model` and `thinking`.
+Explicit mentions use the specialist's configured virtual preset unless the user requests an override. Do not select a new preset or inspect the role file merely to launch a named specialist.
 
-| Task complexity | Use when | Model | Thinking |
-| --- | --- | --- | --- |
-| Routine | Direct lookup, bounded edits, or deterministic work with clear acceptance criteria | `openai-codex/gpt-6-luna-fast` | `low` |
-| Moderate | Multi-step planning, diagnosis, documentation, or synthesis with limited ambiguity | `openai-codex/gpt-6-sol` | `medium` |
-| Complex implementation | Cross-file implementation or refactoring with clear acceptance criteria and bounded failure cost | `openai-codex/gpt-6-luna` | `xhigh` |
-| Consequential architecture or cross-system implementation | Broad subsystem/interface changes with high coupling or costly retries/review, where contracts are clear and failures remain reviewable or reversible | `openai-codex/gpt-6-sol` | `high` |
-| Deep technical analysis | Detailed tracing, test design, benchmarking, or failure analysis with many interacting details | `openai-codex/gpt-6-luna` | `max` |
-| High-risk reasoning | Ambiguous contracts, security or correctness review, or decisions with material impact | `openai-codex/gpt-6-astra` | `xhigh` |
+For `general`, select the lowest-cost fitting virtual preset below and pass `model`. Omit `thinking`; each preset owns its reasoning policy.
 
-Escalate one preset when uncertainty, coupling, or impact is higher than the task's apparent size. Do not use a stronger preset merely because the task is long; use it when the task requires deeper judgment or carries greater risk.
+| Task complexity | Use when | Model |
+| --- | --- | --- |
+| Routine | Direct lookup, bounded edits, or deterministic work with clear acceptance criteria | `presets/routine` |
+| Moderate | Multi-step planning, diagnosis, documentation, or synthesis with limited ambiguity | `presets/planning` |
+| Complex implementation | Cross-file implementation or refactoring with clear acceptance criteria and bounded failure cost | `presets/implementation` |
+| Consequential architecture or cross-system implementation | Broad subsystem/interface changes with high coupling or costly retries/review, where contracts are clear and failures remain reviewable or reversible | `presets/deliberation` |
+| Deep technical analysis | Detailed tracing, test design, benchmarking, or failure analysis with many interacting details | `presets/deep-analysis` |
+| High-risk reasoning | Ambiguous contracts, security or correctness review, or decisions with material impact | `presets/failure-analysis` |
+
+Describe ambiguity, coupling, and failure consequences in the assignment so the preset can assess the task. Do not prescribe a physical model or reasoning level in the prompt.
+
+Use a more demanding preset when uncertainty, coupling, or impact warrants it, not merely because the task is long. Profile permissions and fresh quota availability determine eligible execution accounts. Do not bypass an unavailable preset by choosing an account outside the project's enabled profiles.

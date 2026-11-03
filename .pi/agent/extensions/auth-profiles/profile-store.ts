@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, realpathSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { pathToFileURL } from "node:url";
 import type { CredentialStore } from "@earendil-works/pi-ai";
@@ -59,6 +59,16 @@ export function authPathFor(profile: string, agentDir = getAgentDir()): string {
   return profile === DEFAULT_PROFILE
     ? join(agentDir, "auth.json")
     : join(profilesDir(agentDir), `${profile}.json`);
+}
+
+export function credentialPathForDisplay(path: string): string {
+  try {
+    return realpathSync(path);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return path;
+    // Host-only stores may block path resolution inside the sandbox, not just file reads.
+    return `${path} (unable to resolve storage path)`;
+  }
 }
 
 export function readJsonFile(path: string): Record<string, unknown> | undefined {

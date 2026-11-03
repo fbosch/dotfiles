@@ -44,6 +44,8 @@ export function capabilityCatalog(
   return {
     baseline: {
       extensions: [
+        // Isolated child sessions do not inherit the parent's bridge provider.
+        installed("pi-claude-bridge/src/index.ts"),
         local("auth-profiles/index.ts"),
         local("model-presets.ts"),
         local("openai-capabilities.ts"),

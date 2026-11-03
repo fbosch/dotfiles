@@ -53,6 +53,7 @@ export type DiagnosticCode =
   | "usage-request-failed";
 
 export const AUTH_USAGE_OBSERVATION: unique symbol = Symbol("auth-usage-observation");
+export const ANTHROPIC_USAGE_OBSERVATION: unique symbol = Symbol("anthropic-own-usage-observation");
 
 export interface AuthUsageObservation {
   readonly windows: readonly ProviderUsageWindow[];
@@ -74,6 +75,7 @@ export type ProfileUsageStatus = {
   /** Anthropic plan windows (5h, 7d) for profiles that can use Anthropic OAuth. */
   anthropicUsage?: UsageWindowStatus[];
   readonly [AUTH_USAGE_OBSERVATION]?: AuthUsageObservation;
+  readonly [ANTHROPIC_USAGE_OBSERVATION]?: AuthUsageObservation;
 };
 
 export type UsageStatusPayload = {
@@ -493,7 +495,11 @@ async function anthropicUsageFor(
   cacheOnly: boolean,
   previous: Record<string, CachedAccount>,
   cache: Record<string, CachedAccount>,
-): Promise<{ windows: UsageWindowStatus[] | undefined; needsRevalidation: boolean }> {
+): Promise<{
+  windows: UsageWindowStatus[] | undefined;
+  needsRevalidation: boolean;
+  observedAt?: number;
+}> {
   let credential: AnthropicCredential | undefined = await readAnthropicCredential(
     profileLabel,
     agentDir,
@@ -505,7 +511,14 @@ async function anthropicUsageFor(
   const cachedWindows = cached?.usage ? anthropicDisplayWindows(cached.usage.windows) : undefined;
   const attemptedAt = cached?.attemptedAt ?? cached?.usageCheckedAt;
   const fresh = attemptedAt !== undefined && now - attemptedAt < ANTHROPIC_CACHE_MS;
-  if (cacheOnly || fresh) return { windows: cachedWindows, needsRevalidation: !fresh };
+  if (cacheOnly || fresh)
+    return {
+      windows: cachedWindows,
+      needsRevalidation: !fresh,
+      ...(credential.owner === profileLabel && cached?.usageCheckedAt !== undefined
+        ? { observedAt: cached.usageCheckedAt }
+        : {}),
+    };
   try {
     if (credential.expiresAt <= now) {
       credential = await refreshAnthropicCredential(credential, agentDir, false);
@@ -523,14 +536,23 @@ async function anthropicUsageFor(
       return { windows: undefined, needsRevalidation: false };
     }
     cache[key] = { credentialKey: key, usage: { windows }, usageCheckedAt: now, attemptedAt: now };
-    return { windows: anthropicDisplayWindows(windows), needsRevalidation: false };
+    return {
+      windows: anthropicDisplayWindows(windows),
+      needsRevalidation: false,
+      ...(credential.owner === profileLabel ? { observedAt: now } : {}),
+    };
   } catch {
     // Back off for a full interval so a failing endpoint is not retried on every render.
     cache[key] = { ...(cached ?? { credentialKey: key }), attemptedAt: now };
-    return { windows: cachedWindows, needsRevalidation: false };
+    return {
+      windows: cachedWindows,
+      needsRevalidation: false,
+      ...(credential.owner === profileLabel && cached?.usageCheckedAt !== undefined
+        ? { observedAt: cached.usageCheckedAt }
+        : {}),
+    };
   }
 }
-
 async function mapWithConcurrency<T, R>(
   values: T[],
   concurrency: number,
@@ -768,8 +790,17 @@ export async function collectUsageStatus(
     ),
   );
   profiles.forEach((profile, index) => {
-    const windows = anthropicUsage[index]?.windows;
-    if (windows) profile.anthropicUsage = windows;
+    const result = anthropicUsage[index];
+    if (result?.windows) profile.anthropicUsage = result.windows;
+    if (result?.observedAt !== undefined && result.windows !== undefined) {
+      Object.defineProperty(profile, ANTHROPIC_USAGE_OBSERVATION, {
+        value: Object.freeze({
+          windows: Object.freeze(result.windows),
+          observedAt: result.observedAt,
+          staleAt: result.observedAt + ANTHROPIC_CACHE_MS,
+        }),
+      });
+    }
   });
 
   if (options.cacheOnly !== true) {

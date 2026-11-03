@@ -4,6 +4,7 @@ import {
   getAgentDir,
 } from "@earendil-works/pi-coding-agent";
 import { match, P } from "ts-pattern";
+import { restoreSessionProfile } from "../auth-profiles/session-profile";
 import { loadAgentMentions } from "../mentions/agent-mentions";
 import { createBudgetAdvisor } from "./budget-advisor";
 import { resolveNamedSpecialist } from "./catalog";
@@ -81,6 +82,7 @@ export function registerSubagentHost(
       cwd: ctx.cwd,
       agentDir,
       projectTrusted: ctx.isProjectTrusted(),
+      authProfile: () => restoreSessionProfile(ctx),
       resolveModel: (config) =>
         ctx.modelRegistry
           .getAvailable()

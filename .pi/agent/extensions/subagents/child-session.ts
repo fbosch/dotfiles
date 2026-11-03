@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import * as Pi from "@earendil-works/pi-coding-agent";
+import { persistSessionProfile } from "../auth-profiles/session-profile";
 import { selectedMcp } from "./mcp";
 import { matchesToolPattern, type ResolvedSpecialist, verifyChildCapabilities } from "./specialist";
 
@@ -10,6 +11,7 @@ export interface ChildSessionOptions {
   cwd: string;
   agentDir: string;
   projectTrusted?: boolean;
+  authProfile?: string;
   model: NonNullable<Pi.ExtensionContext["model"]>;
   protocol: Pi.ExtensionFactory;
   /** Retain these resources and block delegation if startup cannot establish cleanup. */
@@ -138,13 +140,26 @@ export async function createChildSession(options: ChildSessionOptions) {
       modelsStorePath: join(agentDir, "models-store.json"),
       allowModelNetwork: false,
     });
+    const sessionManager = sdk.SessionManager.inMemory(cwd);
+    if (options.authProfile !== undefined) {
+      // Copy only the explicit parent override, before auth availability is resolved.
+      persistSessionProfile(
+        {
+          appendEntry: (type, data) => {
+            sessionManager.appendCustomEntry(type, data);
+          },
+        },
+        { sessionManager },
+        options.authProfile,
+      );
+    }
     const created = await sdk.createAgentSession({
       cwd,
       agentDir,
       settingsManager,
       modelRuntime: runtime,
       resourceLoader: loader,
-      sessionManager: sdk.SessionManager.inMemory(cwd),
+      sessionManager,
       model: options.model,
       ...(config.thinking === undefined ? {} : { thinkingLevel: config.thinking }),
       // Add discovery entry points without turning the hints into an SDK allowlist.

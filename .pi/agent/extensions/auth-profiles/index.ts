@@ -10,6 +10,12 @@
 import type { CredentialStore } from "@earendil-works/pi-ai";
 import { brandColor, PROVIDER_BRANDS, type ProviderBrand } from "../shared/provider-brand";
 import {
+  BRIDGE_OWNER,
+  bridgeSubscriptionEnvironment,
+  readBridgeQuota,
+  recordBridgeQuota,
+} from "./bridge-quota";
+import {
   installCredentialLoginBoundary,
   PROFILE_FALLBACK_PROVIDERS,
   PROFILE_LOGIN_PROVIDERS,
@@ -22,9 +28,11 @@ import {
   type ProfileAuthFallbackCallbacks,
 } from "./profile-credentials";
 import type { GitRunner } from "./profile-resolver";
+import { resolveProfile } from "./profile-resolver";
 import { type ProfileSelection, selectProfile } from "./profile-selector";
 import {
   authPathFor,
+  credentialPathForDisplay,
   DEFAULT_PROFILE,
   globalConfigPath,
   listProfiles,
@@ -44,6 +52,7 @@ import {
 } from "./providers/anthropic-usage";
 import { createOpenAiCodexProfileAdapter } from "./providers/openai-codex";
 import { registerResetCreditCommand } from "./reset-credit";
+import { installRoutingEligibilityService, type RoutingAccount } from "./routing-eligibility";
 import { persistSessionProfile, restoreSessionProfile } from "./session-profile";
 import {
   type AuthProfileObservation,
@@ -52,6 +61,7 @@ import {
   type AuthStartupState,
 } from "./startup-owner";
 import {
+  ANTHROPIC_USAGE_OBSERVATION,
   AUTH_USAGE_OBSERVATION,
   collectUsageStatus,
   type ProfileUsageStatus,
@@ -116,6 +126,9 @@ type InternalRuntime = {
 
 type BindProfileOptions = ProfileAuthFallbackCallbacks & {
   refresh?: boolean;
+  routingAccount?: RoutingAccount;
+  routingSignal?: AbortSignal;
+  now?: () => number;
   route?: FallbackOwnerRoute;
 };
 
@@ -166,13 +179,60 @@ async function bindProfile(
   const { profile } = selection;
   const path = authPathFor(profile);
   const { credentials, store } = credentialStoreBinding(ctx);
-  credentials.store = await openProfileCredentials(
+  const composed = await openProfileCredentials(
     adapter,
     profile,
     selection.profileOrder,
     options.route,
     options,
   );
+  const account = options.routingAccount;
+  if (account === undefined || account.provider === "claude-bridge") {
+    credentials.store = composed;
+  } else {
+    const ownerStore = await adapter.createCredentialStore(account.profile);
+    options.routingSignal?.throwIfAborted();
+    const check = () => {
+      if ((options.now ?? Date.now)() >= account.staleAt)
+        throw new Error("Routed quota evidence expired.");
+      if (options.route?.isExhausted(account.provider, account.profile)) {
+        throw new Error("Routed credential owner is exhausted.");
+      }
+    };
+    credentials.store = {
+      ...composed,
+      async read(providerId, authOptions) {
+        if (providerId !== account.provider) return composed.read(providerId, authOptions);
+        check();
+        const credential = await ownerStore.read(providerId, authOptions);
+        if (credential === undefined) throw new Error("Routed credential owner is missing.");
+        return credential;
+      },
+      async list(authOptions) {
+        const [general, owned] = await Promise.all([
+          composed.list(authOptions),
+          ownerStore.list(authOptions),
+        ]);
+        return [
+          ...general.filter((entry) => entry.providerId !== account.provider),
+          ...owned.filter((entry) => entry.providerId === account.provider),
+        ];
+      },
+      async modify(providerId, fn, authOptions) {
+        if (providerId !== account.provider) return composed.modify(providerId, fn, authOptions);
+        check();
+        if ((await ownerStore.read(providerId, authOptions)) === undefined) {
+          throw new Error("Routed credential owner is missing.");
+        }
+        return ownerStore.modify(providerId, fn, authOptions);
+      },
+      async delete(providerId, authOptions) {
+        if (providerId !== account.provider) return composed.delete(providerId, authOptions);
+        check();
+        return ownerStore.delete(providerId, authOptions);
+      },
+    };
+  }
   if (options.refresh === false) return path;
 
   const refresh = async (): Promise<void> => {
@@ -526,6 +586,7 @@ export default function authProfiles(
     await Promise.all(
       [...new Set(profiles)].map(async (profile) => {
         credentialProviders.set(profile, new Set(await providersIn(profile)));
+        return undefined;
       }),
     );
   };
@@ -635,6 +696,113 @@ export default function authProfiles(
       },
     });
 
+  let routingContext: ExtensionContext | undefined;
+  let routedAccount: RoutingAccount | undefined;
+  const positiveObservation = (
+    provider: RoutingAccount["provider"],
+    profile: string,
+    observation: ProfileUsageStatus[typeof AUTH_USAGE_OBSERVATION],
+  ): RoutingAccount | undefined => {
+    const current = now();
+    if (
+      !observation ||
+      !Number.isFinite(observation.observedAt) ||
+      !Number.isFinite(observation.staleAt) ||
+      observation.observedAt > current ||
+      observation.staleAt <= current ||
+      observation.windows.length === 0 ||
+      observation.windows.some(
+        (window) =>
+          !Number.isFinite(window.remaining) || window.remaining <= 0 || window.remaining > 100,
+      )
+    )
+      return undefined;
+    return {
+      provider,
+      profile,
+      remaining: Math.min(...observation.windows.map((window) => window.remaining)),
+      observedAt: observation.observedAt,
+      staleAt: observation.staleAt,
+    };
+  };
+  const allowedRoutingProfiles = async (ctx: ExtensionContext): Promise<string[]> => {
+    const override = sessionProfile ?? restoreSessionProfile(ctx);
+    if (override !== undefined) return [override];
+    const resolution = await resolveProfile(ctx, { runGit });
+    // Repository preferences define the entire authorization scope; ambient host/global
+    // fallback order affects manual auth selection but cannot grant another provider.
+    return resolution.repositoryPreferences.length > 0
+      ? resolution.repositoryPreferences
+      : [resolution.profile];
+  };
+  const routingAccounts = async (ctx: ExtensionContext): Promise<readonly RoutingAccount[]> => {
+    const allowed = await allowedRoutingProfiles(ctx);
+    const credentials = await Promise.all(allowed.map((profile) => storedCredentials(profile)));
+    const status = await usageCollector({
+      profileLabels: allowed,
+      includeDefault: allowed.includes(DEFAULT_PROFILE),
+      includeResetCredits: false,
+      providerAdapter,
+    });
+    const byProfile = new Map(status.profiles.map((profile) => [profile.profileLabel, profile]));
+    const result: RoutingAccount[] = [];
+    allowed.forEach((profile, index) => {
+      const stored = credentials[index];
+      const usage = byProfile.get(profile);
+      if (!usage || !stored) return;
+      const available = (provider: string) =>
+        !fallbackRoute.isExhausted(provider, profile) &&
+        (limitSeenUntil.get(fallbackKey(provider, profile)) ?? 0) <= now();
+      if (stored.get(codexProviderId)?.type === "oauth" && available(codexProviderId)) {
+        const account = positiveObservation("openai-codex", profile, usage[AUTH_USAGE_OBSERVATION]);
+        if (account) result.push(account);
+      }
+      if (stored.get(ANTHROPIC_PROVIDER_ID)?.type === "oauth" && available(ANTHROPIC_PROVIDER_ID)) {
+        const account = positiveObservation(
+          "anthropic",
+          profile,
+          usage[ANTHROPIC_USAGE_OBSERVATION],
+        );
+        if (account) result.push(account);
+      }
+    });
+    if (allowed.includes(BRIDGE_OWNER) && bridgeSubscriptionEnvironment()) {
+      const bridge = readBridgeQuota(now());
+      if (bridge) result.push(bridge);
+    }
+    return result;
+  };
+  const disposeRouting = pi.events
+    ? installRoutingEligibilityService(pi.events, {
+        list: async () => {
+          if (!routingContext) throw new Error("Auth routing has no active session.");
+          return routingAccounts(routingContext);
+        },
+        activate: async (account, signal) => {
+          if (!routingContext) throw new Error("Auth routing has no active session.");
+          const ctx = routingContext;
+          const eligible = await routingAccounts(ctx);
+          const current = eligible.find(
+            (entry) => entry.provider === account.provider && entry.profile === account.profile,
+          );
+          if (!current) throw new Error("Routing account is no longer eligible.");
+          await serializeProfileOperation(async () => {
+            signal.throwIfAborted();
+            if (routingContext !== ctx) throw new Error("Auth routing session changed.");
+            const profiles = await allowedRoutingProfiles(ctx);
+            if (!profiles.includes(current.profile))
+              throw new Error("Routing profile is no longer allowed.");
+            const selection = await chooseCurrentProfile(ctx);
+            signal.throwIfAborted();
+            await activateUnlocked(ctx, selection, {
+              routingAccount: current,
+              routingSignal: signal,
+              now,
+            });
+          });
+        },
+      })
+    : undefined;
   const collectAndPublishUsage = async (): Promise<UsageStatusPayload> => {
     const generation = ++usageGeneration;
     const publish = (status: UsageStatusPayload) => {
@@ -748,6 +916,7 @@ export default function authProfiles(
     }
     activeProfile = bound.profile;
     activeSelection = bound;
+    routedAccount = options.routingAccount;
     authStartupState = {
       ...authStartupState,
       activeProfile,
@@ -802,6 +971,7 @@ export default function authProfiles(
 
   pi.on("before_model_availability", async (_event, ctx) => {
     await serializeProfileOperation(async () => {
+      routingContext = ctx;
       sessionProfile = restoreSessionProfile(ctx);
       startupSelection = undefined;
       const selection = await chooseCurrentProfile(ctx);
@@ -814,8 +984,12 @@ export default function authProfiles(
     });
   });
 
+  // A new session never inherits a previous route's physical-provider attribution.
   pi.on("session_shutdown", () => {
     clearQuotaRetry();
+    routingContext = undefined;
+    routedAccount = undefined;
+    disposeRouting?.();
     usageGeneration += 1;
     usageContext = undefined;
     authStartupOwner?.dispose();
@@ -824,6 +998,7 @@ export default function authProfiles(
   });
 
   pi.on("session_start", async (_event, ctx) => {
+    routingContext = ctx;
     usageContext = ctx;
     const resolution = await serializeProfileOperation(async () => {
       sessionProfile = restoreSessionProfile(ctx);
@@ -1007,6 +1182,24 @@ export default function authProfiles(
     fallbackRequestOwners.get(providerId) ?? currentFallbackOwner(providerId) ?? activeProfile;
 
   pi.on("after_provider_response", async (event, ctx) => {
+    // A virtual selection names presets, not the provider executing it. Only the
+    // immediately activated route may attribute its response to the bridge.
+    if (
+      ctx.model?.provider === "claude-bridge" ||
+      (ctx.model?.provider === "presets" && routedAccount?.provider === "claude-bridge")
+    ) {
+      try {
+        recordBridgeQuota(event.headers, now());
+      } catch {
+        ctx.ui.notify("Could not persist Claude bridge quota observation.", "warning");
+      }
+    }
+    if (ctx.model?.provider === "presets" && routedAccount?.provider === codexProviderId) {
+      const limit = providerAdapter.usageLimitResetAt(event.headers, now());
+      if (limit !== undefined)
+        limitSeenUntil.set(fallbackKey(codexProviderId, routedAccount.profile), limit);
+      return;
+    }
     if (ctx.model?.provider !== codexProviderId) return;
     const resetAt = providerAdapter.usageLimitResetAt(event.headers, now());
     if (resetAt === undefined) return;
@@ -1018,6 +1211,25 @@ export default function authProfiles(
 
   pi.on("message_end", async (event, ctx) => {
     if (event.message.role !== "assistant" || event.message.stopReason !== "error") return;
+    if (ctx.model?.provider === "presets" && routedAccount) {
+      const account = routedAccount;
+      if (account.provider === "claude-bridge") {
+        if (anthropicUsageLimitFromMessage(event.message.errorMessage, now())) {
+          recordBridgeQuota({ "anthropic-ratelimit-unified-status": "rejected" }, now());
+        }
+      } else {
+        const resetAt =
+          account.provider === codexProviderId
+            ? providerAdapter.usageLimitResetAtFromMessage(event.message.errorMessage, now())
+            : (anthropicUsageLimitFromMessage(event.message.errorMessage, now())?.resetAt ??
+              (anthropicUsageLimitFromMessage(event.message.errorMessage, now())
+                ? now() + 5 * 60_000
+                : undefined));
+        if (resetAt !== undefined)
+          limitSeenUntil.set(fallbackKey(account.provider, account.profile), resetAt);
+      }
+      return;
+    }
     if (ctx.model?.provider === ANTHROPIC_PROVIDER_ID) {
       const limit = anthropicUsageLimitFromMessage(event.message.errorMessage, now());
       if (limit === undefined) return;
@@ -1033,7 +1245,6 @@ export default function authProfiles(
     if (resetAt === undefined) return;
     await rotateCodexOwner(ctx, resetAt, requestOwner(codexProviderId));
   });
-
   const clearQuotaRetry = () => {
     pendingQuotaRetry = undefined;
     retryOwners.clear();
@@ -1149,7 +1360,7 @@ export default function authProfiles(
                 `Repository order: ${repositoryPreferences}\n` +
                 `Host order: ${hostPreferences}\n` +
                 `Effective order: ${resolution.profileOrder.join(", ")}\n` +
-                `File: ${authPathFor(resolution.fallbackFrom ?? resolution.profile)}\n` +
+                `File: ${credentialPathForDisplay(authPathFor(resolution.fallbackFrom ?? resolution.profile))}\n` +
                 credentialsInUse() +
                 `Providers: ${providers.length ? providers.join(", ") : "none — run /login"}` +
                 warning,
@@ -1173,7 +1384,7 @@ export default function authProfiles(
             const profile = normalizeName(rawName);
             const { path } = await changeSessionProfile(ctx, profile);
             ctx.ui.notify(
-              `Session auth profile preference set to ${profile}. Active profile: ${activeProfile}. /login now saves to ${path}`,
+              `Session auth profile preference set to ${profile}. Active profile: ${activeProfile}. /login now saves to ${credentialPathForDisplay(path)}`,
               "info",
             );
             return;
