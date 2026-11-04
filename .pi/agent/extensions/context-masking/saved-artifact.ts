@@ -22,7 +22,11 @@ export async function readSavedArtifact(
   if (archiveId !== undefined && (typeof archiveId !== "string" || !/^[a-f0-9]{64}$/u.test(archiveId)))
     throw new Error("Invalid saved-result archive ID");
   const fileId = archiveId ?? entryId;
-  const rel = relative(resolve(root), resolve(path));
+  const canonicalRoot = await realpath(root);
+  // Archive writers return canonical paths; callers may retain a platform alias such
+  // as macOS /var or /tmp. Both spellings must identify the same cache root.
+  const addressRoot = resolve(path).startsWith(`${canonicalRoot}${sep}`) ? canonicalRoot : resolve(root);
+  const rel = relative(addressRoot, resolve(path));
   const parts = rel.split(sep);
   if (
     isAbsolute(rel) ||
@@ -31,7 +35,6 @@ export async function readSavedArtifact(
     basename(path) !== `${safeName(fileId)}.txt`
   )
     throw new Error("Invalid saved-result path");
-  const canonicalRoot = await realpath(root);
   const dir = await realpath(dirname(path));
   // Reject symlinked session directories as well as symlinked files.
   if (dir !== join(canonicalRoot, parts[0] ?? ""))

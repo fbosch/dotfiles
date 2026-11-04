@@ -53,7 +53,6 @@ describe("placeholder", () => {
     const text = placeholder({ entryId: "e1", toolName: "bash", text: "a\nb\nc" }, "/cache/e1.txt");
     expect(text.startsWith(MARKER)).toBe(true);
     expect(text).toContain("bash result");
-    expect(text).toContain("3 lines, 5 chars");
     expect(text).toContain("/cache/e1.txt");
   });
 });

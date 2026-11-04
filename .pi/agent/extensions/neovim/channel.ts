@@ -12,7 +12,7 @@ import {
   parsePromptNotification,
 } from "./prompt-protocol";
 
-const MAX_FRAME_BYTES = 64 * 1024 + 2 * 1024;
+const MAX_FRAME_BYTES = 66 * 1024;
 const BIND_TIMEOUT_MS = 5000;
 const bindingKeys = [
   "version",
@@ -34,26 +34,11 @@ interface PromptHandlers {
   readonly disconnect: () => void;
 }
 
-interface BindMessage {
-  readonly version: 1;
-  readonly type: "bind";
-  readonly launchId: string;
-  readonly cwd: string;
-  readonly sessionId: string;
+interface ClientMessage {
+  readonly id: string | number;
+  readonly method: "neovim.bind" | "neovim.ack" | "neovim.close";
+  readonly params: object;
 }
-
-interface AckMessage {
-  readonly version: 1;
-  readonly type: "ack";
-  readonly payload: PromptAcknowledgement;
-}
-
-interface CloseMessage {
-  readonly version: 1;
-  readonly type: "close";
-}
-
-type ClientMessage = BindMessage | AckMessage | CloseMessage;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && Array.isArray(value) === false;
@@ -68,15 +53,6 @@ function isPositiveSafeInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value > 0;
 }
 
-function isServerError(value: Record<string, unknown>): boolean {
-  return (
-    hasOnlyKeys(value, ["version", "type", "code"]) &&
-    value.version === 1 &&
-    value.type === "error" &&
-    (value.code === "bind-rejected" || value.code === "protocol-error")
-  );
-}
-
 export class PiAskChannel {
   #socket: Socket | undefined;
   #binding: PromptBinding | undefined;
@@ -86,6 +62,9 @@ export class PiAskChannel {
   #openReject: ((error: Error) => void) | undefined;
   #openSettled = false;
   #disconnectNotified = false;
+  #nextAck = 0;
+  #pendingAcks = new Set<number>();
+  #closing = false;
 
   constructor(
     readonly socketPath: string,
@@ -107,6 +86,8 @@ export class PiAskChannel {
     this.#buffer = Buffer.alloc(0);
     this.#disconnectNotified = false;
     this.#openSettled = false;
+    this.#closing = false;
+    this.#pendingAcks.clear();
 
     return new Promise((resolve, reject) => {
       this.#openResolve = resolve;
@@ -130,11 +111,9 @@ export class PiAskChannel {
         socket.once("connect", () => {
           if (this.#socket !== socket) return;
           this.#write({
-            version: 1,
-            type: "bind",
-            launchId: this.launchId,
-            cwd,
-            sessionId,
+            id: "bind",
+            method: "neovim.bind",
+            params: { launchId: this.launchId, cwd, sessionId },
           });
         });
       } catch (error) {
@@ -148,10 +127,10 @@ export class PiAskChannel {
     if (socket === undefined) return Promise.resolve();
     const closed = new Promise<void>((resolve) => socket.once("close", () => resolve()));
     socket.setTimeout(1000, () => socket.destroy());
-    const frame = this.#binding !== undefined && socket.writable && !socket.destroyed
-      ? this.#encode({ version: 1, type: "close" })
-      : undefined;
-    this.#finish(new Error("Pi Ask channel closed"), frame);
+    if (this.#binding !== undefined && socket.writable && !socket.destroyed) {
+      this.#closing = true;
+      this.#write({ id: "close", method: "neovim.close", params: {} });
+    } else this.#finish(new Error("Pi Ask channel closed"));
     return closed;
   }
 
@@ -168,7 +147,9 @@ export class PiAskChannel {
       }
       let decoded: string;
       try {
-        decoded = new TextDecoder("utf-8", { fatal: true }).decode(combined.subarray(start, newline));
+        decoded = new TextDecoder("utf-8", { fatal: true }).decode(
+          combined.subarray(start, newline),
+        );
       } catch {
         this.#fail(new Error("Pi Ask sent invalid UTF-8"));
         return;
@@ -187,80 +168,58 @@ export class PiAskChannel {
   }
 
   #receiveFrame(frame: string, cwd: string, sessionId: string): void {
-    let value: unknown;
-    try {
-      value = JSON.parse(frame);
-    } catch {
-      this.#fail(new Error("Invalid Pi Ask message"));
-      return;
-    }
-    if (!isRecord(value) || value.version !== 1 || typeof value.type !== "string") {
-      this.#fail(new Error("Invalid Pi Ask message envelope"));
-      return;
-    }
-    if (value.type === "error") {
-      if (!isServerError(value)) {
-        this.#fail(new Error("Invalid Pi Ask error envelope"));
-        return;
-      }
-      this.#fail(
-        new Error(value.code === "bind-rejected" ? "Pi Ask binding was rejected" : "Pi Ask protocol error"),
-      );
-      return;
-    }
+    const value: unknown = JSON.parse(frame);
+    if (!isRecord(value)) throw new Error("Invalid Pi Ask message envelope");
+    if (value.ok === false) throw new Error("Pi Ask broker rejected the request");
 
     if (this.#binding === undefined) {
       if (
-        value.type !== "bound" ||
-        !hasOnlyKeys(value, ["version", "type", "binding"]) ||
-        !isRecord(value.binding) ||
-        !hasOnlyKeys(value.binding, bindingKeys) ||
-        value.binding.version !== 1 ||
-        !isPositiveSafeInteger(value.binding.channelId) ||
-        !isPositiveSafeInteger(value.binding.editorPid)
-      ) {
-        this.#fail(new Error("Invalid Pi Ask binding response"));
-        return;
-      }
-      const binding = parsePromptBinding(value.binding, {
-        channelId: value.binding.channelId,
-        editorPid: value.binding.editorPid,
+        !hasOnlyKeys(value, ["id", "ok", "result"]) ||
+        value.id !== "bind" ||
+        value.ok !== true ||
+        !isRecord(value.result) ||
+        !hasOnlyKeys(value.result, bindingKeys) ||
+        value.result.version !== 1 ||
+        !isPositiveSafeInteger(value.result.channelId) ||
+        !isPositiveSafeInteger(value.result.editorPid)
+      )
+        throw new Error("Invalid Pi Ask binding response");
+      const binding = parsePromptBinding(value.result, {
+        channelId: value.result.channelId,
+        editorPid: value.result.editorPid,
         cwd,
         launchId: this.launchId,
         sessionId,
       });
-      if (binding === undefined) {
-        this.#fail(new Error("Pi Ask binding does not match this session"));
-        return;
-      }
+      if (binding === undefined) throw new Error("Pi Ask binding does not match this session");
       this.#binding = binding;
       this.#settleOpen(binding);
       return;
     }
-
-    if (
-      value.type !== "prompt" ||
-      !hasOnlyKeys(value, ["version", "type", "request"])
-    ) {
-      this.#fail(new Error("Unexpected Pi Ask message"));
-      return;
+    if (value.ok === true && hasOnlyKeys(value, ["id", "ok"])) {
+      if (value.id === "close" && this.#closing) {
+        this.#finish(new Error("Pi Ask channel closed"));
+        return;
+      }
+      if (typeof value.id === "number" && this.#pendingAcks.delete(value.id)) return;
+      throw new Error("Unexpected Pi Ask acknowledgement");
     }
-    const result = parsePromptNotification(PROMPT_NOTIFICATION, [value.request], cwd);
-    if (result === undefined) {
-      this.#fail(new Error("Invalid Pi Ask prompt"));
-      return;
-    }
+    if (!hasOnlyKeys(value, ["method", "params"]) || value.method !== "neovim.prompt")
+      throw new Error("Unexpected Pi Ask message");
+    if (this.#closing) return;
+    const result = parsePromptNotification(PROMPT_NOTIFICATION, [value.params], cwd);
+    if (result === undefined) throw new Error("Invalid Pi Ask prompt");
     const acknowledgement = match(result)
       .with({ ok: true }, ({ value }) => this.handlers.dispatch(value))
       .with({ ok: false, identity: P.nonNullable }, ({ identity, error, fingerprint }) =>
         this.handlers.reject(identity, error, fingerprint),
       )
       .otherwise(() => undefined);
-    if (acknowledgement === undefined) {
-      this.#fail(new Error("Invalid Pi Ask prompt identity"));
-      return;
-    }
-    this.#write({ version: 1, type: "ack", payload: acknowledgement });
+    if (acknowledgement === undefined) throw new Error("Invalid Pi Ask prompt identity");
+    if (this.#pendingAcks.size >= 16) throw new Error("Too many unacknowledged Pi Ask messages");
+    const id = ++this.#nextAck;
+    this.#pendingAcks.add(id);
+    this.#write({ id, method: "neovim.ack", params: { payload: acknowledgement } });
   }
 
   #encode(message: ClientMessage): Buffer {
@@ -304,7 +263,7 @@ export class PiAskChannel {
     this.#finish(error);
   }
 
-  #finish(error: Error, finalFrame?: Buffer): void {
+  #finish(error: Error): void {
     const socket = this.#socket;
     if (socket === undefined) {
       this.#settleOpen(undefined, error);
@@ -316,8 +275,7 @@ export class PiAskChannel {
     if (this.#timer !== undefined) clearTimeout(this.#timer);
     this.#timer = undefined;
     this.#settleOpen(undefined, error);
-    if (finalFrame !== undefined && !socket.destroyed) socket.end(finalFrame);
-    else socket.destroy();
+    socket.destroy();
     if (!this.#disconnectNotified) {
       this.#disconnectNotified = true;
       this.handlers.disconnect();

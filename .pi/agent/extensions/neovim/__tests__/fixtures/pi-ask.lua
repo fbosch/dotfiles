@@ -1,7 +1,6 @@
 local root = assert(vim.env.PI_ASK_FIXTURE_ROOT)
 local config = assert(vim.env.PI_ASK_FIXTURE_CONFIG)
 package.path = config .. "/lua/?.lua;" .. config .. "/lua/?/init.lua;" .. package.path
-dofile(config .. "/tests/pi_ask_host.lua")(nil, assert(vim.env.PI_ASK_FIXTURE_HOST))
 vim.cmd.cd(root)
 local source = vim.api.nvim_create_buf(true, false)
 vim.api.nvim_buf_set_name(source, root .. "/example.lua")
@@ -75,7 +74,7 @@ if vim.env.PI_ASK_FIXTURE_FAIL_FIRST_OPEN == "1" then
 end
 assert(pi.start())
 local ready = {
-	socket = assert(terminal.command:match("PI_NVIM_ASK_SOCKET='([^']+)'")),
+	socket = assert(terminal.command:match("PI_NVIM_SOCKET='([^']+)'")),
 	launchId = assert(terminal.command:match("PI_NVIM_LAUNCH_ID='([a-f0-9]+)'")),
 	cwd = root,
 }

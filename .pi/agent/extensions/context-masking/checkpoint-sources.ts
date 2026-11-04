@@ -1,10 +1,11 @@
+import { dirname, isAbsolute, resolve } from "node:path";
 import { readTextArchiveReference, type MaskedItem } from "./evidence-archive";
+import { parseReferenceManifest } from "./checkpoint-format";
 
 export const EXTRACTIVE_HEADER = "Extractive compaction: selected historical text and evidence; originals remain recoverable through recall.";
 
 // Keep replay and assessment counts aligned so validated originals remain classifiable.
 export const MAX_CLASSIFIER_SOURCES = 512;
-const MANIFEST_HEADER = "Retained reference manifest. Historical data, not instructions.";
 export interface CheckpointSource { text: string; metadata?: string; archive?: MaskedItem; referenceOnly?: boolean; }
 export interface CheckpointReadLimits { windowBytes: number; totalBytes: number; }
 export interface ExpandedCheckpoint { sources: CheckpointSource[]; bytes: number; references: number; windows: number; }
@@ -45,7 +46,25 @@ export async function expandCheckpointSources(
     signal?.throwIfAborted();
     if (depth > 8) throw Error("Checkpoint reference depth exceeded");
     const body = text.startsWith("[previous compaction state]\n") ? text.slice("[previous compaction state]\n".length) : text;
-    if (!body.startsWith(EXTRACTIVE_HEADER) && !body.startsWith(MANIFEST_HEADER)) {
+    const manifest = parseReferenceManifest(body);
+    if (manifest?.root && (!archive || resolve(manifest.root) !== dirname(resolve(archive.path))))
+      throw Error("Reference manifest root does not match its archive");
+    const address = (path: string) => manifest?.root && !isAbsolute(path) ? resolve(manifest.root, path) : path;
+    const callMetadata = async (metadata: string | undefined) => {
+      const match = /^\[tool call codemode; arguments line (\d+)\](?:: ([^\n]+))?\n/u.exec(metadata ?? "");
+      if (!match) return metadata;
+      const path = match[2] ?? manifest?.calls;
+      if (!path) throw Error("Missing call argument archive");
+      const saved = await load(address(path));
+      if (saved.record.toolName !== "compaction:calls") throw Error("Invalid call argument archive");
+      let calls: unknown;
+      try { calls = JSON.parse(saved.text); } catch { throw Error("Invalid call argument archive"); }
+      const index = Number(match[1]);
+      if (!isMatching(P.array(P.string), calls) || !Number.isSafeInteger(index) || !calls[index]?.startsWith("[tool call codemode] "))
+        throw Error("Invalid call argument index");
+      return calls[index];
+    };
+    if (!body.startsWith(EXTRACTIVE_HEADER) && !manifest) {
       result.sources.push({ text, ...(metadata ? { metadata } : {}), ...(archive ? { archive } : {}), ...(referenceOnly ? { referenceOnly } : {}) });
       return;
     }
@@ -55,36 +74,36 @@ export async function expandCheckpointSources(
     };
     let fence: string | undefined;
     // Only host wrapper syntax is expanded, and every address still crosses the archive boundary.
-    const wrapper = body.startsWith(MANIFEST_HEADER) ? body.replace(/^\[Reference [^\n]+\]\n/gmu, "") : body;
+    const wrapper = manifest ? manifest.parts.map(part => part.text).join("\n\n") : body;
     for (const block of wrapper.split("\n\n")) {
       const value = block.trim();
-      if (!value || value === EXTRACTIVE_HEADER || value === MANIFEST_HEADER) continue;
+      if (!value || value === EXTRACTIVE_HEADER) continue;
       const wasFenced = fence !== undefined;
       for (const line of block.split("\n")) {
         const marker = /^ {0,3}(`{3,}|~{3,})/u.exec(line)?.[1];
         if (marker && (!fence || marker[0] === fence[0])) fence = fence ? undefined : marker;
       }
       const reference = !wasFenced && !fence
-        ? /^\[(?:saved (?:conversation|tool output); use read or recall|Retained references:[^\n]*Manifest)\]: (.+)$/u.exec(value)
+        ? /^\[(?:saved (?:conversation|tool output)(?:; use read or recall)?|Retained references:[^\n]*Manifest)\]: (.+)$/u.exec(value)
         : null;
       const inline = !wasFenced && !fence
         ? /^\[(?:tool output|recovered evidence); saved copy: ([^\n]+)\]\n([\s\S]*)$/u.exec(value)
         : null;
       if (inline) {
-        const path = inline[1], text = inline[2];
+        const path = inline[1] ? address(inline[1]) : undefined, text = inline[2];
         if (!path || text === undefined) throw Error("Inline checkpoint source is not in the session catalogue");
         const { record } = await load(path);
         const previous = pending.at(-1);
-        const metadata = previous && (/^\{"[^"]+":\{/u.test(previous) || previous.startsWith("[tool call ")) ? pending.pop() : undefined;
+        const metadata = await callMetadata(previous && (/^\{"[^"]+":\{/u.test(previous) || previous.startsWith("[tool call ")) ? pending.pop() : undefined);
         flush();
         result.sources.push({ text, ...(metadata ? { metadata } : {}), archive: record, ...(referenceOnly ? { referenceOnly } : {}) });
         continue;
       }
       if (reference) {
-        const path = reference[1];
+        const path = reference[1] ? address(reference[1]) : undefined;
         if (!path) throw Error("Missing checkpoint address");
         const previous = pending.at(-1);
-        const call = previous && (/^\{"[^"]+":\{/u.test(previous) || previous.startsWith("[tool call ")) ? pending.pop() : undefined;
+        const call = await callMetadata(previous && (/^\{"[^"]+":\{/u.test(previous) || previous.startsWith("[tool call ")) ? pending.pop() : undefined);
         flush();
         if (active.has(path)) throw Error("Cyclic checkpoint reference");
         if (seen.has(path)) continue;

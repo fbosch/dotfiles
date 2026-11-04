@@ -259,7 +259,7 @@ function legacyRollingRecords(branch: readonly SessionEntry[]) {
     if (!isMatching({ content: P.array({ type: "text", text: P.string }) }, replacement)) continue;
     const [part] = replacement.content;
     if (replacement.content.length !== 1 || !part?.text.startsWith(MARKER)) continue;
-    const path = / Full text: (.+) — use read with offset and limit if you need it again\.$/u.exec(part.text)?.[1];
+    const path = / Full text: (.+?)(?: — use read with offset and limit if you need it again\.)?$/u.exec(part.text)?.[1];
     if (path) references.push({ sourceId: entry.targetId, path });
   }
   const records = new Map<string, Array<{ entryId: string; archiveId: string; toolName: string }>>();

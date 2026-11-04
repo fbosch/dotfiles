@@ -92,16 +92,6 @@ local pi = dofile(repo_root .. "/.config/nvim/lua/plugins/ai/pi/init.lua")
 local command_prefix = "env -u HERDR_PANE_ID PI_NVIM_HERDR_PANE_ID="
 	.. vim.fn.shellescape(vim.env.HERDR_PANE_ID)
 	.. " PI_IMAGE_PROTOCOL=none PI_NVIM_LAUNCH_ID="
-local profile_realpath = vim.uv.fs_realpath
-vim.uv.fs_realpath = function(path, ...)
-	if path == "/run/current-system/sw/share/pi/pi-ask.lua" then
-		return nil
-	end
-	return profile_realpath(path, ...)
-end
-assert(pi.start() == nil, "Pi started without its packaged host")
-assert(captured_command == nil, "missing host opened a terminal")
-vim.uv.fs_realpath = profile_realpath
 local first = pi.start()
 assert(first == terminal, "Pi launcher did not return its terminal")
 assert(captured_command ~= nil, "Pi launcher did not open a terminal")
@@ -109,7 +99,7 @@ local first_launch_id = assert(captured_command:match("PI_NVIM_LAUNCH_ID='([a-f0
 assert(#first_launch_id == 32, "Pi launcher did not generate a bounded launch ID")
 local expected_prefix = command_prefix
 	.. vim.fn.shellescape(first_launch_id)
-	.. " PI_NVIM_ASK_SOCKET="
+	.. " PI_NVIM_SOCKET="
 	.. vim.fn.shellescape(ask_socket)
 assert(captured_command == expected_prefix .. " pi", "fresh Pi launcher did not let Pi assign its session ID")
 assert(captured_options.win.position == "left", "Pi terminal was not opened on the left")
@@ -207,7 +197,7 @@ local restored_launch_id = assert(captured_command:match("PI_NVIM_LAUNCH_ID='([a
 assert(restored_launch_id ~= first_launch_id, "Pi launcher reused a closed terminal launch ID")
 local restored_prefix = command_prefix
 	.. vim.fn.shellescape(restored_launch_id)
-	.. " PI_NVIM_ASK_SOCKET="
+	.. " PI_NVIM_SOCKET="
 	.. vim.fn.shellescape(ask_socket)
 assert(
 	captured_command

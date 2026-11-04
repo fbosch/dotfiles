@@ -65,7 +65,7 @@ for (const binding of [false, { version: 2 }, { channelId: 12, sessionId: "wrong
     cleanup.push(editor.close);
     const observed = handlers();
     const channel = new PiAskChannel(editor.socket, editor.cwd, editor.launchId, observed);
-    await expect(channel.open("fixture-session")).rejects.toThrow("binding");
+    await expect(channel.open("fixture-session")).rejects.toThrow();
     expect(channel.binding()).toBeUndefined();
     expect(observed.disconnected()).toBe(1);
   });

@@ -159,7 +159,7 @@ rawset(vim, "system", original_system)
 
 assert(vim.g.pi_production_session_loaded == 1, "Neovim did not source the restored session")
 local launch_id = assert(opened_terminal.command:match("PI_NVIM_LAUNCH_ID='([a-f0-9]+)'"))
-local editor_socket = assert(opened_terminal.command:match("PI_NVIM_ASK_SOCKET='([^']+)'"))
+local editor_socket = assert(opened_terminal.command:match("PI_NVIM_SOCKET='([^']+)'"))
 assert(#launch_id == 32, "production wiring did not assign a bounded Pi launch ID")
 assert(
 	opened_terminal.command
@@ -167,7 +167,7 @@ assert(
 			.. vim.fn.shellescape(expected_pane_id)
 			.. " PI_IMAGE_PROTOCOL=none PI_NVIM_LAUNCH_ID="
 			.. vim.fn.shellescape(launch_id)
-			.. " PI_NVIM_ASK_SOCKET="
+			.. " PI_NVIM_SOCKET="
 			.. vim.fn.shellescape(editor_socket)
 			.. " pi --session-dir "
 			.. vim.fn.shellescape(pi_session_dir)
@@ -186,7 +186,7 @@ assert(
 		"PI_NVIM_HERDR_PANE_ID=" .. expected_pane_id,
 		"PI_IMAGE_PROTOCOL=none",
 		"PI_NVIM_LAUNCH_ID=" .. launch_id,
-		"PI_NVIM_ASK_SOCKET=" .. editor_socket,
+		"PI_NVIM_SOCKET=" .. editor_socket,
 		"ARG1=--session-dir",
 		"ARG2=" .. pi_session_dir,
 		"ARG3=--session",

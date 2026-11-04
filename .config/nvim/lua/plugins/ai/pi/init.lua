@@ -184,7 +184,7 @@ local function launch_command(session_flag, session_id, session_dir, socket, lau
 	end
 	local environment = "PI_NVIM_LAUNCH_ID="
 		.. vim.fn.shellescape(launch_id)
-		.. " PI_NVIM_ASK_SOCKET="
+		.. " PI_NVIM_SOCKET="
 		.. vim.fn.shellescape(socket)
 		.. " "
 	if vim.env.HERDR_ENV == "1" then
@@ -207,17 +207,12 @@ local function launch_command(session_flag, session_id, session_dir, socket, lau
 end
 
 local function create_ask_host(launch_id, cwd)
-	local pi_ask_host_factory, pi_ask_host_load_error = ask_host.load()
-	if pi_ask_host_factory == nil then
-		vim.notify("Pi Ask is unavailable: " .. tostring(pi_ask_host_load_error), vim.log.levels.ERROR)
-		return nil
-	end
 	local callbacks = {
 		bind = M.bind_session,
 		acknowledge = M.prompt_acknowledge,
 		closed = M.prompt_channel_closed,
 	}
-	local started, host = pcall(pi_ask_host_factory.start, {
+	local started, host = pcall(ask_host.start, {
 		launchId = launch_id,
 		cwd = cwd,
 		bind = callbacks.bind,

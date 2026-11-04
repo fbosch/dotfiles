@@ -51,6 +51,7 @@ export interface CompactionInput {
 }
 interface Candidate {
   kind: "tool" | "conversation";
+  callSummary?: string | undefined;
   parentId?: string;
   startLine?: number;
   endLine?: number;
@@ -344,7 +345,7 @@ async function classifyTextCompaction(
     const candidate: Candidate = {
       kind: "conversation", id: `t${proseCount++}`, entryId: item.entryId,
       toolCallId: "", tool: role, arguments: metadata, path: item.path, content,
-      mask: `[saved ${role} text; use read or recall]: ${item.path}`,
+      mask: `[saved ${role} text]: ${item.path}`,
       complete: byteLength(content) <= settings.maxArtifactBytes,
       totalBytes: byteLength(content), readStatus: "complete", referenceOnly,
     };
@@ -394,6 +395,7 @@ async function classifyTextCompaction(
       const candidate: Candidate = {
         kind: "tool", id: `r${byCall.size}`, entryId: record.entryId, readWindow,
         toolCallId: message.toolCallId, tool: call.tool, arguments: call.arguments,
+        callSummary: codemodeCallSummary(message),
         mask: textOf(message).startsWith(MARKER) ? textOf(message)
           : placeholder({ entryId: record.entryId, toolName: call.tool, text: textOf(message), calls: codemodeCallSummary(message) }, record.path),
         path: record.path, content: "", complete: false, totalBytes: 0, readStatus: "budget",
@@ -727,8 +729,8 @@ async function classifyTextCompaction(
       ).join("\n");
       const text = piece.part === "call" ? piece.text : hybrid || action === "inline"
         ? parent.kind === "conversation" ? parent.tool === "recovered evidence" ? `[recovered evidence; saved copy: ${parent.path}]\n${selected}` : selected : `[tool output; saved copy: ${parent.path}]\n${selected}`
-        : `[saved ${parent.kind === "tool" ? "tool output" : "conversation"}; use read or recall]: ${parent.path}`;
-      rendered.push({ text, ...reference });
+        : `[saved ${parent.kind === "tool" ? "tool output" : "conversation"}]: ${parent.path}`;
+      rendered.push({ text, ...reference, ...(piece.part === "call" && parent.callSummary ? { summary: parent.callSummary } : {}) });
     }
     return rendered;
   };

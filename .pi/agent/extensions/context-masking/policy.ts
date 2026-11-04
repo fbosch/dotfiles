@@ -116,13 +116,8 @@ export function selectMasks(
 }
 
 export function placeholder(candidate: MaskCandidate, artifactPath: string): string {
-  const lines = candidate.text.split("\n").length;
-  const calls = candidate.calls;
-  return (
-    `${MARKER} Older ${candidate.toolName} result hidden to save context (${lines} lines, ${candidate.text.length} chars). ` +
-    (calls ? `Calls: ${calls}. ` : "") +
-    `Full text: ${artifactPath} — use read with offset and limit if you need it again.`
-  );
+  return `${MARKER} Saved ${candidate.toolName} result. ` +
+    (candidate.calls ? `Calls: ${candidate.calls}. ` : "") + `Full text: ${artifactPath}`;
 }
 
 /** chars/4, matching Pi's own context estimate. */

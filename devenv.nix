@@ -393,8 +393,9 @@ in
     "test:pi-context-baseline".exec = ''
       set -euo pipefail
       cd .pi/agent
-      bun test benchmarks/__tests__/context-baseline.test.ts benchmarks/__tests__/context-masking-replay.test.ts benchmarks/__tests__/context-masking-live-report.test.ts benchmarks/__tests__/context-masking-recall-probe.test.ts benchmarks/__tests__/context-compaction.test.ts benchmarks/__tests__/context-pruning-recall.test.ts benchmarks/__tests__/context-compaction-tasks.test.ts benchmarks/__tests__/context-classifier-recall.test.ts benchmarks/__tests__/context-classifier-autonomous.test.ts benchmarks/__tests__/context-classifier-isolated.test.ts
+      bun test benchmarks/__tests__/context-baseline.test.ts benchmarks/__tests__/context-recall-baseline.test.ts extensions/context-masking/__tests__/checkpoint-format.test.ts extensions/context-masking/__tests__/recall-history.test.ts benchmarks/__tests__/context-masking-replay.test.ts benchmarks/__tests__/context-masking-live-report.test.ts benchmarks/__tests__/context-masking-recall-probe.test.ts benchmarks/__tests__/context-compaction.test.ts benchmarks/__tests__/context-pruning-recall.test.ts benchmarks/__tests__/context-compaction-tasks.test.ts benchmarks/__tests__/context-classifier-recall.test.ts benchmarks/__tests__/context-classifier-autonomous.test.ts benchmarks/__tests__/context-classifier-isolated.test.ts
       node_modules/.bin/tsc --project benchmarks/tsconfig.context-baseline.json
+      node_modules/.bin/tsc --project benchmarks/tsconfig.context-recall-baseline.json
     '';
 
     "test:pi-context-masking-cadence".exec = ''
@@ -485,11 +486,6 @@ in
       chmod +x "$test_bin/pi"
       PATH="$test_bin:$PATH" REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE \
         --listen "$DEVENV_STATE/pi-launcher.sock" -l .config/nvim/tests/pi_launcher.lua
-    '';
-
-    "test:nvim-pi-ask-discovery".exec = ''
-      REPO_ROOT="$PWD" timeout --foreground 15s nvim --headless -u NONE \
-        -l .config/nvim/tests/pi_ask_discovery.lua
     '';
 
     "test:nvim-pi-cutover".exec = ''
@@ -612,7 +608,6 @@ in
         "test:nvim-direnv-loader"
         "test:nvim-pi-direnv-launch"
         "test:nvim-pi-launcher"
-        "test:nvim-pi-ask-discovery"
         "test:nvim-pi-cutover"
         "test:nvim-pi-prompt"
         "test:nvim-pi-session-restore"

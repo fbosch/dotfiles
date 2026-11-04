@@ -134,7 +134,7 @@ local function assert_exact_command(command, directory, session_id, message)
 		command
 			== "PI_NVIM_LAUNCH_ID="
 				.. vim.fn.shellescape(launch_id)
-				.. " PI_NVIM_ASK_SOCKET="
+				.. " PI_NVIM_SOCKET="
 				.. vim.fn.shellescape(ask_socket)
 				.. " pi --session-dir "
 				.. vim.fn.shellescape(directory)
@@ -151,7 +151,7 @@ local function assert_fresh_command(command, message)
 		command
 			== "PI_NVIM_LAUNCH_ID="
 				.. vim.fn.shellescape(launch_id)
-				.. " PI_NVIM_ASK_SOCKET="
+				.. " PI_NVIM_SOCKET="
 				.. vim.fn.shellescape(ask_socket)
 				.. " pi",
 		message .. ": fresh Pi command was not session-neutral"
