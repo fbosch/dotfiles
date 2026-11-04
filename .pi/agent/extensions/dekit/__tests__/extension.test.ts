@@ -38,6 +38,11 @@ async function harness(options?: {
   modelRegistry?: ExtensionContext["modelRegistry"];
   includePackage?: boolean;
 }) {
+  const modelRegistry = options?.modelRegistry ?? (await createNativeClassifierRegistry());
+  if (options?.modelRegistry === undefined)
+    modelRegistry.classify = async () => {
+      throw new Error("offline classifier fixture");
+    };
   const cwd = await realpath(await mkdtemp(join(tmpdir(), "pi-dekit-test-")));
   directories.push(cwd);
   const packagePath = join(cwd, "package.json");
@@ -124,7 +129,7 @@ async function harness(options?: {
     },
     mode: "rpc",
     isProjectTrusted: () => state.trusted,
-    ...(options?.modelRegistry === undefined ? {} : { modelRegistry: options.modelRegistry }),
+    modelRegistry,
     ui: {
       async confirm(_title: string, message: string) {
         state.confirmations.push(message);
@@ -169,8 +174,6 @@ function classifierReply(
   choice: string,
   billedUsage?: Usage,
 ): ClassifierResult {
-  const question = input.questions.best_tool;
-  if (question?.type !== "choice") throw new Error("choice criteria missing");
   return {
     api: model.api,
     provider: model.provider,
@@ -178,16 +181,15 @@ function classifierReply(
     timestamp: 0,
     stopReason: "stop",
     ...(billedUsage === undefined ? {} : { usage: billedUsage }),
-    answers: {
-      best_tool: {
-        type: "choice",
-        choice,
-        confidence: 1,
-        probabilities: Object.fromEntries(
-          Object.keys(question.criteria).map((id) => [id, id === choice ? 1 : 0]),
-        ),
-      },
-    },
+    answers: Object.fromEntries(
+      Object.keys(input.questions).map((id) => [
+        id,
+        {
+          type: "bool" as const,
+          probability: id === choice ? 1 : 0,
+        },
+      ]),
+    ),
   };
 }
 
@@ -508,9 +510,9 @@ test.each(["persistence", "æøå", "ÆØÅ"])(
         throw new Error("tagged candidate metadata missing");
       expect(input.state.candidates).toHaveLength(24);
       expect(input.state.candidates[0]).toMatchObject({ name: "just:z-step", tags });
-      const question = input.questions.best_tool;
-      if (question?.type !== "choice") throw new Error("choice criteria missing");
-      expect(question.criteria.candidate_0).toContain("[tags: persistence, agent, æøå]");
+      const question = input.questions.candidate_0;
+      if (question?.type !== "bool") throw new Error("relevance criteria missing");
+      expect(question.instructions).toContain("tags");
       return classifierReply(model, input, "candidate_0", usage);
     });
     const h = await harness({ modelRegistry: registry });
@@ -592,11 +594,11 @@ test("uses the classifier to select one safe nonlexical script from its bounded 
   const inputs: ClassifierContext[] = [];
   const registry = await classifierRegistry(async (model, input) => {
     inputs.push(input);
-    const question = input.questions.best_tool;
-    if (question?.type !== "choice") throw new Error("choice criteria missing");
-    const selected = Object.entries(question.criteria).find(([, value]) =>
-      value.startsWith("just:database::migrate:"),
-    )?.[0];
+    if (!isMatching({ candidates: P.array({ id: P.string, name: P.string }) }, input.state))
+      throw new Error("candidates missing");
+    const selected = input.state.candidates.find(
+      (candidate) => candidate.name === "just:database::migrate",
+    )?.id;
     if (selected === undefined) throw new Error("semantic candidate missing");
     return classifierReply(model, input, selected, usage);
   });

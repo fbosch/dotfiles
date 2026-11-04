@@ -93,7 +93,7 @@ interface Result {
   totalScripts?: number;
   considered?: number;
   hasMore?: boolean;
-  rankingSource?: "classifier" | "lexical";
+  rankingSource?: "classifier" | "lexical" | "lookup";
   fallbackReason?: DiscoveryFallbackReason;
   tasks?: Task[];
   screen?: string;

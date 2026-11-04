@@ -55,6 +55,33 @@ const unavailable: ClassifierRequestResult = {
 };
 
 describe("native discovery adapter", () => {
+  test("lookup keeps admission filtering without lexical ranking or classification", async () => {
+    let calls = 0;
+    const ranker = createNativeDiscoveryRanker(
+      () => candidates.slice(0, 1),
+      () => ({
+        modelRegistry,
+        enabled: true,
+        request: async () => {
+          calls++;
+          throw new Error("unexpected classification");
+        },
+      }),
+    );
+    const base = {
+      ...request(),
+      mode: "lookup" as const,
+      rankLexical: () => {
+        throw new Error("unexpected lexical ranking");
+      },
+    };
+    expect((await ranker({ ...base, query: "beta" })).matches).toEqual([]);
+    expect((await ranker({ ...base, query: "alpha" })).matches).toEqual([
+      { name: "alpha", score: 1 },
+    ]);
+    expect((await ranker({ ...base, query: "alph" })).matches).toEqual([]);
+    expect(calls).toBe(0);
+  });
   test("detects only the patched SDK registration capability", () => {
     expect(hasNativeToolSearchHooks(null)).toBe(false);
     expect(hasNativeToolSearchHooks(undefined)).toBe(false);
@@ -114,12 +141,8 @@ describe("native discovery adapter", () => {
           usage,
           value: {
             answers: {
-              best_tool: {
-                type: "choice",
-                choice: "no_match",
-                probabilities: { no_match: 1 },
-                confidence: 1,
-              },
+              candidate_0: { type: "bool", probability: 0 },
+              candidate_1: { type: "bool", probability: 0 },
             },
           },
         }),
@@ -140,12 +163,7 @@ describe("native discovery adapter", () => {
             ok: true,
             value: {
               answers: {
-                best_tool: {
-                  type: "choice",
-                  choice: "candidate_0",
-                  probabilities: { candidate_0: 1 },
-                  confidence: 1,
-                },
+                candidate_0: { type: "bool", probability: 1 },
               },
             },
           };

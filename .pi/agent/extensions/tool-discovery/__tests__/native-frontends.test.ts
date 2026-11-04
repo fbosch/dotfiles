@@ -1,4 +1,4 @@
-import { expect, test } from "bun:test";
+import { expect, spyOn, test } from "bun:test";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,6 +14,8 @@ import toolDiscoveryExtension from "../index";
 
 // Exercise Pi's real discovery and sandbox implementations without model or MCP requests.
 test("native search loads deferred tools while codemode retains the inactive-direct loader", async () => {
+  // Discovery is under test, not Bun’s differing available-memory accounting.
+  const memory = spyOn(process, "availableMemory").mockReturnValue(8 * 1024 ** 3);
   const previous = process.env.PI_CODING_AGENT_DIR;
   const directory = mkdtempSync(join(tmpdir(), "native-deferral-"));
   writeFileSync(
@@ -71,7 +73,11 @@ test("native search loads deferred tools while codemode retains the inactive-dir
       cwd: directory,
       isProjectTrusted: () => false,
       getSystemPrompt: () => "base prompt",
-      sessionManager: { getHeader: () => ({}), getBranch: () => [] },
+      sessionManager: {
+        getHeader: () => ({}),
+        getBranch: () => [],
+        getSessionId: () => "native-discovery-test",
+      },
       get tools() {
         return callable().map((tool) => ({
           ...tool,
@@ -96,16 +102,47 @@ test("native search loads deferred tools while codemode retains the inactive-dir
     expect(active).not.toContain("chart_pie");
     const miss = await search.execute(
       "search",
-      { query: "third_party_fetch" },
+      { query: "third_party_fetch", mode: "lookup" },
       undefined,
       undefined,
       ctx,
     );
     expect(miss.details).toEqual({ loaded: [] });
-    const found = await search.execute("search", { query: "chart_pie" }, undefined, undefined, ctx);
+    const prefix = await search.execute(
+      "search",
+      { query: "chart", mode: "lookup" },
+      undefined,
+      undefined,
+      ctx,
+    );
+    expect(prefix.details).toEqual({ loaded: [] });
+    const found = await search.execute(
+      "search",
+      { query: "chart_pie", mode: "lookup" },
+      undefined,
+      undefined,
+      ctx,
+    );
     expect(found.details).toEqual({ loaded: ["chart_pie"] });
     expect(active).toContain("chart_pie");
     expect(active).not.toContain("webfetch");
+    const discovery = await codemode.execute(
+      "discover",
+      {
+        code: `
+      const known = await searchTools("chart_pie", { mode: "lookup" });
+      if (known.length !== 1 || known[0].name !== "chart_pie") throw new Error("exact lookup missed");
+      if ((await searchTools("chart", { mode: "lookup" })).length !== 0) throw new Error("prefix guessed");
+      if ((await searchTools("third_party_fetch", { mode: "lookup" })).length !== 0) throw new Error("inactive tool exposed");
+      return "lookup verified";
+    `,
+      },
+      undefined,
+      undefined,
+      ctx,
+    );
+    expect(discovery.isError).not.toBe(true);
+    expect(active).not.toContain("third_party_fetch");
     const loaded = await codemode.execute(
       "sandbox",
       {
@@ -119,6 +156,7 @@ test("native search loads deferred tools while codemode retains the inactive-dir
     expect(JSON.stringify(loaded.content)).toContain("third_party_fetch (loaded)");
     expect(active).toContain("third_party_fetch");
   } finally {
+    memory.mockRestore();
     if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
     else process.env.PI_CODING_AGENT_DIR = previous;
     rmSync(directory, { recursive: true, force: true });

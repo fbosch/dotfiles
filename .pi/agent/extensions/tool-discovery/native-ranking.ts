@@ -10,6 +10,7 @@ import {
 
 export interface NativeToolSearchRequest {
   query: string;
+  mode?: "explore" | "lookup";
   documents: readonly { name: string; text: string; description?: string }[];
   limit: number;
   signal?: AbortSignal;
@@ -50,11 +51,13 @@ export function createNativeDiscoveryRanker(
       .map((document) => ({ name: document.name, description: document.description ?? "" }));
     // Rank the full native snapshot before admission filtering so forbidden hits cannot crowd out permitted ones.
     const lexical =
-      request.documents.length === 0
+      request.mode === "lookup" || request.documents.length === 0
         ? []
         : request.rankLexical(request.documents.length).filter((item) => admitted.has(item.name));
     const ranked = await rankDiscovery(candidates, lexical, request.query, request.limit, {
       ...getOptions(request.context),
+      ...(request.mode === undefined ? {} : { mode: request.mode }),
+      kind: "tool",
       ...(request.reportUsage === undefined ? {} : { onUsage: request.reportUsage }),
       ...(request.signal === undefined ? {} : { signal: request.signal }),
     });

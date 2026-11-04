@@ -9,6 +9,7 @@ import {
 import { Type } from "typebox";
 import {
   DiscoverySearchError,
+  discoveryMode,
   MAX_DISCOVERY_CLASSIFIER_CANDIDATES,
   resolveClassifierToolDiscoveryConfig,
   searchCatalog,
@@ -36,6 +37,12 @@ const ToolSearchParameters = Type.Object(
       maxLength: 500,
       description: "Capability, task, or tool name to search for.",
     }),
+    mode: Type.Optional(
+      Type.Union([Type.Literal("explore"), Type.Literal("lookup")], {
+        description:
+          "Default explore: describe the task or capability. Use lookup only for a known exact name.",
+      }),
+    ),
     limit: Type.Optional(Type.Integer({ minimum: 1, maximum: MAX_MATCHES })),
   },
   { additionalProperties: false },
@@ -44,7 +51,7 @@ const ToolSearchParameters = Type.Object(
 interface ToolSearchDetails {
   matches: string[];
   added: string[];
-  rankingSource: "classifier" | "lexical";
+  rankingSource: "classifier" | "lexical" | "lookup";
 }
 
 type ToolInfo = ReturnType<ExtensionAPI["getAllTools"]>[number];
@@ -118,15 +125,11 @@ function queryTerms(query: string): string[] {
 
 function scoreTool(tool: ToolInfo, terms: readonly string[]): number {
   const name = tool.name.toLowerCase();
-  const nameTokens = name.split(/[^a-z0-9]+/).filter(Boolean);
   const description = tool.description.toLowerCase();
 
   return terms.reduce((score, term) => {
-    if (name === term) return score + 16;
-
-    const nameScore = nameTokens.includes(term) ? 8 : name.includes(term) ? 4 : 0;
-    const descriptionScore = description.includes(term) ? 1 : 0;
-
+    const nameScore = name.includes(term) ? 1 : 0;
+    const descriptionScore = description.includes(term) ? 3 : 0;
     return score + nameScore + descriptionScore;
   }, 0);
 }
@@ -217,10 +220,11 @@ export default function toolDiscoveryExtension(
     defineTool<typeof ToolSearchParameters, ToolSearchDetails>({
       name: "tool_load",
       label: "Load tools",
-      description: "Find and enable inactive specialized tools.",
+      description: "Discover and enable tools by capability, or look up a known exact tool name.",
       promptSnippet: "Find and activate specialized tools",
       promptGuidelines: [
         "Use tool_load when the current tools cannot perform the task or a needed tool is not active.",
+        'Explore with a task or capability description instead of guessing a tool name. Use mode: "lookup" only for a known exact name.',
       ],
       parameters: ToolSearchParameters,
       executionMode: "sequential",
@@ -233,8 +237,13 @@ export default function toolDiscoveryExtension(
           const ranked = await searchCatalog(tools, {
             key: (tool) => tool.name,
             describe: (tool) => tool.description,
-            lexical: lexicalDiscoveryMatches(tools, params.query, prefixes),
+            lexical:
+              params.mode === "lookup"
+                ? []
+                : lexicalDiscoveryMatches(tools, params.query, prefixes),
             query: params.query,
+            mode: discoveryMode(params.mode),
+            kind: "tool",
             limit: params.limit ?? DEFAULT_MATCHES,
             context: ctx,
             config,

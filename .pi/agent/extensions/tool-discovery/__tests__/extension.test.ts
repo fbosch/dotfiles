@@ -54,7 +54,7 @@ interface SearchResult {
   details: {
     matches: string[];
     added: string[];
-    rankingSource: "classifier" | "lexical";
+    rankingSource: "classifier" | "lexical" | "lookup";
   };
 }
 
@@ -73,6 +73,10 @@ function dummyTool(name: string, description: string): ToolDefinition {
   } as ToolDefinition;
 }
 
+const offlineRegistry = await createNativeClassifierRegistry();
+offlineRegistry.classify = async () => {
+  throw new Error("offline classifier fixture");
+};
 function createHarness(options?: {
   activeTools?: string[];
   tools?: ToolDefinition[];
@@ -125,7 +129,7 @@ function createHarness(options?: {
   const ctx = withToolExecution({
     cwd: process.cwd(),
     isProjectTrusted: () => false,
-    modelRegistry: options?.modelRegistry,
+    modelRegistry: options?.modelRegistry ?? offlineRegistry,
     getSystemPrompt: () => options?.systemPrompt ?? "base system prompt",
     sessionManager: {
       getHeader: () => ({
@@ -153,13 +157,22 @@ function createHarness(options?: {
     async discoverResources() {
       await handlers.get("resources_discover")?.({} as never, ctx);
     },
-    async search(query: string, limit?: number, signal?: AbortSignal): Promise<SearchResult> {
+    async search(
+      query: string,
+      limit?: number,
+      signal?: AbortSignal,
+      mode?: "explore" | "lookup",
+    ): Promise<SearchResult> {
       const tool = tools.get("tool_load");
       if (tool === undefined) throw new Error("tool_load was not registered");
 
       return (await tool.execute(
         "search",
-        limit === undefined ? { query } : { query, limit },
+        {
+          query,
+          ...(limit === undefined ? {} : { limit }),
+          ...(mode === undefined ? {} : { mode }),
+        },
         signal,
         undefined,
         ctx,
@@ -169,6 +182,26 @@ function createHarness(options?: {
 }
 
 describe("tool discovery", () => {
+  test("lookup resolves a known name without classification and never guesses a prefix", async () => {
+    let calls = 0;
+    const registry = await createNativeClassifierRegistry();
+    registry.classify = async () => {
+      calls++;
+      throw new Error("lookup must not classify");
+    };
+    const harness = createHarness({
+      modelRegistry: registry,
+      tools: [dummyTool("chart_pie", "Draw portions")],
+    });
+    await harness.discoverResources();
+    expect((await harness.search("chart", 3, undefined, "lookup")).details.matches).toEqual([]);
+    expect((await harness.search("chart_pie", 3, undefined, "lookup")).details).toEqual({
+      matches: ["chart_pie"],
+      added: ["chart_pie"],
+      rankingSource: "lookup",
+    });
+    expect(calls).toBe(0);
+  });
   test("loads settings once per loader search and observes changes on the next call", async () => {
     const settingsPath = join(testAgentDirectory, "settings.json");
     const originalSettings = readFileSync(settingsPath, "utf8");
@@ -257,12 +290,7 @@ describe("tool discovery", () => {
         stopReason: "stop",
         usage,
         answers: {
-          best_tool: {
-            type: "choice",
-            choice: "candidate_0",
-            confidence: 1,
-            probabilities: { candidate_0: 1, no_match: 0 },
-          },
+          candidate_0: { type: "bool", probability: 1 },
         },
       };
     };
@@ -360,12 +388,7 @@ describe("tool discovery", () => {
         return usage;
       },
       answers: {
-        best_tool: {
-          type: "choice",
-          choice: "candidate_0",
-          confidence: 1,
-          probabilities: { candidate_0: 1, no_match: 0 },
-        },
+        candidate_0: { type: "bool", probability: 1 },
       },
     });
     const harness = createHarness({
@@ -491,10 +514,10 @@ describe("tool discovery", () => {
 
     await harness.discoverResources();
     expect(harness.activeTools).toEqual(["read", "tool_load"]);
-    expect((await harness.search("chart_gantt", 1)).details).toEqual({
+    expect((await harness.search("chart_gantt", 1, undefined, "lookup")).details).toEqual({
       matches: ["chart_gantt"],
       added: ["chart_gantt"],
-      rankingSource: "lexical",
+      rankingSource: "lookup",
     });
     expect(harness.activeTools).toEqual(["read", "tool_load", "chart_gantt"]);
   });

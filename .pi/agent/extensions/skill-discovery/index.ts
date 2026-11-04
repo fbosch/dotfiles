@@ -4,6 +4,7 @@ import {
   compactDiscoveryDescription,
   type DiscoveryMatch,
   DiscoverySearchError,
+  discoveryMode,
   searchCatalog,
 } from "../../lib/discovery-ranking";
 import { fullSkillCatalog } from "../shared/skill-prompt";
@@ -31,8 +32,6 @@ export function searchSkillsBm25(
   const terms = [...new Set(tokens(query))];
   if (terms.length === 0 || skills.length === 0) return [];
   const documents = skills.map((skill) => [
-    ...tokens(skill.name),
-    ...tokens(skill.name),
     ...tokens(skill.name),
     ...tokens(skill.description),
     ...tokens(skill.description),
@@ -82,10 +81,10 @@ export default function skillDiscovery(
       name: "skill_search",
       label: "Search skills",
       description:
-        "Search available skills by name or task. Returns paths to read the selected SKILL.md; does not load skill instructions automatically.",
+        "Discover skills by task or workflow, or look up a known exact skill name. Returns paths; read selected SKILL.md instructions before following them.",
       promptSnippet: "Find relevant skills before reading their instructions",
       promptGuidelines: [
-        "For specialized work not covered by the advertised skills, use skill_search to find relevant skills by task or name. Read the selected SKILL.md before following it. Explicit /skill:name commands remain available.",
+        'For specialized work not covered by advertised skills, explore with a task or workflow description instead of guessing a skill name. Use mode: "lookup" only for a known exact name. Read selected SKILL.md instructions before following them. Explicit /skill:name commands remain available.',
       ],
       parameters: Type.Object(
         {
@@ -94,6 +93,12 @@ export default function skillDiscovery(
             maxLength: 500,
             description: "Task, capability, or skill name to search for.",
           }),
+          mode: Type.Optional(
+            Type.Union([Type.Literal("explore"), Type.Literal("lookup")], {
+              description:
+                "Default explore: describe the task or workflow. Use lookup only for a known exact name.",
+            }),
+          ),
           limit: Type.Optional(Type.Integer({ minimum: 1, maximum: MAX_MATCHES })),
         },
         { additionalProperties: false },
@@ -104,8 +109,13 @@ export default function skillDiscovery(
           const ranking = await searchCatalog(catalog, {
             key: (skill) => skill.name,
             describe: (skill) => skill.description,
-            lexical: searchSkillsBm25(catalog, params.query, catalog.length),
+            lexical:
+              params.mode === "lookup"
+                ? []
+                : searchSkillsBm25(catalog, params.query, catalog.length),
             query: params.query,
+            mode: discoveryMode(params.mode),
+            kind: "skill",
             limit: params.limit ?? DEFAULT_MATCHES,
             context: ctx,
             ...(signal === undefined ? {} : { signal }),

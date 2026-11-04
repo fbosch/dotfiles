@@ -32,19 +32,20 @@ const usage: Usage = {
   totalTokens: 15,
   cost: { input: 0.001, output: 0.002, cacheRead: 0, cacheWrite: 0, total: 0.003 },
 };
-function choice(selected = "candidate_0"): ClassifierRequestResult {
+function scores(selected = "candidate_0", count = 2): ClassifierRequestResult {
   return {
     ok: true,
     usage,
     value: {
-      answers: {
-        best_tool: {
-          type: "choice",
-          choice: selected,
-          probabilities: { [selected]: 0.8 },
-          confidence: 0.8,
-        },
-      },
+      answers: Object.fromEntries(
+        Array.from({ length: count }, (_, index) => [
+          `candidate_${index}`,
+          {
+            type: "bool" as const,
+            probability: `candidate_${index}` === selected ? 0.8 : 0.1,
+          },
+        ]),
+      ),
     },
   };
 }
@@ -55,12 +56,57 @@ function options(
 }
 
 describe("shared discovery ranking", () => {
+  test("exploration ranks multiple independently relevant capabilities", async () => {
+    const result = await rankDiscovery(
+      candidates,
+      lexical,
+      "alpha",
+      3,
+      options(async () => ({
+        ok: true,
+        usage,
+        value: {
+          answers: {
+            candidate_0: { type: "bool", probability: 0.8 },
+            candidate_1: { type: "bool", probability: 0.9 },
+          },
+        },
+      })),
+    );
+    expect(result).toEqual({
+      matches: [
+        { name: "alpha", score: 0.9 },
+        { name: "beta", score: 0.8 },
+      ],
+      rankingSource: "classifier",
+      usage,
+    });
+  });
+  test("explicit lookup returns only an exact visible name without classification", async () => {
+    let requests = 0;
+    const opts = {
+      ...options(async () => {
+        requests++;
+        return scores();
+      }),
+      mode: "lookup" as const,
+    };
+    expect(await rankDiscovery(candidates, lexical, "alpha", 3, opts)).toEqual({
+      matches: [{ name: "alpha", score: 1 }],
+      rankingSource: "lookup",
+    });
+    expect(await rankDiscovery(candidates, lexical, "alph", 3, opts)).toEqual({
+      matches: [],
+      rankingSource: "lookup",
+    });
+    expect(requests).toBe(0);
+  });
   test("disabled classification preserves lexical order and limit without a request", async () => {
     let requests = 0;
     const result = await rankDiscovery(candidates, lexical, "find", 1, {
       ...options(async () => {
         requests += 1;
-        return choice();
+        return scores();
       }),
       enabled: false,
     });
@@ -86,7 +132,7 @@ describe("shared discovery ranking", () => {
             { id: "candidate_1", name: "alpha", description: "Find æøå information" },
           ],
         });
-        return choice("candidate_1");
+        return scores("candidate_1");
       }),
     );
     expect(result).toEqual({
@@ -133,7 +179,7 @@ describe("shared discovery ranking", () => {
           [],
           "semantic capability",
           1,
-          options(async () => choice()),
+          options(async () => scores()),
         )
       ).matches,
     ).toEqual([{ name: "alpha", score: 0.8 }]);
@@ -146,7 +192,7 @@ describe("shared discovery ranking", () => {
         lexical,
         "unrelated",
         3,
-        options(async () => choice("no_match")),
+        options(async () => scores("no_match")),
       ),
     ).toEqual({ matches: [], rankingSource: "classifier", usage });
   });
@@ -172,14 +218,14 @@ describe("shared discovery ranking", () => {
     });
   });
 
-  test("unknown choices fail back to known lexical matches", async () => {
+  test("incomplete relevance answers fall back to known lexical matches", async () => {
     expect(
       await rankDiscovery(
         candidates,
         lexical,
         "find",
         2,
-        options(async () => choice("forbidden")),
+        options(async () => scores("candidate_0", 1)),
       ),
     ).toEqual({
       matches: [...lexical],
@@ -195,7 +241,12 @@ describe("shared discovery ranking", () => {
       usage,
       value: {
         answers: {
-          best_tool: { type: "bool", probability: 0.8 },
+          candidate_0: {
+            type: "choice",
+            choice: "yes",
+            probabilities: { yes: 0.8 },
+            confidence: 0.8,
+          },
         },
       },
     };
@@ -216,7 +267,7 @@ describe("shared discovery ranking", () => {
     let requests = 0;
     const opts = options(async () => {
       requests += 1;
-      return choice();
+      return scores();
     });
     expect(await rankDiscovery([], [], "find", 1, opts)).toEqual({
       matches: [],
@@ -246,7 +297,7 @@ describe("shared discovery ranking", () => {
       1,
       options(async (_registry, input) => {
         submitted = input;
-        return choice();
+        return scores();
       }),
     );
     expect(submitted?.state.candidates).toEqual([
@@ -285,15 +336,13 @@ describe("shared discovery ranking", () => {
         expect(input.state.candidates).toEqual([
           { id: "candidate_0", name: "opaque", description: "Run a helper", tags: expectedTags },
         ]);
-        const question = input.questions.best_tool;
-        if (question?.type !== "choice") throw new Error("choice criteria missing");
-        expect(question.criteria.candidate_0).toBe(
-          `opaque: Run a helper [tags: ${expectedTags.join(", ")}]`,
-        );
+        const question = input.questions.candidate_0;
+        if (question?.type !== "bool") throw new Error("relevance criteria missing");
+        expect(question.instructions).toContain("opaque");
         expect(question.instructions).toContain("tags");
         expect(JSON.stringify(input)).not.toContain("PRIVATE_TAG_DETAILS");
         expect(JSON.stringify(input)).not.toContain("PRIVATE_COMMAND");
-        return choice();
+        return scores();
       }),
     );
     expect(result.matches).toEqual([{ name: "opaque", score: 0.8 }]);
@@ -316,7 +365,7 @@ describe("shared discovery ranking", () => {
         expect(serialized).not.toContain("PRIVATE_SCHEMA");
         expect(serialized).toContain(compactDiscoveryDescription(candidate.description));
         expect(compactDiscoveryDescription(candidate.description).length).toBeLessThanOrEqual(180);
-        return choice();
+        return scores();
       }),
     );
   });
@@ -329,7 +378,7 @@ describe("shared discovery ranking", () => {
       rankDiscovery(candidates, lexical, "find", 1, {
         ...options(async () => {
           requests += 1;
-          return choice();
+          return scores();
         }),
         signal: controller.signal,
       }),
@@ -345,7 +394,7 @@ describe("shared discovery ranking", () => {
         ...options(async (_registry, _input, requestOptions) => {
           expect(requestOptions.signal).toBe(controller.signal);
           controller.abort();
-          return choice();
+          return scores();
         }),
         signal: controller.signal,
         onUsage: (value: Usage) => {
@@ -360,7 +409,7 @@ describe("shared discovery ranking", () => {
     let requests = 0;
     const opts = options(async () => {
       requests += 1;
-      return choice();
+      return scores();
     });
     await expect(
       rankDiscovery(candidates, [{ name: "forbidden", score: 1 }], "find", 1, opts),
@@ -382,7 +431,7 @@ describe("shared discovery ranking", () => {
           lexical,
           "find",
           limit,
-          options(async () => choice()),
+          options(async () => scores()),
         ),
       ).rejects.toThrow("positive integer");
     }
@@ -465,7 +514,7 @@ describe("catalog search", () => {
       context,
       request: async (_registry, request) => {
         input = request;
-        return choice("candidate_1");
+        return scores("candidate_1");
       },
     });
     expect(result).toEqual({ items: [alpha], rankingSource: "classifier", usage });
@@ -483,7 +532,7 @@ describe("catalog search", () => {
       context,
       request: async () => {
         requests += 1;
-        return choice();
+        return scores();
       },
     });
     expect(result).toEqual({
@@ -520,7 +569,7 @@ describe("catalog search", () => {
         query: "find",
         limit: 1,
         context,
-        request: async () => choice(),
+        request: async () => scores(),
       }),
     ).rejects.toThrow("Duplicate discovery candidate names");
   });
@@ -537,7 +586,7 @@ describe("catalog search", () => {
       signal: controller.signal,
       request: async () => {
         controller.abort(new Error("caller stopped"));
-        return choice();
+        return scores();
       },
     }).catch((caught: unknown) => caught);
     expect(error).toBeInstanceOf(DiscoverySearchError);
@@ -557,7 +606,7 @@ describe("catalog search", () => {
         limit: 1,
         context,
         signal: controller.signal,
-        request: async () => choice(),
+        request: async () => scores(),
       }),
     ).rejects.toBe(reason);
   });
