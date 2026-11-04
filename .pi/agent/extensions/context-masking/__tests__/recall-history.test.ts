@@ -96,3 +96,25 @@ test("a matched declaration retains nearby configuration values", async () => {
   );
   expect(report.passages.some((p) => p.text.includes("https://service.example.test"))).toBe(true);
 });
+
+test("original argument catalogues preserve serialized code instead of decoding it as stdout", async () => {
+  const root = await realpath(await mkdtemp(join(tmpdir(), "recall-arguments-")));
+  roots.push(root);
+  const { manager } = sessionWith([]);
+  const args = {
+    code: `const approval_token = "approved_æøå";\n${Array.from({ length: 24 }, (_, i) => `const detail_${i} = ${i};`).join("\n")}\nreturn approval_token;`,
+  };
+  const call = `[tool call codemode] ${JSON.stringify(args)}`;
+  const text = `${call}\n`;
+  const record = await saveConversationArtifact(root, manager.getSessionId(), text);
+  manager.appendCustomEntry("context-masking", {
+    items: [{ ...record, toolName: "compaction:calls", text }],
+  });
+  const result = await recallSaved(
+    manager.getBranch(),
+    root,
+    "exact JSON arguments codemode approval_token approved_æøå",
+    3,
+  );
+  expect(result.passages.some((p) => p.text.includes(JSON.stringify(args)))).toBe(true);
+});

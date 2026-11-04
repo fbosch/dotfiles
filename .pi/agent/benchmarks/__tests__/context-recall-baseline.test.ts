@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { readFile, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import { savedItems } from "../../extensions/context-masking/evidence-archive";
-import { recordedBaseline, scoreAnswer } from "../context-recall-baseline";
+import { readSavedLines, recordedBaseline, scoreAnswer } from "../context-recall-baseline";
 import { recallSession } from "../context-recall-offline";
 
 const cleanups: Array<() => Promise<void>> = [];
@@ -46,6 +46,23 @@ test("recorded baseline verifies sources, scores batch retrieval, and never appe
   expect(result[0]?.rows.every((row) => row.hit3 && row.expectedSourceCited)).toBe(true);
   expect(result[0]?.batches[0]?.hits.every((row) => row.hit)).toBe(true);
   expect(await readFile(path, "utf8")).toBe(source);
+  const firstRecord = records[0];
+  if (!firstRecord) throw Error("Missing source record");
+  expect(
+    await readSavedLines(session.manager.getBranch(), session.root, firstRecord.path, 1, 1),
+  ).toBe("1│Approved schema: skema_æøå_42.");
+  await expect(
+    readSavedLines(
+      session.manager.getBranch(),
+      session.root,
+      join(session.root, "unregistered.txt"),
+      1,
+      1,
+    ),
+  ).rejects.toThrow();
+  await expect(
+    readSavedLines(session.manager.getBranch(), session.root, firstRecord.path, 0, 1),
+  ).rejects.toThrow("range");
   const first = probes[0];
   if (!first) throw Error("Missing fixture probe");
   await expect(

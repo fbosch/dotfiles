@@ -28,10 +28,18 @@ async function main() {
   if (!isMatching(Input, input)) throw Error("Invalid footprint inputs");
   let probes: unknown = [];
   if (process.argv[4]) {
-    try { probes = JSON.parse(await readFile(process.argv[4], "utf8")); }
-    catch (cause) { throw Error("Cannot parse recorded probes", { cause }); }
+    try {
+      probes = JSON.parse(await readFile(process.argv[4], "utf8"));
+    } catch (cause) {
+      throw Error("Cannot parse recorded probes", { cause });
+    }
   }
-  if (!isMatching(P.array({ id: P.string, sessionFile: P.string, question: P.string, expected: P.string }), probes))
+  if (
+    !isMatching(
+      P.array({ id: P.string, sessionFile: P.string, question: P.string, expected: P.string }),
+      probes,
+    )
+  )
     throw Error("Invalid recorded probes");
   await mkdir(output, { recursive: false, mode: 0o700 });
   const rows = [];
@@ -56,16 +64,12 @@ async function main() {
     );
     if (!manifest?.text) throw Error("Missing compacted manifest");
     const compactText = manifest.text;
-    let archivedCalls: unknown = [];
     const calls = packed.savedItems.find((record) => record.toolName === "compaction:calls");
-    if (calls?.text) {
-      try {
-        archivedCalls = JSON.parse(await readFile(calls.path, "utf8"));
-      } catch (cause) {
-        throw Error("Cannot recover exact archived calls", { cause });
-      }
-    }
-    if (!isMatching(P.array(P.string), archivedCalls)) throw Error("Invalid exact call archive");
+    const archivedCalls = calls
+      ? (await readFile(calls.path, "utf8")).split("\n").filter(Boolean)
+      : [];
+    if (!archivedCalls.every((call) => call.startsWith("[tool call codemode] ")))
+      throw Error("Invalid exact call archive");
     const originals = parsed.parts.filter((part) => part.text.startsWith("[tool call codemode] "));
     const exactCalls = originals.every(
       (part) => archivedCalls.includes(part.text) || compactText.includes(part.text),
@@ -103,17 +107,35 @@ async function main() {
         sha256: hash(newValue ?? ""),
       };
       const originalBranch = manager.getBranch();
-      const branch = [...originalBranch, { type: "custom", id: `footprint-overlay-${index}`,
-        parentId: originalBranch.at(-1)?.id ?? null, timestamp: new Date().toISOString(),
-        customType: "context-masking", data: { items: packed.savedItems } } satisfies SessionEntry];
-      const matching = probes.filter(probe => probe.sessionFile === item.sessionFile);
+      const branch = [
+        ...originalBranch,
+        {
+          type: "custom",
+          id: `footprint-overlay-${index}`,
+          parentId: originalBranch.at(-1)?.id ?? null,
+          timestamp: new Date().toISOString(),
+          customType: "context-masking",
+          data: { items: packed.savedItems },
+        } satisfies SessionEntry,
+      ];
+      const matching = probes.filter((probe) => probe.sessionFile === item.sessionFile);
       for (let offset = 0; offset < matching.length; offset += 8) {
         const group = matching.slice(offset, offset + 8);
-        const batch = await recallSavedBatch(branch, root, group.map(probe => probe.question), 3);
+        const batch = await recallSavedBatch(
+          branch,
+          root,
+          group.map((probe) => probe.question),
+          3,
+        );
         for (const [queryIndex, probe] of group.entries()) {
           const single = await recallSaved(branch, root, probe.question, 3);
-          recall.push({ id: probe.id, hit3: single.passages.some(p => p.text.includes(probe.expected)),
-            batchHit: batch.queries[queryIndex]?.passages.some(p => p.text.includes(probe.expected)) ?? false });
+          recall.push({
+            id: probe.id,
+            hit3: single.passages.some((p) => p.text.includes(probe.expected)),
+            batchHit:
+              batch.queries[queryIndex]?.passages.some((p) => p.text.includes(probe.expected)) ??
+              false,
+          });
         }
       }
     }

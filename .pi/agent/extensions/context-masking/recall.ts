@@ -185,9 +185,10 @@ function expandSegment(value: string, depth: number): string[] {
 
 // Codemode and MCP results are often saved as one JSON line with escaped newlines; search
 // decoded, bounded segments while citing the saved file's own line numbers.
-function recallSegments(text: string): RecallSegment[] {
+function recallSegments(text: string, literalCalls = false): RecallSegment[] {
   return text.split("\n").flatMap((line, index) =>
-    expandSegment(line, 0).map((segment) => ({ text: segment, line: index + 1 })));
+    // Original call catalogues are serialized arguments, not JSON-encoded stdout.
+    (literalCalls ? [line] : expandSegment(line, 0)).map((segment) => ({ text: segment, line: index + 1 })));
 }
 
 /** Keeps the first passage per evidence line; later copies from other saves only add a count. */
@@ -425,7 +426,7 @@ async function scanSaved(
     let score = callRelevance(label);
     if (item.text !== undefined) {
       const prefix = Buffer.from(item.text.slice(0, RECALL_LIMITS.fileBytes)).subarray(0, RECALL_LIMITS.fileBytes).toString("utf8");
-      for (const segment of recallSegments(prefix)) score = Math.max(score, callRelevance(segment.text));
+      for (const segment of recallSegments(prefix, item.toolName === "compaction:calls")) score = Math.max(score, callRelevance(segment.text));
     }
     // An explicit stdout question names the invocation, not words in its short result.
     // Preserve that label evidence even when large snapshots contain more query words.
@@ -482,7 +483,7 @@ async function scanSaved(
     scanned++;
     bytes += read.bytes;
     limited ||= read.partial;
-    const segments = recallSegments(read.text);
+    const segments = recallSegments(read.text, item.toolName === "compaction:calls");
     loaded.push({
       item,
       read,

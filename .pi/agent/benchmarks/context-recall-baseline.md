@@ -1,10 +1,12 @@
 # Context footprint recall baseline
 
+Post-change measurements are in [Context footprint change](context-reference-footprint.md).
+
 Capture recall behavior before changing context-masking rendering. The runner
 uses existing recall functions and leaves production extension sources unchanged.
 Recorded sessions stay local. Hosted requests contain synthetic fixtures only.
 
-## Recorded results
+## Pre-change results
 
 The pre-change run produced:
 

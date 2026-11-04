@@ -57,10 +57,9 @@ export async function expandCheckpointSources(
       if (!path) throw Error("Missing call argument archive");
       const saved = await load(address(path));
       if (saved.record.toolName !== "compaction:calls") throw Error("Invalid call argument archive");
-      let calls: unknown;
-      try { calls = JSON.parse(saved.text); } catch { throw Error("Invalid call argument archive"); }
-      const index = Number(match[1]);
-      if (!isMatching(P.array(P.string), calls) || !Number.isSafeInteger(index) || !calls[index]?.startsWith("[tool call codemode] "))
+      const calls = saved.text.split("\n");
+      const index = Number(match[1]) - 1;
+      if (!Number.isSafeInteger(index) || index < 0 || !calls[index]?.startsWith("[tool call codemode] "))
         throw Error("Invalid call argument index");
       return calls[index];
     };

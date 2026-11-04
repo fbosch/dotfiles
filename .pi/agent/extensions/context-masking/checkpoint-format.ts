@@ -56,7 +56,7 @@ export function renderReferenceManifest(
       .replace(
         /^\[tool call codemode; arguments line (\d+)\]: (.+)$/gmu,
         (line: string, index: string, path: string) =>
-          path === calls ? `[tool call codemode; args ${index}]` : line,
+          path === calls ? `[tool call codemode; arguments line ${index}]` : line,
       );
   return (
     [MANIFEST_HEADER, `Root: ${root}`, ...(calls ? [`Calls: ${relative(calls)}`] : [])].join("\n") +
@@ -100,4 +100,4 @@ export function codemodePreview(text: string, summary?: string): string | undefi
 }
 
 export const argumentPointer = (index: number, path: string) =>
-  `[tool call codemode; args ${index}]: ${path}`;
+  `[tool call codemode; arguments line ${index + 1}]: ${path}`;

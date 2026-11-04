@@ -4,13 +4,24 @@ import { mkdir, readdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import type { Usage } from "@earendil-works/pi-ai";
-import { ModelRegistry, ModelRuntime, SessionManager } from "@earendil-works/pi-coding-agent";
+import {
+  ModelRegistry,
+  ModelRuntime,
+  type SessionEntry,
+  SessionManager,
+} from "@earendil-works/pi-coding-agent";
 import { isMatching, P } from "ts-pattern";
 import { buildIndex } from "../extensions/context-masking/artifact-index";
 import { packCheckpoint } from "../extensions/context-masking/checkpoint-packing";
-import { EXTRACTIVE_HEADER } from "../extensions/context-masking/checkpoint-sources";
-import { expandCheckpointSources } from "../extensions/context-masking/checkpoint-sources";
-import { readTextArtifact, savedItems } from "../extensions/context-masking/evidence-archive";
+import {
+  EXTRACTIVE_HEADER,
+  expandCheckpointSources,
+} from "../extensions/context-masking/checkpoint-sources";
+import {
+  readTextArchiveReference,
+  readTextArtifact,
+  savedItems,
+} from "../extensions/context-masking/evidence-archive";
 import {
   type RecallClassifier,
   recallSaved,
@@ -75,6 +86,28 @@ export function scoreAnswer(
   }));
 }
 
+export async function readSavedLines(
+  branch: readonly SessionEntry[],
+  root: string,
+  path: string,
+  offset: number,
+  limit: number,
+) {
+  if (
+    !Number.isSafeInteger(offset) ||
+    offset < 1 ||
+    !Number.isSafeInteger(limit) ||
+    limit < 1 ||
+    limit > 200
+  )
+    throw Error("Invalid saved read range");
+  const saved = await readTextArchiveReference(root, savedItems(branch), path, 64_000);
+  return saved.text
+    .split("\n")
+    .slice(offset - 1, offset - 1 + limit)
+    .map((line, index) => `${offset + index}│${line}`)
+    .join("\n");
+}
 export async function recordedBaseline(probes: readonly RecordedProbe[], artifactRoot: string) {
   const results = [];
   for (const sessionFile of new Set(probes.map((probe) => probe.sessionFile))) {
@@ -177,13 +210,23 @@ async function agentBaseline(
   const slash = modelName.indexOf("/");
   const model = runtime.getModel(modelName.slice(0, slash), modelName.slice(slash + 1));
   if (!model) throw Error(`Agent model unavailable: ${modelName}`);
-  const callArgs = { code: `const approval_token = "approved_æøå";\n${Array.from({ length: 24 }, (_, i) => `const detail_${i} = ${i};`).join("\n")}\nreturn approval_token;` };
+  const callArgs = {
+    code: `const approval_token = "approved_æøå";\n${Array.from({ length: 24 }, (_, i) => `const detail_${i} = ${i};`).join("\n")}\nreturn approval_token;`,
+  };
   const fixture = recallFixture("context-footprint-baseline-v1");
   if (memoryMode === "arguments") {
     fixture.goal = "Recover the original codemode arguments without running the script.";
     fixture.outputs = ["Recorded operation returned approved_æøå."];
-    fixture.probes = [{ id: "arguments", category: "surprise", source: "read", expected: JSON.stringify(callArgs),
-      question: "As one string, what exact JSON argument object was supplied to the codemode call whose script set approval_token to approved_æøå? Include the complete code, not only the token." }];
+    fixture.probes = [
+      {
+        id: "arguments",
+        category: "surprise",
+        source: "read",
+        expected: JSON.stringify(callArgs),
+        question:
+          "As one string, what exact JSON argument object was supplied to the codemode call whose script set approval_token to approved_æøå? Include the complete code, not only the token.",
+      },
+    ];
   }
   const session = await recallSession(
     fixture.outputs.map((text, index) => ({
@@ -199,7 +242,9 @@ async function agentBaseline(
       const packed = await packCheckpoint(
         [
           { text: EXTRACTIVE_HEADER },
-          ...(memoryMode === "arguments" ? [{ reference: "r0", text: `[tool call codemode] ${JSON.stringify(callArgs)}` }] : []),
+          ...(memoryMode === "arguments"
+            ? [{ reference: "r0", text: `[tool call codemode] ${JSON.stringify(callArgs)}` }]
+            : []),
           ...[...savedItems(branch).values()].map((record, index) => ({
             reference: `r${index}`,
             text: `[saved tool output]: ${record.path}`,
@@ -210,7 +255,10 @@ async function agentBaseline(
         session.manager.getSessionId(),
       );
       if (!packed.fits) throw Error("Synthetic checkpoint did not fit");
-      if (memoryMode === "arguments" && !packed.savedItems.some(record => record.toolName === "compaction:calls"))
+      if (
+        memoryMode === "arguments" &&
+        !packed.savedItems.some((record) => record.toolName === "compaction:calls")
+      )
         throw Error("Exact-argument probe did not exercise an argument archive");
       session.manager.appendCustomEntry("context-masking", { items: packed.savedItems });
       branch = session.manager.getBranch();
@@ -249,6 +297,10 @@ async function agentBaseline(
               skipped: report.skipped,
             };
           },
+          undefined,
+          memoryMode === "arguments"
+            ? (path, offset, limit) => readSavedLines(branch, session.root, path, offset, limit)
+            : undefined,
         );
         rows.push({
           repeat,
@@ -261,6 +313,7 @@ async function agentBaseline(
           toolCalls: result.toolCalls,
           exhausted: result.exhausted,
           maxContextBytes: result.maxContextBytes,
+          ...(memoryMode === "arguments" ? { transcript: result.messages } : {}),
         });
       }
     }
@@ -289,7 +342,8 @@ async function main() {
     throw Error("Invalid --repeats");
   const modelName = arg("--model");
   const memoryMode = arg("--agent-memory") ?? "index";
-  if (memoryMode !== "index" && memoryMode !== "checkpoint" && memoryMode !== "arguments") throw Error("Invalid --agent-memory");
+  if (memoryMode !== "index" && memoryMode !== "checkpoint" && memoryMode !== "arguments")
+    throw Error("Invalid --agent-memory");
   if (process.argv.includes("--agent") && !modelName?.includes("/"))
     throw Error("--agent requires --model provider/model");
   await mkdir(output, { recursive: false, mode: 0o700 });

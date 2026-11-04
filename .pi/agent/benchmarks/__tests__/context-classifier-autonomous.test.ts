@@ -299,3 +299,36 @@ test("a length-limited final answer is scored instead of aborting the probe", as
   expect(scoreStagedRecall([stage], 0, result.answer).valid).toBe(false);
   expect(result.turns).toBe(1);
 });
+
+test("exact saved reads share the agent budget and reject invalid ranges before reading", async () => {
+  const { stage } = fixture();
+  let turn = 0;
+  const reads: Array<[string, number, number]> = [];
+  const result = await autonomousProbe(
+    stage,
+    "Saved arguments: /saved/call.txt line 2",
+    async (context) => {
+      expect(context.tools?.map((tool) => tool.name)).toEqual(["recall_saved", "read_saved"]);
+      if (turn++ === 0)
+        return calls([
+          { id: "bad", name: "read_saved", arguments: { path: "/saved/call.txt", offset: 0 } },
+          {
+            id: "good",
+            name: "read_saved",
+            arguments: { path: "/saved/call.txt", offset: 2, limit: 1 },
+          },
+        ]);
+      return text(emptyAnswers());
+    },
+    async () => ({ text: "", limited: false, skipped: 0 }),
+    bounds,
+    async (path, offset, limit) => {
+      reads.push([path, offset, limit]);
+      return "exact æøå";
+    },
+  );
+  expect(reads).toEqual([["/saved/call.txt", 2, 1]]);
+  expect(result.toolCalls).toBe(1);
+  expect(result.events[0]?.error).toBe(true);
+  expect(result.events[1]?.error).toBe(false);
+});
