@@ -46,7 +46,7 @@
       "src": "https://github.com/jinh0/eyeliner.nvim.git"
     },
     "fff.nvim": {
-      "rev": "d1c7dd47130ca670ab71e7466a1a3b4a57d5348d",
+      "rev": "b3b8cede0beb95272ebc2c72c648269f9c5228b3",
       "src": "https://github.com/dmtrKovalenko/fff.nvim.git"
     },
     "fidget.nvim": {
@@ -66,7 +66,7 @@
       "src": "https://github.com/lionyxml/gitlineage.nvim.git"
     },
     "gitsigns.nvim": {
-      "rev": "1e9d0fbfe7ff848bc402d2c2e2854fb4eff2dce7",
+      "rev": "ef707fb93301a9b856f36eae4c8f56f5b988a794",
       "src": "https://github.com/lewis6991/gitsigns.nvim.git"
     },
     "helpview.nvim": {
@@ -147,11 +147,11 @@
       "src": "https://github.com/gennaro-tedesco/nvim-jqx.git"
     },
     "nvim-lsp-file-operations": {
-      "rev": "3d40a10419acfb2778d58a62ccb083d256114232",
+      "rev": "2ee429013c9b0fee96dc41ba1d6715165205a2f8",
       "src": "https://github.com/antosha417/nvim-lsp-file-operations.git"
     },
     "nvim-lspconfig": {
-      "rev": "4b2b045b8ceb035f5c8bc9cab19b95706bfa6a19",
+      "rev": "cc404d425c7752f56b8eaa269107be44d888ea51",
       "src": "https://github.com/neovim/nvim-lspconfig.git"
     },
     "nvim-nio": {
@@ -184,11 +184,11 @@
       "src": "https://github.com/nguyenvukhang/nvim-toggler.git"
     },
     "nvim-tree.lua": {
-      "rev": "45f82f7b2c68c3e2bedbf6ad1d8d687a78e6faf4",
+      "rev": "69eb0c34ed3d836d5a0d92d913b77dd73b054f2f",
       "src": "https://github.com/nvim-tree/nvim-tree.lua.git"
     },
     "nvim-treesitter": {
-      "rev": "a2f694478be07f89c2d03cc17858a8745a400c4b",
+      "rev": "610734c5d3e59761d5f79318d120633374537fa5",
       "src": "https://github.com/nvim-treesitter/nvim-treesitter.git"
     },
     "nvim-ts-autotag": {
@@ -204,7 +204,7 @@
       "src": "https://github.com/nvim-lua/plenary.nvim.git"
     },
     "smart-splits.nvim": {
-      "rev": "dd40c3a03ef71bcdf77fb4b14668cc1320293f48",
+      "rev": "6a03b298635205802ee1d390826f02414a13290d",
       "src": "https://github.com/mrjones2014/smart-splits.nvim.git"
     },
     "snacks.nvim": {
@@ -232,7 +232,7 @@
       "src": "https://github.com/Wansmer/treesj.git"
     },
     "treewalker.nvim": {
-      "rev": "0f755216b260351d2d95387260bc77660db5214b",
+      "rev": "e41baa1cb39f15a72633d8ae47a430f3a86ff8b7",
       "src": "https://github.com/aaronik/treewalker.nvim.git"
     },
     "trouble.nvim": {
@@ -256,7 +256,7 @@
       "src": "https://github.com/tpope/vim-repeat.git"
     },
     "vim-startuptime": {
-      "rev": "5f33e50f1e2e2a80370c9094e4c303ea54cd2aea",
+      "rev": "b2de50f190c8139d70d36d82157dd9c1a8212579",
       "src": "https://github.com/dstein64/vim-startuptime.git"
     },
     "vim-unimpaired": {
