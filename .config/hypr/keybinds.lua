@@ -82,9 +82,7 @@ bind.register("ALT + ALT_L", release_mouse_modifier, { release = true, auto_cons
 bind.register("ALT + ALT_R", release_mouse_modifier, { release = true, auto_consuming = true })
 
 -- Input and clipboard
-bind.register("CTRL + SPACE", keyboard_layout.switch, {
-	predicate = window_state.active_is_not_game,
-})
+bind.register("CTRL + SPACE", keyboard_layout.switch)
 bind.register(main("SHIFT + V"), clipboard_bridge.paste_with_clipboard_bridge)
 bind.register(
 	"CTRL + C",
