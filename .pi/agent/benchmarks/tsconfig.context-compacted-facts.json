@@ -1,0 +1,8 @@
+{
+  "extends": "../tsconfig.json",
+  "include": [
+    "context-compacted-facts.ts",
+    "context-prefetch-revisions.ts",
+    "__tests__/context-compacted-fact-fixtures.test.ts"
+  ]
+}

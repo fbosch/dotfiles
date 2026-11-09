@@ -46,7 +46,7 @@ test("rejects changed originals and reports the bytes already read", async () =>
   await expect(readSavedArtifact(root, record, 100)).rejects.toThrow("snapshot changed");
 });
 
-test("recall charges changed snapshots against its scan budget", async () => {
+test("recall counts changed snapshots as scanned and skipped", async () => {
   const { root, record } = await fixture("Approved: archived original");
   const manager = SessionManager.inMemory(root);
   manager.appendCustomEntry("context-masking", { items: [record] });

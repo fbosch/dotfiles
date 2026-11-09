@@ -144,9 +144,11 @@ The default `devenv test` still runs the broader `test:all` task.
 
 With both `enabled` and `prefetchRecall` on, the extension searches saved output once per new text request. It parses up to 8,000 prompt characters into at most 16 questions of 500 characters each, twice the `recall` tool's per-call limit. All prefetched questions share one scan and the 12,000-character output cap, so a longer list gives each question a smaller excerpt. It recognizes ordinary English and Danish questions and bullet lists. A single request still uses at most 500 characters as its query. Each prefetched question needs a match for at least two distinct terms within three neighboring lines. A strong question does not admit weak matches for another question. The extension appends the passages as historical data at the conversation tail. It does not rewrite earlier messages or append an identical lookup result already in visible context.
 
-Lookup is local and does not call a classifier. It only reads artifacts recorded on the current session branch, under the masking cache, with the expected entry filename. It rejects symlinked files and session directories. Each lookup scans at most the newest 80 artifacts, 128 KiB per file and 2 MiB total. Returned text is capped at 12,000 characters; long lines are excerpted. Passages with equal match scores list the more recently saved artifact first. The output reports skipped files and scan limits. Full saved files remain available through `read`.
+Lookup reads every eligible artifact recorded on the current session branch, under the masking cache, with the expected entry filename. It rejects symlinked files and session directories. Archive count and total corpus bytes do not exclude older facts. Two passes gather corpus-wide ranking statistics and select passages while retaining only bounded candidate bodies. The reported byte count includes both passes and any post-classification verification reads. This makes lookup cost grow with the archive corpus.
 
-The two-term gate is a lexical heuristic, not a relevance guarantee. It can miss paraphrases or add irrelevant context when terms overlap. Automatic lookup stops when either setting is off; the deferred `recall` tool remains available for existing saved output.
+Each pass reads at most 128 KiB per file. Facts beyond that prefix still require `read`; partial reads are reported as limited. Returned text is capped at 12,000 characters, and long lines are excerpted. Passages with equal match scores list the more recently saved artifact first.
+
+Automatic lookup sends candidates that pass the lexical gate to the configured classifier. It injects a passage only when the classifier rates it above `no_match` by the configured margin; classifier failure injects nothing. The lexical gate can miss paraphrases. Automatic lookup stops when either setting is off; the deferred `recall` tool remains available for existing saved output.
 
 The synthetic discovery probe separates model-directed recall from automatic lookup:
 
@@ -156,6 +158,14 @@ PROBE_RECALL=1 PROBE_PREFETCH=1 PI_BIN=/path/to/unwrapped/pi \
 ```
 
 Omit `PROBE_PREFETCH=1` to test the tool alone. The probe records correctness, retrieval behavior, tokens and latency. Its gateway pacing is excluded from measured response time. These small synthetic cases do not establish real-task quality.
+
+## Explicit recall candidate selection
+
+The `recall` tool accepts up to eight queries and shares a pool of at most 12 text candidates. Each query with a lexical match reserves its best passage before the selector adds extra lexical matches and semantic candidates. Equal lexical scores favor newer saved evidence. Shared evidence uses one slot, so repeated subjects do not consume the pool twice. This prevents a batch of identifier-only queries from losing answers to the semantic-candidate allocation.
+
+Matching windows can omit a revision header at the start of an archive. Text candidates therefore carry up to 320 characters from the first three normalized source segments before the window. Tool/search framing is excluded. The classifier receives this prefix as `source_context`, and returned passages label it `Source context (same archive)` with its original line citations.
+
+The prefix comes from the same validated snapshot and counts against existing request and output limits. It restores recorded revision evidence without declaring a later save or a larger date authoritative. Older snapshots remain available for historical questions. Revision cues outside this bounded prefix or the per-file read limit can still be missed.
 
 ## Interaction with compaction and caching
 

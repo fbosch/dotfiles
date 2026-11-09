@@ -21,11 +21,13 @@ import {
 } from "../extensions/context-masking/recall";
 import { userStartEvent } from "../extensions/shared/__tests__/agent-start-events";
 import { addClassifierUsage, requestClassifier } from "../lib/classifier";
+import { largeRecallCorpus } from "./context-recall-large-corpus";
 
 // Offline recall evaluation. By default there are no model calls: explicit recall is scored on
 // lexical ranking and on whether the answer reaches the classifier's candidate pool, and
 // prefetch uses a stub that approves every lexical match, so it measures the lexical gate alone.
 // `--classifier` reruns both paths through the configured hosted classifier.
+// Add `--large-corpus` for 1,000 facts across 102 snapshots, using source-free fact questions.
 
 export interface RecallArchive {
   tool: string;
@@ -529,6 +531,10 @@ export interface ExplicitResult {
   stale1: boolean;
   clipped: boolean;
   redundant: number;
+  scanned: number;
+  bytes: number;
+  limited: boolean;
+  outputChars: number;
 }
 export interface PrefetchResult {
   id: string;
@@ -584,6 +590,10 @@ export async function runRecallEval(
           !(texts[0]?.includes(expected) ?? false),
         clipped: texts.some((text) => text.includes("[line clipped]")),
         redundant: Math.max(0, containing - 1),
+        scanned: report.scanned,
+        bytes: report.bytes,
+        limited: report.limited,
+        outputChars: report.text.length,
       });
     }
 
@@ -646,6 +656,10 @@ export function summarizeRecallEval(result: Awaited<ReturnType<typeof runRecallE
     explicitProbes: result.explicit.length,
     hit1: rate(result.explicit.map((row) => row.hit1)),
     hit3: rate(result.explicit.map((row) => row.hit3)),
+    limitedProbes: result.explicit.filter((row) => row.limited).length,
+    maxScanned: Math.max(0, ...result.explicit.map((row) => row.scanned)),
+    maxBytes: Math.max(0, ...result.explicit.map((row) => row.bytes)),
+    maxOutputChars: Math.max(0, ...result.explicit.map((row) => row.outputChars)),
     candidateRecall12: rate(result.explicit.map((row) => row.pool12)),
     stale1: result.explicit.filter((row) => row.stale1).length,
     clippedPassages: result.explicit.filter((row) => row.clipped).length,
@@ -713,6 +727,10 @@ export interface LiveExplicitResult {
   stale: boolean;
   rankingSource: "classifier" | "lexical";
   fallbackReason?: string;
+  scanned: number;
+  bytes: number;
+  limited: boolean;
+  outputChars: number;
 }
 
 /** Runs explicit recall and prefetch through `classify`, scoring answers and abstentions. */
@@ -752,6 +770,10 @@ export async function runLiveRecallEval(
           !content.includes(probe.expected ?? ""),
         rankingSource: report.rankingSource,
         ...(report.fallbackReason === undefined ? {} : { fallbackReason: report.fallbackReason }),
+        scanned: report.scanned,
+        bytes: report.bytes,
+        limited: report.limited,
+        outputChars: content.length,
       });
     }
     return { explicit, prefetch: await runPrefetchProbes(session, probes, classify) };
@@ -778,6 +800,10 @@ export function summarizeLiveRecallEval(
         );
   return {
     explicitAnswered: rate(answerable.map((row) => row.answered)),
+    limitedProbes: result.explicit.filter((row) => row.limited).length,
+    maxScanned: Math.max(0, ...result.explicit.map((row) => row.scanned)),
+    maxBytes: Math.max(0, ...result.explicit.map((row) => row.bytes)),
+    maxOutputChars: Math.max(0, ...result.explicit.map((row) => row.outputChars)),
     explicitAnswerable: answerable.length,
     explicitAbstainedOnUnanswerable: rate(unanswerable.map((row) => row.abstained)),
     // Unanswerable queries that returned passages: share labelled as possibly not answering.
@@ -819,6 +845,15 @@ if (import.meta.main) {
   };
   prefetchTuning.coverage = tuning("--prefetch-coverage") ?? prefetchTuning.coverage;
   prefetchTuning.margin = tuning("--prefetch-margin") ?? prefetchTuning.margin;
+  const corpus = process.argv.includes("--large-corpus") ? largeRecallCorpus() : undefined;
+  if (corpus)
+    console.log(
+      JSON.stringify({
+        facts: corpus.facts.length,
+        archives: corpus.archives.length,
+        probes: corpus.probes.length,
+      }),
+    );
   if (process.argv.includes("--classifier")) {
     const runtime = await ModelRuntime.create({ allowModelNetwork: false, refreshOnCreate: false });
     const registry = new ModelRegistry(runtime);
@@ -828,12 +863,12 @@ if (import.meta.main) {
         settingsContext: { cwd: process.cwd(), isProjectTrusted: () => false },
       }),
     );
-    const result = await runLiveRecallEval(meter.classify);
+    const result = await runLiveRecallEval(meter.classify, corpus?.archives, corpus?.probes);
     console.table(result.explicit);
     console.table(result.prefetch);
     console.log(JSON.stringify(summarizeLiveRecallEval(result, meter), null, 2));
   } else {
-    const result = await runRecallEval();
+    const result = await runRecallEval(corpus?.archives, corpus?.probes);
     console.table(result.explicit);
     console.table(result.prefetch);
     console.log(JSON.stringify(summarizeRecallEval(result), null, 2));

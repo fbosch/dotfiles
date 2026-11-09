@@ -3,7 +3,7 @@ import { mkdtemp, realpath, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { saveConversationArtifact } from "../evidence-archive";
-import { RECALL_LIMITS, recallSaved, recallSavedBatch } from "../recall";
+import { recallSaved, recallSavedBatch } from "../recall";
 import { sessionWith } from "./fixtures";
 
 const roots: string[] = [];
@@ -11,7 +11,7 @@ afterEach(async () => {
   for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true });
 });
 
-test("finds older compaction snapshots before the bounded disk scan", async () => {
+test("finds older compaction snapshots across the full archive catalog", async () => {
   const root = await realpath(await mkdtemp(join(tmpdir(), "recall-history-")));
   roots.push(root);
   const { manager } = sessionWith([]);
@@ -31,7 +31,7 @@ test("finds older compaction snapshots before the bounded disk scan", async () =
     3,
   );
   expect(report.passages.some((passage) => passage.text.includes("plain value"))).toBe(true);
-  expect(report.scanned).toBeLessThanOrEqual(RECALL_LIMITS.artifacts);
+  expect(report.scanned).toBe(texts.length);
   const batch = await recallSavedBatch(
     manager.getBranch(),
     root,

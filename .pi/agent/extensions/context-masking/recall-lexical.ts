@@ -75,18 +75,27 @@ const B = 0.75;
 /** Okapi BM25 with document frequencies taken over archive segments. */
 export class Bm25Corpus {
   private readonly frequency = new Map<string, number>();
-  private readonly size: number;
-  private readonly averageLength: number;
+  private size = 0;
+  private totalLength = 0;
 
-  constructor(documents: readonly LexicalDocument[]) {
-    let total = 0;
-    for (const document of documents) {
-      total += document.length;
-      for (const token of document.counts.keys())
+  constructor(
+    documents: readonly LexicalDocument[],
+    private readonly terms?: ReadonlySet<string>,
+  ) {
+    for (const document of documents) this.add(document);
+  }
+
+  add(document: LexicalDocument): void {
+    this.size++;
+    this.totalLength += document.length;
+    for (const token of document.counts.keys()) {
+      if (!this.terms || this.terms.has(token))
         this.frequency.set(token, (this.frequency.get(token) ?? 0) + 1);
     }
-    this.size = documents.length;
-    this.averageLength = documents.length === 0 ? 1 : Math.max(1, total / documents.length);
+  }
+
+  private get averageLength(): number {
+    return this.size === 0 ? 1 : Math.max(1, this.totalLength / this.size);
   }
 
   idf(term: string): number {

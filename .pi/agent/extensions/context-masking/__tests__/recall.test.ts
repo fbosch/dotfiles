@@ -106,7 +106,7 @@ test("rejects symlinked session directories", async () => {
 test("reports scan limits and bounds returned output", async () => {
   const f = await fixture([`audit receipt: found\n${"x".repeat(RECALL_LIMITS.fileBytes * 2)}`]);
   const report = await recallSaved(f.manager.getBranch(), f.root, "audit receipt");
-  expect(report.bytes).toBe(RECALL_LIMITS.fileBytes);
+  expect(report.bytes).toBe(2 * RECALL_LIMITS.fileBytes);
   expect(report.limited).toBe(true);
   expect(report.text.length).toBeLessThanOrEqual(RECALL_LIMITS.outputChars);
   expect(report.text).toContain("found");
@@ -179,18 +179,14 @@ test("prefetch adds relevant passages once, skips unrelated and custom requests,
   expect(await invoke(message)).toBeUndefined();
 });
 
-test("enforces total scan bytes and artifact count limits", async () => {
-  const big = await fixture(
-    Array.from({ length: 17 }, () => "audit receipt\n".padEnd(RECALL_LIMITS.fileBytes, "x")),
-  );
-  let report = await recallSaved(big.manager.getBranch(), big.root, "audit receipt");
-  expect(report.bytes).toBe(RECALL_LIMITS.totalBytes);
-  expect(report.scanned).toBe(16);
-  expect(report.limited).toBe(true);
-  const many = await fixture(Array.from({ length: 81 }, () => "audit receipt"));
-  report = await recallSaved(many.manager.getBranch(), many.root, "audit receipt");
-  expect(report.scanned).toBe(RECALL_LIMITS.artifacts);
-  expect(report.limited).toBe(true);
+test("searches beyond the former total byte budget while bounding returned output", async () => {
+  const f = await fixture(Array.from({ length: 17 }, (_, index) =>
+    `audit receipt: recorded-${index}\n`.padEnd(RECALL_LIMITS.fileBytes, "x")));
+  const report = await recallSaved(f.manager.getBranch(), f.root, "audit receipt recorded-0", 1);
+  expect(report.scanned).toBe(17);
+  expect(report.bytes).toBe(2 * 17 * RECALL_LIMITS.fileBytes);
+  expect(report.text).toContain("recorded-0");
+  expect(report.text.length).toBeLessThanOrEqual(RECALL_LIMITS.outputChars);
 });
 
 test("splits long saved lines into bounded passages that fit the output cap", async () => {
@@ -220,6 +216,15 @@ test("collapses the same evidence line from several saves into one passage with 
   expect(report.passages.filter((passage) => passage.text.includes("Operation not permitted"))).toHaveLength(1);
   expect(report.text).toContain("Same passage in 2 other saved outputs.");
   expect(report.text).toContain("/run/nix/socket-v2");
+});
+
+test("streaming selection counts repeated evidence across more than 80 archives", async () => {
+  const f = await fixture(Array.from({ length: 101 }, () => "Archived audit receipt: repeated-101"));
+  const report = await recallSaved(f.manager.getBranch(), f.root, "audit receipt", 1);
+  expect(report.passages).toHaveLength(1);
+  expect(report.passages[0]?.path).toBe(f.paths.at(-1));
+  expect(report.passages[0]?.duplicates).toBe(100);
+  expect(report.text).toContain("Same passage in 100 other saved outputs.");
 });
 
 test("matches split identifiers, plurals, and exact compounds", async () => {
@@ -252,19 +257,12 @@ test("searches JSON-encoded output as decoded lines and cites the saved line", a
   expect(report.text).not.toContain("[line clipped]");
 });
 
-test("an old archive whose call names the queried file is scanned despite the artifact cap", async () => {
-  const count = RECALL_LIMITS.artifacts + 10;
-  // fixture() labels result i with its read path, file<i>; file0 is the oldest.
-  const f = await fixture(
-    Array.from({ length: count }, (_, i) => (i === 0 ? "Archived audit receipt: oldest-007" : "routine passed")),
-  );
-  const branch = f.manager.getBranch();
-  const named = await recallSaved(branch, f.root, "audit receipt in file0");
-  expect(named.scanned).toBe(RECALL_LIMITS.artifacts);
-  expect(named.text).toContain("oldest-007");
-  expect(named.text).toContain(f.paths[0] ?? "");
-  // Without a label match, the cap still admits the newest archives and reports the limit.
-  const unnamed = await recallSaved(branch, f.root, "audit receipt");
-  expect(unnamed.text).not.toContain("oldest-007");
-  expect(unnamed.limited).toBe(true);
+test("retrieves the oldest evidence without its source path", async () => {
+  const count = 90;
+  const f = await fixture(Array.from({ length: count }, (_, i) =>
+    i === 0 ? "Archived audit receipt: oldest-007" : "routine passed"));
+  const report = await recallSaved(f.manager.getBranch(), f.root, "audit receipt");
+  expect(report.scanned).toBe(count);
+  expect(report.text).toContain("oldest-007");
+  expect(report.text).toContain(f.paths[0] ?? "");
 });

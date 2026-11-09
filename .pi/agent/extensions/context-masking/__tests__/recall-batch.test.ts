@@ -60,7 +60,7 @@ test("answers multiple Danish fact questions from one shared artifact scan", asy
   const report = await recallSavedBatch(f.manager.getBranch(), f.root, queries);
 
   expect(report.scanned).toBe(2);
-  expect(report.bytes).toBe(texts.reduce((sum, text) => sum + Buffer.byteLength(text), 0));
+  expect(report.bytes).toBe(2 * texts.reduce((sum, text) => sum + Buffer.byteLength(text), 0));
   expect(report.queries.map((result) => result.passages.length)).toEqual([1, 1, 0]);
   expect(report.text).toContain("Query: Hvilket audit-id blev arkiveret?");
   expect(report.text).toContain("Query: Hvem godkendte rapporten?");
@@ -88,7 +88,7 @@ test("shares the output cap fairly across queries while keeping each best match 
     expect(report.text).toContain(`${topic} record:`);
   }
   expect(report.scanned).toBe(8);
-  expect(report.bytes).toBe(texts.reduce((sum, text) => sum + Buffer.byteLength(text), 0));
+  expect(report.bytes).toBe(2 * texts.reduce((sum, text) => sum + Buffer.byteLength(text), 0));
 });
 
 test("rejects empty, duplicate, oversized, termless, and excessive query batches", async () => {
@@ -196,12 +196,14 @@ test("prefetch parses ordinary Danish questions and structured question lists", 
   }
 });
 
-test("batch queries share the original total scan budget", async () => {
-  const f = await fixture(Array.from({ length: 17 }, () => "audit receipt and schema tag\n".padEnd(RECALL_LIMITS.fileBytes, "x")));
+test("batch queries share corpus reads beyond the former byte budget", async () => {
+  const texts = Array.from({ length: 17 }, () =>
+    "audit receipt and schema tag\n".padEnd(RECALL_LIMITS.fileBytes, "x"));
+  const f = await fixture(texts);
   const report = await recallSavedBatch(f.manager.getBranch(), f.root, ["audit receipt", "schema tag"]);
-  expect(report.scanned).toBe(16);
-  expect(report.bytes).toBe(RECALL_LIMITS.totalBytes);
-  expect(report.limited).toBe(true);
+  expect(report.scanned).toBe(texts.length);
+  expect(report.bytes).toBe(2 * texts.reduce((sum, text) => sum + Buffer.byteLength(text), 0));
+  expect(report.queries.every((query) => query.passages.length > 0)).toBe(true);
   expect(report.text.length).toBeLessThanOrEqual(RECALL_LIMITS.outputChars);
 });
 
