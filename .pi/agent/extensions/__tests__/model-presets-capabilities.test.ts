@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { getSupportedThinkingLevels, InMemoryCredentialStore } from "@earendil-works/pi-ai";
 import { ModelRuntime } from "@earendil-works/pi-coding-agent";
@@ -12,6 +13,15 @@ test("configured model policies match the installed provider capabilities", asyn
     allowModelNetwork: false,
     executorSocket: null,
   });
+  const settings = JSON.parse(
+    readFileSync(new URL("../../settings.json", import.meta.url), "utf8"),
+  );
+  expect(settings.defaultProvider).toBe("openai-codex");
+  expect(settings.defaultModel).toBe("gpt-6.1-terra-fast");
+  expect(settings.defaultThinkingLevel).toBe("medium");
+  const defaultModel = runtime.getModel(settings.defaultProvider, settings.defaultModel);
+  if (!defaultModel) throw new Error("Missing configured default model");
+  expect(getSupportedThinkingLevels(defaultModel)).toContain(settings.defaultThinkingLevel);
   // The installed bridge projects the native catalog's thinkingLevelMap unchanged.
   runtime.registerProvider("claude-bridge", {
     api: "anthropic-messages",

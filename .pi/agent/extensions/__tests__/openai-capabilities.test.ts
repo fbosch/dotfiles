@@ -63,6 +63,10 @@ describe("OpenAI capabilities", () => {
   test("routes each configured fast model", () => {
     expect(applyFastServiceTier({}, "gpt-6-sol-fast").model).toBe("gpt-6-sol");
     expect(applyFastServiceTier({}, "gpt-5.6-terra-fast").model).toBe("gpt-5.6-terra");
+    expect(applyFastServiceTierForPayload({ model: "gpt-6.1-terra-fast" })).toEqual({
+      model: "gpt-6.1-terra",
+      service_tier: "priority",
+    });
     expect(applyFastServiceTier({}, "gpt-6-astra-fast").model).toBe("gpt-6-astra");
     expect(applyFastServiceTier({}, "gpt-6.1-sol-fast").model).toBe("gpt-6.1-sol");
   });
