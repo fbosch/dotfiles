@@ -108,6 +108,16 @@ describe("quota-aware model presets", () => {
       expect(/^thinking:/mu.test(source)).toBe(false);
     }
   });
+  test("execution and analysis presets select Terra with workload-specific defaults", () => {
+    for (const [id, defaultThinking] of [
+      ["focused-execution", "medium"],
+      ["implementation", "high"],
+      ["deep-analysis", "high"],
+    ] as const) {
+      expect(MODEL_PRESETS[id].models[0].model).toBe("openai-codex/gpt-6.1-terra");
+      expect(MODEL_PRESETS[id].models[0].defaultThinking).toBe(defaultThinking);
+    }
+  });
   for (const [id, preset] of Object.entries(MODEL_PRESETS)) {
     test(`${id} executes through an eligible local account with supported bounds`, async () => {
       const f = fixture();
@@ -373,11 +383,11 @@ describe("quota-aware model presets", () => {
   });
 
   const adaptivePolicies = [
-    ["focused-execution", ["low", "medium", "high", "xhigh"], "xhigh"],
+    ["focused-execution", ["low", "medium", "high", "xhigh"], "medium"],
     ["planning", ["low", "medium", "high", "xhigh"], "medium"],
-    ["implementation", ["low", "medium", "high", "xhigh"], "xhigh"],
+    ["implementation", ["low", "medium", "high", "xhigh"], "high"],
     ["deliberation", ["medium", "high", "xhigh"], "high"],
-    ["deep-analysis", ["medium", "high", "xhigh"], "xhigh"],
+    ["deep-analysis", ["medium", "high", "xhigh"], "high"],
   ] as const;
 
   for (const [id, thinking, defaultThinking] of adaptivePolicies) {
@@ -385,7 +395,11 @@ describe("quota-aware model presets", () => {
       for (const policy of MODEL_PRESETS[id].models) {
         if (policy.model.startsWith("anthropic/")) continue;
         expect([...policy.thinking]).toEqual([...thinking]);
-        expect(policy.defaultThinking).toBe(defaultThinking);
+        expect(policy.defaultThinking).toBe(
+          id === "deep-analysis" && policy.model.startsWith("claude-bridge/")
+            ? "xhigh"
+            : defaultThinking,
+        );
       }
     });
 

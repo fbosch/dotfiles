@@ -41,9 +41,9 @@ export const MODEL_PRESETS = {
   "focused-execution": {
     models: [
       {
-        model: "openai-codex/gpt-6-luna-fast",
+        model: "openai-codex/gpt-6.1-terra",
         thinking: ["low", "medium", "high", "xhigh"],
-        defaultThinking: "xhigh",
+        defaultThinking: "medium",
       },
     ],
   },
@@ -96,18 +96,18 @@ export const MODEL_PRESETS = {
   implementation: {
     models: [
       {
-        model: "openai-codex/gpt-6-luna",
+        model: "openai-codex/gpt-6.1-terra",
         thinking: ["low", "medium", "high", "xhigh"],
-        defaultThinking: "xhigh",
+        defaultThinking: "high",
       },
     ],
   },
   "deep-analysis": {
     models: [
       {
-        model: "openai-codex/gpt-6-luna",
+        model: "openai-codex/gpt-6.1-terra",
         thinking: ["medium", "high", "xhigh"],
-        defaultThinking: "xhigh",
+        defaultThinking: "high",
       },
       {
         model: "anthropic/claude-opus-5-5",
