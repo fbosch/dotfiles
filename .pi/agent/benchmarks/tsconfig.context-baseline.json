@@ -22,6 +22,7 @@
     "context-classifier-isolated.ts",
     "context-native-comparison.ts",
     "__tests__/context-native-comparison.test.ts",
+    "__tests__/context-classifier-diverse-history.test.ts",
     "__tests__/context-classifier-isolated.test.ts",
     "context-classifier-autonomous.ts",
     "context-classifier-autonomous-agent.ts",

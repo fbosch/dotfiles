@@ -1,5 +1,5 @@
 import { createHash } from "node:crypto";
-import { execFileSync } from "node:child_process";
+import sharp from "sharp";
 import { DEFAULT_SETTINGS } from "../extensions/context-masking/policy";
 import { autonomousStages } from "./context-classifier-autonomous-history";
 import type { RecallFixture, RecallProbe } from "./context-classifier-recall-fixtures";
@@ -19,16 +19,56 @@ const padded = (text: string) => {
   return output;
 };
 
-function panel(code: string, color: string): string {
-  return execFileSync("/run/current-system/sw/bin/magick", [
-    "-size", "640x320", "xc:white", "-fill", color,
-    "-draw", "rectangle 420,205 610,295", "-fill", "black",
-    "-font", "DejaVu-Sans-Bold", "-pointsize", "48", "-gravity", "NorthWest",
-    "-annotate", "+24+48", code, "-strip", "png:-",
-  ], { maxBuffer: 2_000_000 }).toString("base64");
+const PANEL_GLYPHS: Record<string, string> = {
+  I: "11111/00100/00100/00100/00100/00100/11111",
+  M: "10001/11011/10101/10101/10001/10001/10001",
+  G: "01110/10001/10000/10111/10001/10001/01110",
+  "-": "00000/00000/00000/11111/00000/00000/00000",
+  "0": "01110/10001/10011/10101/11001/10001/01110",
+  "1": "00100/01100/00100/00100/00100/00100/01110",
+  "2": "01110/10001/00001/00010/00100/01000/11111",
+  "3": "11110/00001/00001/01110/00001/00001/11110",
+  "4": "00010/00110/01010/10010/11111/00010/00010",
+  "5": "11111/10000/10000/11110/00001/00001/11110",
+  "6": "01110/10000/10000/11110/10001/10001/01110",
+  "7": "11111/00001/00010/00100/01000/01000/01000",
+  "8": "01110/10001/10001/01110/10001/10001/01110",
+  "9": "01110/10001/10001/01111/00001/00001/01110",
+  A: "01110/10001/10001/11111/10001/10001/10001",
+  B: "11110/10001/10001/11110/10001/10001/11110",
+  C: "01111/10000/10000/10000/10000/10000/01111",
+  D: "11110/10001/10001/10001/10001/10001/11110",
+  E: "11111/10000/10000/11110/10000/10000/11111",
+  F: "11111/10000/10000/11110/10000/10000/10000",
+};
+
+async function panel(code: string, color: "red" | "blue" | "green" | "orange"): Promise<string> {
+  if (code.length !== 12) throw Error("Unsupported panel code");
+  const pixels = Buffer.alloc(640 * 320 * 3, 255);
+  const tiles = { red: [255, 0, 0], blue: [0, 0, 255], green: [0, 128, 0], orange: [255, 165, 0] } as const;
+  const rectangle = (left: number, top: number, width: number, height: number, rgb: readonly [number, number, number]) => {
+    for (let y = top; y < top + height; y++) {
+      for (let x = left; x < left + width; x++) {
+        const offset = (y * 640 + x) * 3;
+        pixels[offset] = rgb[0];
+        pixels[offset + 1] = rgb[1];
+        pixels[offset + 2] = rgb[2];
+      }
+    }
+  };
+  rectangle(420, 205, 191, 91, tiles[color]);
+  // Fixed glyphs keep seeded image evidence independent of host fonts and font configuration.
+  for (const [index, character] of [...code].entries()) {
+    const glyph = PANEL_GLYPHS[character];
+    if (!glyph) throw Error("Unsupported panel code");
+    for (const [row, bits] of glyph.split("/").entries())
+      for (let column = 0; column < 5; column++)
+        if (bits[column] === "1") rectangle(24 + index * 36 + column * 6, 48 + row * 6, 6, 6, [0, 0, 0]);
+  }
+  return (await sharp(pixels, { raw: { width: 640, height: 320, channels: 3 } }).png().toBuffer()).toString("base64");
 }
 
-export function diverseStages(seed: string): DiverseStage[] {
+export async function diverseStages(seed: string): Promise<DiverseStage[]> {
   const stages = autonomousStages(seed);
   const release = `release_${token(seed, "release")}`;
   const owner = `owner_${token(seed, "owner")}`;
@@ -65,6 +105,7 @@ export function diverseStages(seed: string): DiverseStage[] {
       question: "What color fills the lower-right tile of the latest inspection panel image?" },
   ];
 
+  const [oldPanel, currentPanel] = await Promise.all([panel(oldCode, "red"), panel(code, color)]);
   return stages.map((stage, phase): DiverseStage => {
     const extras = phase === 0 ? [
       `Exporter config: retry_ceiling=${retry}.`,
@@ -76,10 +117,10 @@ export function diverseStages(seed: string): DiverseStage[] {
       `Exporter config revision 3 FINAL APPROVED checkpoint_policy=${policy}. Explicitly replaces the earlier checkpoint_policy=${policyOld}.`,
     ] : [];
     const images = phase === 0
-      ? [{ data: panel(oldCode, "red"), mimeType: "image/png" as const,
+      ? [{ data: oldPanel, mimeType: "image/png" as const,
           label: "Inspection panel revision 1; later panels supersede its code and tile." }]
       : phase === 2
-        ? [{ data: panel(code, color), mimeType: "image/png" as const,
+        ? [{ data: currentPanel, mimeType: "image/png" as const,
             label: "Inspection panel revision 3; read its printed code and lower-right tile pixels." }]
         : [];
     const goal = phase === 0

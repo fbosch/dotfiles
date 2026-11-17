@@ -184,7 +184,7 @@ describe("native versus enabled-classifier comparison preflight", () => {
     const root = await mkdtemp(join(scratch, "diverse-"));
     roots.push(root);
     for (const seed of DIVERSE_SEEDS) {
-      const stages = diverseStages(seed);
+      const stages = await diverseStages(seed);
       expect(stages[2]?.probes.filter(probe => probe.expected !== null)).toHaveLength(15);
       const positives = stages[2]?.probes.filter(probe => probe.expected !== null) ?? [];
       expect(Object.fromEntries(["read", "conversation", "bash", "image"].map(source =>
@@ -213,7 +213,7 @@ describe("native versus enabled-classifier comparison preflight", () => {
     expect(report.config.classifier.maxConcurrentAssessments).toBe(2);
     for (const seed of DIVERSE_SEEDS) {
       const paired = report.arms.filter(arm => arm.seed === seed);
-      const bashIndices = diverseStages(seed)[0]?.tools.flatMap((tool, i) => tool === "bash" ? [i] : []) ?? [];
+      const bashIndices = (await diverseStages(seed))[0]?.tools.flatMap((tool, i) => tool === "bash" ? [i] : []) ?? [];
       expect(new Set(paired.map(arm => arm.workspaceHash)).size).toBe(1);
       for (const arm of paired) {
         expect(arm.compactions[0]?.imageFactEvidence).toBeGreaterThan(0);

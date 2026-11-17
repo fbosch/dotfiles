@@ -152,7 +152,7 @@ async function fixture(root: string, seed: string, diverse = false): Promise<Fix
   const cwd = join(root, "workspace"), agentDir = join(root, "agent");
   await mkdir(cwd, { recursive: true, mode: 0o700 });
   await mkdir(agentDir, { recursive: true, mode: 0o700 });
-  const stages: Fixture["stages"] = diverse ? diverseStages(seed) : autonomousStages(seed), manifest = new Map<string, string>();
+  const stages: Fixture["stages"] = diverse ? await diverseStages(seed) : autonomousStages(seed), manifest = new Map<string, string>();
   for (const [phase, stage] of stages.entries()) {
     await mkdir(join(cwd, "reports", "phase-" + phase), { recursive: true, mode: 0o700 });
     for (const [i, value] of stage.outputs.entries()) {
