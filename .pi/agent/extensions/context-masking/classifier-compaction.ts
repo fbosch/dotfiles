@@ -1,3 +1,4 @@
+import { compactionFailureDetail } from "./compaction-diagnostics";
 import { coherentEvidence } from "./coherent-evidence";
 import { EXTRACTIVE_HEADER, MAX_CLASSIFIER_SOURCES, expandCheckpointSources } from "./checkpoint-sources";
 import { manifestPointer, packCheckpoint, type CheckpointPart, type PackedCheckpoint } from "./checkpoint-packing";
@@ -515,7 +516,7 @@ async function classifyTextCompaction(
   const abortAssessments = () => assessmentController.abort();
   if (parallelAssessments) signal?.addEventListener("abort", abortAssessments, { once: true });
   if (signal?.aborted) abortAssessments();
-  type AssessmentResult = { request: ClassifierRequest; response?: ClassifierResponse; cached: boolean; failed?: boolean };
+  type AssessmentResult = { request: ClassifierRequest; response?: ClassifierResponse; cached: boolean; failureDetail?: string };
   const pendingAssessments = new Map<number, Promise<AssessmentResult>>();
   let nextAssessment = 0;
   const scheduleAssessments = () => {
@@ -540,9 +541,9 @@ async function classifyTextCompaction(
           if (response.usage) outcome.usage = sumUsage(outcome.usage, response.usage);
           else outcome.usageComplete = false;
           return { request, response, cached: false };
-        } catch {
+        } catch (error) {
           outcome.usageComplete = false;
-          return { request, cached: false, failed: true };
+          return { request, cached: false, failureDetail: compactionFailureDetail("assessment", error) };
         } finally {
           outcome.classifierMs += performance.now() - started;
         }
@@ -566,8 +567,10 @@ async function classifyTextCompaction(
       : cacheScope ? dependencies.cache?.get(cacheScope, request) : undefined;
     let response: ClassifierResponse;
     if (prefetched) {
-      if (prefetched.failed || !prefetched.response)
+      if (prefetched.failureDetail || !prefetched.response) {
+        if (prefetched.failureDetail) outcome.failureDetail = prefetched.failureDetail;
         return fallback(signal?.aborted ? "aborted" : "classifier-request-failed");
+      }
       response = prefetched.response;
       if (cached) outcome.cacheHits++;
     } else if (cached) {
@@ -580,8 +583,9 @@ async function classifyTextCompaction(
       const started = performance.now();
       try {
         response = await dependencies.classify(request, signal);
-      } catch {
+      } catch (error) {
         outcome.usageComplete = false;
+        outcome.failureDetail = compactionFailureDetail(phase, error);
         return fallback(signal?.aborted ? "aborted" : "classifier-request-failed");
       } finally {
         outcome.classifierMs += performance.now() - started;
@@ -589,8 +593,11 @@ async function classifyTextCompaction(
       if (response.usage) outcome.usage = sumUsage(outcome.usage, response.usage);
       else outcome.usageComplete = false;
     }
-    if (response.stopReason !== "stop")
+    if (response.stopReason !== "stop") {
+      outcome.failureDetail = compactionFailureDetail(phase,
+        [response.stopReason, response.errorMessage].filter(Boolean).join(": "));
       return fallback(response.stopReason === "aborted" ? "aborted" : "classifier-error");
+    }
     if (phase === "bounded-reconciliation") {
       for (const candidate of group.slice(0, -1)) {
         const verdict = response.answers[`superseded_${candidate.id}`];

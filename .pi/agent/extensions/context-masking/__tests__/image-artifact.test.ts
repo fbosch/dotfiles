@@ -1,5 +1,4 @@
 import { afterEach, expect, test } from "bun:test";
-import { spawn } from "node:child_process";
 import { chmod, link, mkdir, mkdtemp, readFile, readdir, rm, stat, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,8 +9,8 @@ import {
   readImageArtifact,
   saveImageArtifact,
 } from "../evidence-archive";
+import { syntheticImage, imageDimensions as dimensions, pixelColour as pixel } from "./image-fixtures";
 
-const MAGICK = "/run/current-system/sw/bin/magick";
 const roots: string[] = [];
 
 afterEach(async () => {
@@ -24,72 +23,6 @@ async function tempRoot(): Promise<{ base: string; root: string }> {
   const root = join(base, "archive");
   await mkdir(root, { mode: 0o700 });
   return { base, root };
-}
-
-function runMagick(args: string[], input?: Buffer, maxOutput = 5_000_000): Promise<Buffer> {
-  return new Promise((resolvePromise, rejectPromise) => {
-    const child = spawn(MAGICK, args, {
-      cwd: "/",
-      env: { PATH: "/run/current-system/sw/bin:/usr/bin:/bin", HOME: "/nonexistent", LC_ALL: "C" },
-      shell: false,
-      stdio: ["pipe", "pipe", "ignore"],
-    });
-    const chunks: Buffer[] = [];
-    let size = 0;
-    child.stdout.on("data", (chunk: Buffer) => {
-      size += chunk.length;
-      if (size > maxOutput) child.kill("SIGKILL");
-      else chunks.push(chunk);
-    });
-    child.on("error", rejectPromise);
-    child.on("close", (code) => {
-      if (code !== 0) rejectPromise(new Error("Synthetic ImageMagick fixture failed"));
-      else resolvePromise(Buffer.concat(chunks, size));
-    });
-    child.stdin.end(input);
-  });
-}
-
-async function syntheticImage(
-  width: number,
-  height: number,
-  mimeType: "image/png" | "image/jpeg" = "image/png",
-): Promise<Buffer> {
-  const format = mimeType === "image/png" ? "png" : "jpeg";
-  const args = ["-size", `${width}x${height}`, "xc:white"];
-  if (width === 720 && height === 131) {
-    args.push(
-      "-fill", "#111111",
-      "-draw", "rectangle 10,10 80,60",
-      "-stroke", "#2255aa",
-      "-strokewidth", "3",
-      "-draw", "line 0,100 719,100",
-      "-fill", "#cc3333",
-      "-draw", "rectangle 500,20 550,90",
-    );
-  } else {
-    args.push("-fill", "#222222", "-draw", `rectangle 10,10 ${Math.min(width - 1, 100)},${Math.min(height - 1, 100)}`);
-  }
-  if (format === "jpeg") args.push("-quality", "88");
-  args.push(`${format}:-`);
-  return runMagick(args);
-}
-
-async function dimensions(bytes: Buffer, mimeType: "image/png" | "image/jpeg") {
-  const coder = mimeType === "image/png" ? "png:-" : "jpeg:-";
-  const result = await runMagick([coder, "-format", "%w %h", "info:-"], bytes, 256);
-  const [width, height] = result.toString("ascii").trim().split(" ").map(Number);
-  if (width === undefined || height === undefined || !Number.isFinite(width) || !Number.isFinite(height)) throw new Error("Invalid synthetic image dimensions");
-  return { width, height };
-}
-
-async function pixel(bytes: Buffer, x: number, y: number) {
-  const result = await runMagick(
-    ["png:-", "-format", `%[pixel:p{${x},${y}}]`, "info:-"],
-    bytes,
-    256,
-  );
-  return result.toString("ascii");
 }
 
 const imagePayload = (bytes: Buffer, mimeType = "image/png") => ({

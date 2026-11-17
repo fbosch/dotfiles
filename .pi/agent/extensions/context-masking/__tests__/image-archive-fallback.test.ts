@@ -46,8 +46,7 @@ async function fixture(mode: "extractive" | "hybrid", previousImage = false, goo
   });
   const messages = manager.buildSessionProjection().messages;
   const keptId = manager.appendMessage({ role: "user", content: "Recent tail", timestamp: 2 });
-  // Replay persisted originals through the real archive reader. Six valid images exercise
-  // Jev's metadata-only transport without requiring the NixOS-only image normalizer.
+  // Six persisted originals exercise Jev's metadata-only transport without image normalization.
   const images: ImageArchiveRecord[] = [];
   for (let i = 0; i < goodImages; i++) images.push(await archivedImage(root, manager.getSessionId(), `source_${i}`));
   const previous = [...images];
@@ -106,6 +105,20 @@ async function fixture(mode: "extractive" | "hybrid", previousImage = false, goo
   return { event, controller, calls, notices, requests, images, manager, root, keptId, ctx, sourceId,
     run: () => run(event, ctx), failSummary: () => { summaryFails = true; } };
 }
+
+test("classifier failure reaches the fallback notice with provider diagnostics", async () => {
+  const f = await fixture("extractive");
+  f.ctx.modelRegistry.classify = async () => ({
+    api: "typesafe-system-one", provider: "test", model: "test", timestamp: 1,
+    stopReason: "error", errorMessage: "Invalid classifier input", answers: {}, usage,
+  });
+  const result = await f.run();
+  expect(result?.compaction?.summary).toBe("Native selected-text summary");
+  expect(f.calls).toHaveLength(1);
+  expect(f.notices.at(-1)?.message).toBe(
+    "Classifier compaction fell back: assessment: error: Invalid classifier input.",
+  );
+});
 
 for (const mode of ["extractive", "hybrid"] as const) {
   for (const previousImage of [false, true]) {

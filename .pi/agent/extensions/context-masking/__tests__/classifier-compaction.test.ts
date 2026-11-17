@@ -98,6 +98,29 @@ async function fixture(texts = ["approved value: æøå-123", "obsolete result",
 }
 const omitAll = async (request: ClassifierRequest) => answer(request, () => 0);
 
+test("classifier fallback preserves response diagnostics and phase", async () => {
+  const f = await fixture();
+  const result = await classifyCompaction(f.input, settings, {
+    artifactRoot: f.root,
+    classify: async request => ({
+      ...answer(request, () => 0), stopReason: "error",
+      errorMessage: "Invalid classifier image input",
+    }),
+  });
+  expect(result.reason).toBe("classifier-error");
+  expect(result.failureDetail).toBe("assessment: error: Invalid classifier image input");
+});
+
+test("classifier request failures preserve bounded diagnostics", async () => {
+  const f = await fixture();
+  const result = await classifyCompaction(f.input, settings, {
+    artifactRoot: f.root,
+    classify: async () => { throw new Error("API unavailable"); },
+  });
+  expect(result.reason).toBe("classifier-request-failed");
+  expect(result.failureDetail).toBe("assessment: API unavailable");
+});
+
 test("repeated checkpoints keep demoted sources recoverable without re-promoting them", async () => {
   const old = "Exporter approved schema_tag=old_æøå. Initial decision.";
   const current = "Exporter revised schema_tag=new_æøå. Replaces the initial decision.";
@@ -1119,6 +1142,7 @@ test("assessment failure stops queued requests and awaits cancellation of in-fli
     throw Error("cancelled");
   } });
   expect(result.reason).toBe("classifier-request-failed");
+  expect(result.failureDetail).toBe("assessment: API failure");
   expect(started).toBe(2);
   expect(aborted).toBe(1);
   expect(result.assessmentRequests).toBe(2);

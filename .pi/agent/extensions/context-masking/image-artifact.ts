@@ -15,13 +15,13 @@ const MAX_IMAGE_DIMENSION = 1_568;
 const MIN_IMAGE_AREA = 78_400;
 const MAX_IMAGE_AREA = 2_458_624;
 const MAX_DECODE_AREA = 8_000_000;
-const MAGICK = "/run/current-system/sw/bin/magick";
+export class ImageProcessorUnavailableError extends Error {}
+
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/u;
 
 const IMAGE_MIME = ["image/png", "image/jpeg"] as const;
 export type ImageMime = (typeof IMAGE_MIME)[number];
 
-type ImageDimensions = { width: number; height: number };
 type ImageInput = { data: string; mimeType: string };
 
 const hasUid = typeof process.getuid === "function";
@@ -35,7 +35,7 @@ const fileWriteFlags =
   constants.O_NOFOLLOW |
   constants.O_NONBLOCK;
 const childEnv = {
-  PATH: "/run/current-system/sw/bin:/usr/bin:/bin",
+  PATH: "/usr/bin:/bin",
   HOME: "/nonexistent",
   LANG: "C",
   LC_ALL: "C",
@@ -104,43 +104,35 @@ export function checkImageProcessingAbort(signal?: AbortSignal): void {
   if (signal?.aborted) throw abortError();
 }
 
-function resourceArgs(): string[] {
-  return [
-    "-limit", "memory", "256MiB",
-    "-limit", "map", "0",
-    "-limit", "disk", "0",
-    "-limit", "area", String(MAX_DECODE_AREA),
-    "-limit", "width", "10000",
-    "-limit", "height", "10000",
-    "-limit", "time", "12",
-    "-limit", "thread", "1",
-  ];
-}
-
-function runMagick(
-  args: string[],
+export function runImageProcessor(
+  operation: "inspect" | "normalize",
   input: Buffer,
-  maxOutputBytes: number,
-  signal?: AbortSignal,
+  mimeType: ImageMime,
+  options: { signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<Buffer> {
+  const { signal, timeoutMs = 15_000 } = options;
   checkImageProcessingAbort(signal);
+  if (!input.length || input.length > MAX_IMAGE_BYTES) fail("Image input exceeded its byte limit");
+  if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) fail("Invalid image processing timeout");
+  const maxOutputBytes = operation === "inspect" ? 0 : MAX_CLASSIFIER_BYTES;
+  const request = JSON.stringify({ operation, mimeType, limits: {
+    maxImageBytes: MAX_IMAGE_BYTES, maxDecodeArea: MAX_DECODE_AREA,
+    minDimension: MIN_IMAGE_DIMENSION, maxDimension: MAX_IMAGE_DIMENSION,
+    minArea: MIN_IMAGE_AREA, maxArea: MAX_IMAGE_AREA, maxClassifierBytes: MAX_CLASSIFIER_BYTES,
+  } });
   return new Promise((resolvePromise, rejectPromise) => {
-    let child: ChildProcessByStdio<Writable, Readable, null>;
+    let child: ChildProcessByStdio<Writable, Readable, Readable>;
     try {
-      child = spawn(MAGICK, args, {
-        cwd: "/",
-        env: childEnv,
-        shell: false,
-        stdio: ["pipe", "pipe", "ignore"],
-        windowsHide: true,
+      child = spawn(process.execPath, [join(__dirname, "image-codec.cjs"), request], {
+        cwd: "/", env: childEnv, shell: false, stdio: ["pipe", "pipe", "pipe"], windowsHide: true,
       });
     } catch {
-      rejectPromise(new Error("ImageMagick could not be started"));
+      rejectPromise(new ImageProcessorUnavailableError("Sharp image processor could not be started"));
       return;
     }
-
     let outputBytes = 0;
     let failure: Error | undefined;
+    let errorBytes = Buffer.alloc(0);
     const chunks: Buffer[] = [];
     const stop = (error: Error) => {
       if (failure !== undefined) return;
@@ -148,184 +140,53 @@ function runMagick(
       child.kill("SIGKILL");
     };
     const onAbort = () => stop(abortError());
-    const timeout = setTimeout(() => stop(new Error("Image processing timed out")), 15_000);
+    // A process deadline can terminate native work, unlike a raced Promise or worker-thread abort.
+    const timeout = setTimeout(() => stop(new Error("Image processing timed out")), timeoutMs);
     timeout.unref?.();
     signal?.addEventListener("abort", onAbort, { once: true });
     if (signal?.aborted) onAbort();
-
     child.stdout.on("data", (part: Buffer) => {
       if (failure !== undefined) return;
       outputBytes += part.length;
       if (outputBytes > maxOutputBytes) {
-        stop(new Error("ImageMagick output exceeded its limit"));
+        stop(new Error("Image processor output exceeded its limit"));
         return;
       }
       chunks.push(part);
     });
-    child.stdin.on("error", () => {});
-    child.on("error", () => {
-      stop(new Error("ImageMagick could not be started"));
+    child.stderr.on("data", (part: Buffer) => {
+      if (errorBytes.length < 1_024)
+        errorBytes = Buffer.concat([errorBytes, part.subarray(0, 1_024 - errorBytes.length)]);
     });
+    child.stdin.on("error", () => {});
+    child.on("error", () => stop(new ImageProcessorUnavailableError("Sharp image processor could not be started")));
     child.on("close", (code: number | null) => {
       clearTimeout(timeout);
       signal?.removeEventListener("abort", onAbort);
-      if (failure !== undefined) {
-        rejectPromise(failure);
-      } else if (code !== 0) {
-        rejectPromise(new Error("ImageMagick rejected the image"));
-      } else if (signal?.aborted) {
-        rejectPromise(abortError());
-      } else {
-        resolvePromise(Buffer.concat(chunks, outputBytes));
-      }
+      if (failure !== undefined) rejectPromise(failure);
+      else if (code === 2) rejectPromise(new ImageProcessorUnavailableError("Sharp image processor is unavailable"));
+      else if (code !== 0) rejectPromise(new Error(errorBytes.toString("utf8").replace(/\p{Cc}/gu, " ").trim() || "Sharp rejected the image"));
+      else if (signal?.aborted) rejectPromise(abortError());
+      else resolvePromise(Buffer.concat(chunks, outputBytes));
     });
     child.stdin.end(input);
   });
-}
-
-function inputCoder(mimeType: ImageMime): string {
-  return mimeType === "image/png" ? "png:-" : "jpeg:-";
-}
-
-async function inspectImage(
-  bytes: Buffer,
-  mimeType: ImageMime,
-  signal?: AbortSignal,
-): Promise<ImageDimensions> {
-  const output = await runMagick(
-    [
-      ...resourceArgs(),
-      inputCoder(mimeType),
-      "-auto-orient",
-      "-format",
-      "%n %w %h\\n",
-      "info:-",
-    ],
-    bytes,
-    256,
-    signal,
-  );
-  const lines = output.toString("ascii").trim().split("\n");
-  if (lines.length !== 1) fail("Animated or multi-frame images are not supported");
-  const match = /^(\d+) (\d+) (\d+)$/u.exec(lines[0] ?? "");
-  if (match === null || match[1] !== "1") fail("Invalid image dimensions or frame count");
-  const width = Number(match[2]);
-  const height = Number(match[3]);
-  if (
-    !Number.isSafeInteger(width) ||
-    !Number.isSafeInteger(height) ||
-    width < 1 ||
-    height < 1 ||
-    width > 10_000 ||
-    height > 10_000 ||
-    width * height > MAX_DECODE_AREA
-  )
-    fail("Image exceeds decode limits");
-  return { width, height };
 }
 
 export async function validateImageInput(image: ImageInput): Promise<{ bytes: Buffer; mimeType: ImageMime }> {
   const mimeType = imageMime(image?.mimeType ?? "");
   const bytes = decodeBase64(image?.data);
   assertMagic(bytes, mimeType);
-  await inspectImage(bytes, mimeType);
+  await runImageProcessor("inspect", bytes, mimeType);
   return { bytes, mimeType };
 }
 
-function normalizedDimensions({ width, height }: ImageDimensions): ImageDimensions {
-  const scale = Math.min(
-    1,
-    MAX_IMAGE_DIMENSION / width,
-    MAX_IMAGE_DIMENSION / height,
-    Math.sqrt(MAX_IMAGE_AREA / (width * height)),
-  );
-  const resizedWidth = Math.max(1, Math.floor(width * scale));
-  const resizedHeight = Math.max(1, Math.floor(height * scale));
-  let canvasWidth = Math.max(MIN_IMAGE_DIMENSION, resizedWidth);
-  let canvasHeight = Math.max(MIN_IMAGE_DIMENSION, resizedHeight);
-
-  if (canvasWidth * canvasHeight < MIN_IMAGE_AREA) {
-    const paddingScale = Math.sqrt(MIN_IMAGE_AREA / (canvasWidth * canvasHeight));
-    canvasWidth = Math.min(MAX_IMAGE_DIMENSION, Math.ceil(canvasWidth * paddingScale));
-    canvasHeight = Math.min(MAX_IMAGE_DIMENSION, Math.ceil(canvasHeight * paddingScale));
-    while (canvasWidth * canvasHeight < MIN_IMAGE_AREA && canvasWidth < MAX_IMAGE_DIMENSION)
-      canvasWidth++;
-    while (canvasWidth * canvasHeight < MIN_IMAGE_AREA && canvasHeight < MAX_IMAGE_DIMENSION)
-      canvasHeight++;
-  }
-  if (
-    canvasWidth < MIN_IMAGE_DIMENSION ||
-    canvasHeight < MIN_IMAGE_DIMENSION ||
-    canvasWidth > MAX_IMAGE_DIMENSION ||
-    canvasHeight > MAX_IMAGE_DIMENSION ||
-    canvasWidth * canvasHeight < MIN_IMAGE_AREA ||
-    canvasWidth * canvasHeight > MAX_IMAGE_AREA
-  )
-    fail("Image cannot be normalized within classifier bounds");
-  return { width: canvasWidth, height: canvasHeight };
-}
-
-async function normalizeImage(
-  bytes: Buffer,
-  mimeType: ImageMime,
-  signal?: AbortSignal,
-): Promise<Buffer> {
-  checkImageProcessingAbort(signal);
-  const source = await inspectImage(bytes, mimeType, signal);
-  const size = normalizedDimensions(source);
-  const scale = Math.min(
-    1,
-    MAX_IMAGE_DIMENSION / source.width,
-    MAX_IMAGE_DIMENSION / source.height,
-    Math.sqrt(MAX_IMAGE_AREA / (source.width * source.height)),
-  );
-  const resizedWidth = Math.max(1, Math.floor(source.width * scale));
-  const resizedHeight = Math.max(1, Math.floor(source.height * scale));
-  const output = await runMagick(
-    [
-      ...resourceArgs(),
-      inputCoder(mimeType),
-      "-auto-orient",
-      "-resize",
-      `${resizedWidth}x${resizedHeight}`,
-      "-background",
-      "white",
-      "-alpha",
-      "remove",
-      "-alpha",
-      "off",
-      "-gravity",
-      "center",
-      "-extent",
-      `${size.width}x${size.height}`,
-      "-strip",
-      ...(mimeType === "image/jpeg" ? ["-quality", "88", "-sampling-factor", "4:4:4"] : []),
-      mimeType === "image/png" ? "png:-" : "jpeg:-",
-    ],
-    bytes,
-    MAX_CLASSIFIER_BYTES,
-    signal,
-  );
-  checkImageProcessingAbort(signal);
-  const verified = await inspectImage(output, mimeType, signal);
-  if (
-    output.length === 0 ||
-    output.length > MAX_CLASSIFIER_BYTES ||
-    verified.width !== size.width ||
-    verified.height !== size.height ||
-    verified.width < MIN_IMAGE_DIMENSION ||
-    verified.height < MIN_IMAGE_DIMENSION ||
-    verified.width > MAX_IMAGE_DIMENSION ||
-    verified.height > MAX_IMAGE_DIMENSION ||
-    verified.width * verified.height < MIN_IMAGE_AREA ||
-    verified.width * verified.height > MAX_IMAGE_AREA
-  )
-    fail("Normalized image exceeds classifier bounds");
+export async function normalizeImageForClassifier(bytes: Buffer, mimeType: string, signal?: AbortSignal): Promise<Buffer> {
+  const mime = imageMime(mimeType);
+  assertMagic(bytes, mime);
+  const output = await runImageProcessor("normalize", bytes, mime, signal ? { signal } : {});
+  assertMagic(output, mime);
   return output;
-}
-
-export function normalizeImageForClassifier(bytes: Buffer, mimeType: string, signal?: AbortSignal): Promise<Buffer> {
-  return normalizeImage(bytes, imageMime(mimeType), signal);
 }
 
 async function openSessionDirectory(root: string, sessionId: string, create: boolean) {

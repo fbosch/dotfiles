@@ -1,5 +1,5 @@
+import { solidImage } from "./image-fixtures";
 import { afterEach, expect, test } from "bun:test";
-import { execFileSync } from "node:child_process";
 import { mkdtemp, readFile, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -46,7 +46,7 @@ function answer(request: ClassifierRequest, probability: (name: string) => numbe
   };
 }
 
-const pixels = () => execFileSync("/run/current-system/sw/bin/magick", ["-size", "720x131", "xc:blue", "png:-"]).toString("base64");
+const pixels = async () => (await solidImage()).toString("base64");
 
 test("text and image recovery uses caller-committed catalogs and preserves omitted originals", async () => {
   const f = await fixture();
@@ -56,7 +56,7 @@ test("text and image recovery uses caller-committed catalogs and preserves omitt
   if (!written) throw Error("Missing masked original");
   const conversationText = "[user]\nPreserve Danish æøå exactly.";
   const conversation = { ...await saveConversationArtifact(f.root, f.sessionId, conversationText), text: conversationText };
-  const imageInput = { data: pixels(), mimeType: "image/png" };
+  const imageInput = { data: await pixels(), mimeType: "image/png" };
   const image = { ...await saveImageArtifact(f.root, f.sessionId, entryId, 0, imageInput), action: "omit" as const, forced: false };
   expect(savedItems(f.manager.getBranch()).size).toBe(0);
 
@@ -92,7 +92,7 @@ test("repeated mixed checkpoints keep text references demoted while restoring re
   if (!written) throw Error("Missing masked original");
   f.manager.appendContextEdit(entryId, { content: [{ type: "text", text: placeholder(written.candidate, written.path) }] });
   f.manager.appendCustomEntry("context-masking", { items: [{ entryId, toolName: "read", path: written.path }] });
-  const imageInput = { type: "image" as const, data: pixels(), mimeType: "image/png" };
+  const imageInput = { type: "image" as const, data: await pixels(), mimeType: "image/png" };
   f.manager.appendMessage({ role: "user", timestamp: 3, content: [{ type: "text", text: "Keep the current chart and preserve æøå." }, imageInput] });
   const settings = { ...CLASSIFIER_DEFAULTS, enabled: true, minFreedRatio: 0 };
   let result = await classifyCompaction({ sessionId: f.sessionId, branch: f.manager.getBranch(), messages: f.manager.buildSessionProjection().messages }, settings, {

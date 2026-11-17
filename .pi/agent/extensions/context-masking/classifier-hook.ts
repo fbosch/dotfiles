@@ -263,6 +263,10 @@ export function registerClassifierCompaction(
       },
       event.signal,
     );
+    if (result.reason === "image-processor-unavailable") {
+      if (!event.signal.aborted && ctx.hasUI) ctx.ui.notify(`Compaction cancelled: ${result.failureDetail ?? "Sharp is unavailable"}.`, "error");
+      return { cancel: true };
+    }
     if (result.images?.length) pi.appendEntry(IMAGE_ARCHIVE, { version: 1, images: result.images });
     if (result.savedItems?.length) pi.appendEntry("context-masking", { items: result.savedItems });
     if ((result.reason.startsWith("conversation-archive") && result.reason !== "conversation-archive-limit") || result.reason === "conversation-count-limit") {

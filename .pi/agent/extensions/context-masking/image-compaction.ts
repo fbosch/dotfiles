@@ -1,3 +1,5 @@
+import { ImageProcessorUnavailableError } from "./image-artifact";
+import { compactionFailureDetail } from "./compaction-diagnostics";
 import { packCheckpoint } from "./checkpoint-packing";
 import { retentionContext } from "./retention-context";
 import { createHash } from "node:crypto";
@@ -70,8 +72,10 @@ export async function classifyWithImages(
         if (images.length >= MAX_IMAGES) throw new Error("Image count limit");
         const record = await saveImageArtifact(dependencies.artifactRoot, sessionId, entryId, index, block);
         add({ ...record, action: "inline", forced: true, label: describe(message).slice(0, 2_000) });
-      } catch {
+      } catch (error) {
         if (signal?.aborted) return fail("aborted");
+        if (error instanceof ImageProcessorUnavailableError)
+          return { ...fail("image-processor-unavailable"), failureDetail: error.message };
         skippedImages.push({ entryId, blockIndex: index });
       }
     }
@@ -90,7 +94,11 @@ export async function classifyWithImages(
     if (!exceedsJevImageLimit) {
       for (const image of images) normalized.push(await classifierImage(dependencies.artifactRoot, sessionId, image, signal));
     }
-  } catch { return fail(signal?.aborted ? "aborted" : "image-normalization-failed"); }
+  } catch (error) {
+    const reason = signal?.aborted ? "aborted" : error instanceof ImageProcessorUnavailableError
+      ? "image-processor-unavailable" : "image-normalization-failed";
+    return { ...fail(reason), failureDetail: compactionFailureDetail("image-normalization", error) };
+  }
   const context = images.map((image, index) => ({ imageNumber: index + 1, id: image.id, source: image.entryId, block: image.blockIndex, sha256: image.sha256 }));
   // The image identity is part of the text classifier's cache scope, even when prose is unchanged.
   const instructions = [input.instructions, "[Image evidence context]\n" + JSON.stringify(context)].filter(Boolean).join("\n\n");
@@ -162,11 +170,19 @@ export async function classifyWithImages(
       result.requestBytes.push(totalBytes);
       const started = performance.now();
       try { response = await dependencies.classify(request, signal); }
-      catch { result.usageComplete = false; return fail(signal?.aborted ? "aborted" : "classifier-request-failed", result); }
+      catch (error) {
+        result.usageComplete = false;
+        return { ...fail(signal?.aborted ? "aborted" : "classifier-request-failed", result),
+          failureDetail: compactionFailureDetail("image-decision", error) };
+      }
       finally { result.classifierMs += performance.now() - started; }
       if (response.usage) result.usage = sumUsage(result.usage, response.usage); else result.usageComplete = false;
     }
-    if (!response || response.stopReason !== "stop") return fail(signal?.aborted ? "aborted" : "classifier-error", result);
+    if (response?.stopReason !== "stop") return {
+      ...fail(signal?.aborted || response?.stopReason === "aborted" ? "aborted" : "classifier-error", result),
+      failureDetail: compactionFailureDetail("image-decision", response
+        ? [response.stopReason, response.errorMessage].filter(Boolean).join(": ") : "Missing classifier response"),
+    };
     for (const [index, image] of images.entries()) {
       const inline = response.answers[`inline_i${index}`], reference = response.answers[`reference_i${index}`];
       if (inline?.type !== "bool" || reference?.type !== "bool" || ![inline.probability, reference.probability].every(p => Number.isFinite(p) && p >= 0 && p <= 1))

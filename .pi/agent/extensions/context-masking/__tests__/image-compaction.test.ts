@@ -1,5 +1,5 @@
+import { solidImage, noisyImage } from "./image-fixtures";
 import { afterEach, expect, test } from "bun:test";
-import { execFileSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -14,7 +14,7 @@ import { placeholder } from "../policy";
 
 const roots: string[] = [];
 afterEach(async () => { for (const root of roots.splice(0)) await rm(root, { recursive: true, force: true }); });
-const pixels = (color = "blue") => execFileSync("/run/current-system/sw/bin/magick", ["-size", "720x131", `xc:${color}`, "png:-"]).toString("base64");
+const pixels = async (color = "blue") => (await solidImage(color)).toString("base64");
 const settings = { ...CLASSIFIER_DEFAULTS, enabled: true };
 const usage = { input: 10, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 10, cost: { input: 0.001, output: 0, cacheRead: 0, cacheWrite: 0, total: 0.001 } };
 function answer(request: ClassifierRequest, probability: (name: string) => number): ClassifierResponse {
@@ -25,7 +25,7 @@ async function fixture(count = 1, mixed = true) {
   const root = await mkdtemp(join(tmpdir(), "image-compaction-")); roots.push(root);
   const manager = SessionManager.inMemory(root);
   const sessionId = manager.getSessionId();
-  const originals = Array.from({ length: count }, (_, i) => pixels(["blue", "red", "green"][i % 3]));
+  const originals = await Promise.all(Array.from({ length: count }, (_, i) => pixels(["blue", "red", "green"][i % 3])));
   manager.appendMessage({ role: "user", timestamp: 1, content: [{ type: "text", text: "Compare the chart evidence and preserve Danish æøå. The numeric table already describes the red chart." }, ...originals.map(data => ({ type: "image" as const, data, mimeType: "image/png" }))] });
   if (mixed) {
     manager.appendMessage({ role: "assistant", content: [{ type: "toolCall", id: "call1", name: "read", arguments: { path: "routine.txt" } }], api: "openai-responses", provider: "test", model: "test", usage, stopReason: "toolUse", timestamp: 2 });
@@ -173,8 +173,9 @@ test("identical mixed evidence reuses both decision stages; focus and pixels inv
   expect(calls).toBe(2); expect(again.cacheHits).toBe(2); expect(again.usage).toBeUndefined();
   await classifyCompaction({ ...f.input, instructions: "Preserve all diagrams for a visual review." }, settings, dependencies);
   expect(calls).toBe(4);
+  const yellow = await pixels("yellow");
   const messages = f.input.messages.map(message => message.role === "user" && Array.isArray(message.content)
-    ? { ...message, content: message.content.map(block => block.type === "image" ? { ...block, data: pixels("yellow") } : block) } : message);
+    ? { ...message, content: message.content.map(block => block.type === "image" ? { ...block, data: yellow } : block) } : message);
   await classifyCompaction({ ...f.input, messages }, settings, dependencies);
   expect(calls).toBe(6);
 });
@@ -361,7 +362,7 @@ test("ordinary prose can be pruned while image decisions use the same goal and r
 
 test("the combined normalized image packet is bounded before provider submission", async () => {
   const f = await fixture(3, false);
-  const data = execFileSync("/run/current-system/sw/bin/magick", ["-seed", "7", "-size", "720x720", "xc:gray", "+noise", "Random", "-depth", "8", "-quality", "95", "jpeg:-"], { maxBuffer: 4_000_000 }).toString("base64");
+  const data = (await noisyImage()).toString("base64");
   const messages = f.input.messages.map(message => message.role === "user" && Array.isArray(message.content)
     ? { ...message, content: message.content.map(block => block.type === "image" ? { ...block, data, mimeType: "image/jpeg" } : block) } : message);
   let calls = 0;
