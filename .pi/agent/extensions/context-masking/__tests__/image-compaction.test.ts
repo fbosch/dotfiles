@@ -7,7 +7,7 @@ import { SessionManager, type ContextEvent, type ContextEventResult, type Extens
 import { CLASSIFIER_DEFAULTS, classifyCompaction, type ClassifierRequest, type ClassifierResponse } from "../classifier-compaction";
 import { ClassifierDecisionCache } from "../classifier-cache";
 import { registerClassifierCompaction } from "../classifier-hook";
-import { IMAGE_ARCHIVE, checkpointImages } from "../evidence-archive";
+import { IMAGE_ARCHIVE, checkpointImages, readImageArtifact } from "../evidence-archive";
 import { IMAGE_CONTEXT, RETENTION_GOAL, registerImageContext } from "../image-retention";
 import { recallImages } from "../image-recall";
 import { placeholder } from "../policy";
@@ -40,6 +40,31 @@ async function fixture(count = 1, mixed = true) {
   const keptId = manager.appendMessage({ role: "user", content: "Recent tail", timestamp: 4 });
   const input = { sessionId, branch: manager.getBranch(), messages: manager.buildSessionProjection().messages.slice(0, -1), previousSummary: "Preserve the decision identifiers and æøå.", instructions: "Prioritize chart evidence for the current comparison." };
   return { root, manager, originals, input, keptId };
+}
+
+for (const stage of ["assessment", "image-decision", "thrown-image-decision"] as const) {
+  test(`content filter at ${stage} keeps all image originals as references and stops classification`, async () => {
+    const f = await fixture(2, false);
+    let calls = 0;
+    const error = 'System One API error (403): {"error":{"message":"Request blocked by content filter: [EMAIL]","code":403}}';
+    const result = await classifyCompaction(f.input, settings, {
+      artifactRoot: f.root,
+      classify: async request => {
+        calls++;
+        if (stage === "assessment" || request.state.phase === undefined) {
+          if (stage === "thrown-image-decision") throw new Error(error);
+          return { ...answer(request, () => 0), stopReason: "error", errorMessage: error };
+        }
+        return answer(request, () => 0);
+      },
+    });
+    expect(result.kind).toBe("retained");
+    expect(result.contentFilterBlocked).toBe(true);
+    expect(calls).toBe(stage === "assessment" ? 1 : 2);
+    expect(result.images?.map(image => [image.action, image.forced])).toEqual([["reference", true], ["reference", true]]);
+    for (const [index, image] of (result.images ?? []).entries())
+      expect((await readImageArtifact(f.root, f.input.sessionId, image)).data).toBe(f.originals[index] ?? "");
+  });
 }
 
 test("images and text share the goal and evidence; keep/reference/prune never delete originals", async () => {

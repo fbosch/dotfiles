@@ -57,3 +57,65 @@ test("configured model policies match the installed provider capabilities", asyn
     expect(configured.every((id) => id === latest)).toBe(true);
   }
 });
+
+test("Astra and Sol 6.2 load offline with current limits, reasoning, and base pricing", async () => {
+  const runtime = await ModelRuntime.create({
+    credentials: new InMemoryCredentialStore(),
+    modelsPath: fileURLToPath(new URL("../../models.json", import.meta.url)),
+    refreshOnCreate: false,
+    allowModelNetwork: false,
+    executorSocket: null,
+  });
+  for (const [family, input, output, cacheRead, cacheWrite] of [
+    ["sol", 2, 10, 0.1, 2.5],
+    ["astra", 8, 40, 0.4, 10],
+  ] as const) {
+    for (const suffix of ["", "-fast"]) {
+      const id = `gpt-6.2-${family}${suffix}`;
+      const model = runtime.getModel("openai-codex", id);
+      if (!model) throw new Error(`Missing configured model ${id}`);
+      expect(model.api).toBe("openai-codex-responses");
+      expect(model.contextWindow).toBe(1_050_000);
+      expect(model.maxTokens).toBe(128_000);
+      expect(model.input).toEqual(["text", "image"]);
+      expect(model.thinkingLevelMap).toEqual({
+        off: null,
+        minimal: "low",
+        low: "low",
+        medium: "medium",
+        high: "high",
+        xhigh: "xhigh",
+        max: "max",
+      });
+      expect(getSupportedThinkingLevels(model)).toEqual([
+        "minimal",
+        "low",
+        "medium",
+        "high",
+        "xhigh",
+        "max",
+      ]);
+      expect(model.compat).toMatchObject({
+        supportsMidConvoSystemMessages: true,
+        supportsAdditionalTools: true,
+        supportsToolSearch: true,
+      });
+      // The Codex adapter applies the returned priority tier multiplier once.
+      expect(model.cost).toEqual({
+        input,
+        output,
+        cacheRead,
+        cacheWrite,
+        tiers: [
+          {
+            inputTokensAbove: 272_000,
+            input: input * 2,
+            output: output * 1.5,
+            cacheRead: cacheRead * 2,
+            cacheWrite: cacheWrite * 2,
+          },
+        ],
+      });
+    }
+  }
+});

@@ -118,6 +118,20 @@ describe("quota-aware model presets", () => {
       expect(MODEL_PRESETS[id].models[0].defaultThinking).toBe(defaultThinking);
     }
   });
+  test("selected writing and review workloads use 6.2 with workload-specific effort", () => {
+    for (const [id, model, thinking, defaultThinking] of [
+      ["creative", "gpt-6.2-sol", ["low"], "low"],
+      ["planning", "gpt-6.2-sol", ["low", "medium", "high", "xhigh"], "medium"],
+      ["deliberation", "gpt-6.1-sol", ["medium", "high", "xhigh"], "high"],
+      ["critical-review", "gpt-6.2-astra", ["high"], "high"],
+      ["failure-analysis", "gpt-6.2-astra", ["xhigh"], "xhigh"],
+    ] as const) {
+      const policy = MODEL_PRESETS[id].models[0];
+      expect(policy.model).toBe(`openai-codex/${model}`);
+      expect([...policy.thinking]).toEqual([...thinking]);
+      expect(policy.defaultThinking).toBe(defaultThinking);
+    }
+  });
   for (const [id, preset] of Object.entries(MODEL_PRESETS)) {
     test(`${id} executes through an eligible local account with supported bounds`, async () => {
       const f = fixture();

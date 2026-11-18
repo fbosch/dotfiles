@@ -98,6 +98,152 @@ async function fixture(texts = ["approved value: æøå-123", "obsolete result",
 }
 const omitAll = async (request: ClassifierRequest) => answer(request, () => 0);
 
+const FILTER_ERROR = 'System One API error (403): {"error":{"message":"Request blocked by content filter: [EMAIL]","code":403}}';
+const blocked = (request: ClassifierRequest): ClassifierResponse => ({
+  ...answer(request, () => 0), stopReason: "error", errorMessage: FILTER_ERROR,
+});
+
+for (const mode of ["extractive", "hybrid"] as const) {
+  test(`${mode}: a content-filter refusal preserves reference-only evidence without retrying`, async () => {
+    const f = await fixture(["Unassessed private contact evidence", "Approved constraint: keep æøå unchanged"]);
+    let calls = 0;
+    const result = await classifyCompaction(f.input, { ...settings, mode }, {
+      artifactRoot: f.root,
+      classify: async request => { calls++; return blocked(request); },
+    });
+    expect(result.kind).toBe("retained");
+    expect(calls).toBe(1);
+    expect(result.contentFilterBlocked).toBe(true);
+    expect(result.decisions.every(decision => decision.action === "reference" && decision.forced)).toBe(true);
+    expect(result.text).toContain("Manifest");
+    expect(result.text).not.toContain("Unassessed private contact evidence");
+    expect(result.text).not.toContain("source-0.txt");
+    const records = new Map(savedItems(f.input.branch));
+    for (const item of result.savedItems ?? []) records.set(item.entryId, item);
+    const expanded = await expandCheckpointSources(result.text, records, f.root, { windowBytes: 20000, totalBytes: 20000 });
+    expect(expanded?.sources.some(source => source.text.includes("Unassessed private contact evidence"))).toBe(true);
+    for (const path of f.paths) expect((await readFile(path, "utf8")).length).toBeGreaterThan(0);
+  });
+}
+
+test("confirmed filter refusal stops later batches without weakening an earlier independent selection", async () => {
+  const f = await fixture(Array.from({ length: 12 }, (_, i) => `Evidence ${i} ` + "x".repeat(1500)));
+  let calls = 0;
+  const result = await classifyCompaction(f.input, { ...settings, maxRequestBytes: 6800 }, {
+    artifactRoot: f.root,
+    classify: async request => ++calls === 1
+      ? answer(request, name => name === "inline_r0" ? 1 : 0) : blocked(request),
+  });
+  expect(result.kind).toBe("retained");
+  expect(calls).toBe(2);
+  expect(result.decisions.find(decision => decision.id === "r0")?.action).toBe("inline");
+  expect(result.decisions.filter(decision => decision.id.startsWith("t")).every(decision => decision.action === "reference")).toBe(true);
+  expect(result.decisions.some(decision => decision.action === "reference" && decision.forced)).toBe(true);
+});
+
+test("non-filter forbidden responses still fall back", async () => {
+  const f = await fixture();
+  const result = await classifyCompaction(f.input, settings, {
+    artifactRoot: f.root,
+    classify: async request => ({ ...blocked(request),
+      errorMessage: 'System One API error (403): {"error":{"message":"Forbidden","code":403}}' }),
+  });
+  expect(result.kind).toBe("fallback");
+  expect(result.reason).toBe("classifier-error");
+});
+
+for (const throws of [false, true]) {
+  test(`parallel filter refusal ${throws ? "thrown" : "returned"} stops queued work and settles in-flight accounting`, async () => {
+    const f = await fixture(Array.from({ length: 12 }, (_, i) => `Evidence ${i} ` + "x".repeat(1500)));
+    let started = 0, aborted = 0;
+    const result = await classifyCompaction(f.input, { ...settings, maxRequestBytes: 6800, maxConcurrentAssessments: 2 }, {
+      artifactRoot: f.root,
+      classify: async (request, signal) => {
+        if (started++ === 0) {
+          if (throws) throw new Error(FILTER_ERROR);
+          return blocked(request);
+        }
+        await new Promise<void>((_resolve, reject) => {
+          signal?.addEventListener("abort", () => { aborted++; reject(new Error("cancelled")); }, { once: true });
+        });
+        throw new Error("cancelled");
+      },
+    });
+    expect(result.kind).toBe("retained");
+    expect(result.contentFilterBlocked).toBe(true);
+    expect(started).toBe(2);
+    expect(aborted).toBe(1);
+    expect(result.usageComplete).toBe(false);
+    expect(result.decisions.every(decision => decision.action === "reference")).toBe(true);
+  });
+}
+
+test("an out-of-order filter refusal prevents scheduling another assessment", async () => {
+  const f = await fixture(Array.from({ length: 12 }, (_, i) => `Evidence ${i} ` + "x".repeat(1500)));
+  let started = 0;
+  const result = await classifyCompaction(f.input, { ...settings, maxRequestBytes: 6800, maxConcurrentAssessments: 2 }, {
+    artifactRoot: f.root,
+    classify: async request => {
+      if (started++ > 0) return blocked(request);
+      await new Promise(resolve => setTimeout(resolve, 20));
+      return answer(request, name => name === "inline_r0" ? 1 : 0);
+    },
+  });
+  expect(result.kind).toBe("retained");
+  expect(started).toBe(2);
+  expect(result.contentFilterBlocked).toBe(true);
+  expect(result.usage?.totalTokens).toBe(200);
+});
+
+test("a filter refusal during reconciliation retains recovery pointers instead of falling back", async () => {
+  const f = await fixture(Array.from({ length: 6 }, (_, i) => `Approval ${i}: ` + "x".repeat(1500)));
+  let filtered = 0;
+  const result = await classifyCompaction(f.input, { ...settings, maxRequestBytes: 6800 }, {
+    artifactRoot: f.root, deferReduction: true,
+    classify: async request => {
+      if (request.state.phase === "assessment") return answer(request, () => 1);
+      filtered++; return blocked(request);
+    },
+  });
+  expect(filtered).toBe(1);
+  expect(result.kind).toBe("retained");
+  expect(result.reconciliationIncomplete).toBe(true);
+  expect(result.contentFilterBlocked).toBe(true);
+  expect(result.decisions.some(decision => decision.action === "reference" && decision.forced)).toBe(true);
+});
+
+for (const mode of ["extractive", "hybrid"] as const) {
+  test(`${mode}: reference-only originals are not resubmitted as shared history on the next compaction`, async () => {
+    const f = await fixture(["Private contact evidence must remain local", "Independent supporting evidence"]);
+    const first = await classifyCompaction(f.input, { ...settings, mode }, { artifactRoot: f.root, classify: async request => blocked(request) });
+    if (first.kind !== "retained") throw new Error(`Initial reference checkpoint was not committed: ${first.reason}`);
+    f.manager.appendCustomEntry("context-masking", { items: first.savedItems });
+    let calls = 0;
+    const next = await classifyCompaction({
+      sessionId: f.manager.getSessionId(), branch: f.manager.getBranch(), previousSummary: first.text,
+      messages: [{ role: "user", content: "Continue independent work.", timestamp: 5 }],
+    }, { ...settings, mode }, {
+      artifactRoot: f.root, deferReduction: true,
+      classify: async request => {
+        calls++;
+        expect(JSON.stringify(request.state)).not.toContain("Private contact evidence must remain local");
+        return answer(request, () => 1);
+      },
+    });
+    expect(calls).toBeGreaterThan(0);
+    expect(next.kind).toBe("retained");
+    expect(next.text).not.toContain("Private contact evidence must remain local");
+    const records = new Map(savedItems(f.manager.getBranch()));
+    for (const item of next.savedItems ?? []) records.set(item.entryId, item);
+    const expanded = await expandCheckpointSources(next.text, records, f.root, { windowBytes: 20000, totalBytes: 20000 });
+    expect(expanded?.sources.some(source => source.text.includes("Private contact evidence must remain local"))).toBe(true);
+    if (mode === "hybrid") {
+      expect(next.referenceSummary).toBeTruthy();
+      expect(next.referenceSummary).not.toContain("Private contact evidence must remain local");
+    }
+  });
+}
+
 test("classifier fallback preserves response diagnostics and phase", async () => {
   const f = await fixture();
   const result = await classifyCompaction(f.input, settings, {

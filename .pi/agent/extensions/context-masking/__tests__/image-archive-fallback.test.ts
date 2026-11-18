@@ -12,7 +12,7 @@ import {
   type SessionBeforeCompactEvent,
   type SessionBeforeCompactResult,
 } from "@earendil-works/pi-coding-agent";
-import { CLASSIFIER_DEFAULTS, type ClassifierRequest, type ClassifierResponse } from "../classifier-compaction";
+import { CLASSIFIER_DEFAULTS, type ClassifierRequest, type ClassifierResponse, type ClassifierSettings } from "../classifier-compaction";
 import { registerClassifierCompaction } from "../classifier-hook";
 import { type ImageArchiveRecord } from "../evidence-archive";
 import { writeArchiveBytes } from "../image-artifact";
@@ -35,7 +35,7 @@ async function archivedImage(root: string, sessionId: string, entryId: string, p
   return { id, entryId, blockIndex: 0, sessionId, path, mimeType, sha256, bytes: bytes.length, action: "inline", forced: true };
 }
 
-async function fixture(mode: "extractive" | "hybrid", previousImage = false, goodImages = 0) {
+async function fixture(mode: "extractive" | "hybrid", previousImage = false, goodImages = 0, limits: Partial<ClassifierSettings> = {}) {
   const root = await mkdtemp(join(tmpdir(), "image-archive-fallback-"));
   roots.push(root);
   const manager = SessionManager.inMemory(root);
@@ -65,7 +65,7 @@ async function fixture(mode: "extractive" | "hybrid", previousImage = false, goo
     on: (_event: string, fn: Handler) => { handler = fn; },
     appendEntry: (type: string, data: unknown) => { manager.appendCustomEntry(type, data); },
   } as unknown as Pick<ExtensionAPI, "on" | "appendEntry">, {
-    settings: () => ({ ...CLASSIFIER_DEFAULTS, enabled: true, mode }),
+    settings: () => ({ ...CLASSIFIER_DEFAULTS, enabled: true, mode, ...limits }),
     artifactRoot: () => root,
     globalSettings: () => ({ compactionModel: { model: "test/summary", thinkingLevel: "off" } }),
     compact: async preparation => {
@@ -105,6 +105,38 @@ async function fixture(mode: "extractive" | "hybrid", previousImage = false, goo
   return { event, controller, calls, notices, requests, images, manager, root, keptId, ctx, sourceId,
     run: () => run(event, ctx), failSummary: () => { summaryFails = true; } };
 }
+
+const FILTER_ERROR = 'System One API error (403): {"error":{"message":"Request blocked by content filter: [EMAIL]","code":403}}';
+const filteredResponse = (): ClassifierResponse => ({
+  api: "typesafe-system-one", provider: "test", model: "test", timestamp: 1,
+  stopReason: "error", errorMessage: FILTER_ERROR, answers: {}, usage,
+});
+
+for (const mode of ["extractive", "hybrid"] as const) {
+  test(`${mode}: filter recovery reaches the live hook without exposing blocked bodies or error payloads`, async () => {
+    const f = await fixture(mode);
+    f.ctx.modelRegistry.classify = async () => filteredResponse();
+    const result = await f.run();
+    expect(result?.compaction?.details).toMatchObject({ outcome: "retained", contentFilterBlocked: true });
+    expect(result?.compaction?.summary).toContain("Manifest");
+    expect(result?.compaction?.summary).not.toContain("Preserve the decision and æøå.");
+    expect(f.requests).toHaveLength(0);
+    expect(f.calls).toHaveLength(mode === "hybrid" ? 1 : 0);
+    expect(JSON.stringify(f.calls)).not.toContain("Preserve the decision and æøå.");
+    const notices = f.notices.map(notice => notice.message).join("\n");
+    expect(notices).toContain("continuing with archive references");
+    expect(notices).not.toContain("[EMAIL]");
+    expect(notices).not.toContain("fell back");
+  });
+}
+
+test("a filtered checkpoint that cannot fit cancels rather than sending original content to native fallback", async () => {
+  const f = await fixture("extractive", false, 0, { maxOutputBytes: 1 });
+  f.ctx.modelRegistry.classify = async () => filteredResponse();
+  expect(await f.run()).toEqual({ cancel: true });
+  expect(f.calls).toHaveLength(0);
+  expect(f.notices.at(-1)?.message).toContain("cancelled after a classifier content-filter block");
+});
 
 test("classifier failure reaches the fallback notice with provider diagnostics", async () => {
   const f = await fixture("extractive");

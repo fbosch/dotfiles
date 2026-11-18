@@ -1,4 +1,4 @@
-import { compactionFailureDetail } from "./compaction-diagnostics";
+import { compactionFailureDetail, isClassifierContentFilterError } from "./compaction-diagnostics";
 import { coherentEvidence } from "./coherent-evidence";
 import { EXTRACTIVE_HEADER, MAX_CLASSIFIER_SOURCES, expandCheckpointSources } from "./checkpoint-sources";
 import { manifestPointer, packCheckpoint, type CheckpointPart, type PackedCheckpoint } from "./checkpoint-packing";
@@ -99,6 +99,9 @@ export interface CompactionOutcome {
   kind: "retained" | "fallback";
   reason: string;
   failureDetail?: string;
+  contentFilterBlocked?: boolean;
+  contentFilterReferences?: number;
+  referenceSummary?: string;
   text: string;
   decisions: RetentionDecision[];
   requestBytes: number[];
@@ -460,7 +463,7 @@ async function classifyTextCompaction(
   // Context excerpts are explicitly marked; candidate bodies are complete, never silently truncated.
   const history = JSON.stringify({
     ...retentionContext(input),
-    recentEvidence: candidates.filter(candidate => candidate.kind === "conversation").slice(-6).map(candidate => ({ id: candidate.id, role: candidate.tool, ...excerpt(candidate.content, 300) })),
+    recentEvidence: candidates.filter(candidate => candidate.kind === "conversation" && !candidate.referenceOnly).slice(-6).map(candidate => ({ id: candidate.id, role: candidate.tool, ...excerpt(candidate.content, 300) })),
   });
   // Image assessments must fit after their shared image context and payload are added.
   const fitsPacket = (group: readonly Candidate[], phase: "assessment" | "reconciliation" | "bounded-reconciliation" = "assessment") => {
@@ -481,6 +484,18 @@ async function classifyTextCompaction(
       action: "reference",
       forced: true,
     });
+  const preserveFilteredSources = (group: readonly Candidate[]) => {
+    // A refusal identifies a whole request, not a span. Preserve complete affected parents and
+    // unassessed sources, and stop sending the shared context again during this attempt.
+    const protectedParents = new Set([...group, ...candidates.filter(c =>
+      !decisions.has(c.id) || (c.kind === "conversation" && !c.referenceOnly))]
+      .map(c => c.parentId ?? c.id));
+    for (const candidate of candidates)
+      if (protectedParents.has(candidate.parentId ?? candidate.id)) reference(candidate);
+    outcome.contentFilterBlocked = true;
+    outcome.contentFilterReferences = protectedParents.size;
+    outcome.reconciliationIncomplete = true;
+  };
   const cacheScope = dependencies.cache?.scope({
     settings, history,
     evidence: candidates.map(c => [c.entryId, c.path, c.tool, c.arguments, c.content, c.complete]),
@@ -516,13 +531,14 @@ async function classifyTextCompaction(
   const abortAssessments = () => assessmentController.abort();
   if (parallelAssessments) signal?.addEventListener("abort", abortAssessments, { once: true });
   if (signal?.aborted) abortAssessments();
-  type AssessmentResult = { request: ClassifierRequest; response?: ClassifierResponse; cached: boolean; failureDetail?: string };
+  type AssessmentResult = { request: ClassifierRequest; response?: ClassifierResponse; cached: boolean; failureDetail?: string; contentFiltered?: boolean };
   const pendingAssessments = new Map<number, Promise<AssessmentResult>>();
+  let contentFilterObserved = false;
   let nextAssessment = 0;
   const scheduleAssessments = () => {
     if (!parallelAssessments) return;
     while (pendingAssessments.size < settings.maxConcurrentAssessments &&
-      nextAssessment < batches.length && !assessmentController.signal.aborted) {
+      nextAssessment < batches.length && !assessmentController.signal.aborted && !contentFilterObserved) {
       const index = nextAssessment++;
       const group = batches[index];
       if (!group) break;
@@ -540,9 +556,14 @@ async function classifyTextCompaction(
           const response = await dependencies.classify(request, assessmentController.signal);
           if (response.usage) outcome.usage = sumUsage(outcome.usage, response.usage);
           else outcome.usageComplete = false;
+          if (response.stopReason === "error" && isClassifierContentFilterError(response.errorMessage)) contentFilterObserved = true;
           return { request, response, cached: false };
         } catch (error) {
           outcome.usageComplete = false;
+          if (isClassifierContentFilterError(error)) {
+            contentFilterObserved = true;
+            return { request, cached: false, contentFiltered: true };
+          }
           return { request, cached: false, failureDetail: compactionFailureDetail("assessment", error) };
         } finally {
           outcome.classifierMs += performance.now() - started;
@@ -567,6 +588,7 @@ async function classifyTextCompaction(
       : cacheScope ? dependencies.cache?.get(cacheScope, request) : undefined;
     let response: ClassifierResponse;
     if (prefetched) {
+      if (prefetched.contentFiltered) { preserveFilteredSources(group); break; }
       if (prefetched.failureDetail || !prefetched.response) {
         if (prefetched.failureDetail) outcome.failureDetail = prefetched.failureDetail;
         return fallback(signal?.aborted ? "aborted" : "classifier-request-failed");
@@ -585,6 +607,7 @@ async function classifyTextCompaction(
         response = await dependencies.classify(request, signal);
       } catch (error) {
         outcome.usageComplete = false;
+        if (!signal?.aborted && isClassifierContentFilterError(error)) { preserveFilteredSources(group); break; }
         outcome.failureDetail = compactionFailureDetail(phase, error);
         return fallback(signal?.aborted ? "aborted" : "classifier-request-failed");
       } finally {
@@ -592,6 +615,10 @@ async function classifyTextCompaction(
       }
       if (response.usage) outcome.usage = sumUsage(outcome.usage, response.usage);
       else outcome.usageComplete = false;
+    }
+    if (response.stopReason === "error" && isClassifierContentFilterError(response.errorMessage)) {
+      preserveFilteredSources(group);
+      break;
     }
     if (response.stopReason !== "stop") {
       outcome.failureDetail = compactionFailureDetail(phase,
@@ -721,6 +748,7 @@ async function classifyTextCompaction(
     const actions = (unitsByParent.get(id) ?? []).map(unit => decisions.get(unit.id)?.action ?? "reference");
     return actions.includes("inline") ? "inline" : actions.includes("reference") ? "reference" : "omit";
   };
+  const archiveReferences = !!outcome.contentFilterBlocked;
   const renderDecisions = (): CheckpointPart[] => {
     const rendered: CheckpointPart[] = [{ text: EXTRACTIVE_HEADER }];
     for (const piece of pieces) {
@@ -730,11 +758,12 @@ async function classifyTextCompaction(
       if (!parent || !units) throw Error("Missing checkpoint source");
       const action = parentAction(parent.id);
       if (action === "omit") continue;
-      const reference = !hybrid && action === "reference" ? { reference: parent.id } : {};
-      const selected = hybrid ? parent.content : units.filter(unit => decisions.get(unit.id)?.action === "inline").map(unit =>
+      const referenceOnly = action === "reference" && (!hybrid || outcome.contentFilterBlocked || parent.referenceOnly);
+      const reference = referenceOnly ? { reference: parent.id } : {};
+      const selected = hybrid && !referenceOnly ? parent.content : units.filter(unit => decisions.get(unit.id)?.action === "inline").map(unit =>
         unit.startLine === undefined ? unit.content : `[source lines ${unit.startLine}-${unit.endLine}]\n${unit.content}`,
       ).join("\n");
-      const text = piece.part === "call" ? piece.text : hybrid || action === "inline"
+      const text = piece.part === "call" ? piece.text : !referenceOnly && (hybrid || action === "inline")
         ? parent.kind === "conversation" ? parent.tool === "recovered evidence" ? `[recovered evidence; saved copy: ${parent.path}]\n${selected}` : selected : `[tool output; saved copy: ${parent.path}]\n${selected}`
         : `[saved ${parent.kind === "tool" ? "tool output" : "conversation"}]: ${parent.path}`;
       rendered.push({ text, ...reference, ...(piece.part === "call" && parent.callSummary ? { summary: parent.callSummary } : {}) });
@@ -768,11 +797,14 @@ async function classifyTextCompaction(
   const rendered = renderDecisions();
   let packed: PackedCheckpoint;
   try {
-    packed = await packCheckpoint(rendered, outputLimit, dependencies.artifactRoot, input.sessionId, signal);
+    packed = await packCheckpoint(rendered, outputLimit, dependencies.artifactRoot, input.sessionId, signal,
+      { archiveReferences });
   } catch { return fallback(signal?.aborted ? "aborted" : "reference-manifest-failed"); }
   outcome.savedItems ??= [];
   outcome.savedItems.push(...packed.savedItems);
   outcome.checkpointParts = packed.parts;
+  if (archiveReferences || parents.some(parent => parent.referenceOnly))
+    outcome.referenceSummary = packed.parts.filter(part => part.reference !== undefined).map(part => part.text).join("\n\n");
   outcome.checkpointBytes = byteLength(packed.text);
   outcome.checkpointUnpackedBytes = packed.unpackedBytes;
   outcome.checkpointInlineBytes = packed.inlineBytes;

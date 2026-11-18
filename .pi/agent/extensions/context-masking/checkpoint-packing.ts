@@ -33,6 +33,7 @@ export async function packCheckpoint(
   artifactRoot: string,
   sessionId: string | undefined,
   signal?: AbortSignal,
+  options: { archiveReferences?: boolean } = {},
 ): Promise<PackedCheckpoint> {
   signal?.throwIfAborted();
   const original = render(parts);
@@ -84,7 +85,7 @@ export async function packCheckpoint(
     fits: Buffer.byteLength(text) <= limit,
   });
   const references = compacted.filter((part) => part.reference !== undefined);
-  if (result.fits || !references.length) return result;
+  if ((result.fits && !options.archiveReferences) || !references.length) return result;
   if (!sessionId) throw Error("Reference manifest requires a session ID");
   const manifest = renderReferenceManifest(
     compacted,

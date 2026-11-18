@@ -48,12 +48,12 @@ export const MODEL_PRESETS = {
     ],
   },
   creative: {
-    models: [{ model: "openai-codex/gpt-6.1-sol", thinking: ["low"], defaultThinking: "low" }],
+    models: [{ model: "openai-codex/gpt-6.2-sol", thinking: ["low"], defaultThinking: "low" }],
   },
   planning: {
     models: [
       {
-        model: "openai-codex/gpt-6.1-sol",
+        model: "openai-codex/gpt-6.2-sol",
         thinking: ["low", "medium", "high", "xhigh"],
         defaultThinking: "medium",
       },
@@ -122,10 +122,12 @@ export const MODEL_PRESETS = {
     ],
   },
   "critical-review": {
-    models: [{ model: "openai-codex/gpt-6-astra", thinking: ["high"], defaultThinking: "high" }],
+    models: [{ model: "openai-codex/gpt-6.2-astra", thinking: ["high"], defaultThinking: "high" }],
   },
   "failure-analysis": {
-    models: [{ model: "openai-codex/gpt-6-astra", thinking: ["xhigh"], defaultThinking: "xhigh" }],
+    models: [
+      { model: "openai-codex/gpt-6.2-astra", thinking: ["xhigh"], defaultThinking: "xhigh" },
+    ],
   },
 } as const satisfies Record<string, Preset>;
 

@@ -317,6 +317,8 @@ export function registerClassifierCompaction(
       outcome: result.kind,
       reason: result.reason,
       ...(result.failureDetail ? { failureDetail: result.failureDetail } : {}),
+      contentFilterBlocked: result.contentFilterBlocked ?? false,
+      contentFilterReferences: result.contentFilterReferences ?? 0,
       requests: result.requestBytes.length,
       requestBytes: result.requestBytes,
       imageRequestLimit: result.imageRequestLimit,
@@ -351,10 +353,16 @@ export function registerClassifierCompaction(
     // separately without storing classifier packets or tool-output contents in telemetry.
     if (result.requestBytes.length || result.cacheHits || result.imageRequestLimit || result.reason === "checkpoint-expansion-failed") pi.appendEntry(CLASSIFIER_CHECKPOINT, audit);
     if (result.reason === "aborted") return { cancel: true };
+    if (result.contentFilterBlocked && result.kind === "fallback") {
+      if (ctx.hasUI) ctx.ui.notify("Compaction cancelled after a classifier content-filter block.", "error");
+      return { cancel: true };
+    }
     if (result.kind === "fallback") {
       if (ctx.hasUI) ctx.ui.notify(`Classifier compaction fell back: ${result.failureDetail ?? result.reason}.`, "warning");
       return imageFallback();
     }
+    if (result.contentFilterBlocked && ctx.hasUI)
+      ctx.ui.notify("Classifier content filter blocked assessment; continuing with archive references.", "warning");
     if (settings.mode === "hybrid" && selectedPreparation) {
       const native = await fallback(event, ctx, selectedPreparation);
       if (!native?.compaction) return native;
@@ -364,7 +372,7 @@ export function registerClassifierCompaction(
       const usage = result.usage ? sumUsage(native.compaction.usage, result.usage) : native.compaction.usage;
       return { compaction: {
         ...native.compaction,
-        summary: native.compaction.summary + (result.imageSummary ? "\n\n" + result.imageSummary : "") + "\n\nSaved tool evidence is available through recall; discover it with tool_search.",
+        summary: native.compaction.summary + (result.referenceSummary ? "\n\n" + result.referenceSummary : "") + (result.imageSummary ? "\n\n" + result.imageSummary : "") + "\n\nSaved tool evidence is available through recall; discover it with tool_search.",
         ...(usage ? { usage } : {}),
         details: { ...nativeDetails, ...audit, type: HYBRID_CHECKPOINT,
           artifactIndex: "external", ...(result.images ? { images: result.images } : {}), usageComplete: audit.usageComplete && !!native.compaction.usage },
