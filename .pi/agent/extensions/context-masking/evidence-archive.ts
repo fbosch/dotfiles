@@ -1,3 +1,4 @@
+import { MAX_INSPECTION_IMAGES } from "./image-inspection";
 import { Buffer } from "node:buffer";
 import { createHash } from "node:crypto";
 import { mkdir, realpath, writeFile } from "node:fs/promises";
@@ -11,6 +12,7 @@ import {
   normalizeImageForClassifier,
   readImageBytes,
   validateImageInput,
+  validateImageInputs,
   writeArchiveBytes,
   type ImageMime,
 } from "./image-artifact";
@@ -131,23 +133,59 @@ export async function saveConversationArtifact(root: string, sessionId: string, 
   return { entryId, toolName: "conversation", path };
 }
 
-export async function saveImageArtifact(
-  root: string,
-  sessionId: string,
-  entryId: string,
-  blockIndex: number,
-  image: ImageInput,
-): Promise<ArchivedImage> {
+function validateImageSource(sessionId: string, entryId: string, blockIndex: number): void {
   if (!validId(entryId) || !validId(sessionId)) throw new Error("Invalid image source ID");
-  if (!Number.isSafeInteger(blockIndex) || blockIndex < 0)
-    throw new Error("Invalid image block index");
-  const { bytes, mimeType } = await validateImageInput(image);
+  if (!Number.isSafeInteger(blockIndex) || blockIndex < 0) throw new Error("Invalid image block index");
+}
+
+async function archiveValidatedImage(
+  root: string, sessionId: string, entryId: string, blockIndex: number,
+  image: { bytes: Buffer; mimeType: ImageMime },
+): Promise<ArchivedImage> {
+  const { bytes, mimeType } = image;
   const sha256 = createHash("sha256").update(bytes).digest("hex");
   const id = imageId(sessionId, entryId, blockIndex, mimeType, bytes.length, sha256);
   const extension = mimeType === "image/png" ? "png" : "jpg";
-  const fileName = `image-${id}.${extension}`;
-  const path = await writeArchiveBytes(root, sessionId, fileName, bytes);
+  const path = await writeArchiveBytes(root, sessionId, `image-${id}.${extension}`, bytes);
   return { id, entryId, blockIndex, sessionId, path, mimeType, sha256, bytes: bytes.length };
+}
+
+export async function saveImageArtifact(
+  root: string, sessionId: string, entryId: string, blockIndex: number, image: ImageInput,
+): Promise<ArchivedImage> {
+  validateImageSource(sessionId, entryId, blockIndex);
+  return archiveValidatedImage(root, sessionId, entryId, blockIndex, await validateImageInput(image));
+}
+
+export type ImageSource = { entryId: string; blockIndex: number; image: ImageInput };
+export type ImageArchiveResult = { ok: true; record: ArchivedImage } | { ok: false; error: Error };
+
+export async function saveImageArtifacts(
+  root: string, sessionId: string, sources: readonly ImageSource[], signal?: AbortSignal,
+): Promise<ImageArchiveResult[]> {
+  if (sources.length > MAX_INSPECTION_IMAGES) throw new Error("Image archive batch exceeds its limits");
+  checkImageProcessingAbort(signal);
+  const valid = sources.map(source => {
+    try { validateImageSource(sessionId, source.entryId, source.blockIndex); return true; }
+    catch { return false; }
+  });
+  const inspected = await validateImageInputs(sources.filter((_, index) => valid[index]).map(source => source.image), signal ? { signal } : {});
+  let cursor = 0;
+  const results: ImageArchiveResult[] = [];
+  for (const [index, source] of sources.entries()) {
+    checkImageProcessingAbort(signal);
+    if (!valid[index]) { results.push({ ok: false, error: new Error("Invalid image source") }); continue; }
+    const image = inspected[cursor++];
+    if (!image) throw new Error("Incomplete image archive batch");
+    if (!image.ok) { results.push(image); continue; }
+    try {
+      results.push({ ok: true, record: await archiveValidatedImage(root, sessionId, source.entryId, source.blockIndex, image) });
+    } catch (error) {
+      results.push({ ok: false, error: error instanceof Error ? error : new Error("Image archive failed") });
+    }
+  }
+  checkImageProcessingAbort(signal);
+  return results;
 }
 
 function validateImageRecord(

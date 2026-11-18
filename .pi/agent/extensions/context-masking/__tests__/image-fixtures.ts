@@ -52,3 +52,13 @@ export function noisyImage(width = 720, height = 720): Promise<Buffer> {
   return sharp(raw, { raw: { width, height, channels: 3 } })
     .jpeg({ quality: 95, chromaSubsampling: "4:4:4" }).toBuffer();
 }
+
+export async function randomPng(width: number, height: number) {
+  const raw = Buffer.alloc(width * height * 3);
+  let seed = 17;
+  for (let offset = 0; offset < raw.length; offset++) {
+    seed ^= seed << 13; seed ^= seed >>> 17; seed ^= seed << 5;
+    raw[offset] = seed & 0xff;
+  }
+  return sharp(raw, { raw: { width, height, channels: 3 } }).png().toBuffer();
+}

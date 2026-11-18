@@ -1,4 +1,4 @@
-import { solidImage, noisyImage } from "./image-fixtures";
+import { solidImage, noisyImage, randomPng } from "./image-fixtures";
 import { afterEach, expect, test } from "bun:test";
 import { mkdir, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -92,6 +92,40 @@ test("a malformed image between valid originals does not prevent later image dec
     if (!original) throw Error("Missing original pixels");
     expect((await readFile(image.path)).toString("base64")).toBe(original);
   }
+});
+
+test("invalid images do not consume the slots needed by later validation batches", async () => {
+  const f = await fixture(0, false);
+  const good = await pixels();
+  const messages = f.input.messages.map(message => message.role === "user" && Array.isArray(message.content)
+    ? { ...message, content: [...message.content,
+      ...Array.from({ length: 32 }, () => ({ type: "image" as const, data: "AA==", mimeType: "image/png" })),
+      { type: "image" as const, data: good, mimeType: "image/png" }] } : message);
+  const result = await classifyCompaction({ ...f.input, messages }, settings, {
+    artifactRoot: f.root, classify: async request => answer(request, name => name.startsWith("inline_i") ? 1 : 0),
+  });
+  expect(result.kind).toBe("retained");
+  expect(result.skippedImages).toHaveLength(32);
+  expect(result.images).toHaveLength(1);
+  expect((await readFile(result.images?.[0]?.path ?? "")).toString("base64")).toBe(good);
+});
+
+test("batch admission leaves room for later small images at the total archive-byte boundary", async () => {
+  const f = await fixture(0, false);
+  const large = await randomPng(1200, 1000);
+  const small = await pixels();
+  const messages = f.input.messages.map(message => message.role === "user" && Array.isArray(message.content)
+    ? { ...message, content: [...message.content,
+      ...Array.from({ length: 5 }, () => ({ type: "image" as const, data: large.toString("base64"), mimeType: "image/png" })),
+      { type: "image" as const, data: small, mimeType: "image/png" }] } : message);
+  const result = await classifyCompaction({ ...f.input, messages }, settings, {
+    artifactRoot: f.root, classify: async request => answer(request, () => 0),
+  });
+  expect(result.kind).toBe("retained");
+  expect(result.images).toHaveLength(5);
+  expect(result.skippedImages).toHaveLength(1);
+  expect(result.images?.reduce((total, image) => total + image.bytes, 0)).toBeLessThanOrEqual(16_000_000);
+  expect((await readFile(result.images?.at(-1)?.path ?? "")).toString("base64")).toBe(small);
 });
 
 test("more than four images stay inline while text compaction avoids unsupported image input", async () => {

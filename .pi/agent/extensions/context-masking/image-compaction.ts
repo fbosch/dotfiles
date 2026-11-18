@@ -1,10 +1,10 @@
-import { ImageProcessorUnavailableError } from "./image-artifact";
+import { ImageProcessorUnavailableError, MAX_IMAGE_BYTES } from "./image-artifact";
 import { compactionFailureDetail } from "./compaction-diagnostics";
 import { packCheckpoint } from "./checkpoint-packing";
 import { retentionContext } from "./retention-context";
 import { createHash } from "node:crypto";
 import type { CompactionInput, CompactionOutcome, ClassifierSettings, ClassifierRequest, ClassifierResponse } from "./classifier-compaction";
-import { classifierImage, readImageArtifact, saveImageArtifact } from "./evidence-archive";
+import { classifierImage, readImageArtifact, saveImageArtifacts, type ImageSource } from "./evidence-archive";
 import { MAX_IMAGES, MAX_TOTAL_IMAGE_BYTES, MAX_IMAGE_REQUEST_BYTES, RETENTION_GOAL, imageReferences } from "./image-retention";
 import type { ImageArchiveRecord as ImageRetention } from "./evidence-archive";
 
@@ -62,26 +62,58 @@ export async function classifyWithImages(
       skippedImages.push({ entryId: image.entryId, blockIndex: image.blockIndex });
     }
   }
+  const sources: Array<ImageSource & { label: string }> = [];
   for (const message of input.messages) {
-    if (!("content" in message) || typeof message.content === "string" || message.role === "assistant" || message.role === "system") { messages.push(message); continue; }
-    const entryId = sourceId(input, message);
-    for (const [index, block] of message.content.entries()) {
-      if (block.type !== "image") continue;
-      if (signal?.aborted) return fail("aborted");
-      try {
-        if (images.length >= MAX_IMAGES) throw new Error("Image count limit");
-        const record = await saveImageArtifact(dependencies.artifactRoot, sessionId, entryId, index, block);
-        add({ ...record, action: "inline", forced: true, label: describe(message).slice(0, 2_000) });
-      } catch (error) {
-        if (signal?.aborted) return fail("aborted");
-        if (error instanceof ImageProcessorUnavailableError)
-          return { ...fail("image-processor-unavailable"), failureDetail: error.message };
-        skippedImages.push({ entryId, blockIndex: index });
-      }
+    if (!("content" in message) || typeof message.content === "string" || message.role === "assistant" || message.role === "system") {
+      messages.push(message); continue;
     }
+    const entryId = sourceId(input, message);
+    const label = describe(message).slice(0, 2_000);
+    for (const [index, block] of message.content.entries())
+      if (block.type === "image") sources.push({ entryId, blockIndex: index, image: block, label });
     // Only verified archives can supply pixels or references after compaction.
-    // Keep the prose, but do not submit failed image payloads to text classification.
     messages.push({ ...message, content: message.content.filter(block => block.type !== "image") });
+  }
+  for (let cursor = 0; cursor < sources.length;) {
+    if (signal?.aborted) return fail("aborted");
+    const capacity = MAX_IMAGES - images.length;
+    const remainingBytes = MAX_TOTAL_IMAGE_BYTES - images.reduce((total, image) => total + image.bytes, 0);
+    if (!capacity || !remainingBytes) {
+      for (const source of sources.slice(cursor)) skippedImages.push({ entryId: source.entryId, blockIndex: source.blockIndex });
+      break;
+    }
+    const batch: typeof sources = [];
+    let batchBytes = 0;
+    while (cursor < sources.length && batch.length < capacity) {
+      const source = sources[cursor];
+      if (!source) throw new Error("Missing image source");
+      const data = source.image.data;
+      const estimated = typeof data === "string" ? Math.floor(data.length / 4) * 3 -
+        (data.endsWith("==") ? 2 : data.endsWith("=") ? 1 : 0) : 0;
+      const size = estimated > 0 && estimated <= MAX_IMAGE_BYTES ? estimated : 0;
+      if (size > remainingBytes) {
+        skippedImages.push({ entryId: source.entryId, blockIndex: source.blockIndex });
+        cursor++; continue;
+      }
+      if (batchBytes + size > remainingBytes) break;
+      batch.push(source);
+      batchBytes += size;
+      cursor++;
+    }
+    try {
+      const archived = await saveImageArtifacts(dependencies.artifactRoot, sessionId, batch, signal);
+      for (const [index, source] of batch.entries()) {
+        const record = archived[index];
+        if (!record) throw new Error("Incomplete image archive batch");
+        if (record.ok) add({ ...record.record, action: "inline", forced: true, label: source.label });
+        else skippedImages.push({ entryId: source.entryId, blockIndex: source.blockIndex });
+      }
+    } catch (error) {
+      if (signal?.aborted) return fail("aborted");
+      if (error instanceof ImageProcessorUnavailableError)
+        return { ...fail("image-processor-unavailable"), failureDetail: error.message };
+      return { ...fail("image-archive-failed"), failureDetail: compactionFailureDetail("image-archive", error) };
+    }
   }
   if (messages.some(message => message.role === "bashExecution")) return fail("unsupported-content");
   // shortcut: OpenRouter Jev 1.14 rejects five images per request. Keep pixels inline

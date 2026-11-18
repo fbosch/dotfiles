@@ -6,7 +6,12 @@ import type { Readable, Writable } from "node:stream";
 
 import { join, resolve } from "node:path";
 
-export const MAX_IMAGE_BYTES = 4_000_000;
+import { ImageNormalizationCache } from "./image-normalization-cache";
+import {
+  inspectImageBatch, ImageProcessorUnavailableError, MAX_IMAGE_BYTES,
+  MAX_INSPECTION_IMAGES, MAX_INSPECTION_BYTES, IMAGE_PROCESSING_TIMEOUT_MS,
+} from "./image-inspection";
+export { ImageProcessorUnavailableError, MAX_IMAGE_BYTES } from "./image-inspection";
 
 const MAX_CLASSIFIER_BYTES = 500_000;
 // TypeSafe rejects either side below 280 pixels, even when the area is sufficient.
@@ -15,7 +20,16 @@ const MAX_IMAGE_DIMENSION = 1_568;
 const MIN_IMAGE_AREA = 78_400;
 const MAX_IMAGE_AREA = 2_458_624;
 const MAX_DECODE_AREA = 8_000_000;
-export class ImageProcessorUnavailableError extends Error {}
+const IMAGE_PROCESSING_POLICY = {
+  maxImageBytes: MAX_IMAGE_BYTES, maxDecodeArea: MAX_DECODE_AREA,
+  minDimension: MIN_IMAGE_DIMENSION, maxDimension: MAX_IMAGE_DIMENSION,
+  minArea: MIN_IMAGE_AREA, maxArea: MAX_IMAGE_AREA, maxClassifierBytes: MAX_CLASSIFIER_BYTES,
+  maxBatchImages: MAX_INSPECTION_IMAGES, maxBatchBytes: MAX_INSPECTION_BYTES,
+  jpegQualities: [88, 76, 64], resizeFactors: [1, 0.85, 0.70],
+  pngCompressionLevel: 9, pngAdaptiveFiltering: true,
+};
+const normalizationCache = new ImageNormalizationCache();
+const normalizationPolicyKey = JSON.stringify(["sharp-normalization-v2", IMAGE_PROCESSING_POLICY]);
 
 const ID_PATTERN = /^[A-Za-z0-9_-]{1,128}$/u;
 
@@ -110,16 +124,12 @@ export function runImageProcessor(
   mimeType: ImageMime,
   options: { signal?: AbortSignal; timeoutMs?: number } = {},
 ): Promise<Buffer> {
-  const { signal, timeoutMs = 15_000 } = options;
+  const { signal, timeoutMs = IMAGE_PROCESSING_TIMEOUT_MS } = options;
   checkImageProcessingAbort(signal);
   if (!input.length || input.length > MAX_IMAGE_BYTES) fail("Image input exceeded its byte limit");
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) fail("Invalid image processing timeout");
   const maxOutputBytes = operation === "inspect" ? 0 : MAX_CLASSIFIER_BYTES;
-  const request = JSON.stringify({ operation, mimeType, limits: {
-    maxImageBytes: MAX_IMAGE_BYTES, maxDecodeArea: MAX_DECODE_AREA,
-    minDimension: MIN_IMAGE_DIMENSION, maxDimension: MAX_IMAGE_DIMENSION,
-    minArea: MIN_IMAGE_AREA, maxArea: MAX_IMAGE_AREA, maxClassifierBytes: MAX_CLASSIFIER_BYTES,
-  } });
+  const request = JSON.stringify({ operation, mimeType, limits: IMAGE_PROCESSING_POLICY });
   return new Promise((resolvePromise, rejectPromise) => {
     let child: ChildProcessByStdio<Writable, Readable, Readable>;
     try {
@@ -173,19 +183,62 @@ export function runImageProcessor(
   });
 }
 
-export async function validateImageInput(image: ImageInput): Promise<{ bytes: Buffer; mimeType: ImageMime }> {
+export type ImageValidationResult =
+  | { ok: true; bytes: Buffer; mimeType: ImageMime }
+  | { ok: false; error: Error };
+
+function prepareImageInput(image: ImageInput): { bytes: Buffer; mimeType: ImageMime } {
   const mimeType = imageMime(image?.mimeType ?? "");
   const bytes = decodeBase64(image?.data);
   assertMagic(bytes, mimeType);
-  await runImageProcessor("inspect", bytes, mimeType);
   return { bytes, mimeType };
 }
 
+export async function validateImageInputs(
+  images: readonly ImageInput[],
+  options: { signal?: AbortSignal; timeoutMs?: number } = {},
+): Promise<ImageValidationResult[]> {
+  checkImageProcessingAbort(options.signal);
+  if (images.length > MAX_INSPECTION_IMAGES) fail("Image inspection batch exceeds its limits");
+  const prepared: ImageValidationResult[] = images.map(image => {
+    try { return { ok: true, ...prepareImageInput(image) }; }
+    catch (error) { return { ok: false, error: error instanceof Error ? error : new Error("Image validation failed") }; }
+  });
+  const jobs = prepared.flatMap(item => item.ok ? [item] : []);
+  const inspected = await inspectImageBatch(jobs, () =>
+    spawn(process.execPath, [join(__dirname, "image-codec.cjs"),
+      JSON.stringify({ operation: "inspect-batch", limits: IMAGE_PROCESSING_POLICY })], {
+      cwd: "/", env: childEnv, shell: false, stdio: ["pipe", "pipe", "pipe"], windowsHide: true,
+    }), options);
+  let cursor = 0;
+  return prepared.map(item => {
+    if (!item.ok) return item;
+    const status = inspected[cursor++];
+    if (!status) fail("Incomplete image inspection batch");
+    return status.ok ? item : { ok: false, error: status.error };
+  });
+}
+
+export async function validateImageInput(image: ImageInput): Promise<{ bytes: Buffer; mimeType: ImageMime }> {
+  const [result] = await validateImageInputs([image]);
+  if (!result) fail("Incomplete image inspection batch");
+  if (!result.ok) throw result.error;
+  return { bytes: result.bytes, mimeType: result.mimeType };
+}
+
 export async function normalizeImageForClassifier(bytes: Buffer, mimeType: string, signal?: AbortSignal): Promise<Buffer> {
+  checkImageProcessingAbort(signal);
   const mime = imageMime(mimeType);
-  assertMagic(bytes, mime);
-  const output = await runImageProcessor("normalize", bytes, mime, signal ? { signal } : {});
+  if (!bytes.length || bytes.length > MAX_IMAGE_BYTES) fail("Image input exceeded its byte limit");
+  const input = Buffer.from(bytes);
+  assertMagic(input, mime);
+  const key = createHash("sha256").update(normalizationPolicyKey).update("|").update(mime).update("|").update(input).digest("hex");
+  const cached = normalizationCache.get(key);
+  if (cached) return cached;
+  const output = await runImageProcessor("normalize", input, mime, signal ? { signal } : {});
+  checkImageProcessingAbort(signal);
   assertMagic(output, mime);
+  normalizationCache.set(key, output);
   return output;
 }
 

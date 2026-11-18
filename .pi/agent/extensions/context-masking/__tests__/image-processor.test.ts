@@ -76,16 +76,37 @@ test("terminates timed-out and cancelled decoder processes and permits subsequen
 });
 
 const agentDir = new URL("../../../", import.meta.url).pathname;
-test("loads Sharp and its isolated decoder through Node/Jiti", async () => {
+test("Node/Jiti batches validation and reuses normalized pixels without sharing mutable buffers", async () => {
   const image = imageInput(await solidImage());
+  const other = imageInput(await solidImage("orange"));
   const source = `import { createJiti } from "jiti";
+    import { createRequire, syncBuiltinESMExports } from "node:module";
+    const require = createRequire(import.meta.url);
+    const cp = require("node:child_process");
+    const spawn = cp.spawn;
+    let launches = 0;
+    cp.spawn = (...args) => { launches++; return spawn.apply(cp, args); };
+    syncBuiltinESMExports();
     const jiti = createJiti(import.meta.url, { fsCache: false });
     const codec = await jiti.import("./extensions/context-masking/image-artifact.ts");
-    const result = await codec.validateImageInput(${JSON.stringify(image)});
-    console.log(result.bytes.length);`;
+    const image = ${JSON.stringify(image)};
+    const checked = await codec.validateImageInputs(Array(23).fill(image));
+    const validationLaunches = launches;
+    const first = await codec.normalizeImageForClassifier(Buffer.from(image.data, "base64"), image.mimeType);
+    const normalizationLaunches = launches - validationLaunches;
+    first[0] = 0;
+    const second = await codec.normalizeImageForClassifier(Buffer.from(image.data, "base64"), image.mimeType);
+    const cacheLaunches = launches - validationLaunches - normalizationLaunches;
+    const beforeOther = launches;
+    const other = ${JSON.stringify(other)};
+    await codec.normalizeImageForClassifier(Buffer.from(other.data, "base64"), other.mimeType);
+    console.log(JSON.stringify({ valid: checked.filter(item => item.ok).length,
+      validationLaunches, normalizationLaunches, cacheLaunches,
+      changedContentLaunches: launches - beforeOther, signature: second[0] }));`;
   const { stdout, stderr } = await execFileAsync("node", ["--input-type=module", "--eval", source], {
     cwd: agentDir, timeout: 15_000, env: { PATH: process.env.PATH ?? "", HOME: "/nonexistent" },
   });
-  expect(Number(stdout.trim())).toBe(Buffer.from(image.data, "base64").length);
+  expect(JSON.parse(stdout)).toEqual({ valid: 23, validationLaunches: 1, normalizationLaunches: 1,
+    cacheLaunches: 0, changedContentLaunches: 1, signature: 0x89 });
   expect(stderr).toBe("");
 }, 20_000);
