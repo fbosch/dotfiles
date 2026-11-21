@@ -104,6 +104,8 @@ hl.on("hyprland.start", function()
 	if not claim_autostart() then
 		return
 	end
+	-- Systemd-managed Hyprland no longer exports its display environment automatically.
+	hl.exec_cmd("uwsm finalize")
 	if benchmark_armed then
 		record_benchmark(startup_benchmark.begin)
 	end
