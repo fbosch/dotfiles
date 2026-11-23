@@ -5,6 +5,7 @@ import type { FillMode } from "../types";
 import { expandPath } from "./filesystem";
 import { getConnectedMonitors } from "./monitors";
 import { createSpanWallpapers } from "./span-wallpaper";
+import { cacheWallpaperAssignments } from "./wallpaper-cache";
 import {
 	buildHyprpaperConfig,
 	parseWallpaperAssignments,
@@ -127,11 +128,13 @@ export async function getCurrentWallpaperAssignments(
 async function writeWallpaperAssignments(
 	configPath: string,
 	monitorWallpapers: Map<string, WallpaperConfig>,
-): Promise<void> {
+): Promise<Map<string, WallpaperConfig>> {
 	const config = await readHyprpaperConfig(configPath);
 	const syntax = await detectHyprpaperSyntax();
-	const nextConfig = buildHyprpaperConfig(config, monitorWallpapers, syntax);
+	const cachedAssignments = await cacheWallpaperAssignments(monitorWallpapers);
+	const nextConfig = buildHyprpaperConfig(config, cachedAssignments, syntax);
 	await writeHyprpaperConfig(configPath, nextConfig);
+	return cachedAssignments;
 }
 
 /**
@@ -142,7 +145,7 @@ export async function updateHyprpaperConfig(
 	wallpaperPath: string,
 	monitor?: string,
 	fillMode: FillMode = "cover",
-): Promise<void> {
+): Promise<string> {
 	try {
 		const monitorWallpapers = await getCurrentWallpaperAssignments(configPath);
 
@@ -184,7 +187,8 @@ export async function updateHyprpaperConfig(
 			});
 		}
 
-		await writeWallpaperAssignments(configPath, monitorWallpapers);
+		const cachedAssignments = await writeWallpaperAssignments(configPath, monitorWallpapers);
+		return cachedAssignments.get(monitor ?? "__all__")!.path;
 	} catch (error) {
 		throw new Error("Failed to update hyprpaper config", { cause: error });
 	}
@@ -261,9 +265,9 @@ export async function setWallpaper(
 	});
 
 	try {
-		await updateHyprpaperConfig(configPath, wallpaperPath, monitor, fillMode);
+		const cachedPath = await updateHyprpaperConfig(configPath, wallpaperPath, monitor, fillMode);
 
-		const didApplyViaIpc = await tryApplyWallpaperViaIpc(wallpaperPath, monitor);
+		const didApplyViaIpc = await tryApplyWallpaperViaIpc(cachedPath, monitor);
 		if (didApplyViaIpc === false) {
 			await reloadHyprpaper();
 		}
