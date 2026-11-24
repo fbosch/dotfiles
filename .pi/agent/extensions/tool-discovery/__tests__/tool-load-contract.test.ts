@@ -35,6 +35,7 @@ test("scopes local loader guidance to tool_load without renaming native helpers"
   expect(guidance).toContain("tools.tool_load({ query, limit })");
   expect(guidance).toContain("Pi's native `searchTools()`");
   expect(guidance).toContain("Pi's `tool_search`");
-  expect(guidance).toContain("no old-name tool alias is registered");
+  expect(guidance).toContain('mode: "lookup"');
+  expect(guidance).toContain("there is no `search_tools` alias");
   expect(instructionFragmentsForTools(fragments, ["read", "tool_search"])).toBe("");
 });

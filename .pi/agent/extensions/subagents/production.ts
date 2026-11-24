@@ -33,6 +33,7 @@ function isParentLaunch(value: unknown): value is ParentLaunch {
     "specialist",
     "prompt",
     "foreground",
+    "triggerParentTurn",
     "inheritContext",
     "maxTurns",
     "hardMaxTurns",
@@ -41,6 +42,8 @@ function isParentLaunch(value: unknown): value is ParentLaunch {
   ]);
   if (Object.keys(value).some((key) => !allowed.has(key))) return false;
   if (value.foreground !== undefined && typeof value.foreground !== "boolean") return false;
+  if (value.triggerParentTurn !== undefined && typeof value.triggerParentTurn !== "boolean")
+    return false;
   if (value.inheritContext !== undefined && typeof value.inheritContext !== "boolean") return false;
   if (
     value.maxTurns !== undefined &&

@@ -105,7 +105,7 @@ export function registerParentTools(
     name: "subagent",
     label: "Launch specialist",
     promptGuidelines: [
-      "Discover subagent_result or subagent_control with tool_search when worker inspection or control is needed; loading subagent does not load these tools.",
+      'For a report, call tool_search({ query: "subagent_result", mode: "lookup" }) if the tool is not declared. For control, look up "subagent_control" the same way. Loading subagent does not load either tool.',
     ],
     description:
       "Launch one named specialist. Background is the default; foreground returns its report or blocking question. Optional inherited context contains only parent narrative text. maxTurns is the initial allowance; hardMaxTurns may only lower a configured specialist ceiling. A report is evidence, not verification.",

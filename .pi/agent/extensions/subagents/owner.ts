@@ -434,7 +434,7 @@ export class WorkerOwner {
     return () => this.listeners.delete(listener);
   }
 
-  async launch(request: LaunchRequest): Promise<LaunchReceipt> {
+  async launch(request: LaunchRequest, onAccepted?: (assignmentId: AssignmentId) => void): Promise<LaunchReceipt> {
     this.assertAdmissionOpen();
     if (!request.prompt.trim()) throw new Error("assignment prompt must be non-empty");
     const config = freezeConfig(request.config);
@@ -460,6 +460,8 @@ export class WorkerOwner {
       createdAt: Date.now(),
     };
     this.workers.set(id, worker);
+    // Register delivery before pump can synchronously emit the worker's first update.
+    onAccepted?.(assignmentId);
     this.queue.push({ workerId: id, assignmentId, purpose: "start" });
     this.emitState(worker);
     this.pump();

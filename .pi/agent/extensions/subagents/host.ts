@@ -130,7 +130,7 @@ export function registerSubagentHost(
     owner.reconcileBuffered(() => persistedHistoryIds(ctx.sessionManager.getSessionFile()));
     const delivery = new WorkerDelivery(
       owner,
-      (notice, noticeDeliveryId) => {
+      (notice, noticeDeliveryId, triggerTurn) => {
         if (context?.sessionManager.getSessionId() !== parentId || shuttingDown) return;
         const assignment = match(notice)
           .with(
@@ -155,7 +155,7 @@ export function registerSubagentHost(
             details: { preview, updateDeliveryId: noticeDeliveryId },
             display: !cards.has(workerTarget(notice)),
           },
-          { triggerTurn: true, deliverAs: "followUp" },
+          triggerTurn ? { triggerTurn: true, deliverAs: "followUp" } : { triggerTurn: false },
         );
       },
       (error) => {

@@ -29,6 +29,7 @@ const drain = () => new Promise<void>((resolve) => setImmediate(resolve));
 function fixture(
   options: {
     immediate?: boolean;
+    startupUpdate?: string;
     storageFailure?: boolean;
     bufferedEntryId?: string;
     parentSessionId?: string;
@@ -41,9 +42,11 @@ function fixture(
   >();
   const notices: WorkerNotice[] = [];
   const updateIds: string[] = [];
+  const triggerTurns: boolean[] = [];
   const errors: unknown[] = [];
   const driver: ChildDriver = {
     start(input, callbacks) {
+      if (options.startupUpdate) callbacks.onUpdate(options.startupUpdate);
       if (options.immediate) return Promise.resolve(completed);
       return new Promise((resolve) => {
         runs.set(input.workerId, { resolve, callbacks });
@@ -73,8 +76,9 @@ function fixture(
   });
   const delivery = new WorkerDelivery(
     owner,
-    (notice, updateDeliveryId?: string) => {
+    (notice, updateDeliveryId, triggerParentTurn) => {
       notices.push(notice);
+      triggerTurns.push(triggerParentTurn);
       if (updateDeliveryId !== undefined) updateIds.push(updateDeliveryId);
       options.notify?.(notice, updateDeliveryId);
     },
@@ -83,7 +87,7 @@ function fixture(
     },
   );
   instances.push(delivery);
-  return { owner, delivery, runs, notices, updateIds, errors };
+  return { owner, delivery, runs, notices, updateIds, triggerTurns, errors };
 }
 function launched(result: Awaited<ReturnType<WorkerDelivery["launch"]>>) {
   if (result.kind !== "launched") throw new Error("Expected background launch");
@@ -201,6 +205,19 @@ test("foreground successful execution reports later storage failure without reru
   expect(result.kind).toBe("completed");
   expect(f.owner.list()).toHaveLength(1);
   expect(f.notices.filter((notice) => notice.type === "storage-failure")).toHaveLength(1);
+});
+
+test("a direct report does not wake the parent for early updates or storage failures", async () => {
+  const f = fixture({ immediate: true, storageFailure: true, startupUpdate: "Working" });
+  const result = await f.delivery.launch(
+    { config, prompt: "Task" },
+    { foreground: true, triggerParentTurn: false },
+  );
+  await drain();
+
+  expect(result).toMatchObject({ kind: "completed", report });
+  expect(f.notices.map((notice) => notice.type)).toEqual(["update", "storage-failure"]);
+  expect(f.triggerTurns).toEqual([false, false]);
 });
 
 test("foreground progress is inline and its widget visibility ends when the wait settles", async () => {

@@ -2,16 +2,20 @@ import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import {
   type ExtensionAPI,
+  type ExtensionContext,
   type InputEvent,
   type InputEventResult,
   parseFrontmatter,
   type SlashCommandInfo,
+  getMarkdownTheme,
 } from "@earendil-works/pi-coding-agent";
-import { Text } from "@earendil-works/pi-tui";
+import { Markdown, Text } from "@earendil-works/pi-tui";
 import type { ParentLaunch } from "./subagents/parent-runtime";
+import { terminalText } from "./subagents/presentation";
 import { requestSubagentLaunch } from "./subagents/production";
 
 const ROUTED_PROMPT_MESSAGE = "routed-prompt";
+const ROUTED_PROMPT_REPORT = "routed-prompt.report";
 interface SpawnOptions {
   model?: string;
   thinking?: NonNullable<ParentLaunch["thinking"]>;
@@ -21,6 +25,7 @@ interface SpawnOptions {
 }
 
 interface RoutedPromptFrontmatter extends Record<string, unknown> {
+  return_report?: unknown;
   agent?: unknown;
   inherit_context?: unknown;
   max_turns?: unknown;
@@ -36,10 +41,17 @@ export interface RoutedPrompt {
   prompt: string;
   usage?: string;
   options: SpawnOptions;
+  returnReport?: true;
 }
 
+type RoutedLaunchResult = {
+  kind: Awaited<ReturnType<typeof requestSubagentLaunch>>["kind"];
+  report?: string;
+  assignment?: { error?: string };
+};
+
 interface RoutedPromptsDependencies {
-  launch?: (request: ParentLaunch) => Promise<unknown>;
+  launch?: (request: ParentLaunch) => Promise<RoutedLaunchResult>;
   readPrompt?: (path: string) => string;
 }
 
@@ -300,6 +312,7 @@ export function resolveRoutedPrompt(
       : substitutePromptArgs(parsed.body, invocation.args),
     ...(usage === undefined || invocation.args.length > 0 ? {} : { usage }),
     options: routeOptions(parsed.frontmatter),
+    ...(optionalBoolean(parsed.frontmatter, "return_report") ? { returnReport: true } : {}),
   };
 }
 
@@ -315,17 +328,39 @@ function renderMessageContent(content: unknown): string {
     .join("\n");
 }
 
+function publishReport(
+  pi: ExtensionAPI,
+  ui: ExtensionContext["ui"],
+  command: string,
+  result: RoutedLaunchResult,
+): void {
+  if (result.kind === "question") {
+    ui.notify(`/${command} needs an answer in /subagents.`, "warning");
+    return;
+  }
+  if (result.kind !== "completed" || !result.report?.trim())
+    throw new Error(terminalText(result.assignment?.error ?? "") || "Worker did not return a report");
+  pi.sendMessage(
+    { customType: ROUTED_PROMPT_REPORT, content: result.report, display: true },
+    { triggerTurn: false },
+  );
+}
 export function createRoutedPromptsExtension(
   dependencies: RoutedPromptsDependencies = {},
 ): (pi: ExtensionAPI) => void {
   const readPrompt = dependencies.readPrompt ?? ((path: string) => readFileSync(path, "utf8"));
 
   return (pi) => {
-    const launch =
+    const launch: NonNullable<RoutedPromptsDependencies["launch"]> =
       dependencies.launch ?? ((request: ParentLaunch) => requestSubagentLaunch(pi.events, request));
     pi.registerMessageRenderer(
       ROUTED_PROMPT_MESSAGE,
       (message) => new Text(renderMessageContent(message.content), 0, 0),
+    );
+    pi.registerMessageRenderer(
+      ROUTED_PROMPT_REPORT,
+      (message) =>
+        new Markdown(terminalText(renderMessageContent(message.content)), 0, 0, getMarkdownTheme()),
     );
 
     pi.on("input", async (event: InputEvent, ctx): Promise<InputEventResult> => {
@@ -367,11 +402,13 @@ export function createRoutedPromptsExtension(
       }
 
       try {
-        await launch({
+        const result = await launch({
           specialist: routedPrompt.agent,
           prompt: routedPrompt.prompt,
           ...routedPrompt.options,
+          ...(routedPrompt.returnReport ? { foreground: true, triggerParentTurn: false } : {}),
         });
+        if (routedPrompt.returnReport) publishReport(pi, ctx.ui, routedPrompt.command, result);
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
         ctx.ui.notify(`Cannot run /${routedPrompt.command}: ${message}`, "error");

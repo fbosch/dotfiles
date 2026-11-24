@@ -52,7 +52,7 @@ Unavailable tool hints produce startup warnings without blocking the assignment.
 
 ## Parent tools
 
-`subagent`, `subagent_result`, and `subagent_control` are deferred. Discover each tool with `tool_search` when needed; loading one does not load its siblings. These are the current contracts, not aliases for the old runner's tools. Routed commands use `requestSubagentLaunch` over Pi's event bus and share the same `ParentRuntime` as tool calls.
+`subagent`, `subagent_result`, and `subagent_control` are deferred. Activate each tool by exact name with `tool_search({ query: "subagent_result", mode: "lookup" })`, substituting the name you need. Loading one does not load its siblings. Routed commands use `requestSubagentLaunch` over Pi's event bus and share the same `ParentRuntime` as tool calls.
 
 ### Explicit mentions
 

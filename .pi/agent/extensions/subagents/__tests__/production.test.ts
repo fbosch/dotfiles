@@ -3,6 +3,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import type { AgentSession, ExtensionAPI, ExtensionFactory } from "@earendil-works/pi-coding-agent";
+import { createRoutedPromptsExtension } from "../../routed-prompts";
 import type { PiChildDriver } from "../driver";
 import type { ChildDriver, ChildExecutionOutcome, ChildRunInput } from "../owner";
 import { createProductionExtension, requestSubagentLaunch } from "../production";
@@ -38,8 +39,11 @@ function controlledDriver() {
   const started = new Promise<void>((resolve) => {
     signalStarted = resolve;
   });
-  const finish = (workerId: string) => {
-    finishers.get(workerId)?.({ kind: "failed", turnsUsed: 0, error: "Fixture stopped" });
+  const finish = (
+    workerId: string,
+    outcome: ChildExecutionOutcome = { kind: "failed", turnsUsed: 0, error: "Fixture stopped" },
+  ) => {
+    finishers.get(workerId)?.(outcome);
   };
   const driver: ChildDriver & Pick<PiChildDriver, "observation"> = {
     start(input) {
@@ -70,6 +74,7 @@ function controlledDriver() {
     starts,
     resolvedModels,
     started,
+    finish,
     setResolveModel(value: ModelResolver) {
       resolveModel = value;
     },
@@ -77,7 +82,7 @@ function controlledDriver() {
 }
 
 async function fixture(
-  options: { model?: string; missingPolicy?: string; hardMaxTurns?: number } = {},
+  options: { model?: string; missingPolicy?: string; hardMaxTurns?: number; directRoute?: boolean } = {},
 ) {
   const root = await mkdtemp(join(tmpdir(), "pi-minimal-subagents-production-"));
   cleanups.push(() => rm(root, { recursive: true, force: true }));
@@ -102,6 +107,13 @@ Inspect the assignment and return evidence.
 `,
   );
 
+  if (options.directRoute) {
+    await mkdir(join(root, "prompts"));
+    await writeFile(
+      join(root, "prompts", "report.md"),
+      "---\nagent: fixture\nreturn_report: true\n---\nFormat the report for $ARGUMENTS.",
+    );
+  }
   const settingsManager = sdk.SettingsManager.inMemory({ cacheWarming: "off" });
   const modelRuntime = await sdk.ModelRuntime.create({
     authPath: join(root, "auth.json"),
@@ -148,10 +160,14 @@ Inspect the assignment and return evidence.
     settingsManager,
     noExtensions: true,
     noSkills: true,
-    noPromptTemplates: true,
+    noPromptTemplates: !options.directRoute,
     noThemes: true,
     noContextFiles: true,
-    extensionFactories: [registerFixtureProvider, subagents],
+    extensionFactories: [
+      registerFixtureProvider,
+      subagents,
+      ...(options.directRoute ? [createRoutedPromptsExtension()] : []),
+    ],
   });
   await loader.reload();
   expect(loader.getExtensions().errors).toEqual([]);
@@ -186,6 +202,34 @@ function tool(session: AgentSession, name: string) {
   if (!registered) throw new Error(`Missing tool: ${name}`);
   return registered;
 }
+
+test("the native routed command displays the full worker report without a parent turn", async () => {
+  const f = await fixture({ directRoute: true });
+  const report = "# Report\n\n" + "Full details\n".repeat(400);
+  let parentTurns = 0;
+  const unsubscribe = f.session.subscribe((event) => {
+    if (event.type === "agent_start") parentTurns++;
+  });
+  try {
+    const invocation = f.session.extensionRunner.emitInput("/report 42", undefined, "interactive");
+    await f.controlled.started;
+    const input = f.controlled.starts[0]!;
+    expect(input.prompt).toBe("Format the report for 42.");
+    f.controlled.finish(input.workerId, { kind: "completed", turnsUsed: 1, report });
+    expect(await invocation).toEqual({ action: "handled" });
+    const entries = f.session.sessionManager.getEntries();
+    expect(entries.filter((entry) =>
+      entry.type === "custom_message" && entry.customType === "routed-prompt.report"
+    )).toMatchObject([{ content: report, display: true }]);
+    // This parent is in-memory, so even a real storage warning must not start a turn.
+    expect(entries.filter((entry) =>
+      entry.type === "custom_message" && entry.customType === "minimal-subagents.notice"
+    )).toMatchObject([{ content: expect.stringContaining('"type":"storage-failure"') }]);
+    expect(parentTurns).toBe(0);
+  } finally {
+    unsubscribe();
+  }
+});
 
 test("production launch requests share the native runtime and resolve configured models and capabilities", async () => {
   const f = await fixture();

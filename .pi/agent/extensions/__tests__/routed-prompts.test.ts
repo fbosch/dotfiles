@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
 import type {
   ExtensionAPI,
   ExtensionContext,
@@ -33,10 +34,11 @@ const promptCommand: SlashCommandInfo = {
 
 function createHarness(options: {
   content: string;
-  launch?: (request: object) => Promise<unknown>;
+  launch?: NonNullable<Parameters<typeof createRoutedPromptsExtension>[0]>["launch"];
 }) {
   let inputHandler: InputHandler | undefined;
   const messages: Array<{ customType: string; content: string; display: boolean }> = [];
+  const messageOptions: Array<Parameters<ExtensionAPI["sendMessage"]>[1]> = [];
   const notifications: Array<[string, string]> = [];
   const pi = {
     getCommands: () => [promptCommand],
@@ -44,8 +46,12 @@ function createHarness(options: {
       if (name === "input") inputHandler = handler;
     },
     registerMessageRenderer: () => undefined,
-    sendMessage(message: { customType: string; content: string; display: boolean }) {
+    sendMessage(
+      message: { customType: string; content: string; display: boolean },
+      options?: Parameters<ExtensionAPI["sendMessage"]>[1],
+    ) {
       messages.push(message);
+      messageOptions.push(options);
     },
   } as unknown as ExtensionAPI;
   const ctx = {
@@ -67,6 +73,7 @@ function createHarness(options: {
 
   return {
     messages,
+    messageOptions,
     notifications,
     async input(
       text: string,
@@ -228,7 +235,7 @@ Tail: ${slicePlaceholder}
       content: "---\nagent: general\n---\nHandle $ARGUMENTS",
       launch: async () => {
         spawnCount += 1;
-        return { workerId: "worker-1" };
+        return { kind: "launched" };
       },
     });
     expect(await injected.input("/decision topic", undefined, "extension")).toEqual({
@@ -243,7 +250,7 @@ Tail: ${slicePlaceholder}
       content: "---\nagent: docs\ninherit_context: true\n---\nWrite $ARGUMENTS",
       launch: async (request) => {
         spawns.push(request);
-        return { workerId: "worker-1" };
+        return { kind: "launched" };
       },
     });
 
@@ -253,6 +260,41 @@ Tail: ${slicePlaceholder}
     ]);
   });
 
+  test("/ado-pbi opts into returning its worker report", () => {
+    const command = { ...promptCommand, name: "ado-pbi" };
+    const template = readFileSync(new URL("../../prompts/ado-pbi.md", import.meta.url), "utf8");
+    expect(resolveRoutedPrompt("/ado-pbi 62360", [command], () => template)?.returnReport).toBe(true);
+  });
+
+  test("returns the exact full report without starting a parent turn", async () => {
+    const content = "# PBI #42: Tilpas beregner\n\n" + "Details\n".repeat(700) + "## Wiki Links\n- None\n";
+    const requests: object[] = [];
+    const harness = createHarness({
+      content: "---\nagent: quick\nreturn_report: true\n---\nFormat $ARGUMENTS",
+      launch: async (request) => {
+        requests.push(request);
+        return { kind: "completed", report: content };
+      },
+    });
+
+    expect(await harness.input("/decision 42")).toEqual({ action: "handled" });
+    expect(requests).toEqual([{
+      specialist: "quick", prompt: "Format 42", foreground: true, triggerParentTurn: false,
+    }]);
+    expect(harness.messages).toEqual([{ customType: "routed-prompt.report", content, display: true }]);
+    expect(harness.messageOptions).toEqual([{ triggerTurn: false }]);
+    expect(harness.notifications).toEqual([]);
+  });
+
+  test("a direct route surfaces worker failure instead of publishing a report", async () => {
+    const harness = createHarness({
+      content: "---\nagent: quick\nreturn_report: true\n---\nFormat $ARGUMENTS",
+      launch: async () => ({ kind: "failed", assignment: { error: "Worker could not start" } }),
+    });
+    expect(await harness.input("/decision 42")).toEqual({ action: "handled" });
+    expect(harness.messages).toEqual([]);
+    expect(harness.notifications).toEqual([["Cannot run /decision: Worker could not start", "error"]]);
+  });
   test("returns configured usage without starting a subagent", async () => {
     let spawnCount = 0;
     const harness = createHarness({
@@ -260,7 +302,7 @@ Tail: ${slicePlaceholder}
         '---\nagent: general\nusage: "Usage: /decision <short decision statement>"\n---\nTopic: $ARGUMENTS',
       launch: async () => {
         spawnCount += 1;
-        return { workerId: "worker-1" };
+        return { kind: "launched" };
       },
     });
 
@@ -289,7 +331,7 @@ Tail: ${slicePlaceholder}
       content: "---\nagent: general\n---\nTopic: $ARGUMENTS",
       launch: async () => {
         spawnCount += 1;
-        return { workerId: "worker-1" };
+        return { kind: "launched" };
       },
     });
     expect(

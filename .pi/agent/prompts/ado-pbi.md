@@ -2,6 +2,7 @@
 description: Fetch Azure DevOps product backlog item with tasks and wiki links
 argument-hint: "[PBI input]"
 agent: quick
+return_report: true
 ---
 
 Fetch and structure Azure DevOps Product Backlog Item data for agent context.

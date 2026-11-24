@@ -7,6 +7,7 @@ export interface ParentLaunch extends AssignmentOverrides {
   specialist: string;
   prompt: string;
   foreground?: boolean;
+  triggerParentTurn?: boolean;
   inheritContext?: boolean;
 }
 
@@ -66,6 +67,7 @@ export class ParentRuntime {
       },
       {
         ...(request.foreground === undefined ? {} : { foreground: request.foreground }),
+        ...(request.triggerParentTurn === undefined ? {} : { triggerParentTurn: request.triggerParentTurn }),
         ...(onProgress ? { onProgress } : {}),
         ...(signal ? { signal } : {}),
       },

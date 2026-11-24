@@ -75,6 +75,7 @@ function isUnsettledAssignment(outcome: AssignmentSnapshot["outcome"]): boolean 
     .exhaustive();
 }
 interface Delivery {
+  triggerParentTurn: boolean;
   waiters: number;
   reportDelivered: boolean;
   receiptSent: boolean;
@@ -129,7 +130,7 @@ export class WorkerDelivery {
 
   constructor(
     readonly owner: WorkerOwner,
-    private readonly notify: (notice: WorkerNotice, noticeDeliveryId: string) => void,
+    private readonly notify: (notice: WorkerNotice, noticeDeliveryId: string, triggerParentTurn: boolean) => void,
     private readonly onError: (error: unknown) => void,
   ) {
     this.unsubscribe = owner.subscribe((event) => {
@@ -147,10 +148,12 @@ export class WorkerDelivery {
       foreground?: boolean;
       signal?: AbortSignal;
       onProgress?: (status: ReturnType<typeof workerStatus>) => void;
+      triggerParentTurn?: boolean;
     } = {},
   ) {
-    const launched = await this.owner.launch(request);
-    this.track(launched.assignmentId);
+    const launched = await this.owner.launch(request, (assignmentId) => {
+      this.track(assignmentId).triggerParentTurn = options.triggerParentTurn ?? true;
+    });
     if (options.foreground) {
       this.foreground.add(launched.workerId);
       for (const listener of this.presentationListeners) listener();
@@ -302,6 +305,7 @@ export class WorkerDelivery {
         receiptSent: false,
         storageWarningSent: false,
         questionsDelivered: new Set(),
+        triggerParentTurn: true,
       };
       this.assignments.set(assignmentId, state);
     }
@@ -327,7 +331,11 @@ export class WorkerDelivery {
     const noticeDeliveryId = `${this.owner.parentSessionId}:${randomUUID()}`;
     this.pendingNotices.set(noticeDeliveryId, notice);
     try {
-      this.notify(notice, noticeDeliveryId);
+      const assignmentId =
+        notice.type === "update" ? notice.assignmentId
+        : notice.type === "question" ? notice.question.assignmentId
+        : notice.assignment.assignmentId;
+      this.notify(notice, noticeDeliveryId, this.assignments.get(assignmentId)?.triggerParentTurn ?? true);
     } catch (error) {
       this.pendingNotices.delete(noticeDeliveryId);
       throw error;

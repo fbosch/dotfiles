@@ -2,6 +2,7 @@
 
 ## Native tools and identities
 
+- If a subagent tool is not declared, call `tool_search` directly with its exact name and `mode: "lookup"`. For example, load the report tool with `tool_search({ query: "subagent_result", mode: "lookup" })`.
 - Launch with `subagent({ specialist, prompt, maxTurns, foreground: false })`. Fresh context is the default; `inheritContext: true` includes parent narrative text only. Follow native schemas even when a skill shows older argument names.
 - Retain `workerId`, `assignmentId`, and acceptance criteria. Treat all returned identifiers as opaque strings. Copy them verbatim and compare each full value character-for-character with the original result before sending it; never abbreviate, normalize, reorder, or regenerate segments.
 - Inspect with `subagent_result({ request: { mode: "status", workerId } })`; retrieve complete evidence with `mode: "report"`. An explicit wait uses `mode: "wait"`, both IDs, and optional `timeoutMs`. A background receipt is not a full report or verification. A wait timeout does not cancel the worker.

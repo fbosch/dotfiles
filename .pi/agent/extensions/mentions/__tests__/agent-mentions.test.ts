@@ -228,6 +228,10 @@ describe("agent mentions", () => {
         details: { agents: ["explore"] },
       });
       expect(result?.message?.content).toContain("only to the current user request");
+      expect(result?.message?.content).toContain('tool_search({ query: "subagent", mode: "lookup" })');
+      expect(result?.message?.content).toContain(
+        'For subagent_result or subagent_control, look up each exact name separately with mode: "lookup".',
+      );
       expect(
         await handler?.({ ...event, prompt: "Continue without delegation" }, {
           cwd: agentDirectory,
