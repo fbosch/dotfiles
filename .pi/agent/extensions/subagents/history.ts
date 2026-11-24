@@ -1,4 +1,4 @@
-import { statSync } from "node:fs";
+import { readFileSync, statSync } from "node:fs";
 import { Type } from "typebox";
 import { Value } from "typebox/value";
 import { budgetEvidenceSchema, validBudgetEvidence } from "./budget-history";
@@ -90,7 +90,7 @@ const workerSchema = Type.Object({
       partialReport: Type.Optional(Type.String()),
       error: Type.Optional(Type.String()),
       persistence: Type.Union(
-        (["not-attempted", "pending", "saved", "failed"] as const).map((value) =>
+        (["not-attempted", "pending", "buffered", "saved", "failed"] as const).map((value) =>
           Type.Literal(value),
         ),
       ),
@@ -142,8 +142,8 @@ export interface SavedWorker {
 export function restoreHistory(
   entries: readonly unknown[],
   parentSessionId: string,
-): SavedWorker[] {
-  const latest = new Map<string, SavedWorker>();
+): (SavedWorker & { bufferedEntryId?: string })[] {
+  const latest = new Map<string, SavedWorker & { bufferedEntryId?: string }>();
   for (const entry of entries) {
     if (
       typeof entry !== "object" ||
@@ -177,19 +177,57 @@ export function restoreHistory(
         throw new Error("Invalid saved subagent budget evidence");
       }
     }
-    latest.set(data.worker.id, data);
+    const bufferedEntryId =
+      "id" in entry &&
+      typeof entry.id === "string" &&
+      data.worker.assignments.some((assignment) => assignment.persistence === "buffered")
+        ? entry.id
+        : undefined;
+    latest.set(data.worker.id, bufferedEntryId ? { ...data, bufferedEntryId } : data);
   }
   return [...latest.values()];
 }
 
-function historyFileSize(file: string): number | undefined {
+function historyFileSize(file: string): number | null | undefined {
   try {
     const info = statSync(file, { throwIfNoEntry: false });
-    if (info === undefined) return 0;
+    if (info === undefined) return null;
     return info.isFile() ? info.size : undefined;
   } catch {
     return undefined;
   }
+}
+
+/** Reconcile only complete history entries present in the parent JSONL file. */
+export function persistedHistoryIds(file: string | undefined): ReadonlySet<string> {
+  const ids = new Set<string>();
+  if (!file || historyFileSize(file) === null) return ids;
+  const content = readFileSync(file, "utf8");
+  for (const line of content.split("\n").slice(0, -1)) {
+    if (!line.includes(HISTORY_ENTRY)) continue;
+    let entry: unknown;
+    try {
+      entry = JSON.parse(line);
+    } catch {
+      // A malformed record cannot acknowledge a buffered write.
+      continue;
+    }
+    if (
+      typeof entry === "object" &&
+      entry !== null &&
+      "type" in entry &&
+      entry.type === "custom" &&
+      "customType" in entry &&
+      entry.customType === HISTORY_ENTRY &&
+      "id" in entry &&
+      typeof entry.id === "string" &&
+      "data" in entry &&
+      Value.Check(savedSchema, entry.data)
+    ) {
+      ids.add(entry.id);
+    }
+  }
+  return ids;
 }
 
 /** Embedded custom entries inherit parent deletion and never enter model context. */
@@ -197,7 +235,8 @@ export function parentHistory(options: {
   parentSessionId: string;
   currentParentId: () => string;
   parentFile: () => string | undefined;
-  append: (customType: string, data: SavedWorker) => void;
+  awaitingFirstMessage?: () => boolean;
+  append: (customType: string, data: SavedWorker) => string | null | void;
   observation: (workerId: string) => ChildObservation | undefined;
 }): WorkerPersistence {
   return {
@@ -212,7 +251,7 @@ export function parentHistory(options: {
       if (!file) throw new Error("Parent session evidence is not persisted");
       const observation = options.observation(evidence.workerId);
       const workerWithPersistence = (
-        persistence: "pending" | "saved" | "failed",
+        persistence: "pending" | "buffered" | "saved" | "failed",
         persistenceError?: string,
       ): WorkerSnapshot => ({
         ...evidence.worker,
@@ -222,24 +261,29 @@ export function parentHistory(options: {
             : assignment,
         ),
       });
-      const appendStatus = (
-        persistence: "pending" | "saved" | "failed",
-        persistenceError?: string,
-      ) => {
-        // SDK custom appends may only buffer; unknown file state cannot acknowledge a write.
-        const before = historyFileSize(file);
+      const append = (persistence: "pending" | "buffered" | "saved" | "failed", error?: string) =>
         options.append(HISTORY_ENTRY, {
           version: 1,
-          worker: workerWithPersistence(persistence, persistenceError),
+          worker: workerWithPersistence(persistence, error),
           ...(observation ? { observation } : {}),
         });
+      const appendStatus = (persistence: "pending" | "saved" | "failed", error?: string) => {
+        const before = historyFileSize(file);
+        append(persistence, error);
         const after = historyFileSize(file);
-        if (before === undefined || after === undefined || after <= before) {
+        if (before === undefined || typeof after !== "number" || after <= (before ?? 0)) {
           throw new Error("Parent session evidence is not persisted");
         }
       };
 
-      // SessionManager retains failed appends in memory, so only append "saved" after the pending write is confirmed.
+      // Pi only creates a session file once a real conversation message is appended.
+      if (historyFileSize(file) === null && options.awaitingFirstMessage?.()) {
+        const entryId = append("buffered");
+        if (!entryId) throw new Error("Buffered subagent history has no session entry ID");
+        return { entryId };
+      }
+
+      // Only append "saved" after the pending write is confirmed.
       try {
         appendStatus("pending");
         appendStatus("saved");

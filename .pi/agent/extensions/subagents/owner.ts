@@ -32,7 +32,7 @@ export type { AssignmentOutcome, LiveSessionAvailability, WorkerStatus } from ".
 export type WorkerId = string;
 export type AssignmentId = string;
 export type QuestionId = string;
-export type PersistenceStatus = "not-attempted" | "pending" | "saved" | "failed";
+export type PersistenceStatus = "not-attempted" | "pending" | "buffered" | "saved" | "failed";
 
 export interface TranscriptEntry {
   readonly role: "system" | "user" | "assistant" | "tool";
@@ -94,8 +94,8 @@ export interface PersistedEvidence {
 }
 
 export interface WorkerPersistence {
-  /** Store complete evidence; this boundary must not truncate report text. */
-  save(evidence: PersistedEvidence): Promise<void>;
+  /** Store complete evidence. Return an entry ID only if Pi has buffered the write. */
+  save(evidence: PersistedEvidence): Promise<void | { entryId: string }>;
 }
 
 export interface CleanupUncertainty {
@@ -393,6 +393,10 @@ export class WorkerOwner {
   private readonly queue: QueueJob[] = [];
   private readonly listeners = new Set<(event: OwnerEvent) => void>();
   private readonly pendingPersistence = new Set<Promise<void>>();
+  private readonly bufferedPersistence = new Map<
+    MutableAssignment,
+    { worker: MutableWorker; entryId: string }
+  >();
   private shuttingDown = false;
   private shutdownPromise?: Promise<void>;
 
@@ -409,6 +413,22 @@ export class WorkerOwner {
     for (const historical of options.historicalWorkers ?? []) this.restoreHistorical(historical);
   }
 
+  reconcileBuffered(readPersistedIds: () => ReadonlySet<string>): void {
+    if (!this.bufferedPersistence.size) return;
+    const persistedIds = readPersistedIds();
+    for (const [assignment, { worker, entryId }] of this.bufferedPersistence) {
+      if (!persistedIds.has(entryId)) continue;
+      this.bufferedPersistence.delete(assignment);
+      assignment.persistence = "saved";
+      this.emit({
+        type: "persistence",
+        workerId: worker.id,
+        assignmentId: assignment.id,
+        status: "saved",
+      });
+      this.emitState(worker);
+    }
+  }
   subscribe(listener: (event: OwnerEvent) => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
@@ -698,7 +718,7 @@ export class WorkerOwner {
   }
 
   /** Parent-loaded history is readable but cannot recreate a live child or resume an assignment. */
-  restoreHistorical(snapshot: WorkerSnapshot): void {
+  restoreHistorical(snapshot: WorkerSnapshot, bufferedEntryId?: string): void {
     if (snapshot.parentSessionId !== this.parentSessionId)
       throw new Error("Historical worker belongs to another parent session");
     if (this.workers.has(snapshot.id)) throw new Error(`Duplicate worker ID: ${snapshot.id}`);
@@ -735,6 +755,12 @@ export class WorkerOwner {
       createdAt: snapshot.createdAt,
     };
     this.workers.set(worker.id, worker);
+    if (bufferedEntryId) {
+      for (const assignment of assignments.values()) {
+        if (assignment.persistence === "buffered")
+          this.bufferedPersistence.set(assignment, { worker, entryId: bufferedEntryId });
+      }
+    }
     this.emitState(worker);
   }
 
@@ -1218,6 +1244,7 @@ export class WorkerOwner {
   }
 
   private persist(worker: MutableWorker, assignment: MutableAssignment): void {
+    this.bufferedPersistence.delete(assignment);
     const version = ++assignment.saveVersion;
     assignment.persistence = "pending";
     delete assignment.persistenceError;
@@ -1240,14 +1267,17 @@ export class WorkerOwner {
     const save = Promise.resolve()
       .then(() => this.persistence.save(evidence))
       .then(
-        () => {
+        (receipt) => {
           if (assignment.saveVersion !== version) return;
-          assignment.persistence = "saved";
+          const status = receipt ? "buffered" : "saved";
+          if (receipt)
+            this.bufferedPersistence.set(assignment, { worker, entryId: receipt.entryId });
+          assignment.persistence = status;
           this.emit({
             type: "persistence",
             workerId: worker.id,
             assignmentId: assignment.id,
-            status: "saved",
+            status,
           });
           this.emitState(worker);
         },

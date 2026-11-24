@@ -230,18 +230,20 @@ async function sessionFixture() {
   return { manager, file, persistence };
 }
 
-test("failed SessionManager appends stay failed after an in-process history reload", async () => {
+test("failed SessionManager writes keep the report in the owner, not in restored history", async () => {
   const f = await sessionFixture();
   await rm(f.file);
   await mkdir(f.file);
   const live = owner(f.persistence, f.manager.getSessionId());
   const launched = await live.launch({ config, prompt: "Investigate" });
   await live.wait(launched.workerId, launched.assignmentId);
-
-  const restored = restoreHistory(f.manager.getEntries(), f.manager.getSessionId());
-  expect(restored[0]?.worker.assignments[0]?.persistence).toBe("failed");
-  expect(restored[0]?.worker.assignments[0]?.persistenceError).toContain("EISDIR");
   await live.shutdown();
+
+  const assignment = live.inspect(launched.workerId).assignments[0];
+  expect(assignment?.persistence).toBe("failed");
+  expect(assignment?.persistenceError).toContain("EISDIR");
+  expect(live.report(launched.workerId)).toBe(report);
+  expect(restoreHistory(f.manager.getEntries(), f.manager.getSessionId())).toEqual([]);
 });
 
 test("successful SessionManager writes restore as durable history", async () => {

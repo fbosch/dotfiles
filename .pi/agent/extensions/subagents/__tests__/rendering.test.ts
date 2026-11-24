@@ -126,6 +126,19 @@ test("completion notices show outcome, turns, and expandable report preview", ()
   expect(plain(renderNotice(message, true, theme))).toContain("Second line");
 });
 
+test("buffered completion notices update after history is saved", () => {
+  let persistence: "buffered" | "saved" = "buffered";
+  const notice = renderNotice({
+    content: JSON.stringify({ type: "completion", worker, assignment: { ...assignment, persistence } }),
+    details: { preview: "Report ready" },
+  }, true, theme, undefined, undefined, () => persistence);
+  expect(plain(notice)).toContain("History buffered in memory");
+  expect(plain(notice)).toContain("Report ready");
+  persistence = "saved";
+  expect(plain(notice)).toContain("Storage: saved");
+  expect(plain(notice)).not.toContain("History buffered in memory");
+});
+
 test("failure, storage failure, cancellation and cleanup uncertainty remain explicit", () => {
   expect(
     plain(

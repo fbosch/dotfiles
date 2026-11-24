@@ -59,6 +59,7 @@ function saved(parentSessionId: string): SavedWorker {
 async function fixture(
   seed?: (manager: SessionManager) => void,
   dependencies: HostDependencies = {},
+  withConversation = true,
 ) {
   const cwd = await mkdtemp(join(tmpdir(), "pi-subagent-host-"));
   cleanup.push(() => rm(cwd, { recursive: true, force: true }));
@@ -84,24 +85,26 @@ async function fixture(
   await loader.reload();
   expect(loader.getExtensions().errors).toEqual([]);
   const manager = sdk.SessionManager.create(cwd, cwd);
-  manager.appendMessage({ role: "user", content: "Parent fixture", timestamp: 0 });
-  manager.appendMessage({
-    role: "assistant",
-    content: [{ type: "text", text: "Ready" }],
-    api: "openai-completions",
-    provider: "fixture",
-    model: "fixture",
-    stopReason: "stop",
-    timestamp: 0,
-    usage: {
-      input: 0,
-      output: 0,
-      cacheRead: 0,
-      cacheWrite: 0,
-      totalTokens: 0,
-      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-    },
-  });
+  if (withConversation) {
+    manager.appendMessage({ role: "user", content: "Parent fixture", timestamp: 0 });
+    manager.appendMessage({
+      role: "assistant",
+      content: [{ type: "text", text: "Ready" }],
+      api: "openai-completions",
+      provider: "fixture",
+      model: "fixture",
+      stopReason: "stop",
+      timestamp: 0,
+      usage: {
+        input: 0,
+        output: 0,
+        cacheRead: 0,
+        cacheWrite: 0,
+        totalTokens: 0,
+        cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+      },
+    });
+  }
   seed?.(manager);
   const { session } = await sdk.createAgentSession({
     cwd,
@@ -125,7 +128,7 @@ async function fixture(
     },
   });
   expect(errors).toEqual([]);
-  return { session, errors };
+  return { session, errors, manager };
 }
 function call(
   session: AgentSession,
@@ -262,6 +265,33 @@ function controlledDriver(options: { holdClose?: boolean; uncertainClose?: boole
   };
 }
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve));
+
+test("native host reconciles buffered worker history before the parent model sees it", async () => {
+  const child = controlledDriver();
+  let runtime: ParentRuntime | undefined;
+  const { session, errors, manager } = await fixture(undefined, {
+    ...child.dependencies,
+    runtimeChanged: (next) => { runtime = next; },
+  }, false);
+  if (!runtime) throw new Error("Missing parent runtime");
+  const owner = runtime.delivery.owner;
+  const launched = await owner.launch({ config: saved("fixture").worker.config, prompt: "Investigate" });
+  await tick();
+  child.finish(launched.workerId, { kind: "completed", turnsUsed: 1, report });
+  await owner.wait(launched.workerId, launched.assignmentId);
+  await tick();
+  const assignment = () => owner.inspect(launched.workerId).assignments[0];
+  expect(assignment()?.persistence).toBe("buffered");
+  expect(owner.report(launched.workerId)).toBe(report);
+  await session.extensionRunner.emitContext([]);
+  expect(assignment()?.persistence).toBe("buffered");
+
+  manager.appendMessage({ role: "user", content: "Review the investigation", timestamp: 0 });
+  await session.extensionRunner.emitContext([]);
+  expect(assignment()?.persistence).toBe("saved");
+  expect(owner.report(launched.workerId)).toBe(report);
+  expect(errors).toEqual([]);
+});
 
 function workerId(result: Awaited<ReturnType<typeof call>>): string {
   const block = result.content.find((item) => item.type === "text");

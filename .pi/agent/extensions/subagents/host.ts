@@ -11,7 +11,7 @@ import { resolveNamedSpecialist } from "./catalog";
 import { WorkerDelivery, workerStatus } from "./delivery";
 import { PiChildDriver } from "./driver";
 import { processCleanupHealth } from "./health";
-import { parentHistory, restoreHistory } from "./history";
+import { parentHistory, persistedHistoryIds, restoreHistory } from "./history";
 import { type OpenWorker, resultWorkerTarget, workerTarget } from "./interaction";
 import { type ChildDriver, WorkerOwner, type WorkerStatusSnapshot } from "./owner";
 import { ParentRuntime } from "./parent-runtime";
@@ -94,7 +94,18 @@ export function registerSubagentHost(
       parentSessionId: parentId,
       currentParentId: () => context?.sessionManager.getSessionId() ?? "",
       parentFile: () => ctx.sessionManager.getSessionFile(),
-      append: (type, data) => pi.appendEntry(type, data),
+      awaitingFirstMessage: () =>
+        !ctx.sessionManager.getEntries().some(
+          (entry) =>
+            entry.type === "message" &&
+            (entry.message.role === "user" || entry.message.role === "assistant"),
+        ),
+      append: (type, data) => {
+        const previous = ctx.sessionManager.getLeafId();
+        pi.appendEntry(type, data);
+        const appended = ctx.sessionManager.getLeafId();
+        return appended === previous ? null : appended;
+      },
       observation: (id) => driver.observation(id),
     });
     const owner = new WorkerOwner({
@@ -107,7 +118,6 @@ export function registerSubagentHost(
           settingsContext: ctx,
         }),
       },
-      historicalWorkers: saved.map((entry) => entry.worker),
       cleanupHealth: {
         isBlocked: () => health.isBlocked(),
         markUncertain(diagnostic) {
@@ -116,6 +126,8 @@ export function registerSubagentHost(
         },
       },
     });
+    for (const entry of saved) owner.restoreHistorical(entry.worker, entry.bufferedEntryId);
+    owner.reconcileBuffered(() => persistedHistoryIds(ctx.sessionManager.getSessionFile()));
     const delivery = new WorkerDelivery(
       owner,
       (notice, noticeDeliveryId) => {
@@ -240,7 +252,11 @@ export function registerSubagentHost(
             ? [{ type: "text", text: message.content }]
             : message.content,
       });
-      const component = renderNotice(message, options.expanded, theme, appearance, openWorker);
+      const component = renderNotice(message, options.expanded, theme, appearance, openWorker, (worker, assignmentId) => {
+        if (!current || worker.parentSessionId !== current.parentId) return;
+        return current.runtime.delivery.owner.findStatus(worker.workerId)?.assignments
+          .find((assignment) => assignment.id === assignmentId)?.persistence;
+      });
       return {
         render: (width) => (cards.has(target) ? [] : component.render(width)),
         invalidate: () => component.invalidate(),
@@ -248,7 +264,18 @@ export function registerSubagentHost(
       };
     },
   );
-  pi.on("context", (event) => {
+  const reconcileHistory = (_event: unknown, ctx: ExtensionContext) => {
+    const manager = ctx.sessionManager;
+    if (!current || current.parentId !== manager.getSessionId()) return;
+    current.runtime.delivery.owner.reconcileBuffered(() =>
+      persistedHistoryIds(manager.getSessionFile()),
+    );
+  };
+  // Pi emits message_end before it appends the message to the session file.
+  pi.on("turn_end", reconcileHistory);
+  pi.on("agent_end", reconcileHistory);
+  pi.on("context", (event, ctx) => {
+    reconcileHistory(event, ctx);
     let changed = false;
     const messages = event.messages.map((message) => {
       if (

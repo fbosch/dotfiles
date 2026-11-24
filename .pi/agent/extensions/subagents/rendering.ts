@@ -33,7 +33,7 @@ import {
 import { interpretProjectedResult } from "./interpretation";
 import type { ToolRendererLookup } from "./main-window-renderers";
 import { workerMetadata } from "./metadata";
-import type { WorkerSnapshot } from "./owner";
+import type { PersistenceStatus, WorkerSnapshot } from "./owner";
 import { singleLine, statusGlyph, terminalText } from "./presentation";
 
 export type AgentAppearance = ReadonlyMap<string, AgentMention>;
@@ -179,6 +179,8 @@ function structuredLines(
     lines.push(theme.fg("dim", "  ⎿  Report available · /subagents"));
   if (assignment.error)
     lines.push(theme.fg("error", `  ⎿  ${singleLine(string(assignment.error))}`));
+  if (assignment.persistence === "buffered")
+    lines.push(theme.fg("dim", "  History buffered in memory"));
   if (interpretation.storageFailureNotice)
     lines.push(
       theme.fg(
@@ -240,6 +242,7 @@ export function renderNotice(
   theme: Theme,
   appearance?: AgentAppearance,
   open?: OpenWorker,
+  currentPersistence?: (target: WorkerTarget, assignmentId: string) => PersistenceStatus | undefined,
 ): Component {
   const content =
     typeof message.content === "string"
@@ -248,22 +251,44 @@ export function renderNotice(
           .filter((block) => block.type === "text")
           .map((block) => block.text ?? "")
           .join("\n");
-  const data = parse(content);
+  const data = object(parse(content));
+  const target = workerTarget(data);
+  const assignment = object(data.assignment);
+  const renderLines = (persistence: unknown) =>
+    structuredLines(
+      {
+        ...data,
+        ...(persistence === assignment.persistence
+          ? {}
+          : { assignment: { ...assignment, persistence } }),
+        ...(message.details?.preview ? { preview: message.details.preview } : {}),
+      },
+      expanded,
+      theme,
+      appearance,
+    );
+  let persistence = assignment.persistence;
+  const body = new Text(renderLines(persistence), 0, 0);
   return inspectable(
-    new Text(
-      structuredLines(
-        {
-          ...object(data),
-          ...(message.details?.preview ? { preview: message.details.preview } : {}),
-        },
-        expanded,
-        theme,
-        appearance,
-      ),
-      0,
-      0,
-    ),
-    () => workerTarget(data),
+    {
+      render(width) {
+        if (
+          assignment.persistence === "buffered" &&
+          target &&
+          typeof assignment.assignmentId === "string"
+        ) {
+          const next =
+            currentPersistence?.(target, assignment.assignmentId) ?? assignment.persistence;
+          if (next !== persistence) {
+            persistence = next;
+            body.setText(renderLines(next));
+          }
+        }
+        return body.render(width);
+      },
+      invalidate: () => body.invalidate(),
+    },
+    () => target,
     open,
   );
 }

@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { parentHistory, restoreHistory } from "../history";
+import { parentHistory, persistedHistoryIds, restoreHistory } from "../history";
 import { type ChildDriver, WorkerOwner } from "../owner";
 import type { ResolvedSpecialist } from "../specialist";
 
@@ -65,6 +65,7 @@ async function fixture(bufferSavedMarker = false) {
     parentSessionId,
     currentParentId: () => manager.getSessionId(),
     parentFile: () => file,
+    awaitingFirstMessage: () => !manager.getEntries().some((entry) => entry.type === "message"),
     observation: () => undefined,
     append(customType, data) {
       if (
@@ -76,7 +77,7 @@ async function fixture(bufferSavedMarker = false) {
       ) {
         return;
       }
-      manager.appendCustomEntry(customType, data);
+      return manager.appendCustomEntry(customType, data);
     },
   });
   const createOwner = () => {
@@ -92,46 +93,43 @@ async function fixture(bufferSavedMarker = false) {
   return { manager, file, owner: createOwner(), parentSessionId, createOwner };
 }
 
-test("fresh-parent buffering preserves failed evidence through a later flush and recovery", async () => {
+test("fresh-parent history stays buffered until the exact record reaches disk", async () => {
   const f = await fixture();
   const launched = await f.owner.launch({ config, prompt: "Investigate" });
   await f.owner.wait(launched.workerId, launched.assignmentId);
   await f.owner.shutdown();
-  const assignment = f.owner.inspect(launched.workerId).assignments[0];
+  const assignment = () => f.owner.inspect(launched.workerId).assignments[0];
 
-  expect(assignment?.outcome).toBe("completed");
-  expect(assignment?.persistence).toBe("failed");
-  expect(assignment?.persistenceError).toContain("Parent session evidence is not persisted");
+  expect(assignment()?.outcome).toBe("completed");
+  expect(assignment()?.persistence).toBe("buffered");
+  expect(assignment()?.persistenceError).toBeUndefined();
   expect(await Bun.file(f.file).exists()).toBe(false);
   expect(f.owner.report(launched.workerId)).toBe(report);
-  const buffered = restoreHistory(f.manager.getEntries(), f.parentSessionId)[0]?.worker
-    .assignments[0];
-  expect(buffered?.persistence).toBe("failed");
-  expect(buffered?.report).toBe(report);
-  expect(buffered?.transcript[0]?.text).toBe(toolResult);
-  expect(buffered?.budget).toEqual(assignment?.budget);
+
+  f.owner.reconcileBuffered(() => new Set(["unrelated-entry"]));
+  expect(assignment()?.persistence).toBe("buffered");
+  const buffered = restoreHistory(f.manager.getEntries(), f.parentSessionId)[0]!;
+  const reloaded = f.createOwner();
+  reloaded.restoreHistorical(buffered.worker, buffered.bufferedEntryId);
+  reloaded.reconcileBuffered(() => persistedHistoryIds(f.file));
+  expect(reloaded.inspect(launched.workerId).assignments[0]?.persistence).toBe("buffered");
 
   f.manager.appendMessage({ role: "user", content: "Parent conversation", timestamp: 0 });
-  const flushed = restoreHistory(
-    sdk.SessionManager.open(f.file).getEntries(),
-    f.parentSessionId,
-  )[0];
-  expect(flushed?.worker.assignments[0]?.persistence).toBe("failed");
-  expect(flushed?.worker.assignments[0]?.report).toBe(report);
-  expect(flushed?.worker.assignments[0]?.transcript[0]?.text).toBe(toolResult);
-  expect(flushed?.worker.assignments[0]?.budget).toEqual(assignment?.budget);
+  const ids = () => persistedHistoryIds(f.file);
+  f.owner.reconcileBuffered(ids);
+  reloaded.reconcileBuffered(ids);
 
-  const nextOwner = f.createOwner();
-  const next = await nextOwner.launch({ config, prompt: "Next assignment" });
-  await nextOwner.wait(next.workerId, next.assignmentId);
-  await nextOwner.shutdown();
-  const recovered = restoreHistory(sdk.SessionManager.open(f.file).getEntries(), f.parentSessionId);
-  const previous = recovered.find((item) => item.worker.id === launched.workerId);
-  const current = recovered.find((item) => item.worker.id === next.workerId);
-  expect(previous?.worker.assignments[0]?.persistence).toBe("failed");
-  expect(previous?.worker.assignments[0]?.transcript[0]?.text).toBe(toolResult);
-  expect(current?.worker.assignments[0]?.persistence).toBe("saved");
-  expect(current?.worker.assignments[0]?.report).toBe(report);
+  expect(assignment()?.persistence).toBe("saved");
+  expect(reloaded.inspect(launched.workerId).assignments[0]?.persistence).toBe("saved");
+  const flushed = restoreHistory(sdk.SessionManager.open(f.file).getEntries(), f.parentSessionId)[0]!;
+  expect(flushed.worker.assignments[0]?.report).toBe(report);
+  expect(flushed.worker.assignments[0]?.transcript[0]?.text).toBe(toolResult);
+  expect(flushed.worker.assignments[0]?.budget).toEqual(assignment()?.budget);
+
+  const reopened = f.createOwner();
+  reopened.restoreHistorical(flushed.worker, flushed.bufferedEntryId);
+  reopened.reconcileBuffered(ids);
+  expect(reopened.inspect(launched.workerId).assignments[0]?.persistence).toBe("saved");
 });
 
 test("an existing path cannot acknowledge a buffered append", async () => {

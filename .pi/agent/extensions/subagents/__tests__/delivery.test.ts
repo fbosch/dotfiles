@@ -30,6 +30,7 @@ function fixture(
   options: {
     immediate?: boolean;
     storageFailure?: boolean;
+    bufferedEntryId?: string;
     parentSessionId?: string;
     notify?: (notice: WorkerNotice, updateDeliveryId?: string) => void;
   } = {},
@@ -66,6 +67,7 @@ function fixture(
     persistence: {
       async save() {
         if (options.storageFailure) throw new Error("disk full");
+        if (options.bufferedEntryId) return { entryId: options.bufferedEntryId };
       },
     },
   });
@@ -110,6 +112,26 @@ test("background completion sends one structural receipt without report or inves
   expect(f.errors).toEqual([]);
 });
 
+test("buffered completion delivers its report once and refreshes the receipt on flush", async () => {
+  const f = fixture({ immediate: true, bufferedEntryId: "history-entry" });
+  const launch = launched(await f.delivery.launch({ config, prompt: "Investigate" }));
+  await drain();
+
+  expect(f.notices).toHaveLength(1);
+  expect(f.notices[0]).toMatchObject({
+    type: "completion",
+    assignment: { persistence: "buffered" },
+    reportAvailable: true,
+  });
+  expect(f.owner.report(launch.workerId)).toBe(report);
+
+  f.owner.reconcileBuffered(() => new Set(["history-entry"]));
+  expect(f.notices).toHaveLength(1);
+  expect(f.delivery.refreshNotice(f.updateIds[0]!)).toMatchObject({
+    type: "completion",
+    assignment: { persistence: "saved" },
+  });
+});
 test("explicit wait returns full evidence and consumes the concurrent completion receipt", async () => {
   const f = fixture();
   const launch = launched(await f.delivery.launch({ config, prompt: "Task" }));
