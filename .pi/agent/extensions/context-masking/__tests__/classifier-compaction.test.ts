@@ -807,6 +807,17 @@ test("cancellation after a paid response preserves usage and returns no proposed
   expect(result.text).toBe("");
 });
 
+test("an aborted tool call without a result remains recoverable as an attempt", async () => {
+  const f = await fixture();
+  const assistant = f.input.messages.find(message => message.role === "assistant");
+  if (!assistant) throw Error("Missing assistant fixture");
+  f.manager.appendMessage({ ...assistant, stopReason: "aborted",
+    content: [{ type: "toolCall", id: "interrupted", name: "codemode", arguments: { code: "unfinished()" } }] });
+  const result = await classifyCompaction({ ...f.input, branch: f.manager.getBranch(),
+    messages: f.manager.buildSessionProjection().messages }, settings, { artifactRoot: f.root, classify: omitAll });
+  expect(result.kind).toBe("retained");
+  expect(result.savedItems?.some(item => item.text?.includes("no result recorded") && item.text.includes("unfinished()"))).toBe(true);
+});
 test("ambiguous saved-call identities and mismatched result tools fall back before requests", async () => {
   const f = await fixture();
   const source = f.input.branch.find(

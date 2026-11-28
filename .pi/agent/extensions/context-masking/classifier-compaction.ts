@@ -422,6 +422,10 @@ async function classifyTextCompaction(
           if (block.type === "text") await prose(block.text, "assistant");
           else if (block.type === "toolCall") {
             const candidate = byCall.get(block.id);
+            if (!candidate && message.stopReason === "aborted" && !sources.has(block.id)) {
+              await prose(`[interrupted tool call ${block.name}; no result recorded] ${JSON.stringify(block.arguments)}`, "assistant");
+              continue;
+            }
             if (!candidate) return fallback("orphan-or-mismatched-result");
             pieces.push({ text: `[tool call ${block.name}] ${JSON.stringify(block.arguments)}`, candidate: candidate.id, part: "call" });
           } else if (block.type !== "thinking") throw new UnsupportedContentError("unsupported-content");

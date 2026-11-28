@@ -1,5 +1,5 @@
 {
-  "lastChangelogVersion": "1.6.0",
+  "lastChangelogVersion": "1.6.1",
   "theme": "zenwritten-dark",
   "quietStartup": true,
   "references": {
@@ -167,13 +167,13 @@
   "packages": [
     "npm:pi-hashline-edit-pro@7.2.0",
     "npm:pi-codex-goal@0.7.11",
-    "npm:pi-context-view@0.8.4",
+    "npm:pi-context-view@0.9.0",
     "npm:@ff-labs/pi-fff@0.11.0",
     "npm:pi-web-access@0.48.0",
-    "npm:pi-lens@4.5.2",
+    "npm:pi-lens@4.5.3",
     "npm:pi-compaction-model@0.1.0",
-    "npm:pi-codemode-compact@0.5.1",
-    "npm:pi-claude-bridge@0.13.0"
+    "npm:pi-codemode-compact@0.5.2",
+    "npm:pi-claude-bridge@0.13.1"
   ],
   "autocompleteMaxVisible": 10,
   "editorPaddingX": 0,
@@ -233,6 +233,8 @@
     "{\"source\":\"npm:pi-codex-goal@0.7.10\",\"scope\":\"user\"}": "0.7.10",
     "{\"source\":\"npm:pi-web-access@0.48.0\",\"scope\":\"user\"}": "0.48.0",
     "{\"source\":\"npm:pi-lens@4.5.1\",\"scope\":\"user\"}": "4.5.1",
-    "{\"source\":\"npm:pi-codemode-compact@0.5.1\",\"scope\":\"user\"}": "0.5.1"
+    "{\"source\":\"npm:pi-codemode-compact@0.5.1\",\"scope\":\"user\"}": "0.5.1",
+    "{\"source\":\"npm:pi-codex-goal@0.7.11\",\"scope\":\"user\"}": "0.7.11",
+    "{\"source\":\"npm:pi-lens@4.5.2\",\"scope\":\"user\"}": "4.5.2"
   }
 }

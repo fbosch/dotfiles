@@ -15,6 +15,7 @@ import {
   classifyCompaction,
 } from "./classifier-compaction";
 
+import { smallerPrefix } from "./compaction-prefix";
 import { ClassifierDecisionCache } from "./classifier-cache";
 import { HYBRID_CHECKPOINT, prepareHybridSummary, restoreCheckpointFiles } from "./hybrid-summary";
 import { sumUsage } from "./classifier-compaction";
@@ -154,12 +155,14 @@ export function registerClassifierCompaction(
     artifactRoot: () => join(getAgentDir(), "cache", "context-masking"),
   },
 ) {
+  class SummaryTokenCap extends Error {}
   let cache = new ClassifierDecisionCache();
   let cacheSessionId: string | undefined;
   const fallback = async (
     event: SessionBeforeCompactEvent,
     ctx: ExtensionContext,
     preparation = event.preparation,
+    allowSmallerPrefix = true,
   ): Promise<SessionBeforeCompactResult> => {
     if (event.signal.aborted) return { cancel: true };
     try {
@@ -207,6 +210,10 @@ export function registerClassifierCompaction(
       );
       return event.signal.aborted ? { cancel: true } : { compaction };
     } catch (error) {
+      // The SDK rejects length stops as plain errors, including split-turn summaries.
+      if (allowSmallerPrefix && !event.signal.aborted && error instanceof Error &&
+          /^(Summarization|Turn prefix summarization) failed: generation hit the token cap and the summary is incomplete$/.test(error.message))
+        throw new SummaryTokenCap(error.message);
       if (!event.signal.aborted && ctx.hasUI)
         ctx.ui.notify(
           `Classifier compaction fallback failed: ${error instanceof Error ? error.message : String(error)}`,
@@ -216,7 +223,7 @@ export function registerClassifierCompaction(
       return { cancel: true };
     }
   };
-  pi.on("session_before_compact", async (event, ctx) => {
+  const attempt = async (event: SessionBeforeCompactEvent, ctx: ExtensionContext) => {
     const imageInput = [...event.preparation.messagesToSummarize, ...event.preparation.turnPrefixMessages].some(message =>
       "content" in message && Array.isArray(message.content) && message.content.some(block => block.type === "image")) || checkpointImages(event.branchEntries).some(image => image.action !== "omit");
     let settings: ClassifierSettings;
@@ -364,7 +371,7 @@ export function registerClassifierCompaction(
     if (result.contentFilterBlocked && ctx.hasUI)
       ctx.ui.notify("Classifier content filter blocked assessment; continuing with archive references.", "warning");
     if (settings.mode === "hybrid" && selectedPreparation) {
-      const native = await fallback(event, ctx, selectedPreparation);
+      const native = await fallback(event, ctx, selectedPreparation, !result.contentFilterBlocked);
       if (!native?.compaction) return native;
       const nativeDetails = native.compaction.details;
       if (!isMatching({ readFiles: P.array(P.string), modifiedFiles: P.array(P.string) }, nativeDetails))
@@ -416,5 +423,28 @@ export function registerClassifierCompaction(
         },
       },
     };
+  };
+  pi.on("session_before_compact", async (event, ctx) => {
+    if (event.signal.aborted) return { cancel: true };
+    const bounded = smallerPrefix(event);
+    let selected = bounded ? { ...event, preparation: bounded } : event;
+    for (let pass = 0; ; pass++) {
+      try {
+        const result = await attempt(selected, ctx);
+        if (result?.compaction && selected !== event && ctx.hasUI)
+          ctx.ui.notify("Checkpoint covers only the oldest messages. Newer messages stay in context.", "info");
+        return result;
+      } catch (error) {
+        if (!(error instanceof SummaryTokenCap)) throw error;
+        if (event.signal.aborted) return { cancel: true };
+        const smaller = pass === 0 ? smallerPrefix(selected, true) : undefined;
+        if (!smaller) {
+          if (ctx.hasUI) ctx.ui.notify("Compaction stopped at the summary token limit. No checkpoint was saved.", "error");
+          return { cancel: true };
+        }
+        if (ctx.hasUI) ctx.ui.notify("Summary hit the token limit. Retrying with a smaller portion of the conversation.", "warning");
+        selected = { ...event, preparation: smaller };
+      }
+    }
   });
 }

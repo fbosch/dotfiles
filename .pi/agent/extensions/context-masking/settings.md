@@ -218,6 +218,10 @@ Manifests use the same private, content-addressed store and 4 MB per-file cap. T
 
 Ordinary prose, prior summaries and unmasked tool outputs participate even when no masked tool results exist. Only an empty eligible prefix returns `no-content`. Pi stores the selected history as a labeled summary string, not the original structured messages. The native retained tail stays outside these decisions. Images use the shared goal and retention path below; ambiguous call identities or unsupported content use native fallback.
 
+For long histories, the hook checkpoints the oldest portion first. It targets 256 projected messages or 24,000 estimated input tokens, whichever comes first. It cuts at a user or assistant message with a known session entry ID. If the first indivisible group exceeds the target, the hook keeps the group together. Newer messages stay in context for later turns. An aborted tool call without a result is archived as an interrupted attempt.
+
+If the native summary hits its output token limit, the hook discards it and tries a smaller prefix once when a safe cut exists. A second length stop cancels compaction. The hook does not retry a filtered hybrid summary this way.
+
 | Setting | Default | Meaning |
 |---|---|---|
 | `mode` | `"extractive"` | Use extractive checkpoints or opt in to `"hybrid"` native summaries. |
@@ -334,7 +338,7 @@ Hybrid mode is opt-in.
 
 The classifier gets one evidence-selection question per complete saved result. It excludes a result only when its relevance probability is at most 0.1. Uncertain results stay in the selected evidence. Partial results keep their trusted saved path and a partial-excerpt notice without classification. Hybrid classifier packets repeat non-candidate conversation state rather than every candidate's placeholder.
 
-The host restores selected source text into coherent call/result pairs. It preserves user and assistant text, combines the chronological prefix into one native summary request, and leaves Pi's retained-history boundary unchanged. The configured native summarizer updates the working summary from that evidence and the previous summary. The model can still omit or misstate facts; selecting evidence does not guarantee summary quality.
+The host restores selected source text into coherent call/result pairs. It preserves user and assistant text, combines the chronological prefix into one native summary request, and leaves the selected prefix boundary unchanged. The configured native summarizer updates the working summary from that evidence and the previous summary. The model can still omit or misstate facts; selecting evidence does not guarantee summary quality.
 
 The 48,000-byte limit covers the selected message representation and previous summary. It is separate from the extractive 4,000-byte checkpoint cap. Hybrid output follows native summarization rather than rejecting a useful summary solely for exceeding that extractive cap. The checkpoint carries a short recall hint. The complete saved-result catalogue stays in session entries instead of taking space in the working summary.
 
