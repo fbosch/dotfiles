@@ -1,4 +1,4 @@
-import { afterEach, expect, test } from "bun:test";
+import { afterEach, expect, spyOn, test } from "bun:test";
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
@@ -63,17 +63,22 @@ async function fixture(
       repositoryPreferences: { [basename(root)]: [profile] },
     }),
   );
-  const accounts = () =>
+  let clockOffset = 0;
+  let forceRefreshes = 0;
+  let forcedQuota = quota;
+  const now = () => Date.now() + clockOffset;
+  const accounts = (forceRefresh: boolean) =>
     ["kk", "fbb"].map((label) => {
-      const observedAt = Date.now() - (stale ? 600000 : 0);
+      const observedAt = now() - (stale ? 600000 : 0);
+      const remaining = forceRefresh ? forcedQuota : quota;
       const result: ProfileUsageStatus = {
         profileLabel: label,
         active: label === profile,
         urgency: "unknown",
-        usage: [{ remaining: quota }],
+        usage: [{ remaining }],
       };
       Object.defineProperty(result, AUTH_USAGE_OBSERVATION, {
-        value: { windows: [{ remaining: quota }], observedAt, staleAt: observedAt + 10000 },
+        value: { windows: [{ remaining }], observedAt, staleAt: observedAt + 10000 },
       });
       Object.defineProperty(result, ANTHROPIC_USAGE_OBSERVATION, {
         value: { windows: [{ remaining: nativeQuota }], observedAt, staleAt: observedAt + 300000 },
@@ -122,11 +127,16 @@ async function fixture(
           hostPreferences: [],
           repositoryPreferences: [profile],
         }),
-        usageCollector: async () => ({
-          schema: "fbb.pi-auth-profiles-usage/v1",
-          profiles: accounts(),
-          diagnostics: [],
-        }),
+        now,
+        usageCollector: async (options) => {
+          const force = options?.forceUsageRefresh === true;
+          if (force) forceRefreshes++;
+          return {
+            schema: "fbb.pi-auth-profiles-usage/v1",
+            profiles: accounts(force),
+            diagnostics: [],
+          };
+        },
       });
       modelPresets(pi);
       for (const provider of ["openai-codex", "anthropic", "claude-bridge"]) {
@@ -211,7 +221,28 @@ async function fixture(
   });
   cleanup.push(child.close);
   if (!events) throw new Error("Missing fixture event bus");
-  return { child, events, requests, probeCalls: () => probeCalls, root };
+  return {
+    child, events, requests, probeCalls: () => probeCalls, root,
+    expireOnNextRefresh() {
+      const runtime = child.session.modelRuntime;
+      const refresh = runtime.refresh.bind(runtime);
+      const observations: number[] = [];
+      let first = true;
+      const spy = spyOn(runtime, "refresh").mockImplementation(async (options) => {
+        if (first) {
+          first = false;
+          clockOffset += 10_001;
+        }
+        const result = await refresh(options);
+        observations.push(result.errors.size);
+        return result;
+      });
+      cleanup.push(() => { spy.mockRestore(); });
+      return observations;
+    },
+    forceRefreshes: () => forceRefreshes,
+    setForcedQuota(value: number) { forcedQuota = value; },
+  };
 }
 
 test("kk routing excludes Claude despite global fbb credentials and fresh bridge quota", async () => {
@@ -248,6 +279,36 @@ test("fresh native Anthropic quota can execute independently of unknown bridge q
   await f.child.session.prompt("QUOTA_ASSIGNMENT: inspect this bounded task");
   expect(f.requests.map(({ provider }) => provider)).toEqual(["anthropic", "anthropic"]);
   expect(f.requests.every(({ token }) => token === "native-fixture-token")).toBe(true);
+});
+
+test("expiry during a preset rebind refreshes quota once and never restores the expired route", async () => {
+  const f = await fixture();
+  const [account] = await requestRoutingAccounts(f.events);
+  if (!account) throw new Error("Missing eligible account");
+  await activateRoutingAccount(f.events, account);
+  const observations = f.expireOnNextRefresh();
+
+  await activateRoutingAccount(f.events, account);
+
+  expect(f.forceRefreshes()).toBe(1);
+  expect(observations).toEqual([1, 0, 0]);
+  const resolved = await f.child.session.modelRuntime.getAuth("openai-codex");
+  expect(resolved?.auth.apiKey).toBe("kk-fixture-token");
+});
+
+test("expired routing fails closed when the same account has no fresh quota", async () => {
+  const f = await fixture();
+  const [account] = await requestRoutingAccounts(f.events);
+  if (!account) throw new Error("Missing eligible account");
+  await activateRoutingAccount(f.events, account);
+  const observations = f.expireOnNextRefresh();
+  f.setForcedQuota(0);
+
+  await expect(activateRoutingAccount(f.events, account)).rejects.toThrow("no longer eligible");
+
+  expect(f.forceRefreshes()).toBe(1);
+  expect(observations).toEqual([1, 0]);
+  expect(f.requests).toEqual([]);
 });
 
 test("stale quota stops execution and account activation cannot escape profile scope", async () => {

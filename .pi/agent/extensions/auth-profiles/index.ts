@@ -130,6 +130,7 @@ type BindProfileOptions = ProfileAuthFallbackCallbacks & {
   routingSignal?: AbortSignal;
   now?: () => number;
   route?: FallbackOwnerRoute;
+  restorePins?: () => void;
 };
 
 type StartupSelection = {
@@ -169,6 +170,45 @@ function credentialStoreBinding(ctx: Pick<ExtensionContext, "modelRegistry">): {
   return { credentials, store, runtime };
 }
 
+class RoutedQuotaExpiredError extends Error {
+  constructor() {
+    super("Routed quota evidence expired.");
+  }
+}
+
+function isRoutedQuotaExpiry(error: unknown, depth = 0): boolean {
+  if (depth >= 8) return false;
+  if (error instanceof RoutedQuotaExpiredError) return true;
+  if (error instanceof AggregateError)
+    return (
+      error.errors.length > 0 &&
+      error.errors.every((cause: unknown) => isRoutedQuotaExpiry(cause, depth + 1))
+    );
+  return error instanceof Error && isRoutedQuotaExpiry(error.cause, depth + 1);
+}
+
+const routedStores = new WeakMap<
+  CredentialStore,
+  { unpinned: CredentialStore; canRestore(): boolean }
+>();
+
+async function restoreCredentialStore(
+  credentials: InternalCredentials,
+  store: CredentialStore,
+  refresh: () => Promise<void>,
+): Promise<void> {
+  const previous = routedStores.get(store);
+  const restored = previous && !previous.canRestore() ? previous.unpinned : store;
+  credentials.store = restored;
+  try {
+    await refresh();
+  } catch (error) {
+    if (!previous || restored !== store || !isRoutedQuotaExpiry(error)) throw error;
+    // A route that was fresh when restored can expire during the rollback refresh.
+    credentials.store = previous.unpinned;
+    await refresh();
+  }
+}
 /** Point the session's live credential store at the profile's file. */
 async function bindProfile(
   ctx: Pick<ExtensionContext, "modelRegistry">,
@@ -187,24 +227,28 @@ async function bindProfile(
     options,
   );
   const account = options.routingAccount;
+  const now = options.now ?? Date.now;
+  const checkFreshness = () => {
+    if (account && now() >= account.staleAt) throw new RoutedQuotaExpiredError();
+  };
+  options.routingSignal?.throwIfAborted();
   if (account === undefined || account.provider === "claude-bridge") {
     credentials.store = composed;
   } else {
     const ownerStore = await adapter.createCredentialStore(account.profile);
     options.routingSignal?.throwIfAborted();
+    const isExhausted = () => options.route?.isExhausted(account.provider, account.profile) === true;
     const check = () => {
-      if ((options.now ?? Date.now)() >= account.staleAt)
-        throw new Error("Routed quota evidence expired.");
-      if (options.route?.isExhausted(account.provider, account.profile)) {
-        throw new Error("Routed credential owner is exhausted.");
-      }
+      checkFreshness();
+      if (isExhausted()) throw new Error("Routed credential owner is exhausted.");
     };
-    credentials.store = {
+    const routed: CredentialStore = {
       ...composed,
       async read(providerId, authOptions) {
         if (providerId !== account.provider) return composed.read(providerId, authOptions);
         check();
         const credential = await ownerStore.read(providerId, authOptions);
+        check();
         if (credential === undefined) throw new Error("Routed credential owner is missing.");
         return credential;
       },
@@ -224,6 +268,7 @@ async function bindProfile(
         if ((await ownerStore.read(providerId, authOptions)) === undefined) {
           throw new Error("Routed credential owner is missing.");
         }
+        check();
         return ownerStore.modify(providerId, fn, authOptions);
       },
       async delete(providerId, authOptions) {
@@ -232,6 +277,11 @@ async function bindProfile(
         return ownerStore.delete(providerId, authOptions);
       },
     };
+    routedStores.set(routed, {
+      unpinned: composed,
+      canRestore: () => now() < account.staleAt && !isExhausted(),
+    });
+    credentials.store = routed;
   }
   if (options.refresh === false) return path;
 
@@ -253,11 +303,14 @@ async function bindProfile(
   };
 
   try {
+    checkFreshness();
     await refresh();
+    checkFreshness();
+    options.routingSignal?.throwIfAborted();
   } catch (switchError) {
-    credentials.store = store;
+    options.restorePins?.();
     try {
-      await refresh();
+      await restoreCredentialStore(credentials, store, refresh);
     } catch (rollbackError) {
       throw new AggregateError(
         [switchError, rollbackError],
@@ -735,14 +788,21 @@ export default function authProfiles(
       ? resolution.repositoryPreferences
       : [resolution.profile];
   };
-  const routingAccounts = async (ctx: ExtensionContext): Promise<readonly RoutingAccount[]> => {
-    const allowed = await allowedRoutingProfiles(ctx);
+  const routingAccounts = async (
+    ctx: ExtensionContext,
+    options: { profile?: string; forceUsageRefresh?: boolean } = {},
+  ): Promise<readonly RoutingAccount[]> => {
+    const profiles = await allowedRoutingProfiles(ctx);
+    const allowed =
+      options.profile === undefined ? profiles : profiles.filter((profile) => profile === options.profile);
+    if (!allowed.length) return [];
     const credentials = await Promise.all(allowed.map((profile) => storedCredentials(profile)));
     const status = await usageCollector({
       profileLabels: allowed,
       includeDefault: allowed.includes(DEFAULT_PROFILE),
       includeResetCredits: false,
       providerAdapter,
+      ...(options.forceUsageRefresh ? { forceUsageRefresh: true } : {}),
     });
     const byProfile = new Map(status.profiles.map((profile) => [profile.profileLabel, profile]));
     const result: RoutingAccount[] = [];
@@ -781,24 +841,37 @@ export default function authProfiles(
         activate: async (account, signal) => {
           if (!routingContext) throw new Error("Auth routing has no active session.");
           const ctx = routingContext;
-          const eligible = await routingAccounts(ctx);
-          const current = eligible.find(
-            (entry) => entry.provider === account.provider && entry.profile === account.profile,
-          );
-          if (!current) throw new Error("Routing account is no longer eligible.");
-          await serializeProfileOperation(async () => {
+          const checkSession = () => {
             signal.throwIfAborted();
             if (routingContext !== ctx) throw new Error("Auth routing session changed.");
-            const profiles = await allowedRoutingProfiles(ctx);
-            if (!profiles.includes(current.profile))
-              throw new Error("Routing profile is no longer allowed.");
+          };
+          await serializeProfileOperation(async () => {
+            checkSession();
             const selection = await chooseCurrentProfile(ctx);
-            signal.throwIfAborted();
-            await activateUnlocked(ctx, selection, {
-              routingAccount: current,
-              routingSignal: signal,
-              now,
-            });
+            const attempt = async (forceUsageRefresh: boolean) => {
+              checkSession();
+              const eligible = await routingAccounts(ctx, {
+                profile: account.profile,
+                forceUsageRefresh,
+              });
+              const current = eligible.find((entry) => entry.provider === account.provider);
+              if (!current) throw new Error("Routing account is no longer eligible.");
+              const profiles = await allowedRoutingProfiles(ctx);
+              checkSession();
+              if (!profiles.includes(current.profile))
+                throw new Error("Routing profile is no longer allowed.");
+              await activateUnlocked(ctx, selection, {
+                routingAccount: current,
+                routingSignal: signal,
+                now,
+              });
+            };
+            try {
+              await attempt(false);
+            } catch (error) {
+              if (!isRoutedQuotaExpiry(error)) throw error;
+              await attempt(true);
+            }
           });
         },
       })
@@ -865,7 +938,7 @@ export default function authProfiles(
     selection: ProfileSelection,
     options: BindProfileOptions = {},
   ) => {
-    const { runtime } = credentialStoreBinding(ctx);
+    const { runtime, store: previousStore } = credentialStoreBinding(ctx);
     if (!loginBoundaries.has(runtime)) {
       loginBoundaries.set(
         runtime,
@@ -886,6 +959,10 @@ export default function authProfiles(
       DEFAULT_PROFILE,
     ]);
     const previousPin = fallbackPins.get(codexProviderId);
+    const restorePins = () => {
+      if (previousPin === undefined) fallbackPins.delete(codexProviderId);
+      else fallbackPins.set(codexProviderId, previousPin);
+    };
     if (selection.profile === bound.profile) fallbackPins.delete(codexProviderId);
     else {
       fallbackPins.set(codexProviderId, {
@@ -897,6 +974,7 @@ export default function authProfiles(
     try {
       path = await bindProfile(ctx, bound, providerAdapter, {
         ...options,
+        restorePins,
         route: fallbackRoute,
         onInvalidOAuthRefresh(providerId, owner) {
           authRejectedOwners.add(fallbackKey(providerId, owner));
@@ -910,8 +988,8 @@ export default function authProfiles(
         },
       });
     } catch (error) {
-      if (previousPin === undefined) fallbackPins.delete(codexProviderId);
-      else fallbackPins.set(codexProviderId, previousPin);
+      restorePins();
+      if (credentialStoreBinding(ctx).store !== previousStore) routedAccount = undefined;
       throw error;
     }
     activeProfile = bound.profile;

@@ -30,6 +30,10 @@ If `$ARGUMENTS` is empty, infer PBI ID from current branch name (for example `AB
 - **Iteration:** <iteration>
 - **Description:** <description plain text or N/A>
 
+## Reproduction Steps
+
+<bug reproduction steps in original order, or N/A>
+
 ## Child Tasks
 
 ### Task #<ID>: <Title>
@@ -62,6 +66,8 @@ If `$ARGUMENTS` is empty, infer PBI ID from current branch name (for example `AB
 - Extract child task fields from each item in `tasks` using the same field names
 - Include every task returned in `tasks`; preserve numeric ordering by `System.Id`
 - Convert HTML descriptions (`System.Description`) to plain readable text; if empty or missing use `N/A`
+- Include `## Reproduction Steps` only when `pbi.fields.System.WorkItemType` is `Bug`. Read `Microsoft.VSTS.TCM.ReproSteps` from `pbi.fields`; use `N/A` if it is empty or missing.
+- Convert reproduction-step HTML to readable Markdown. Preserve the original wording, step order, line breaks, and any expected or actual results; do not summarize or invent steps.
 - For missing assignee use `Unassigned`; for any other missing field use `N/A`
 - `Wiki Links` section must include every unique entry from `wikiLinks`
 - Use link text in this order of preference: `name`, then `comment`, then URL
